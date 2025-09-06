@@ -1,10 +1,12 @@
-import Sidebar from "../../components/Sidebar";
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex" }}>
-      <Sidebar />
-      <div className="content">{children}</div>
-    </div>
+    <html>
+      <body>
+        <div style={{ display: "flex" }}>
+          <aside style={{ width: 220, borderRight: "1px solid #eee" }}>/* sidebar */</aside>
+          <section style={{ flex: 1, padding: 16 }}>{children}</section>
+        </div>
+      </body>
+    </html>
   );
 }
