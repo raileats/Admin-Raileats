@@ -2,21 +2,28 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const url = req.nextUrl.clone();
+  const pathname = req.nextUrl.pathname;
 
-  // Only protect admin paths except the login page and assets
-  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+  // Allow public assets and the login page
+  if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname === "/admin/login") {
+    return NextResponse.next();
+  }
+
+  // Protect admin routes
+  if (pathname.startsWith("/admin")) {
     const token = req.cookies.get("admin_auth")?.value;
     if (!token) {
-      const loginUrl = new URL("/admin/login", req.url);
-      return NextResponse.redirect(loginUrl);
+      // redirect to login
+      url.pathname = "/admin/login";
+      return NextResponse.redirect(url);
     }
-    // optionally verify token here (JWT)
   }
+
   return NextResponse.next();
 }
 
-// apply to admin paths
+// Apply middleware to admin routes only
 export const config = {
   matcher: ["/admin/:path*", "/admin"],
 };
