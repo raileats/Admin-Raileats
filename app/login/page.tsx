@@ -1,33 +1,58 @@
+// app/login/page.tsx
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 
-export default function LoginPage() {
+import { useState } from "react";
+
+export default function AdminLogin() {
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
-  const router = useRouter();
+  const [step, setStep] = useState<"login" | "otp">("login");
 
-  function handleLogin(e: any) {
-    e.preventDefault();
-    if (mobile && otp) {
-      router.push("/admin");
-    } else {
-      alert("Enter mobile & OTP");
-    }
-  }
+  const handleSendOtp = () => {
+    if (!mobile) return alert("Enter mobile number");
+    // TODO: backend API call to send OTP
+    setStep("otp");
+  };
+
+  const handleVerifyOtp = () => {
+    if (!otp) return alert("Enter OTP");
+    // TODO: backend API call to verify OTP
+    alert("✅ Login success (dummy)");
+  };
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
-      <form onSubmit={handleLogin} style={{ background: "#fff", padding: 20, borderRadius: 8, boxShadow: "0 0 10px #ccc" }}>
-        <h2>Admin Login</h2>
-        <input type="text" placeholder="Mobile Number" value={mobile} onChange={(e) => setMobile(e.target.value)}
-          style={{ display: "block", margin: "10px 0", padding: 8, width: "100%" }} />
-        <input type="text" placeholder="OTP" value={otp} onChange={(e) => setOtp(e.target.value)}
-          style={{ display: "block", margin: "10px 0", padding: 8, width: "100%" }} />
-        <button type="submit" style={{ padding: 10, width: "100%", background: "#222", color: "#fff" }}>
-          Login
-        </button>
-      </form>
+    <div style={{ maxWidth: "400px", margin: "100px auto", textAlign: "center" }}>
+      <h2>RailEats Admin Login</h2>
+
+      {step === "login" && (
+        <>
+          <input
+            type="text"
+            placeholder="Enter Mobile Number"
+            value={mobile}
+            onChange={(e) => setMobile(e.target.value)}
+            style={{ width: "100%", padding: "10px", margin: "10px 0" }}
+          />
+          <button onClick={handleSendOtp} style={{ padding: "10px 20px" }}>
+            Send OTP
+          </button>
+        </>
+      )}
+
+      {step === "otp" && (
+        <>
+          <input
+            type="text"
+            placeholder="Enter OTP"
+            value={otp}
+            onChange={(e) => setOtp(e.target.value)}
+            style={{ width: "100%", padding: "10px", margin: "10px 0" }}
+          />
+          <button onClick={handleVerifyOtp} style={{ padding: "10px 20px" }}>
+            Verify OTP
+          </button>
+        </>
+      )}
     </div>
   );
 }
