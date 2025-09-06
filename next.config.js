@@ -1,6 +1,9 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-};
-
-module.exports = nextConfig;
+async rewrites() {
+  return [
+    {
+      source: '/',
+      has: [{ type: 'host', value: 'admin.raileats.in' }],
+      destination: '/admin'
+    }
+  ];
+}
