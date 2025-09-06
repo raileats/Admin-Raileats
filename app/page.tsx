@@ -1,4 +1,3 @@
-// Added minimal landing page to avoid 404 at root
 export default function Home() {
   return (
     <main style={{ padding: 32 }}>
