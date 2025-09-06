@@ -1,20 +1,19 @@
 {
-  "name": "raileats-admin",
+  "name": "raileats-admin-example",
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "next start"
+    "start": "next start -p 3000",
+    "lint": "next lint"
   },
   "dependencies": {
-    "next": "14.0.0",
+    "next": "13.4.10",
     "react": "18.2.0",
     "react-dom": "18.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
-    "@types/react": "^18.2.21",
-    "@types/node": "^20.5.3"
+    "typescript": "5.2.2"
   }
 }
