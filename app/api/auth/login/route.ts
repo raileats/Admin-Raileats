@@ -3,22 +3,22 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
-    const { phone, password } = await req.json();
+    const body = await req.json();
+    const phone = String(body.phone || "").trim();
+    const password = String(body.password || "").trim();
 
-    // Hard-coded check (demo). Replace with DB/secure check in prod.
+    // Hard-coded credentials (demo)
     if (phone === "8799726485" && password === "admin123") {
       const res = NextResponse.json({ ok: true });
 
       // Set httpOnly cookie so middleware can read it server-side on next requests.
-      // NOTE: NextResponse.cookies.set options differ by Next version; this is compatible with Next 13+.
+      // In production use secure: true and a signed token/JWT.
       res.cookies.set({
         name: "admin_auth",
-        value: "demo-token",          // in prod use signed JWT or session id
+        value: "demo-token",
         httpOnly: true,
         path: "/",
-        maxAge: 60 * 60 * 24          // 1 day
-        // secure: true,   // set in prod (requires HTTPS)
-        // sameSite: 'lax'
+        maxAge: 60 * 60 * 24 // 1 day
       });
 
       return res;
