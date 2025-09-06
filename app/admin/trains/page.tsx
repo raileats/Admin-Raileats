@@ -1,1 +1,8 @@
-export default function Trains() { return <h1>Trains Management</h1>; }
+export default function AdminTrains() {
+  return (
+    <section>
+      <h1>Trains</h1>
+      <p>Manage trains here.</p>
+    </section>
+  );
+}
