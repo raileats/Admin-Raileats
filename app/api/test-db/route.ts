@@ -1,4 +1,5 @@
 // app/api/test-db/route.ts
+export const runtime = 'nodejs';
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
