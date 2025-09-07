@@ -1,3 +1,4 @@
+// app/admin/login/page.tsx
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -15,19 +16,18 @@ export default function AdminLogin() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, password }),
+        body: JSON.stringify({ phone, password })
       });
 
-      // Debug: if server responded with Set-Cookie, it will be in headers
       if (res.ok) {
-        // navigation after server set cookie
+        // server set cookie; now navigate
         router.replace("/admin/home");
       } else {
-        const json = await res.json().catch(() => ({}));
-        alert(json?.message || "Invalid credentials");
+        const j = await res.json().catch(()=>({}));
+        alert(j?.message || "Login failed");
       }
     } catch (err) {
-      console.error("Login error:", err);
+      console.error(err);
       alert("Network error");
     } finally {
       setLoading(false);
@@ -35,17 +35,14 @@ export default function AdminLogin() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ width: 360, padding: 24, background: "#fff", borderRadius: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
-      <h2 style={{ textAlign: "center" }}>Admin Login</h2>
-
-      <label style={{ display: "block", marginTop: 12 }}>User ID (mobile)</label>
-      <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="8799726485" required style={{ width: "100%", padding: 8, marginTop: 6 }} />
-
-      <label style={{ display: "block", marginTop: 12 }}>Password</label>
-      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="admin123" required style={{ width: "100%", padding: 8, marginTop: 6 }} />
-
-      <button type="submit" disabled={loading} style={{ marginTop: 16, width: "100%", padding: 10, background: "#273e9a", color: "#fff", border: "none", borderRadius: 4 }}>
-        {loading ? "Logging in…" : "Log in"}
+    <form onSubmit={handleSubmit} style={{ width:360, padding:24, background:"#fff", borderRadius:8 }}>
+      <h2 style={{ textAlign:"center" }}>Admin Login</h2>
+      <label>User ID (mobile)</label>
+      <input value={phone} onChange={(e)=>setPhone(e.target.value)} required style={{ width:"100%", padding:8, marginBottom:12 }} />
+      <label>Password</label>
+      <input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required style={{ width:"100%", padding:8, marginBottom:16 }} />
+      <button type="submit" disabled={loading} style={{ width:"100%", padding:10 }}>
+        {loading ? "Logging..." : "Log in"}
       </button>
     </form>
   );
