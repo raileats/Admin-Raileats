@@ -61,22 +61,20 @@ function makeDemoOrdersFor(status: TabKey, count = 6): Order[] {
       stationCode: `ST${10 + (i % 4)}`,
       stationName: `Station ${(i % 4) + 1}`,
       deliveryDate: new Date(Date.now() + i * 86400000).toISOString().slice(0, 10),
-      deliveryTime: `${10 + i % 6}:30`,
+      deliveryTime: `${10 + (i % 6)}:30`,
       trainNo: `TN${500 + i}`,
       coach: `C${(i % 8) + 1}`,
       seat: `${(i % 72) + 1}A`,
       customerName: `Customer ${i + 1}`,
       customerMobile: `9${Math.floor(100000000 + Math.random() * 900000000)}`,
       total: (100 + i * 20).toFixed(2),
-      history: [
-        { at: new Date().toISOString(), by: "system", note: "Order created", status },
-      ],
+      history: [{ at: new Date().toISOString(), by: "system", note: "Order created", status }],
     } as Order;
   });
 }
 
 /**
- * Utility: get next status label and key
+ * Utility: next-status mapping for quick moves
  */
 const NEXT_MAP: Record<TabKey, { next?: TabKey; actionLabel?: string }> = {
   booked: { next: "verification", actionLabel: "Move to In Verification" },
@@ -89,10 +87,20 @@ const NEXT_MAP: Record<TabKey, { next?: TabKey; actionLabel?: string }> = {
   baddelivery: { next: undefined, actionLabel: undefined },
 };
 
+/**
+ * For marking from Out for Delivery or Change Status: these are final-mark options
+ */
+const FINAL_MARK_OPTIONS = [
+  { key: "delivered", label: "Delivered" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "notdelivered", label: "Not Delivered" },
+  { key: "baddelivery", label: "Bad Delivery" },
+] as const;
+
 export default function AdminOrdersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("booked");
 
-  // In real app: fetch orders from API by status. Here we use demo generator.
+  // All orders grouped by tab (demo)
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>(() => {
     const map = {} as Record<TabKey, Order[]>;
     for (const t of TABS) {
@@ -101,27 +109,24 @@ export default function AdminOrdersPage() {
     return map;
   });
 
-  // Orders for active tab
+  // Modal state for marking/changing status
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalOrder, setModalOrder] = useState<Order | null>(null);
+  const [selectedMark, setSelectedMark] = useState<string>("delivered");
+  const [remarks, setRemarks] = useState("");
+
+  // Orders for the active tab
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
 
-  // Move an order to next status (client-side)
-  async function moveOrderToNext(orderId: string) {
-    // Find order in current tab
+  // Move to next status (quick flow)
+  function moveOrderToNext(orderId: string) {
     const current = allOrders[activeTab] || [];
     const idx = current.findIndex((o) => o.id === orderId);
     if (idx === -1) return;
-
     const order = current[idx];
     const mapping = NEXT_MAP[order.status];
-    if (!mapping?.next) {
-      alert("This order cannot be moved further.");
-      return;
-    }
+    if (!mapping?.next) return alert("Cannot move further");
 
-    // Optional: call your backend API to change status
-    // const res = await fetch('/api/admin/orders/change-status', { method: 'POST', body: JSON.stringify({ id: order.id, newStatus: mapping.next }) });
-
-    // Update client state (simulate success)
     const newOrder: Order = {
       ...order,
       status: mapping.next!,
@@ -132,13 +137,56 @@ export default function AdminOrdersPage() {
     };
 
     setAllOrders((prev) => {
+      const next = { ...prev };
+      next[activeTab] = next[activeTab].filter((o) => o.id !== orderId);
+      next[mapping.next!] = [newOrder, ...(next[mapping.next!] ?? [])];
+      return next;
+    });
+  }
+
+  // Open modal for an order (for Out for Delivery marking or change status)
+  function openMarkModal(order: Order) {
+    setModalOrder(order);
+    setSelectedMark("delivered"); // default
+    setRemarks("");
+    setModalOpen(true);
+  }
+
+  // Submit modal: perform status change based on selectedMark
+  async function submitMark() {
+    if (!modalOrder) return;
+    const targetKey = selectedMark as TabKey;
+
+    // Here you would call backend API to change order status
+    // const res = await fetch('/api/admin/orders/change-status', { method: 'POST', body: JSON.stringify({ id: modalOrder.id, newStatus: targetKey, remarks }) });
+
+    // simulate success and update client state
+    const updated: Order = {
+      ...modalOrder,
+      status: targetKey,
+      history: [
+        ...modalOrder.history,
+        { at: new Date().toISOString(), by: "admin", note: remarks || `Marked ${FINAL_MARK_OPTIONS.find(f => f.key === targetKey)?.label}`, status: targetKey },
+      ],
+    };
+
+    setAllOrders((prev) => {
       const copy = { ...prev };
-      // remove from current tab
-      copy[activeTab] = copy[activeTab].filter((o) => o.id !== orderId);
-      // add to next tab at top
-      copy[mapping.next!] = [newOrder, ...(copy[mapping.next!] ?? [])];
+      // Remove from current location (could be any tab)
+      for (const k of Object.keys(copy) as TabKey[]) {
+        copy[k] = copy[k].filter((o) => o.id !== updated.id);
+      }
+      // Add to target tab at top
+      copy[targetKey] = [updated, ...(copy[targetKey] ?? [])];
       return copy;
     });
+
+    // close modal
+    setModalOpen(false);
+    setModalOrder(null);
+    setRemarks("");
+    // ensure UI shows target tab
+    setActiveTab(targetKey);
   }
 
   // Render helper: format date/time
@@ -239,7 +287,7 @@ export default function AdminOrdersPage() {
                           <li key={i} style={{ marginBottom: 6 }}>
                             <div style={{ fontSize: 13, color: "#6b7280" }}>{new Date(h.at).toLocaleString()}</div>
                             <div style={{ fontWeight: 600 }}>{h.by}</div>
-                            <div style={{ fontSize: 13 }}>{h.note ?? TABS.find(t=>t.key===h.status)?.label}</div>
+                            <div style={{ fontSize: 13 }}>{h.note ?? TABS.find(t => t.key === h.status)?.label}</div>
                           </li>
                         ))}
                       </ul>
@@ -247,18 +295,33 @@ export default function AdminOrdersPage() {
                   </td>
 
                   <td style={{ padding: 10 }}>
-                    {NEXT_MAP[o.status]?.next ? (
+                    {/* If current tab is out for delivery, show modal-based marking */}
+                    {o.status === "outfordelivery" ? (
                       <button
-                        onClick={() => {
-                          if (!confirm(`Are you sure you want to ${NEXT_MAP[o.status]?.actionLabel}?`)) return;
-                          moveOrderToNext(o.id);
-                        }}
+                        onClick={() => openMarkModal(o)}
                         style={{ padding: "8px 10px", borderRadius: 6, border: "none", background: "#0f172a", color: "#fff", cursor: "pointer" }}
                       >
-                        {NEXT_MAP[o.status].actionLabel}
+                        Mark Order
+                      </button>
+                    ) : // if order is one of final statuses, show Change Status
+                    ["delivered", "cancelled", "notdelivered", "baddelivery"].includes(o.status) ? (
+                      <button
+                        onClick={() => openMarkModal(o)}
+                        style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #e6e8eb", background: "#fff", cursor: "pointer" }}
+                      >
+                        Change Status
                       </button>
                     ) : (
-                      <div style={{ color: "#6b7280" }}>—</div>
+                      // otherwise show quick move to next (booked->verification->inkitchen->outfordelivery)
+                      <button
+                        onClick={() => {
+                          if (!confirm(`Move order ${o.id} to next status?`)) return;
+                          moveOrderToNext(o.id);
+                        }}
+                        style={{ padding: "8px 10px", borderRadius: 6, border: "none", background: "#273e9a", color: "#fff", cursor: "pointer" }}
+                      >
+                        {NEXT_MAP[o.status]?.actionLabel ?? "—"}
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -275,6 +338,61 @@ export default function AdminOrdersPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal (simple) */}
+      {modalOpen && modalOrder && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(0,0,0,0.4)",
+            zIndex: 9999,
+            padding: 20,
+          }}
+        >
+          <div style={{ width: 720, maxWidth: "100%", background: "#fff", borderRadius: 8, padding: 18 }}>
+            <h3 style={{ marginTop: 0 }}>Mark Order: {modalOrder.id}</h3>
+            <p style={{ color: "#6b7280" }}>Select a status and add remarks (optional)</p>
+
+            {/* options */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              {FINAL_MARK_OPTIONS.map((opt) => (
+                <label key={opt.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="radio"
+                    name="mark"
+                    value={opt.key}
+                    checked={selectedMark === opt.key}
+                    onChange={(e) => setSelectedMark(e.target.value)}
+                  />
+                  <span style={{ fontWeight: 600 }}>{opt.label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>Remarks</label>
+              <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={4} style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #e6e8eb" }} />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => { setModalOpen(false); setModalOrder(null); }} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #e6e8eb", background: "#fff" }}>
+                Cancel
+              </button>
+              <button
+                onClick={submitMark}
+                style={{ padding: "8px 12px", borderRadius: 6, border: "none", background: "#0f172a", color: "#fff" }}
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
