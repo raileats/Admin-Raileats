@@ -1,32 +1,18 @@
-// middleware.ts (at repo root)
+// middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(req: NextRequest) {
-  const pathname = req.nextUrl.pathname;
+  const p = req.nextUrl.pathname;
+  if (p.startsWith("/_next") || p.startsWith("/api") || p === "/admin/login") return NextResponse.next();
 
-  // allow internals, api and login page
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname === "/admin/login"
-  ) {
-    return NextResponse.next();
-  }
-
-  // protect admin routes
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+  if (p === "/admin" || p.startsWith("/admin/")) {
     const token = req.cookies.get("admin_auth")?.value;
     if (!token) {
-      const url = req.nextUrl.clone();
-      url.pathname = "/admin/login";
-      return NextResponse.redirect(url);
+      const url = req.nextUrl.clone(); url.pathname = "/admin/login"; return NextResponse.redirect(url);
     }
   }
-
   return NextResponse.next();
 }
 
-export const config = {
-  matcher: ["/admin/:path*", "/admin"],
-};
+export const config = { matcher: ["/admin/:path*", "/admin"] };
