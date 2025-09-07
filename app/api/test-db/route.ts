@@ -2,21 +2,29 @@
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
-// Pool create with DATABASE_URL
+// Supabase connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, // Supabase ke liye
+  ssl: { rejectUnauthorized: false },
 });
 
 export async function GET() {
   try {
     const client = await pool.connect();
-    const result = await client.query("SELECT NOW()");
+
+    // Orders table se 5 rows uthao
+    const result = await client.query(`
+      SELECT id, status, outlet_name, station_name, delivery_datetime, customer_name, customer_mobile 
+      FROM orders 
+      ORDER BY created_at DESC 
+      LIMIT 5
+    `);
+
     client.release();
 
     return NextResponse.json({
       success: true,
-      time: result.rows[0].now,
+      orders: result.rows,
     });
   } catch (err: any) {
     return NextResponse.json({
