@@ -17,27 +17,27 @@ export default function VendorCsvUploader({ onDone }) {
   }
 
   function mapRow(r){
-  return {
-    outlet_id: (r["Restro Code"] ?? "").toString().trim(),
-    outlet_name: (r["Restro Name"] ?? "").toString().trim(),
-    station_code: (r["Station Code"] ?? "").toString().trim(),
-    station_name: (r["Station Name"] ?? "").toString().trim(),
-    owner_name: (r["Owner Name"] ?? "").toString().trim(),
-    owner_mobile: normalizePhone(r["Owner Phone"] ?? ""),
-    outlet_phone: normalizePhone(r["Restro Phone"] ?? ""),
-    fssai_no: (r["FSSAI Number"] ?? "").toString().trim(),
-    gst_no: (r["GST Number"] ?? "").toString().trim(),
-    pan_no: (r["PAN Number"] ?? "").toString().trim(),
-    latitude: r["latitude"] ? parseFloat(r["latitude"]) : null,
-    longitude: r["longitude"] ? parseFloat(r["longitude"]) : null,
-    min_order_value: r["Min Order Value"] ? parseFloat(r["Min Order Value"]) : 0,
-    delivery_charges: r["Delivery Charges"] ? parseFloat(r["Delivery Charges"]) : 0,
-    start_time: (r["AM Time"] ?? "").toString().trim(),
-    end_time: (r["PM Time"] ?? "").toString().trim(),
-    status: (r["Raileats Status"] == 1 || r["Raileats Status"] === "1") ? "active" : "inactive",
-    raw: r
-  };
-}
+    return {
+      outlet_id: (r["Restro Code"] ?? "").toString().trim(),
+      outlet_name: (r["Restro Name"] ?? "").toString().trim(),
+      station_code: (r["Station Code"] ?? "").toString().trim(),
+      station_name: (r["Station Name"] ?? "").toString().trim(),
+      owner_name: (r["Owner Name"] ?? "").toString().trim(),
+      owner_mobile: normalizePhone(r["Owner Phone"] ?? ""),
+      outlet_phone: normalizePhone(r["Restro Phone"] ?? ""),
+      fssai_no: (r["FSSAI Number"] ?? "").toString().trim(),
+      gst_no: (r["GST Number"] ?? "").toString().trim(),
+      pan_no: (r["PAN Number"] ?? "").toString().trim(),
+      latitude: r["latitude"] ? parseFloat(r["latitude"]) : null,
+      longitude: r["longitude"] ? parseFloat(r["longitude"]) : null,
+      min_order_value: r["Min Order Value"] ? parseFloat(r["Min Order Value"]) : 0,
+      delivery_charges: r["Delivery Charges"] ? parseFloat(r["Delivery Charges"]) : 0,
+      start_time: (r["AM Time"] ?? "").toString().trim(),
+      end_time: (r["PM Time"] ?? "").toString().trim(),
+      status: (r["Raileats Status"] == 1 || r["Raileats Status"] === "1") ? "active" : "inactive",
+      raw: r
+    };
+  }
 
   function validate(mapped){
     const errs = [];
@@ -64,7 +64,7 @@ export default function VendorCsvUploader({ onDone }) {
           if(errs.length) invalid.push({ row: idx+2, errors: errs, raw: m.raw });
           else valid.push(m);
         });
-        setPreview(mappedAll.slice(0,30)); // show some preview
+        setPreview(mappedAll.slice(0,30));
         setInvalidRows(invalid);
         if(invalid.length>0){
           alert("Found " + invalid.length + " invalid rows. Check preview below.");
