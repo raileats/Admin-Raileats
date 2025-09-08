@@ -24,4 +24,8 @@ export async function PATCH(
     const updatedCount = (data ?? []).length;
 
     return NextResponse.json({ updated: updatedCount });
- 
+  } catch (err: any) {
+    console.error("PATCH error", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
