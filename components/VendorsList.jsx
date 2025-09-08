@@ -1,5 +1,8 @@
+// components/VendorsList.jsx
 "use client";
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+const VendorEditModal = dynamic(() => import("@/components/VendorEditModal"), { ssr: false });
 
 export default function VendorsList() {
   const [vendors, setVendors] = useState([]);
@@ -8,6 +11,7 @@ export default function VendorsList() {
   const [alpha, setAlpha] = useState("");
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
+  const [editingVendor, setEditingVendor] = useState(null);
 
   useEffect(() => {
     fetchList();
@@ -36,12 +40,16 @@ export default function VendorsList() {
   }
 
   function openEdit(v) {
-    alert("Open edit modal for " + v.outlet_name);
+    setEditingVendor(v);
+  }
+
+  function onSavedCallback() {
+    fetchList();
+    setEditingVendor(null);
   }
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex gap-2">
         <input
           className="border p-2 rounded flex-1"
@@ -72,7 +80,6 @@ export default function VendorsList() {
         <button onClick={() => setAlpha("")} className="px-2 py-1 bg-gray-200 rounded">Clear</button>
       </div>
 
-      {/* Table */}
       <table className="w-full text-sm border">
         <thead>
           <tr className="bg-gray-100">
@@ -113,12 +120,13 @@ export default function VendorsList() {
         </tbody>
       </table>
 
-      {/* Pagination */}
       <div className="flex gap-2 items-center">
         <button disabled={page===1} onClick={()=>setPage(p=>p-1)} className="px-2 py-1 border rounded">Prev</button>
         <span>Page {page} / {Math.ceil(count/20) || 1}</span>
         <button disabled={page*20>=count} onClick={()=>setPage(p=>p+1)} className="px-2 py-1 border rounded">Next</button>
       </div>
+
+      { editingVendor && <VendorEditModal vendor={editingVendor} onClose={() => setEditingVendor(null)} onSaved={onSavedCallback} /> }
     </div>
   );
 }
