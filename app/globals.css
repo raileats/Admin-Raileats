@@ -1,10 +1,18 @@
+/* ---------------- Tailwind directives (keep these at top) ---------------- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------- Your existing theme variables (kept and reused) ---------------- */
 html, body {
   margin: 0;
   padding: 0;
+  /* using system fallback; optional: load Inter in layout head for nicer look */
   font-family: system-ui, sans-serif;
   background: #f9fafb;
   color: #111827;
 }
+
 :root{
   --bg: #f8fafc;
   --surface: #fff;
@@ -29,3 +37,25 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+
+/* ---------------- Small helper utility classes used by components ---------------- */
+/* shadow-card used for premium cards */
+.shadow-card {
+  box-shadow: var(--card-shadow);
+}
+
+/* small helper for button shadow used in components */
+.shadow-btn {
+  box-shadow: 0 6px 18px rgba(2,6,23,0.08);
+}
+
+/* ensure consistent font family if you load Inter from google fonts in layout */
+:root { --ui-font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+html { font-family: var(--ui-font); }
+
+/* optional: reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+/* --------- keep any other custom CSS below (if you have existing rules) --------- */
