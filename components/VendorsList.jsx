@@ -2,7 +2,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-const VendorEditModal = dynamic(() => import("@/components/VendorEditModal"), { ssr: false });
+const VendorEditModal = dynamic(() => import("components/VendorEditModal"), { ssr: false });
 
 export default function VendorsList() {
   const [vendors, setVendors] = useState([]);
