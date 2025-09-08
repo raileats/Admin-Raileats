@@ -5,8 +5,8 @@ import Link from "next/link";
 
 // These are client components — dynamic import not required but safe to keep for SSR parity.
 // Adjust paths if you placed components elsewhere.
-const VendorCsvUploader = dynamic(() => import("@/components/VendorCsvUploader"), { ssr: false });
-const VendorsList = dynamic(() => import("@/components/VendorsList"), { ssr: false });
+const VendorCsvUploader = dynamic(() => import("../../../components/VendorCsvUploader"), { ssr: false });
+const VendorsList = dynamic(() => import("../../../components/VendorsList"), { ssr: false });
 
 export const metadata = {
   title: "Admin • Vendors",
