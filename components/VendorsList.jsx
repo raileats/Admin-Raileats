@@ -2,9 +2,11 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-const VendorEditModal = dynamic(() => import("components/VendorEditModal"), { ssr: false });
 
-export default function VendorsList() {
+// relative import because this file is inside components/
+const VendorEditModal = dynamic(() => import("./VendorEditModal"), { ssr: false });
+
+export default function VendorsList({ refreshKey = 0 }) {
   const [vendors, setVendors] = useState([]);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
@@ -12,31 +14,58 @@ export default function VendorsList() {
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
   const [editingVendor, setEditingVendor] = useState(null);
+  const pageSize = 20;
 
   useEffect(() => {
     fetchList();
-  }, [q, status, alpha, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, status, alpha, page, refreshKey]);
 
   async function fetchList() {
-    const params = new URLSearchParams({
-      q, status, alpha,
-      page: page.toString(),
-      pageSize: "20"
-    });
-    const res = await fetch("/api/vendors?" + params.toString());
-    const json = await res.json();
-    setVendors(json.data || []);
-    setCount(json.count || 0);
+    try {
+      const params = new URLSearchParams({
+        q: q || "",
+        status: status || "",
+        alpha: alpha || "",
+        page: page.toString(),
+        pageSize: pageSize.toString()
+      });
+      const res = await fetch("/api/vendors?" + params.toString());
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Vendors fetch failed:", res.status, txt);
+        setVendors([]);
+        setCount(0);
+        return;
+      }
+      const json = await res.json();
+      setVendors(json.data || []);
+      setCount(json.count || 0);
+    } catch (err) {
+      console.error("Vendors fetch error:", err);
+      setVendors([]);
+      setCount(0);
+    }
   }
 
   async function toggleOnline(v) {
-    const newStatus = v.status === "active" ? "inactive" : "active";
-    await fetch(`/api/vendors/${v.outlet_id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus })
-    });
-    fetchList();
+    try {
+      const newStatus = v.status === "active" ? "inactive" : "active";
+      const res = await fetch(`/api/vendors/${encodeURIComponent(v.outlet_id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        alert("Update failed: " + txt);
+      }
+      // refetch
+      fetchList();
+    } catch (err) {
+      console.error("toggleOnline error:", err);
+      alert("Update failed");
+    }
   }
 
   function openEdit(v) {
@@ -55,7 +84,7 @@ export default function VendorsList() {
           className="border p-2 rounded flex-1"
           placeholder="Search by Outlet ID / Name / Owner Mobile"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => { setQ(e.target.value); setPage(1); }}
         />
         <select
           className="border p-2 rounded"
@@ -67,66 +96,81 @@ export default function VendorsList() {
           <option value="inactive">Inactive</option>
         </select>
       </div>
+
       <div className="flex gap-1 flex-wrap">
         {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((ltr) => (
           <button
             key={ltr}
             onClick={() => { setAlpha(ltr); setPage(1); }}
-            className={`px-2 py-1 rounded ${alpha===ltr ? "bg-amber-400" : "bg-gray-100"}`}
+            className={`px-2 py-1 rounded ${alpha === ltr ? "bg-amber-400" : "bg-gray-100"}`}
           >
             {ltr}
           </button>
         ))}
-        <button onClick={() => setAlpha("")} className="px-2 py-1 bg-gray-200 rounded">Clear</button>
+        <button onClick={() => { setAlpha(""); setPage(1); }} className="px-2 py-1 bg-gray-200 rounded">Clear</button>
       </div>
 
-      <table className="w-full text-sm border">
-        <thead>
-          <tr className="bg-gray-100">
-            <th className="p-2 border">Outlet Id</th>
-            <th className="p-2 border">Station</th>
-            <th className="p-2 border">Owner</th>
-            <th className="p-2 border">Mobile</th>
-            <th className="p-2 border">FSSAI</th>
-            <th className="p-2 border">Status</th>
-            <th className="p-2 border">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {vendors.map((v) => (
-            <tr key={v.outlet_id}>
-              <td className="p-2 border">{v.outlet_id}</td>
-              <td className="p-2 border">{v.station_code}</td>
-              <td className="p-2 border">{v.owner_name}</td>
-              <td className="p-2 border">{v.owner_mobile}</td>
-              <td className="p-2 border">{v.fssai_no}</td>
-              <td className="p-2 border">{v.status}</td>
-              <td className="p-2 border">
-                <button
-                  className="px-2 py-1 text-xs bg-blue-500 text-white rounded mr-1"
-                  onClick={() => toggleOnline(v)}
-                >
-                  Toggle
-                </button>
-                <button
-                  className="px-2 py-1 text-xs bg-amber-400 rounded"
-                  onClick={() => openEdit(v)}
-                >
-                  Edit
-                </button>
-              </td>
+      <div className="overflow-auto bg-white rounded shadow">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="p-2 border">Outlet Id</th>
+              <th className="p-2 border">Station</th>
+              <th className="p-2 border">Owner</th>
+              <th className="p-2 border">Mobile</th>
+              <th className="p-2 border">FSSAI</th>
+              <th className="p-2 border">Status</th>
+              <th className="p-2 border">Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {vendors.length === 0 ? (
+              <tr>
+                <td className="p-4 text-center text-sm text-slate-500" colSpan={7}>No vendors found</td>
+              </tr>
+            ) : (
+              vendors.map((v) => (
+                <tr key={v.outlet_id} className="odd:bg-white even:bg-slate-50">
+                  <td className="p-2 border">{v.outlet_id}</td>
+                  <td className="p-2 border">{v.station_code}</td>
+                  <td className="p-2 border">{v.owner_name}</td>
+                  <td className="p-2 border">{v.owner_mobile}</td>
+                  <td className="p-2 border">{v.fssai_no}</td>
+                  <td className="p-2 border">{v.status}</td>
+                  <td className="p-2 border">
+                    <button
+                      className="px-2 py-1 text-xs bg-blue-500 text-white rounded mr-1"
+                      onClick={() => toggleOnline(v)}
+                    >
+                      Toggle
+                    </button>
+                    <button
+                      className="px-2 py-1 text-xs bg-amber-400 rounded"
+                      onClick={() => openEdit(v)}
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <div className="flex gap-2 items-center">
-        <button disabled={page===1} onClick={()=>setPage(p=>p-1)} className="px-2 py-1 border rounded">Prev</button>
-        <span>Page {page} / {Math.ceil(count/20) || 1}</span>
-        <button disabled={page*20>=count} onClick={()=>setPage(p=>p+1)} className="px-2 py-1 border rounded">Next</button>
+        <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="px-2 py-1 border rounded">Prev</button>
+        <span>Page {page} / {Math.max(1, Math.ceil(count / pageSize))}</span>
+        <button disabled={page * pageSize >= count} onClick={() => setPage(p => p + 1)} className="px-2 py-1 border rounded">Next</button>
       </div>
 
-      { editingVendor && <VendorEditModal vendor={editingVendor} onClose={() => setEditingVendor(null)} onSaved={onSavedCallback} /> }
+      {editingVendor && (
+        <VendorEditModal
+          vendor={editingVendor}
+          onClose={() => setEditingVendor(null)}
+          onSaved={onSavedCallback}
+        />
+      )}
     </div>
   );
 }
