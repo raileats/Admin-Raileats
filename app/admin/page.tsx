@@ -1,7 +1,13 @@
-// app/admin/page.tsx
-import { redirect } from "next/navigation";
+// app/admin/vendors/page.tsx  (server component)
+import dynamic from "next/dynamic";
 
-export default function AdminRoot() {
-  // send user to login by default; middleware will also handle auth checks
-  redirect("/admin/login");
+const VendorsAdminShell = dynamic(() => import("../../../components/VendorsAdminShell"), { ssr: false });
+
+export default function Page() {
+  return (
+    <div>
+      <h1 className="text-2xl font-semibold mb-4">Outlets / Vendors</h1>
+      <VendorsAdminShell />
+    </div>
+  );
 }
