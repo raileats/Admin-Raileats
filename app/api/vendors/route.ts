@@ -1,48 +1,80 @@
 // app/api/vendors/route.ts
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+// (अगर पहले से supabase client या अन्य imports हैं, वे रहने दें)
 
-const supabase = createClient(
-  process.env.SUPABASE_URL ?? "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
-);
+// helper: env guard
+function checkEnv() {
+  const okUrl = !!process.env.SUPABASE_URL;
+  const okService = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const okAnon = !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // log booleans (NOT the secrets)
+  console.log("DEBUG env status:", { SUPABASE_URL: okUrl, SERVICE_ROLE: okService, NEXT_PUBLIC_ANON: okAnon });
+  if (!okUrl || !okService) {
+    return { ok: false, msg: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment" };
+  }
+  return { ok: true };
+}
 
+/* ----------------- GET handler (example) ----------------- */
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const q = url.searchParams.get("q") || "";
-  const status = url.searchParams.get("status") || "";
-  const alpha = url.searchParams.get("alpha") || "";
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const pageSize = parseInt(url.searchParams.get("pageSize") || "20");
+  console.log("vendors.GET called, url:", req.url);
+  const envCheck = checkEnv();
+  if (!envCheck.ok) {
+    console.error("vendors.GET - env error:", envCheck.msg);
+    return NextResponse.json({ error: envCheck.msg }, { status: 500 });
+  }
 
   try {
-    let query = supabase
-      .from("vendors")
-      .select("*", { count: "exact" })
-      .order("outlet_name", { ascending: true });
+    // --- your existing GET logic goes here ---
+    // e.g. parse query params, query supabase, return NextResponse.json(...)
+    // For example (pseudo):
+    // const { data, error } = await supabaseAdmin.from('vendors').select(...).range(...)
+    // if (error) throw error;
+    // return NextResponse.json({ data, count: ... });
 
-    if (q) {
-      // basic OR search: outlet_id, outlet_name, owner_mobile
-      query = query.or(
-        `outlet_id.ilike.%${q}%,outlet_name.ilike.%${q}%,owner_mobile.ilike.%${q}%`
-      );
-    }
-    if (status) {
-      query = query.eq("status", status);
-    }
-    if (alpha) {
-      query = query.ilike("outlet_name", `${alpha}%`);
-    }
+    return NextResponse.json({ data: [] }); // <-- temporary placeholder IF you need one
+  } catch (err) {
+    console.error("vendors.GET error:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
 
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
+/* ----------------- POST handler (import) ----------------- */
+export async function POST(req: Request) {
+  console.log("vendors.POST called");
+  const envCheck = checkEnv();
+  if (!envCheck.ok) {
+    console.error("vendors.POST - env error:", envCheck.msg);
+    return NextResponse.json({ error: envCheck.msg }, { status: 500 });
+  }
 
-    const { data, error, count } = await query.range(from, to);
-    if (error) throw error;
+  try {
+    const body = await req.json();
+    console.log("vendors.POST body keys:", Object.keys(body || {}));
+    // --- existing import logic here ---
+    return NextResponse.json({ inserted: 0 });
+  } catch (err) {
+    console.error("vendors.POST error:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
 
-    return NextResponse.json({ data, count, page, pageSize });
-  } catch (err: any) {
-    console.error("Vendors GET error", err);
+/* ----------------- PATCH handler (single outlet update) ----------------- */
+export async function PATCH(req: Request, { params }: { params: { outlet_id: string } }) {
+  console.log("vendors.PATCH called for outlet:", params?.outlet_id);
+  const envCheck = checkEnv();
+  if (!envCheck.ok) {
+    console.error("vendors.PATCH - env error:", envCheck.msg);
+    return NextResponse.json({ error: envCheck.msg }, { status: 500 });
+  }
+
+  try {
+    const body = await req.json();
+    console.log("vendors.PATCH body sample keys:", Object.keys(body || {}));
+    // --- existing update logic here ---
+    return NextResponse.json({ updated: 0 });
+  } catch (err) {
+    console.error("vendors.PATCH error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
