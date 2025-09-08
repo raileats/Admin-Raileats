@@ -24,30 +24,21 @@ export async function GET(req: Request) {
     const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
     const pageSize = Math.max(1, parseInt(url.searchParams.get("pageSize") ?? "20", 10));
 
-    // base query
     let query: any = supabaseAdmin.from("vendors").select("*", { count: "exact" });
 
-    // filters
     if (q) {
       const escaped = q.replace(/%/g, "\\%").replace(/_/g, "\\_");
       query = query.or(
         `outlet_id.ilike.%${escaped}%,outlet_name.ilike.%${escaped}%,owner_mobile.ilike.%${escaped}%,fssai_no.ilike.%${escaped}%`
       );
     }
-    if (status) {
-      query = query.eq("status", status);
-    }
-    if (alpha) {
-      query = query.ilike("outlet_name", `${alpha}%`);
-    }
-    if (station_code) {
-      query = query.ilike("station_code", `${station_code}%`);
-    }
+    if (status) query = query.eq("status", status);
+    if (alpha) query = query.ilike("outlet_name", `${alpha}%`);
+    if (station_code) query = query.ilike("station_code", `${station_code}%`);
 
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
-    // call range and capture full result
     const res: any = await query.range(from, to);
     const data = res?.data ?? null;
     const error = res?.error ?? null;
@@ -58,7 +49,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message ?? String(error) }, { status: 500 });
     }
 
-    // determine total count safely
     const totalCount = typeof count === "number" ? count : (Array.isArray(data) ? data.length : 0);
 
     return NextResponse.json({
@@ -83,14 +73,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ inserted: 0 }, { status: 400 });
     }
 
-    const { data, error } = await supabaseAdmin.from("vendors").upsert(rows);
+    const res: any = await supabaseAdmin.from("vendors").upsert(rows);
+    const data = res?.data ?? null;
+    const error = res?.error ?? null;
 
     if (error) {
       console.error("vendors.POST supabase error:", error);
       return NextResponse.json({ error: error.message ?? String(error) }, { status: 500 });
     }
 
-    return NextResponse.json({ inserted: Array.isArray(data) ? data.length : 0 });
+    const insertedCount = Array.isArray(data) ? data.length : 0;
+    return NextResponse.json({ inserted: insertedCount });
   } catch (err: any) {
     console.error("vendors.POST error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
