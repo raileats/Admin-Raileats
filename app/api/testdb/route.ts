@@ -7,6 +7,6 @@ export async function GET() {
     return NextResponse.json({ now: result.rows[0].now });
   } catch (err) {
     console.error("DB connection error:", err);
-    return NextResponse.json({ error: "DB connection failed" }, { status: 500 });
+    return NextResponse.json({ error: "DB connection failed", details: String(err) }, { status: 500 });
   }
 }
