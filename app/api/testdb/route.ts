@@ -1,3 +1,4 @@
+// app/api/testdb/route.ts  — restore this
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
