@@ -3,18 +3,18 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 
-// Dynamic import to avoid SSR/client mismatch or import-time crashes
+// dynamic import of StationSearch (ssr:false) to avoid server-side import-time issues
 const StationSearch = dynamic(() => import("./StationSearch"), { ssr: false });
 
 export default function AddOutletModal({ stations = [], onClose = () => {}, onCreate = () => {} }) {
-  const [tab, setTab] = useState(0); // 0: Basic, 1: Station Settings, 2: Documents, 3+: others
+  const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const [basic, setBasic] = useState({
-    outletId: "", // server will provide
+    outletId: "",
     outletName: "",
     stationId: "",
-    stationObj: null, // store picked station object
+    stationObj: null,
     ownerName: "",
     outletLat: "",
     outletLong: "",
@@ -58,7 +58,7 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
   async function handleBasicSubmit(e) {
     if (e && e.preventDefault) e.preventDefault();
 
-    // client validation — extra guard for stationObj
+    // validation
     if (!basic.outletName || !basic.stationId || !basic.ownerMobile) {
       alert("Please fill required fields: Outlet Name, Station and Owner Mobile.");
       return;
@@ -66,14 +66,12 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
 
     setLoading(true);
     try {
-      // Simulated generated id for now:
+      // TODO: replace with server API that creates outlet and returns id
       const fakeId = "OUT" + Math.floor(Math.random() * 900000 + 100000);
       setBasic((b) => ({ ...b, outletId: fakeId }));
-
-      // proceed to next tab
       setTab(1);
     } catch (err) {
-      console.error("handleBasicSubmit error:", err);
+      console.error("handleBasicSubmit:", err);
       alert("Error creating outlet (basic)");
     } finally {
       setLoading(false);
@@ -84,45 +82,41 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
     if (e && e.preventDefault) e.preventDefault();
     setLoading(true);
     try {
-      // build payload, ensure stationObj exists
       const payload = {
         basic: {
           ...basic,
-          // include readable station fields to store with outlet
-          station: basic.stationObj
-            ? {
-                id: basic.stationObj.StationId,
-                code: basic.stationObj.StationCode,
-                name: basic.stationObj.StationName,
-                state: basic.stationObj.State,
-                district: basic.stationObj.District,
-                lat: basic.stationObj.Lat,
-                long: basic.stationObj.Long,
-              }
-            : null,
+          station: basic.stationObj ? {
+            id: basic.stationObj.StationId,
+            code: basic.stationObj.StationCode,
+            name: basic.stationObj.StationName,
+            state: basic.stationObj.State,
+            district: basic.stationObj.District,
+            lat: basic.stationObj.Lat,
+            long: basic.stationObj.Long,
+          } : null
         },
         stationSettings,
-        documents: {
-          fssai: documents.fssai,
-          // licenceUrl: uploadedUrl
-        },
+        documents: { fssai: documents.fssai }
       };
 
-      // TODO: replace with actual API call to save outlet
-      // const res = await fetch("/api/outlets", { method: "PUT", headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      // TODO: call your API to save
+      // const res = await fetch("/api/outlets", { method: "PUT", headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
       // const json = await res.json();
 
-      // simulate success:
+      // Simulate success:
       const json = { success: true, outlet: { ...basic, ...stationSettings } };
       onCreate(json.outlet);
       resetAll();
     } catch (err) {
-      console.error("handleFinalSubmit error:", err);
+      console.error("handleFinalSubmit:", err);
       alert("Error finalizing outlet");
     } finally {
       setLoading(false);
     }
   }
+
+  // Fallback: if StationSearch fails for some reason, you can still use static stations prop
+  const fallbackStationOptions = Array.isArray(stations) ? stations : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-6">
@@ -168,11 +162,11 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
 
               <div>
                 <label className="block text-sm">Station (Code - Name) *</label>
-                {/* StationSearch dynamically imported to avoid import-time crashes */}
+
+                {/* Primary: StationSearch (client-side) */}
                 <StationSearch
                   value={basic.stationObj}
                   onChange={(s) => {
-                    // `s` may be null when cleared
                     setBasic(b => ({
                       ...b,
                       stationId: s ? s.StationId : "",
@@ -180,6 +174,29 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
                     }));
                   }}
                 />
+
+                {/* Fallback: static select (will be visible if StationSearch SSR not available or you want fallback)
+                    Uncomment below block if you prefer the fallback dropdown instead of StationSearch.
+                */}
+                {/* <div className="mt-2">
+                  <select
+                    required
+                    value={basic.stationId}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setBasic(b => ({ ...b, stationId: val, stationObj: { StationId: val, StationName: e.target.selectedOptions[0]?.text || "" } }));
+                    }}
+                    className="w-full border rounded p-2"
+                  >
+                    <option value="">Select station</option>
+                    {fallbackStationOptions.map(s => (
+                      <option key={s.StationId ?? s.id ?? s.code} value={s.StationId ?? s.id ?? s.code}>
+                        {(s.StationCode ?? s.code ?? "")} - {(s.StationName ?? s.name ?? "")}
+                      </option>
+                    ))}
+                  </select>
+                </div> */}
+
               </div>
 
               <div>
@@ -283,6 +300,7 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
               <p className="text-sm italic">Further tabs (Future Holiday, Bank, Address, Menu) — content to be added later.</p>
             </div>
           )}
+
         </div>
       </div>
     </div>
