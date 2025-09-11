@@ -1,7 +1,10 @@
 // components/AddOutletModal.jsx
 "use client";
 import React, { useState } from "react";
-import StationSearch from "./StationSearch";
+import dynamic from "next/dynamic";
+
+// Dynamic import to avoid SSR/client mismatch or import-time crashes
+const StationSearch = dynamic(() => import("./StationSearch"), { ssr: false });
 
 export default function AddOutletModal({ stations = [], onClose = () => {}, onCreate = () => {} }) {
   const [tab, setTab] = useState(0); // 0: Basic, 1: Station Settings, 2: Documents, 3+: others
@@ -53,8 +56,9 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
   }
 
   async function handleBasicSubmit(e) {
-    e && e.preventDefault && e.preventDefault();
-    // client validation
+    if (e && e.preventDefault) e.preventDefault();
+
+    // client validation — extra guard for stationObj
     if (!basic.outletName || !basic.stationId || !basic.ownerMobile) {
       alert("Please fill required fields: Outlet Name, Station and Owner Mobile.");
       return;
@@ -62,10 +66,6 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
 
     setLoading(true);
     try {
-      // TODO: replace with your real API endpoint to create partial record and generate outletId:
-      // const res = await fetch("/api/outlets/basic", { method: "POST", headers:{'Content-Type':'application/json'}, body: JSON.stringify(basic) });
-      // const json = await res.json();
-      // setBasic(b => ({ ...b, outletId: json.outlet.outlet_id }));
       // Simulated generated id for now:
       const fakeId = "OUT" + Math.floor(Math.random() * 900000 + 100000);
       setBasic((b) => ({ ...b, outletId: fakeId }));
@@ -73,7 +73,7 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
       // proceed to next tab
       setTab(1);
     } catch (err) {
-      console.error(err);
+      console.error("handleBasicSubmit error:", err);
       alert("Error creating outlet (basic)");
     } finally {
       setLoading(false);
@@ -81,13 +81,26 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
   }
 
   async function handleFinalSubmit(e) {
-    e && e.preventDefault && e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     setLoading(true);
     try {
-      // upload documents first (if any) and get URLs — TODO implement server upload / S3 presigned flow
-      // then call final update API (PUT /api/outlets) with outletId and stationSettings + documents
+      // build payload, ensure stationObj exists
       const payload = {
-        basic,
+        basic: {
+          ...basic,
+          // include readable station fields to store with outlet
+          station: basic.stationObj
+            ? {
+                id: basic.stationObj.StationId,
+                code: basic.stationObj.StationCode,
+                name: basic.stationObj.StationName,
+                state: basic.stationObj.State,
+                district: basic.stationObj.District,
+                lat: basic.stationObj.Lat,
+                long: basic.stationObj.Long,
+              }
+            : null,
+        },
         stationSettings,
         documents: {
           fssai: documents.fssai,
@@ -95,7 +108,7 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
         },
       };
 
-      // TODO: replace with actual API call:
+      // TODO: replace with actual API call to save outlet
       // const res = await fetch("/api/outlets", { method: "PUT", headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       // const json = await res.json();
 
@@ -104,7 +117,7 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
       onCreate(json.outlet);
       resetAll();
     } catch (err) {
-      console.error(err);
+      console.error("handleFinalSubmit error:", err);
       alert("Error finalizing outlet");
     } finally {
       setLoading(false);
@@ -155,13 +168,17 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
 
               <div>
                 <label className="block text-sm">Station (Code - Name) *</label>
+                {/* StationSearch dynamically imported to avoid import-time crashes */}
                 <StationSearch
                   value={basic.stationObj}
-                  onChange={(s) => setBasic(b => ({
-                    ...b,
-                    stationId: s ? s.StationId : "",
-                    stationObj: s ? s : null
-                  }))}
+                  onChange={(s) => {
+                    // `s` may be null when cleared
+                    setBasic(b => ({
+                      ...b,
+                      stationId: s ? s.StationId : "",
+                      stationObj: s ? s : null
+                    }));
+                  }}
                 />
               </div>
 
@@ -250,7 +267,7 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
 
                 <div>
                   <label className="block text-sm">Upload Licence</label>
-                  <input type="file" onChange={e => setDocuments(d => ({ ...d, licenceFile: e.target.files[0] }))} className="w-full" />
+                  <input type="file" onChange={e => setDocuments(d => ({ ...d, licenceFile: e.target.files && e.target.files[0] }))} className="w-full" />
                 </div>
 
                 <div className="col-span-2 flex justify-end gap-2">
