@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 function maskDbUrl(url?: string) {
   if (!url) return null;
   try {
-    // parse and return only host:port (no password)
     const m = url.match(/@([^/]+)/);
     if (m && m[1]) return m[1];
     return url;
