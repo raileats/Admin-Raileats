@@ -1,6 +1,7 @@
 // components/AddOutletModal.jsx
 "use client";
 import React, { useState } from "react";
+import StationSearch from "./StationSearch";
 
 export default function AddOutletModal({ stations = [], onClose = () => {}, onCreate = () => {} }) {
   const [tab, setTab] = useState(0); // 0: Basic, 1: Station Settings, 2: Documents, 3+: others
@@ -10,6 +11,7 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
     outletId: "", // server will provide
     outletName: "",
     stationId: "",
+    stationObj: null, // store picked station object
     ownerName: "",
     outletLat: "",
     outletLong: "",
@@ -36,6 +38,7 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
       outletId: "",
       outletName: "",
       stationId: "",
+      stationObj: null,
       ownerName: "",
       outletLat: "",
       outletLong: "",
@@ -152,14 +155,14 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
 
               <div>
                 <label className="block text-sm">Station (Code - Name) *</label>
-                <select required value={basic.stationId} onChange={e => setBasic(b => ({ ...b, stationId: e.target.value }))} className="w-full border rounded p-2">
-                  <option value="">Select station</option>
-                  {stations.map(s => (
-                    <option key={s.id ?? s.code} value={s.id ?? s.code}>
-                      {s.code} - {s.name}
-                    </option>
-                  ))}
-                </select>
+                <StationSearch
+                  value={basic.stationObj}
+                  onChange={(s) => setBasic(b => ({
+                    ...b,
+                    stationId: s ? s.StationId : "",
+                    stationObj: s ? s : null
+                  }))}
+                />
               </div>
 
               <div>
@@ -204,8 +207,8 @@ export default function AddOutletModal({ stations = [], onClose = () => {}, onCr
               <div>
                 <label className="block text-sm">Station (auto)</label>
                 <input value={(() => {
-                  const s = stations.find(x => String(x.id) === String(basic.stationId));
-                  return s ? `${s.code} - ${s.name}` : "";
+                  const s = basic.stationObj;
+                  return s ? `${s.StationCode || ""} - ${s.StationName}` : "";
                 })()} readOnly className="w-full border rounded p-2 bg-gray-50" />
               </div>
 
