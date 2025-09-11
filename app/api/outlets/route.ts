@@ -1,45 +1,102 @@
+// app/api/outlets/route.ts
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
 
-export async function PUT(req: Request) {
+type BodyShape = {
+  basic?: {
+    outletId?: string;
+    outletName?: string;
+    ownerMobile?: string;
+    ownerEmail?: string | null;
+    stationId?: number | string | null;
+    stationObj?: {
+      StationId?: number | string;
+      StationName?: string;
+      StationCode?: string;
+      State?: string;
+      District?: string;
+      Lat?: number | null;
+      Long?: number | null;
+    } | null;
+    outletLat?: number | string | null;
+    outletLong?: number | string | null;
+    outletStatus?: boolean;
+  };
+  stationSettings?: {
+    minOrder?: number | string | null;
+    openTime?: string | null;
+    closeTime?: string | null;
+    cutOffMinutes?: number | string | null;
+  };
+  documents?: {
+    fssai?: string | null;
+  };
+};
+
+export async function POST(request: Request) {
   try {
-    const body = await req.json();
-    const { outletId, stationSettings, documents } = body;
+    const body = (await request.json()) as BodyShape;
 
-    if (!outletId) {
-      return NextResponse.json({ error: "Missing outletId" }, { status: 400 });
+    // minimal validation
+    const outletId = body?.basic?.outletId;
+    const outletName = body?.basic?.outletName;
+    const ownerMobile = body?.basic?.ownerMobile;
+
+    if (!outletId || !outletName || !ownerMobile) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const q = `UPDATE outlets
-      SET min_order = $1,
-          open_time = $2,
-          close_time = $3,
-          cutoff_minutes = $4,
-          fssai = $5,
-          documents = $6,
-          updated_at = now()
-      WHERE outlet_id = $7
-      RETURNING *`;
+    const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE;
+    const PROJECT_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://ygisiztmuzwxpnvhwrmr.supabase.co";
 
-    const vals = [
-      stationSettings?.minOrder || null,
-      stationSettings?.openTime || null,
-      stationSettings?.closeTime || null,
-      stationSettings?.cutOffMinutes || null,
-      documents?.fssai || null,
-      JSON.stringify(documents || {}),
-      outletId,
-    ];
-
-    const updated = await db.query(q, vals);
-
-    if (updated.rowCount === 0) {
-      return NextResponse.json({ error: "Outlet not found" }, { status: 404 });
+    if (!SERVICE_KEY) {
+      return NextResponse.json({ error: "SUPABASE_SERVICE_ROLE not configured on server" }, { status: 500 });
     }
 
-    return NextResponse.json({ outlet: updated.rows[0] }, { status: 200 });
+    const payload = {
+      outlet_id: outletId,
+      name: outletName,
+      owner_mobile: ownerMobile,
+      owner_email: body.basic?.ownerEmail ?? null,
+      station_id: body.basic?.stationId ?? null,
+      station_name: body.basic?.stationObj?.StationName ?? null,
+      station_code: body.basic?.stationObj?.StationCode ?? null,
+      lat: body.basic?.stationObj?.Lat ?? body.basic?.outletLat ?? null,
+      long: body.basic?.stationObj?.Long ?? body.basic?.outletLong ?? null,
+      status: body.basic?.outletStatus ? "active" : "inactive",
+      min_order: body.stationSettings?.minOrder ?? null,
+      open_time: body.stationSettings?.openTime ?? null,
+      close_time: body.stationSettings?.closeTime ?? null,
+      fssai: body.documents?.fssai ?? null,
+      created_at: new Date().toISOString()
+    };
+
+    const url = `${PROJECT_URL}/rest/v1/Outlets`;
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await resp.text();
+    // try parse JSON response
+    try {
+      const data = JSON.parse(text);
+      if (!resp.ok) {
+        return NextResponse.json({ status: resp.status, error: data }, { status: 500 });
+      }
+      return NextResponse.json({ status: resp.status, data }, { status: 200 });
+    } catch (e) {
+      // not JSON? return raw text
+      return NextResponse.json({ status: resp.status, raw: text }, { status: resp.status });
+    }
   } catch (err) {
-    console.error("Error updating outlet:", err);
-    return NextResponse.json({ error: "Failed to update outlet" }, { status: 500 });
+    console.error("API /api/outlets error:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
