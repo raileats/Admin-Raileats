@@ -1,122 +1,13 @@
-// components/StationSearch.jsx
-"use client";
-import React, { useState, useEffect, useRef } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
-/**
- * Props:
- *  - value: currently selected station object (optional)
- *  - onChange: function(station|null) => void   // called when user selects or clears
- *  - placeholder: optional placeholder text
- */
-export default function StationSearch({ value = null, onChange = () => {}, placeholder = "Search station by name or code..." }) {
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const timer = useRef(null);
-
-  useEffect(() => {
-    if (!q || q.trim() === "") {
-      setResults([]);
-      return;
-    }
-    setLoading(true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      try {
-        // search by name prefix OR by exact/partial code
-        const nameFilter = `${q}%`;
-        const codeFilter = `${q}%`;
-        const { data, error } = await supabase
-          .from("Stations")
-          .select("StationId,StationName,StationCode,State,District,Lat,Long")
-          .or(`StationName.ilike.${nameFilter},StationCode.ilike.${codeFilter}`)
-          .order("StationName", { ascending: true })
-          .limit(10);
-
-        if (error) {
-          console.error("Station search error:", error);
-          setResults([]);
-        } else {
-          setResults(data || []);
-        }
-      } catch (err) {
-        console.error(err);
-        setResults([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 250);
-
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, [q]);
-
-  return (
-    <div className="relative w-full">
-      <div className="flex gap-2">
-        <input
-          className="w-full border rounded px-3 py-2"
-          placeholder={placeholder}
-          value={q}
-          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-        />
-        <button
-          type="button"
-          className="px-3 py-2 bg-gray-100 border rounded"
-          onClick={() => {
-            setQ("");
-            onChange(null);
-            setResults([]);
-            setOpen(false);
-          }}
-        >
-          Clear
-        </button>
-      </div>
-
-      {open && (loading || results.length > 0 || q) && (
-        <div className="absolute z-40 mt-1 w-full bg-white border rounded shadow max-h-56 overflow-auto">
-          {loading && <div className="p-2 text-sm">Searching...</div>}
-          {!loading && results.length === 0 && q && (
-            <div className="p-2 text-sm text-gray-500">No stations found</div>
-          )}
-          {!loading && results.map((s) => (
-            <div
-              key={s.StationId}
-              className="p-2 hover:bg-gray-100 cursor-pointer"
-              onClick={() => {
-                onChange({
-                  StationId: s.StationId,
-                  StationName: s.StationName,
-                  StationCode: s.StationCode,
-                  State: s.State,
-                  District: s.District,
-                  Lat: s.Lat,
-                  Long: s.Long
-                });
-                setQ(`${s.StationName} (${s.StationCode || ""})`);
-                setOpen(false);
-              }}
-            >
-              <div className="text-sm font-medium">{s.StationName} <span className="text-xs text-gray-500">({s.StationCode})</span></div>
-              <div className="text-xs text-gray-500">{s.District || ""} • {s.State || ""}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {value && !open && (
-        <div className="mt-2 text-sm text-green-700">Selected: {value.StationName} ({value.StationCode})</div>
-      )}
-    </div>
-  );
-}
+<div>
+  <label className="block text-sm">Station (Code - Name) *</label>
+  <StationSearch
+    value={basic.stationObj}
+    onChange={(s) => {
+      setBasic(b => ({
+        ...b,
+        stationId: s ? s.StationId : "",
+        stationObj: s ? s : null
+      }));
+    }}
+  />
+</div>
