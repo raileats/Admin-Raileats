@@ -4,72 +4,48 @@ import Image from "next/image";
 
 export default function Sidebar() {
   return (
-    <aside
-      style={{
-        width: 240,
-        padding: 20,
-        background: "black",
-        color: "white",
-        minHeight: "100vh",
-      }}
-    >
-      {/* Logo + Title */}
-      <div className="flex items-center gap-2 mb-8">
+    <aside style={{ width: 240, padding: 20 }}>
+      {/* Logo + Title same as raileats.in */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
         <Image
-          src="/logo.png" // <-- aapne /public/logo.png upload kar diya ho
+          src="/logo.png"   // <-- /public/logo.png me rakho
           alt="RailEats"
           width={40}
           height={40}
-          className="rounded-full animate-bubbleGlow"
+          style={{ borderRadius: "50%" }}
         />
-        <span className="text-xl font-bold leading-none">
-          <span className="text-[#F6C800]">Rail</span>
-          <span className="text-white">Eats</span>
-        </span>
+        <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "bold", lineHeight: 1 }}>
+          <span style={{ color: "#F6C800" }}>Rail</span>
+          <span style={{ color: "#000" }}>Eats</span>
+        </h3>
       </div>
 
-      {/* Navigation */}
+      {/* Navigation same as pehle tha */}
       <nav>
-        <ul className="space-y-4">
-          <li>
-            <Link href="/admin/home" className="hover:text-[#F6C800]">
-              Home
-            </Link>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          <li style={{ marginBottom: 10 }}>
+            <Link href="/admin/home">Home</Link>
           </li>
-          <li>
-            <Link href="/admin/orders" className="hover:text-[#F6C800]">
-              Orders
-            </Link>
+          <li style={{ marginBottom: 10 }}>
+            <Link href="/admin/orders">Orders</Link>
           </li>
-          <li>
-            <Link href="/admin/menu" className="hover:text-[#F6C800]">
-              Menu
-            </Link>
+          <li style={{ marginBottom: 10 }}>
+            <Link href="/admin/menu">Menu</Link>
           </li>
-          <li>
-            <Link href="/admin/trains" className="hover:text-[#F6C800]">
-              Trains
-            </Link>
+          <li style={{ marginBottom: 10 }}>
+            <Link href="/admin/trains">Trains</Link>
           </li>
-          <li>
-            <Link href="/admin/stations" className="hover:text-[#F6C800]">
-              Stations
-            </Link>
+          <li style={{ marginBottom: 10 }}>
+            <Link href="/admin/stations">Stations</Link>
           </li>
-          <li>
-            <Link href="/admin/users" className="hover:text-[#F6C800]">
-              Users
-            </Link>
+          <li style={{ marginBottom: 10 }}>
+            <Link href="/admin/users">Users</Link>
           </li>
-          <li>
-            <Link href="/admin/vendors" className="hover:text-[#F6C800]">
-              Vendors
-            </Link>
+          <li style={{ marginBottom: 10 }}>
+            <Link href="/admin/vendors">Vendors</Link>
           </li>
-          <li>
-            <Link href="/admin/logout" className="hover:text-red-400">
-              Logout
-            </Link>
+          <li style={{ marginTop: 18 }}>
+            <Link href="/admin/logout">Logout</Link>
           </li>
         </ul>
       </nav>
