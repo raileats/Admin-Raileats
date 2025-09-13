@@ -1,104 +1,136 @@
-"use client";
-import React, { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+// app/admin/page.tsx
+'use client';
 
-// Place this file as pages/admin.jsx (Next.js 13 "app" router users can adapt path)
-// Env vars required in Vercel:
-// NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
+import React, { useEffect, useState } from 'react';
+import '../globals.css'; // admin -> go up one level to app/
+import { supabase } from '../../lib/supabaseClient'; // admin -> ../../lib
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+type Station = {
+  StationId?: number | string;
+  StationName?: string;
+  StationCode?: string;
+  Category?: string;
+  Division?: string;
+  RailwayZone?: string;
+  District?: string;
+  State?: string;
+  Lat?: number | string | null;
+  Long?: number | string | null;
+  Address?: string;
+};
 
 export default function AdminStationsPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [user, setUser] = useState(null);
-  const [stations, setStations] = useState([]);
+  const [user, setUser] = useState<any | null>(null);
+  const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Get initial user and subscribe to auth changes
   useEffect(() => {
-    const session = supabase.auth.getSession().then((r) => r.data.session);
-    // subscribe to auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) fetchStations();
-    });
+    let sub: any = null;
 
-    // check initial signed-in user
-    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (data?.user) setUser(data.user);
+      } catch (err) {
+        console.warn('getUser error', err);
+      }
+
+      // listen to auth state changes
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null);
+        // when signed in, auto fetch stations
+        if (session?.user) fetchStations();
+      });
+
+      sub = listener?.subscription ?? null;
+    })();
 
     return () => {
-      authListener?.subscription?.unsubscribe?.();
+      try {
+        sub?.unsubscribe?.();
+      } catch (e) {
+        // ignore
+      }
     };
   }, []);
 
-  async function signIn(e) {
+  // Sign in with email/password
+  async function signIn(e: React.FormEvent, email: string, password: string, setLoadingLocal: (b: boolean) => void, setErrorLocal: (s: string) => void) {
     e.preventDefault();
-    setErrorMsg("");
-    setLoading(true);
+    setErrorLocal('');
+    setLoadingLocal(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) setErrorMsg(error.message);
-    else {
-      // fetchStations will be called by auth change
-    }
+    setLoadingLocal(false);
+    if (error) setErrorLocal(error.message);
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
-    setStations([]);
-    setUser(null);
+    try {
+      await supabase.auth.signOut();
+      setStations([]);
+      setUser(null);
+    } catch (err) {
+      console.error('signOut error', err);
+    }
   }
 
+  // Fetch stations from DB
   async function fetchStations() {
     setLoading(true);
-    const { data, error } = await supabase.from("Stations").select(`StationId, StationName, StationCode, Category, Division, RailwayZone, District, State, Lat, Long, Address`).limit(1000);
-    setLoading(false);
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setStations(data || []);
+    setErrorMsg(null);
+    try {
+      // NOTE: change 'Stations' -> 'stations' if your table is lowercase in Postgres
+      const { data, error } = await supabase
+        .from('Stations')
+        .select('StationId,StationName,StationCode,Category,Division,RailwayZone,District,State,Lat,Long,Address')
+        .limit(1000);
+
+      if (error) {
+        setErrorMsg(error.message);
+        setStations([]);
+      } else {
+        setStations((data ?? []) as Station[]);
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Failed to fetch stations');
+      setStations([]);
+    } finally {
+      setLoading(false);
     }
   }
 
-  async function updateStation(id, updates) {
-    setErrorMsg("");
-    const { data, error } = await supabase.from("Stations").update(updates).eq("StationId", id).select();
-    if (error) setErrorMsg(error.message);
-    else {
-      // reflect changes locally
-      setStations((s) => s.map((r) => (r.StationId === id ? { ...r, ...updates } : r)));
+  async function updateStation(id: number | string, updates: Partial<Station>) {
+    setErrorMsg(null);
+    try {
+      const { data, error } = await supabase.from('Stations').update(updates).eq('StationId', id).select();
+      if (error) {
+        setErrorMsg(error.message);
+      } else {
+        // update local copy
+        setStations((prev) => prev.map((s) => (s.StationId === id ? { ...s, ...updates } : s)));
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Update failed');
     }
   }
 
+  // If not signed in, show login form
   if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="w-full max-w-md bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Admin Login</h2>
-          {errorMsg && <div className="mb-3 text-red-600">{errorMsg}</div>}
-          <form onSubmit={signIn}>
-            <label className="block text-sm font-medium">Email</label>
-            <input className="w-full border rounded px-3 py-2 mb-3" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <label className="block text-sm font-medium">Password</label>
-            <input type="password" className="w-full border rounded px-3 py-2 mb-4" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded" disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
-          </form>
-        </div>
-      </div>
-    );
+    return <AdminLogin onSignIn={signIn} />;
   }
 
+  // Signed-in admin UI
   return (
     <div className="min-h-screen p-6 bg-gray-50">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold">Stations — Admin</h1>
           <div className="flex gap-2 items-center">
-            <div className="text-sm">{user.email}</div>
+            <div className="text-sm">{user?.email}</div>
             <button className="px-3 py-1 border rounded" onClick={signOut}>Sign out</button>
           </div>
         </div>
@@ -127,7 +159,7 @@ export default function AdminStationsPage() {
             </thead>
             <tbody>
               {stations.map((st) => (
-                <EditableRow key={st.StationId} station={st} onSave={updateStation} />
+                <EditableRow key={String(st.StationId)} station={st} onSave={updateStation} />
               ))}
             </tbody>
           </table>
@@ -137,25 +169,50 @@ export default function AdminStationsPage() {
   );
 }
 
-function EditableRow({ station, onSave }) {
+/* ----------------- Admin login component ----------------- */
+function AdminLogin({ onSignIn }: { onSignIn: (e: React.FormEvent, email: string, password: string, setLoading: (b: boolean) => void, setError: (s: string) => void) => Promise<void> }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loadingLocal, setLoadingLocal] = useState(false);
+  const [errorLocal, setErrorLocal] = useState('');
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+      <div className="w-full max-w-md bg-white rounded-lg shadow p-6">
+        <h2 className="text-xl font-semibold mb-4">Admin Login</h2>
+        {errorLocal && <div className="mb-3 text-red-600">{errorLocal}</div>}
+        <form onSubmit={(e) => onSignIn(e, email, password, setLoadingLocal, setErrorLocal)}>
+          <label className="block text-sm font-medium">Email</label>
+          <input className="w-full border rounded px-3 py-2 mb-3" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <label className="block text-sm font-medium">Password</label>
+          <input type="password" className="w-full border rounded px-3 py-2 mb-4" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded" disabled={loadingLocal}>{loadingLocal ? 'Signing in…' : 'Sign in'}</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------- EditableRow component ----------------- */
+function EditableRow({ station, onSave }: { station: Station; onSave: (id: any, updates: Partial<Station>) => void }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({
-    StationName: station.StationName || "",
-    Category: station.Category || "",
-    Division: station.Division || "",
-    State: station.State || "",
-    Lat: station.Lat || "",
-    Long: station.Long || "",
+  const [form, setForm] = useState<Partial<Station>>({
+    StationName: station.StationName ?? '',
+    Category: station.Category ?? '',
+    Division: station.Division ?? '',
+    State: station.State ?? '',
+    Lat: station.Lat ?? '',
+    Long: station.Long ?? '',
   });
 
   useEffect(() => {
     setForm({
-      StationName: station.StationName || "",
-      Category: station.Category || "",
-      Division: station.Division || "",
-      State: station.State || "",
-      Lat: station.Lat || "",
-      Long: station.Long || "",
+      StationName: station.StationName ?? '',
+      Category: station.Category ?? '',
+      Division: station.Division ?? '',
+      State: station.State ?? '',
+      Lat: station.Lat ?? '',
+      Long: station.Long ?? '',
     });
   }, [station]);
 
@@ -164,7 +221,7 @@ function EditableRow({ station, onSave }) {
       <td className="p-2 align-top text-sm">{station.StationId}</td>
       <td className="p-2 align-top">
         {editing ? (
-          <input value={form.StationName} onChange={(e) => setForm(f => ({...f, StationName: e.target.value}))} className="w-64 border rounded px-2 py-1" />
+          <input value={String(form.StationName ?? '')} onChange={(e) => setForm(f => ({ ...f, StationName: e.target.value }))} className="w-64 border rounded px-2 py-1" />
         ) : (
           <div className="text-sm">{station.StationName}</div>
         )}
@@ -172,40 +229,43 @@ function EditableRow({ station, onSave }) {
       <td className="p-2 align-top text-sm">{station.StationCode}</td>
       <td className="p-2 align-top">
         {editing ? (
-          <input value={form.Category} onChange={(e) => setForm(f => ({...f, Category: e.target.value}))} className="w-24 border rounded px-2 py-1" />
+          <input value={String(form.Category ?? '')} onChange={(e) => setForm(f => ({ ...f, Category: e.target.value }))} className="w-24 border rounded px-2 py-1" />
         ) : station.Category}
       </td>
       <td className="p-2 align-top">
         {editing ? (
-          <input value={form.Division} onChange={(e) => setForm(f => ({...f, Division: e.target.value}))} className="w-36 border rounded px-2 py-1" />
+          <input value={String(form.Division ?? '')} onChange={(e) => setForm(f => ({ ...f, Division: e.target.value }))} className="w-36 border rounded px-2 py-1" />
         ) : station.Division}
       </td>
       <td className="p-2 align-top">
         {editing ? (
-          <input value={form.State} onChange={(e) => setForm(f => ({...f, State: e.target.value}))} className="w-36 border rounded px-2 py-1" />
+          <input value={String(form.State ?? '')} onChange={(e) => setForm(f => ({ ...f, State: e.target.value }))} className="w-36 border rounded px-2 py-1" />
         ) : station.State}
       </td>
       <td className="p-2 align-top">
         {editing ? (
-          <input value={form.Lat} onChange={(e) => setForm(f => ({...f, Lat: e.target.value}))} className="w-24 border rounded px-2 py-1" />
+          <input value={String(form.Lat ?? '')} onChange={(e) => setForm(f => ({ ...f, Lat: e.target.value }))} className="w-24 border rounded px-2 py-1" />
         ) : station.Lat}
       </td>
       <td className="p-2 align-top">
         {editing ? (
-          <input value={form.Long} onChange={(e) => setForm(f => ({...f, Long: e.target.value}))} className="w-24 border rounded px-2 py-1" />
+          <input value={String(form.Long ?? '')} onChange={(e) => setForm(f => ({ ...f, Long: e.target.value }))} className="w-24 border rounded px-2 py-1" />
         ) : station.Long}
       </td>
       <td className="p-2 align-top">
         {editing ? (
           <div className="flex gap-2">
-            <button className="px-2 py-1 bg-blue-600 text-white rounded" onClick={() => { onSave(station.StationId, {
-              StationName: form.StationName,
-              Category: form.Category,
-              Division: form.Division,
-              State: form.State,
-              Lat: form.Lat || null,
-              Long: form.Long || null
-            }); setEditing(false); }}>Save</button>
+            <button className="px-2 py-1 bg-blue-600 text-white rounded" onClick={() => {
+              onSave(station.StationId!, {
+                StationName: form.StationName,
+                Category: form.Category,
+                Division: form.Division,
+                State: form.State,
+                Lat: form.Lat ?? null,
+                Long: form.Long ?? null
+              });
+              setEditing(false);
+            }}>Save</button>
             <button className="px-2 py-1 border rounded" onClick={() => setEditing(false)}>Cancel</button>
           </div>
         ) : (
