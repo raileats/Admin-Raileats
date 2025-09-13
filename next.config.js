@@ -1,13 +1,8 @@
-{
-  "dependencies": {
-    "next": "14.0.0",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "@supabase/supabase-js": "^2.0.0"
-  },
-  "devDependencies": {
-    "tailwindcss": "^4.0.0",
-    "autoprefixer": "^10.0.0",
-    "postcss": "^8.0.0"
-  }
-}
+/** next.config.js */
+const nextConfig = {
+  reactStrictMode: true,
+  swcMinify: true,
+  // Agar tumhe basePath, images, env vars ya other settings chahiye toh yahan add karo.
+};
+
+module.exports = nextConfig;
