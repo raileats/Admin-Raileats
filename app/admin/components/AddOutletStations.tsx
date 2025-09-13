@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { supabase } from '../../../lib/supabaseClient'; // app/admin/components -> ../../../lib
+import { supabase } from '../../../lib/supabaseClient'; // सुनिश्चित करो: lib/supabaseClient.js project root पर मौजूद हो
 
 type Station = {
   StationId: number | string;
@@ -28,7 +28,6 @@ export default function AddOutletStations({
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
-  // Use ReturnType<typeof setTimeout> so TS is happy in both node/browser envs
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -42,10 +41,9 @@ export default function AddOutletStations({
 
     timer.current = setTimeout(async () => {
       try {
-        // use ilike with % for wildcard matching
         const likePattern = `%${q.trim()}%`;
         const { data, error } = await supabase
-          .from('Stations')
+          .from('Stations') // ध्यान: अगर तुम्हारी टेबल का नाम lowercase 'stations' है तो उसे बदलकर 'stations' कर दो
           .select('StationId,StationName,StationCode,State,District,Lat,Long')
           .or(`StationName.ilike.${likePattern},StationCode.ilike.${likePattern}`)
           .order('StationName', { ascending: true })
