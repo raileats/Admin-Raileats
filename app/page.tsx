@@ -36,4 +36,14 @@ export default function AdminPage() {
       <h2 className="text-xl font-semibold mb-4">Admin — Vendors</h2>
       {loading && <div>Loading…</div>}
       {!loading && vendors.length === 0 && <div>No vendors found.</div>}
-      <ul className
+      <ul className="space-y-2">
+        {vendors.map((v: any) => (
+          <li key={v.id} className="p-3 border rounded shadow-sm">
+            <div className="font-medium">{v.name ?? v.vendor_name ?? 'Unnamed'}</div>
+            <div className="text-sm text-gray-600">{v.station_code ?? v.location ?? ''}</div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
