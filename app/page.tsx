@@ -1,38 +1,22 @@
-// app/admin/page.tsx  (paste replacing the old createClient usage)
 'use client';
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabaseClient'; // <-- from app/admin -> go up two levels to root/lib
-import '../globals.css';
 
-export default function AdminPage() {
-  const [vendors, setVendors] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+import React, { useState } from 'react';
+import './globals.css';                       // सही: app/globals.css (relative to app/)
+import { supabase } from '../lib/supabaseClient'; // सही: lib at project root -> from app/ use ../lib
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const { data, error } = await supabase.from('vendors').select('*').limit(50);
-      if (error) {
-        console.error(error);
-        setVendors([]);
-      } else setVendors(data ?? []);
-      setLoading(false);
-    })();
-  }, []);
+import TrainTypeahead from '../components/TrainTypeahead';
+import OutletsList from '../components/OutletsList';
+
+export default function Page() {
+  const [selectedTrain, setSelectedTrain] = useState<string | null>(null);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h2 className="text-xl font-semibold mb-4">Admin — Vendors</h2>
-      {loading ? <div>Loading…</div> : (vendors.length ? (
-        <ul className="space-y-2">
-          {vendors.map((v:any) => (
-            <li key={v.id ?? v.vendor_id} className="p-3 border rounded shadow-sm">
-              <div className="font-medium">{v.name ?? v.vendor_name}</div>
-              <div className="text-sm text-gray-600">{v.station_code ?? v.location ?? ''}</div>
-            </li>
-          ))}
-        </ul>
-      ) : <div>No vendors found.</div>)}
-    </div>
+    <main className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">RailEats — Search by Train</h1>
+      <TrainTypeahead onSelect={(t) => setSelectedTrain(t)} />
+      <div className="mt-6">
+        <OutletsList trainNo={selectedTrain} />
+      </div>
+    </main>
   );
 }
