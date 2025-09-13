@@ -1,7 +1,7 @@
-'use client'; // <-- make this file a Client Component
+'use client'; // client component
 
 import React, { useState } from 'react';
-import '../globals.css';
+import './globals.css'; // <-- corrected path (was ../globals.css)
 import TrainTypeahead from '../components/TrainTypeahead';
 import OutletsList from '../components/OutletsList';
 
