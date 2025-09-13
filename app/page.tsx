@@ -1,49 +1,21 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabaseClient'; // <-- use centralized client
-import '../../app/globals.css';
+import React, { useState } from 'react';
+import './globals.css';               // correct: app/globals.css
+import { supabase } from '../lib/supabaseClient'; // correct: lib at repo root
 
-export default function AdminPage() {
-  const [vendors, setVendors] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+import TrainTypeahead from '../components/TrainTypeahead';
+import OutletsList from '../components/OutletsList';
 
-  useEffect(() => {
-    // simple example: fetch vendors via a (public) RPC or table select
-    // Replace the RPC name / query with whatever you need.
-    (async () => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('vendors') // or .rpc('your_rpc_name', { ... })
-          .select('*')
-          .limit(50);
-
-        if (error) {
-          console.error('supabase error', error);
-          setVendors([]);
-        } else {
-          setVendors(data ?? []);
-        }
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
+export default function Page() {
+  const [selectedTrain, setSelectedTrain] = useState<string | null>(null);
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h2 className="text-xl font-semibold mb-4">Admin — Vendors</h2>
-      {loading && <div>Loading…</div>}
-      {!loading && vendors.length === 0 && <div>No vendors found.</div>}
-      <ul className="space-y-2">
-        {vendors.map((v: any) => (
-          <li key={v.id} className="p-3 border rounded shadow-sm">
-            <div className="font-medium">{v.name ?? v.vendor_name ?? 'Unnamed'}</div>
-            <div className="text-sm text-gray-600">{v.station_code ?? v.location ?? ''}</div>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <main className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">RailEats — Search by Train</h1>
+      <TrainTypeahead onSelect={(t) => setSelectedTrain(t)} />
+      <div className="mt-6">
+        <OutletsList trainNo={selectedTrain} />
+      </div>
+    </main>
   );
 }
