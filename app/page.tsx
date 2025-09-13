@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import './globals.css';               // correct: app/globals.css
-import { supabase } from '../lib/supabaseClient'; // correct: lib at repo root
+import './globals.css';
+import { supabase } from '../lib/supabaseClient';
 
 import TrainTypeahead from '../components/TrainTypeahead';
 import OutletsList from '../components/OutletsList';
