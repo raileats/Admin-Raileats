@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import '../globals.css'; // app/admin -> globals.css is in app/, so one level up
-import { supabase } from '../../lib/supabaseClient'; // app/admin -> ../../lib
+import '../globals.css';
+import { supabase } from '../../lib/supabaseClient';
 
 export default function AdminStationsPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
