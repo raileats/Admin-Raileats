@@ -1,17 +1,22 @@
+// components/StationSearch.tsx
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-import supabase from '../../lib/supabaseClient';  // ✅ sahi import (default export use karo)
+import supabase from '../lib/supabaseClient'; // components -> up one -> lib
 
 export default function StationSearch({
   value = null,
   onChange = () => {},
   placeholder = "Search station by name or code..."
+}: {
+  value?: any;
+  onChange?: (v: any) => void;
+  placeholder?: string;
 }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState<string>("");
   const [results, setResults] = useState<any[]>([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const timer = useRef<any>(null);
+  const [open, setOpen] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const timer = useRef<number | null>(null);
 
   useEffect(() => {
     if (!q || q.trim() === "") {
@@ -24,8 +29,8 @@ export default function StationSearch({
     }
 
     setLoading(true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(async () => {
       try {
         const nameFilter = `${q}%`;
         const codeFilter = `${q}%`;
@@ -51,7 +56,7 @@ export default function StationSearch({
     }, 250);
 
     return () => {
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) window.clearTimeout(timer.current);
     };
   }, [q]);
 
@@ -85,7 +90,7 @@ export default function StationSearch({
           {!loading && results.length === 0 && q && (
             <div className="p-2 text-sm text-gray-500">No stations found</div>
           )}
-          {!loading && results.map((s) => (
+          {!loading && results.map((s: any) => (
             <div
               key={s.StationId}
               className="p-2 hover:bg-gray-100 cursor-pointer"
@@ -105,23 +110,16 @@ export default function StationSearch({
               }}
             >
               <div className="text-sm font-medium">
-                {s.StationName}{" "}
-                <span className="text-xs text-gray-500">
-                  ({s.StationCode})
-                </span>
+                {s.StationName} <span className="text-xs text-gray-500">({s.StationCode})</span>
               </div>
-              <div className="text-xs text-gray-500">
-                {s.District || ""} • {s.State || ""}
-              </div>
+              <div className="text-xs text-gray-500">{s.District || ""} • {s.State || ""}</div>
             </div>
           ))}
         </div>
       )}
 
       {value && !open && (
-        <div className="mt-2 text-sm text-green-700">
-          Selected: {value.StationName} ({value.StationCode})
-        </div>
+        <div className="mt-2 text-sm text-green-700">Selected: {value.StationName} ({value.StationCode})</div>
       )}
     </div>
   );
