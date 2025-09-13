@@ -2,7 +2,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
+
 
 type Train = { train_no?: string; number?: string; name?: string };
 
