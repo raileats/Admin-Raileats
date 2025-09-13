@@ -1,55 +1,97 @@
-// components/OutletsList.tsx
 'use client';
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
 
-export default function OutletsList({ trainNo }) {
-  const [rows, setRows] = useState([]);
+import React, { useEffect, useState } from 'react';
+import { supabase } from '../../lib/supabaseClient';
+
+type Outlet = {
+  id?: string | number;
+  name?: string;
+  restaurant_name?: string;
+  is_open?: boolean;
+  open_time?: string | null;
+  close_time?: string | null;
+  rating?: number | null;
+  min_order_value?: number | null;
+  pureveg?: boolean | null;
+  cuisines?: string | null;
+};
+
+export default function OutletsList({ trainNo }: { trainNo: string | null }) {
+  const [loading, setLoading] = useState(false);
+  const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!trainNo) return;
+    if (!trainNo) {
+      setOutlets([]);
+      return;
+    }
     (async () => {
-      const { data, error } = await supabase
-        .rpc('rpc_get_outlets_by_train', { p_train_no: trainNo });
-      if (!error) setRows(data ?? []);
+      setLoading(true);
+      setErrorMsg(null);
+      try {
+        // अपनी schema के अनुसार query बदलें:
+        // मान रहे हैं कि table 'outlets' है जिसमें train_no या कोई mapping है.
+        const { data, error } = await supabase
+          .from('outlets')
+          .select('id,name,restaurant_name,is_open,open_time,close_time,rating,min_order_value,pureveg,cuisines')
+          .ilike('train_no', `${trainNo}%`)
+          .order('rating', { ascending: false })
+          .limit(50);
+
+        if (error) {
+          setErrorMsg(error.message);
+          setOutlets([]);
+        } else {
+          setOutlets((data as Outlet[]) ?? []);
+        }
+      } catch (e) {
+        setErrorMsg('Failed to load outlets');
+        setOutlets([]);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [trainNo]);
 
-  if (!trainNo) return <p>Select a train to view outlets</p>;
-  if (rows.length === 0) return <p>No outlets available</p>;
-
-  const grouped = rows.reduce((acc, r) => {
-    acc[r.station_name] = acc[r.station_name] || [];
-    acc[r.station_name].push(r);
-    return acc;
-  }, {});
+  if (!trainNo) {
+    return <div className="text-sm text-gray-600">Select a train to see outlets.</div>;
+    }
 
   return (
-    <div className="space-y-6">
-      {Object.entries(grouped).map(([station, outlets]) => (
-        <div key={station}>
-          <h3 className="font-semibold text-lg">{station}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-            {outlets.map((o) => (
-              <div key={o.outlet_id} className="border p-3 rounded shadow-sm">
-                <div className="flex justify-between">
-                  <div>
-                    <p className="font-medium">{o.outlet_name}</p>
-                    <p className="text-sm text-gray-600">{(o.cuisines || []).join(', ')}</p>
-                  </div>
-                  <span className={o.open_now ? 'text-green-600' : 'text-red-600'}>
-                    {o.open_now ? 'Open' : 'Closed'}
-                  </span>
+    <div>
+      {loading && <div className="text-sm">Loading outlets…</div>}
+      {errorMsg && <div className="text-sm text-red-600 mb-2">{errorMsg}</div>}
+      {!loading && outlets.length === 0 && (
+        <div className="text-sm text-gray-500">No outlets found for this train.</div>
+      )}
+      <ul className="space-y-3">
+        {outlets.map((o) => (
+          <li key={String(o.id ?? o.name)} className="p-3 bg-white border rounded shadow-card">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-base font-semibold">
+                  {o.name ?? o.restaurant_name ?? 'Outlet'}
                 </div>
-                <div className="text-sm mt-2">
-                  ⭐ {o.rating ?? '-'} | Min ₹{o.min_order ?? '-'} 
-                  {o.is_pure_veg && <span className="ml-2 bg-green-100 px-2 rounded text-xs">Pure Veg</span>}
+                <div className="text-xs text-gray-600">
+                  {o.pureveg ? 'Pure Veg' : 'Veg/Non-Veg'} • {o.cuisines || '–'}
+                </div>
+                <div className="text-xs text-gray-600">
+                  Min Order: ₹{o.min_order_value ?? 0} • Rating: {o.rating ?? '–'}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      ))}
+              <div className="text-right text-xs">
+                <div className={o.is_open ? 'text-green-700' : 'text-red-600'}>
+                  {o.is_open ? 'Open' : 'Closed'}
+                </div>
+                <div className="text-gray-500">
+                  {o.open_time ?? '--'} – {o.close_time ?? '--'}
+                </div>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
