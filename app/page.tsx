@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import './globals.css';
 import TrainTypeahead from '../components/TrainTypeahead';
 import OutletsList from '../components/OutletsList';
-import supabase from '../../lib/supabaseClient'; // ✅ correct path
+import supabase from '../lib/supabaseClient'; // app -> up one -> libth
 
 export default function Page() {
   const [selectedTrain, setSelectedTrain] = useState<string | null>(null);
