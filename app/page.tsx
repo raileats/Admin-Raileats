@@ -1,19 +1,39 @@
-'use client'; // client component
+'use client';
 
-import React, { useState } from 'react';
-import './globals.css'; // <-- corrected path (was ../globals.css)
-import TrainTypeahead from '../components/TrainTypeahead';
-import OutletsList from '../components/OutletsList';
+import React, { useEffect, useState } from 'react';
+import { supabase } from '../../lib/supabaseClient'; // <-- use centralized client
+import '../../app/globals.css';
 
-export default function Page() {
-  const [selectedTrain, setSelectedTrain] = useState<string | null>(null);
+export default function AdminPage() {
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // simple example: fetch vendors via a (public) RPC or table select
+    // Replace the RPC name / query with whatever you need.
+    (async () => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('vendors') // or .rpc('your_rpc_name', { ... })
+          .select('*')
+          .limit(50);
+
+        if (error) {
+          console.error('supabase error', error);
+          setVendors([]);
+        } else {
+          setVendors(data ?? []);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
   return (
-    <main className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">RailEats — Search by Train</h1>
-      <TrainTypeahead onSelect={(t) => setSelectedTrain(t)} />
-      <div className="mt-6">
-        <OutletsList trainNo={selectedTrain} />
-      </div>
-    </main>
-  );
-}
+    <div className="p-6 max-w-4xl mx-auto">
+      <h2 className="text-xl font-semibold mb-4">Admin — Vendors</h2>
+      {loading && <div>Loading…</div>}
+      {!loading && vendors.length === 0 && <div>No vendors found.</div>}
+      <ul className
