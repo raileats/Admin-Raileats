@@ -1,7 +1,7 @@
 // components/StationSearch.jsx
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-import { supabase } from '../lib/supabaseClient'; // components -> ../lib
+import { supabase } from '../../lib/supabaseClient'
 
 export default function StationSearch({ value, onChange, placeholder = 'Search stations...' }) {
   const [q, setQ] = useState('');
