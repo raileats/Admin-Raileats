@@ -1,20 +1,11 @@
-// components/StationSearch.jsx
-"use client";
-import React, { useEffect, useRef, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+'use client';
+import React, { useEffect, useRef, useState } from 'react';
+import { supabase } from '../../lib/supabaseClient';  // ✅ सही path
 
-/**
- * StationSearch - a simple safe autocomplete that queries Supabase Stations table.
- *
- * Props:
- *  - value: selected station object or null
- *  - onChange: function(station|null) called when user selects or clears
- *  - placeholder: optional placeholder text
- */
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
+export default function StationSearch({ value, onChange, placeholder = 'Search stations...' }) {
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<any[]>([]);
+  const ref = useRef<any>(null);
 // Guarded supabase client — if env not set, supabase will be null and component will degrade gracefully.
 const supabase = (SUPABASE_URL && SUPABASE_KEY) ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
