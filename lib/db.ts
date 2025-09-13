@@ -1,12 +1,7 @@
 // lib/db.ts
-import { Pool } from 'pg';
+// Quick shim: re-export the supabase client so imports from "@/lib/db" work.
+import supabase from './supabaseClient';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL, // set in Vercel
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-});
-
-export default {
-  query: (text: string, params?: any[]) => pool.query(text, params),
-  pool,
-};
+export default supabase;
+export const db = supabase;
+export { supabase }; // named export bhi diya taaki `import { supabase }` kaam kare
