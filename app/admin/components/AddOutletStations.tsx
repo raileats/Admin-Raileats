@@ -1,11 +1,7 @@
-"use client";
-
+// app/admin/components/AddOutletStations.tsx (recommended)
+'use client';
 import React, { useEffect, useState, useRef } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-
-const supabase: SupabaseClient = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+import { supabase } from '../../../lib/supabaseClient'; // path: app/admin/components -> ../../../lib
 );
 
 type Station = {
