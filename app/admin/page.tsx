@@ -2,9 +2,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { db as supabase } from '../../lib/db'; // relative import to lib/db
-import OutletsList from './components/OutletsList'; // relative import to local components
-
+import { db as supabase } from '../../lib/db';
+import OutletsList from '../../components/OutletsList';
 export default function AdminPage() {
   const [user, setUser] = useState<any | null>(null);
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
