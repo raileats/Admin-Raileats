@@ -1,8 +1,8 @@
 // components/TrainTypeahead.tsx
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/db";
 
 
 type Train = { train_no?: string; number?: string; name?: string };
