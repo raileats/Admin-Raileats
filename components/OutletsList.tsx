@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useState } from "react";
-import { supabase } from "@/lib/db";
+import { supabase } from "../lib/db";
 type Outlet = {
   id?: string | number;
   name?: string;
