@@ -4,7 +4,6 @@ import { db } from "../../../lib/db";
 export async function GET() {
   try {
     if (!db) {
-      // Supabase client missing (likely env not set)
       return new Response(JSON.stringify({ error: "Supabase client not initialized" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
