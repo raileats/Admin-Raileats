@@ -1,8 +1,7 @@
 // components/StationSearch.tsx
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-
+import { supabase } from '../lib/supabaseClient';
 export default function StationSearch({
   value = null,
   onChange = () => {},
