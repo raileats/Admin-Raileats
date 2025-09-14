@@ -1,8 +1,16 @@
-/** next.config.js */
+/** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  // Agar tumhe basePath, images, env vars ya other settings chahiye toh yahan add karo.
-};
-
+  webpack: (config, { isServer }) => {
+    // prevent bundling node-only modules into client build
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false
+      };
+    }
+    return config;
+  },
+}
 module.exports = nextConfig;
