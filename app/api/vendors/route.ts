@@ -1,6 +1,11 @@
 // app/api/vendors/route.ts
-import { NextResponse } from "next/server";
-import { supabase } from '@/lib/db';
+import { db } from "@/lib/db";
+
+export async function GET() {
+  const { data, error } = await db.from("Vendors").select("*").limit(10);
+  return Response.json({ data, error });
+}
+
 
 async function getSupabaseClient() {
   const url = process.env.SUPABASE_URL;
