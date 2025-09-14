@@ -1,6 +1,6 @@
 // app/api/testdb/route.ts  — restore this
 import { NextResponse } from "next/server";
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '@/lib/db';
 
 
 export async function GET() {
