@@ -1,7 +1,12 @@
 // lib/db.ts
-import supabaseDefault, { supabase as namedSupabase } from "./supabaseClient";
+import { PrismaClient } from '@prisma/client';
 
-export const supabase = namedSupabase ?? supabaseDefault ?? null;
-export const db = supabase;
+declare global {
+  // Prevent multiple instances in dev
+  // eslint-disable-next-line no-var
+  var prisma: PrismaClient | undefined;
+}
 
-export default db;
+export const prisma = global.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') global.prisma = prisma;
