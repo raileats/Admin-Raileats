@@ -1,44 +1,46 @@
 'use client';
-import React, { useEffect, useState, useRef } from "react";
-import { supabase } from '../../../lib/db';  // तुम्हारे db से import
+
+import React, { useEffect, useRef, useState } from 'react';
+import { supabase } from '@/lib/db';   // import from db wrapper
 
 export default function AddOutletStations({ onSelect }: { onSelect: (station: any) => void }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const timer = useRef<any>(null);
+  const timer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!q || q.trim() === "") {
+    if (!q.trim()) {
       setResults([]);
       return;
     }
 
-    if (!supabase) {
-      console.error("Supabase client is not initialized (missing env vars)");
-      return;
-    }
-
-    setLoading(true);
     if (timer.current) clearTimeout(timer.current);
 
     timer.current = setTimeout(async () => {
       try {
+        if (!supabase) {
+          console.warn('Supabase client not initialized');
+          setResults([]);
+          return;
+        }
+
         const likePattern = `%${q.trim()}%`;
+
         const { data, error } = await supabase
-          .from("Stations")
-          .select("StationId,StationName,StationCode,State,District,Lat,Long")
+          .from('Stations')
+          .select('StationId,StationName,StationCode,State,District,Lat,Long')
           .or(`StationName.ilike.${likePattern},StationCode.ilike.${likePattern}`)
           .limit(10);
 
         if (error) {
-          console.error("Supabase error:", error);
+          console.error('Station fetch error:', error);
           setResults([]);
         } else {
           setResults(data || []);
         }
       } catch (err) {
-        console.error("Search failed:", err);
+        console.error('Unexpected error:', err);
         setResults([]);
       } finally {
         setLoading(false);
@@ -51,27 +53,36 @@ export default function AddOutletStations({ onSelect }: { onSelect: (station: an
   }, [q]);
 
   return (
-    <div>
+    <div className="relative w-full">
       <input
-        className="border px-2 py-1 rounded w-full"
         value={q}
-        placeholder="Search station..."
         onChange={(e) => setQ(e.target.value)}
+        placeholder="Search Station..."
+        className="border px-3 py-2 rounded w-full"
       />
-      {loading && <div>Loading...</div>}
-      {!loading &&
-        results.map((s) => (
-          <div
-            key={s.StationId}
-            onClick={() => {
-              onSelect(s);
-              setQ(`${s.StationName} (${s.StationCode})`);
-            }}
-            className="cursor-pointer hover:bg-gray-100 p-2"
-          >
-            {s.StationName} ({s.StationCode})
-          </div>
-        ))}
+
+      {loading && <div className="p-2 text-sm">Searching...</div>}
+
+      {!loading && results.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full bg-white border rounded shadow max-h-56 overflow-auto">
+          {results.map((s) => (
+            <div
+              key={s.StationId}
+              className="p-2 hover:bg-gray-100 cursor-pointer"
+              onClick={() => {
+                onSelect(s);
+                setQ(`${s.StationName} (${s.StationCode})`);
+              }}
+            >
+              <div className="text-sm font-medium">
+                {s.StationName}{' '}
+                <span className="text-xs text-gray-500">({s.StationCode})</span>
+              </div>
+              <div className="text-xs text-gray-500">{s.District} • {s.State}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
