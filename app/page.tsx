@@ -1,11 +1,10 @@
 // app/page.tsx
 'use client';
 
-import React, { useState } from 'react';
-import './globals.css';
-import TrainTypeahead from '../components/TrainTypeahead';
-import OutletsList from '../components/OutletsList';
-import { supabase } from '../lib/supabaseClient';
+import React, { useState } from "react";
+import "./globals.css";
+import TrainTypeahead from "../components/TrainTypeahead";
+import OutletsList from "../components/OutletsList";
 
 export default function Page() {
   const [selectedTrain, setSelectedTrain] = useState<string | null>(null);
