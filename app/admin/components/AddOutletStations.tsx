@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { supabase } from '@/lib/db';   // import from db wrapper
-
+import { supabase } from '../../lib/db';
 export default function AddOutletStations({ onSelect }: { onSelect: (station: any) => void }) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<any[]>([]);
