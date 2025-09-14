@@ -1,54 +1,48 @@
-import { NextResponse } from "next/server";
-import db from "../../../../lib/db";
+// app/api/outlets/basic/route.ts
+// Simplified outlets creation endpoint that avoids using db.query()
+// (Supabase JS client does not expose a .query() method).
+// Instead we generate a server-side unique outletId and insert normally.
 
-export async function POST(req: Request) {
+import { db } from "../../../lib/db";
+
+function generateOutletId(): string {
+  // simple deterministic-ish id: OUT + last 6 digits of timestamp + 3 random digits
+  const tsPart = String(Date.now()).slice(-6); // last 6 digits of ms timestamp
+  const rnd = Math.floor(Math.random() * 900 + 100); // 100..999
+  return `OUT${tsPart}${rnd}`; // e.g. OUT345678123
+}
+
+export async function POST(request: Request) {
   try {
-    const body = await req.json();
-    const {
-      outletName,
-      stationId,
-      ownerName,
-      ownerMobile,
-      ownerEmail,
-      outletMobile,
-      outletLat,
-      outletLong,
-      outletStatus,
-    } = body;
-
-    if (!outletName || !stationId || !ownerMobile) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    const body = await request.json();
+    // validate required fields as per your schema (example)
+    const { name, address, station_id, contact } = body || {};
+    if (!name) {
+      return new Response(JSON.stringify({ error: "Missing `name`" }), { status: 400 });
     }
 
-    // generate sequence-based outletId
-    const seqRes = await db.query(
-      "SELECT 'OUT' || LPAD(nextval('outlets_seq')::text, 6, '0') as outlet_id"
-    );
-    const outletId = seqRes.rows[0].outlet_id;
+    // generate an outlet id server-side instead of using DB sequence
+    const outletId = generateOutletId();
 
-    const insert = await db.query(
-      `INSERT INTO outlets (
-        outlet_id, name, station_id, owner_name, owner_mobile, owner_email,
-        outlet_mobile, lat, long, status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-      RETURNING *`,
-      [
-        outletId,
-        outletName,
-        stationId,
-        ownerName || null,
-        ownerMobile,
-        ownerEmail || null,
-        outletMobile || null,
-        outletLat || null,
-        outletLong || null,
-        outletStatus ?? true,
-      ]
-    );
+    const payload = {
+      outlet_id: outletId,
+      name,
+      address: address ?? null,
+      station_id: station_id ?? null,
+      contact: contact ?? null,
+      created_at: new Date().toISOString()
+    };
 
-    return NextResponse.json({ outlet: insert.rows[0] }, { status: 201 });
-  } catch (err) {
-    console.error("Error creating outlet basic:", err);
-    return NextResponse.json({ error: "Failed to create outlet" }, { status: 500 });
+    const { data, error } = await db.from("Outlets").insert(payload).select().single();
+
+    if (error) {
+      console.error("Insert outlet error:", error);
+      return new Response(JSON.stringify({ error: error.message || error }), { status: 500 });
+    }
+
+    return new Response(JSON.stringify({ data }), { status: 201 });
+  } catch (err: any) {
+    console.error("outlets/basic route unexpected error:", err);
+    return new Response(JSON.stringify({ error: err?.message ?? String(err) }), { status: 500 });
   }
 }
