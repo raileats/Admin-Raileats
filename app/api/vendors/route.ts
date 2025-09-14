@@ -1,6 +1,5 @@
 // app/api/vendors/route.ts
-import { db } from "../../lib/db";
-
+import { db } from "../../../lib/db";
 async function getAdminSupabaseClient() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY; // server-only key
