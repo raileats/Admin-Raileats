@@ -3,8 +3,7 @@
 // (Supabase JS client does not expose a .query() method).
 // Instead we generate a server-side unique outletId and insert normally.
 
-import { db } from "../../../lib/db";
-
+import { db } from "../../../../lib/db";
 function generateOutletId(): string {
   // simple deterministic-ish id: OUT + last 6 digits of timestamp + 3 random digits
   const tsPart = String(Date.now()).slice(-6); // last 6 digits of ms timestamp
