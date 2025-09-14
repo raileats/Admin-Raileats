@@ -1,35 +1,33 @@
 // app/api/vendors/route.ts
-import { db } from '../../../lib/db';
-async function getAdminSupabaseClient() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY; // server-only key
-  if (!url || !key) return null;
+import { db } from "@/lib/db"; // अगर alias नहीं चलता तो बदलकर '../../../lib/db' कर दें
 
-  const mod = await import("@supabase/supabase-js");
-  return mod.createClient(url, key);
-}
-
-export async function GET(request: Request) {
+// GET: fetch first 10 vendors (example)
+export async function GET() {
   try {
-    const adminClient = await getAdminSupabaseClient();
-
-    if (adminClient) {
-      const { data, error } = await adminClient.from("Vendors").select("*").limit(100);
-      if (error) {
-        console.error("vendors (admin) supabase error:", error);
-        return new Response(JSON.stringify({ error: error.message }), { status: 500 });
-      }
-      return new Response(JSON.stringify({ data }), { status: 200 });
-    } else {
-      const { data, error } = await db.from("Vendors").select("*").limit(100);
-      if (error) {
-        console.error("vendors (db) error:", error);
-        return new Response(JSON.stringify({ error: error.message }), { status: 500 });
-      }
-      return new Response(JSON.stringify({ data }), { status: 200 });
+    if (!db) {
+      return new Response(JSON.stringify({ error: "Supabase client not initialized" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
+
+    const { data, error } = await db.from("Vendors").select("*").limit(10);
+
+    if (error) {
+      return new Response(JSON.stringify({ error: error.message || error }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ data }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (err: any) {
-    console.error("vendors route unexpected error:", err);
-    return new Response(JSON.stringify({ error: err?.message ?? String(err) }), { status: 500 });
+    return new Response(JSON.stringify({ error: err?.message || String(err) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
