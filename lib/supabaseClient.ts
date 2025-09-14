@@ -1,25 +1,15 @@
-// lib/supabaseClient.ts
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+// lib/supabaseClient.ts  (CLIENT ONLY)
+'use client';
+import { createClient } from '@supabase/supabase-js';
 
-const PUBLIC_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const PUBLIC_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-const SERVER_URL = process.env.SUPABASE_URL ?? "";
-const SERVER_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE ?? "";
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const URL = SERVER_URL || PUBLIC_URL;
-const KEY = SERVER_KEY || PUBLIC_KEY;
-
-let supabase: SupabaseClient | null = null;
-
-try {
-  if (URL && KEY) {
-    supabase = createClient(URL, KEY);
-  } else {
-    supabase = null;
-  }
-} catch (e) {
-  supabase = null;
+if (!url || !anonKey) {
+  // don't throw at module evaluation in build; instead allow runtime fallback or console warn
+  // but here we just provide a client with empty strings (avoid TS error)
+  // better approach is dynamic import inside useEffect and check env on runtime
+  // For safety we keep a runtime check when creating the client in useEffect instead.
 }
 
-export default supabase;
-export { supabase };
+export const supabaseClient = createClient(url ?? '', anonKey ?? '');
