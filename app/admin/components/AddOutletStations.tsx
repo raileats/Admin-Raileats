@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useState, useRef } from "react";
-import { supabase } from "@/lib/db";  // तुम्हारे db से import
+import { supabase } from '../../../lib/db';  // तुम्हारे db से import
 
 export default function AddOutletStations({ onSelect }: { onSelect: (station: any) => void }) {
   const [q, setQ] = useState("");

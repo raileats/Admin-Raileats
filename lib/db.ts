@@ -1,5 +1,7 @@
 // lib/db.ts
-import { supabase } from "./supabaseClient";
+import supabaseDefault, { supabase as namedSupabase } from "./supabaseClient";
 
-export const db = supabase;   // alias
-export { supabase };          // direct
+export const supabase = namedSupabase ?? supabaseDefault ?? null;
+export const db = supabase;
+
+export default db;
