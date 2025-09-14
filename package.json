@@ -3,28 +3,23 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 3000",
-    "lint": "next lint"
+    "start": "next start"
   },
   "dependencies": {
     "next": "13.4.10",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "pg": "^8.11.0",
-    "@supabase/supabase-js": "^2.33.0",
-    "lucide-react": "^0.268.0"
+    "@supabase/supabase-js": "^2.39.0",
+    "@prisma/client": "^5.12.0"
   },
   "devDependencies": {
-    "tailwindcss": "^3.4.7",
-    "postcss": "^8.4.24",
-    "autoprefixer": "^10.4.14",
-    "typescript": "5.2.2",
-    "@types/react": "^18.2.21",
-    "@types/node": "^20.6.5"
+    "prisma": "^5.12.0",
+    "typescript": "^5.2.0"
   },
-  "engines": {
-    "node": "22.x"
+  "resolutions": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
   }
 }
