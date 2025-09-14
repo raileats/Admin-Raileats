@@ -1,33 +1,37 @@
 // app/api/vendors/route.ts
-import { db } from "@/lib/db"; // अगर alias नहीं चलता तो बदलकर '../../../lib/db' कर दें
+import { NextResponse } from "next/server";
+import db from "@/lib/db";
 
-// GET: fetch first 10 vendors (example)
-export async function GET() {
+async function getSupabaseClient() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+
+  // dynamic ESM import so it doesn't run at module-evaluation time
+  const mod = await import("@supabase/supabase-js");
+  return mod.createClient(url, key);
+}
+
+export async function GET(req: Request) {
   try {
-    if (!db) {
-      return new Response(JSON.stringify({ error: "Supabase client not initialized" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+    const supabase = await getSupabaseClient();
+
+    if (supabase) {
+      // Example: read outlets table — adjust columns/table as per your DB
+      const { data, error } = await supabase
+        .from("outlets")
+        .select("*")
+        .limit(50);
+
+      if (error) throw error;
+      return NextResponse.json({ data });
+    } else {
+      // fallback to direct pg pool if supabase client not configured
+      const res = await db.query("SELECT * FROM outlets ORDER BY id DESC LIMIT $1", [50]);
+      return NextResponse.json({ data: res.rows });
     }
-
-    const { data, error } = await db.from("Vendors").select("*").limit(10);
-
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message || error }), {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    return new Response(JSON.stringify({ data }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err?.message || String(err) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+  } catch (err) {
+    console.error("GET /api/vendors error:", err);
+    return NextResponse.json({ error: "Failed to fetch vendors", details: String(err) }, { status: 500 });
   }
 }

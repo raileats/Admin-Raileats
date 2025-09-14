@@ -1,48 +1,54 @@
-// app/api/outlets/basic/route.ts
-import { db } from "../../../../lib/db";
+import { NextResponse } from "next/server";
+import db from "../../../../lib/db";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const {
+      outletName,
+      stationId,
+      ownerName,
+      ownerMobile,
+      ownerEmail,
+      outletMobile,
+      outletLat,
+      outletLong,
+      outletStatus,
+    } = body;
 
-    // simple server-side ID generator fallback (sequence-based logic removed for portability)
-    const tsPart = String(Date.now()).slice(-6);
-    const rnd = Math.floor(Math.random() * 900 + 100);
-    const outletId = `OUT${tsPart}${rnd}`;
-
-    const payload = {
-      outlet_id: outletId,
-      name: body.name ?? null,
-      address: body.address ?? null,
-      station_id: body.station_id ?? null,
-      contact: body.contact ?? null,
-      created_at: new Date().toISOString(),
-    };
-
-    if (!db) {
-      return new Response(JSON.stringify({ error: "Supabase client not initialized" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+    if (!outletName || !stationId || !ownerMobile) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const { data, error } = await db.from("Outlets").insert(payload).select().single();
+    // generate sequence-based outletId
+    const seqRes = await db.query(
+      "SELECT 'OUT' || LPAD(nextval('outlets_seq')::text, 6, '0') as outlet_id"
+    );
+    const outletId = seqRes.rows[0].outlet_id;
 
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message || error }), {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    const insert = await db.query(
+      `INSERT INTO outlets (
+        outlet_id, name, station_id, owner_name, owner_mobile, owner_email,
+        outlet_mobile, lat, long, status
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      RETURNING *`,
+      [
+        outletId,
+        outletName,
+        stationId,
+        ownerName || null,
+        ownerMobile,
+        ownerEmail || null,
+        outletMobile || null,
+        outletLat || null,
+        outletLong || null,
+        outletStatus ?? true,
+      ]
+    );
 
-    return new Response(JSON.stringify({ data }), {
-      status: 201,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err?.message || String(err) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return NextResponse.json({ outlet: insert.rows[0] }, { status: 201 });
+  } catch (err) {
+    console.error("Error creating outlet basic:", err);
+    return NextResponse.json({ error: "Failed to create outlet" }, { status: 500 });
   }
 }
