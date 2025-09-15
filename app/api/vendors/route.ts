@@ -1,37 +1,50 @@
 // app/api/vendors/route.ts
-import { NextResponse } from "next/server";
-import db from "@/lib/db";
+import { NextResponse } from 'next/server';
+import { supabaseServer } from '@/lib/supabaseServer';
 
-async function getSupabaseClient() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-
-  // dynamic ESM import so it doesn't run at module-evaluation time
-  const mod = await import("@supabase/supabase-js");
-  return mod.createClient(url, key);
-}
+// Reuse same column set as restros
+const COLUMNS = [
+  'RestroCode','RestroName','OwnerName','StationCode','StationName',
+  'OwnerPhone','OwnerEmail','FSSAINumber','FSSAIExpiryDate',
+  'IRCTCStatus','RaileatsStatus','IsIrctcApproved'
+].join(',');
 
 export async function GET(req: Request) {
   try {
-    const supabase = await getSupabaseClient();
+    const url = new URL(req.url);
+    const q = url.searchParams.get('q') ?? '';
+    // Keep same filter style your frontend expects (adjust as needed)
+    let query = supabaseServer.from('RestroMaster').select(COLUMNS).order('RestroName', { ascending: true }).limit(1000);
 
-    if (supabase) {
-      // Example: read outlets table — adjust columns/table as per your DB
-      const { data, error } = await supabase
-        .from("outlets")
-        .select("*")
-        .limit(50);
-
-      if (error) throw error;
-      return NextResponse.json({ data });
-    } else {
-      // fallback to direct pg pool if supabase client not configured
-      const res = await db.query("SELECT * FROM outlets ORDER BY id DESC LIMIT $1", [50]);
-      return NextResponse.json({ data: res.rows });
+    if (q) {
+      // example: support a simple ilike OR across common fields
+      query = supabaseServer
+        .from('RestroMaster')
+        .select(COLUMNS)
+        .or(`RestroCode.ilike.%${q}%,RestroName.ilike.%${q}%,OwnerName.ilike.%${q}%,StationCode.ilike.%${q}%`)
+        .order('RestroName', { ascending: true })
+        .limit(1000);
     }
-  } catch (err) {
-    console.error("GET /api/vendors error:", err);
-    return NextResponse.json({ error: "Failed to fetch vendors", details: String(err) }, { status: 500 });
+
+    const { data, error } = await query;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data ?? []);
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
+  }
+}
+
+// optional: if frontend sends POST to /api/vendors to create a vendor
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    if (!body.RestroCode || !body.RestroName) {
+      return NextResponse.json({ error: 'RestroCode and RestroName required' }, { status: 400 });
+    }
+    const { data, error } = await supabaseServer.from('RestroMaster').insert([body]).select().single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data, { status: 201 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
   }
 }
