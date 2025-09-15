@@ -7,7 +7,6 @@ const HEADERS = [
   'RailwayZone','EcatZone','District','State','Lat','Long','Address','ReGroup'
 ];
 
-// helper: safe getter supporting different casings
 function getField(obj: any, name: string) {
   if (!obj) return undefined;
   if (Object.prototype.hasOwnProperty.call(obj, name)) return obj[name];
@@ -22,8 +21,6 @@ export default function StationsTable() {
   const [stations, setStations] = useState<any[]>([]);
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // modal state
   const [editing, setEditing] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -46,13 +43,11 @@ export default function StationsTable() {
 
   useEffect(() => { fetchStations(); }, []);
 
-  // toggle is_active
   async function toggleActive(station: any) {
     const id = getField(station, 'StationId') ?? getField(station, 'stationid') ?? station.id;
     const current = getField(station, 'is_active') ?? getField(station, 'IsActive') ?? true;
     const next = !current;
 
-    // optimistic UI update
     setStations(prev => prev.map(s => {
       const sid = getField(s, 'StationId') ?? getField(s, 'stationid') ?? s.id;
       if (sid === id) return { ...s, is_active: next };
@@ -68,14 +63,12 @@ export default function StationsTable() {
       const json = await res.json();
       if (!res.ok) {
         console.error('toggle update failed', json);
-        // revert on failure
         setStations(prev => prev.map(s => {
           const sid = getField(s, 'StationId') ?? getField(s, 'stationid') ?? s.id;
           if (sid === id) return { ...s, is_active: current };
           return s;
         }));
       } else {
-        // replace with server-returned row if provided
         setStations(prev => prev.map(s => {
           const sid = getField(s, 'StationId') ?? getField(s, 'stationid') ?? s.id;
           if (sid === id) return { ...s, ...json };
@@ -87,9 +80,7 @@ export default function StationsTable() {
     }
   }
 
-  // start editing
   function openEdit(station: any) {
-    // clone and normalize fields we will edit
     const editable = {
       StationId: getField(station, 'StationId') ?? getField(station, 'stationid') ?? station.id,
       StationName: getField(station, 'StationName') ?? getField(station, 'stationname') ?? '',
@@ -127,7 +118,6 @@ export default function StationsTable() {
         console.error('saveEdit failed', json);
         alert('Save failed: ' + (json?.error ?? 'unknown'));
       } else {
-        // update local list
         setStations(prev => prev.map(s => {
           const sid = getField(s, 'StationId') ?? getField(s, 'stationid') ?? s.id;
           if (sid === id) return { ...s, ...json };
@@ -173,7 +163,7 @@ export default function StationsTable() {
                 const id = getField(s, 'StationId') ?? getField(s, 'stationid') ?? idx;
                 const active = getField(s, 'is_active') ?? getField(s, 'IsActive') ?? true;
                 return (
-                  <tr key={id}>
+                  <tr key={String(id)}>
                     {HEADERS.map(h => (
                       <td key={h} className="px-2 py-1 border">{String(getField(s, h) ?? '')}</td>
                     ))}
@@ -190,7 +180,6 @@ export default function StationsTable() {
                     </td>
                     <td className="px-2 py-1 border">
                       <button onClick={() => openEdit(s)} className="mr-2 px-3 py-1 bg-yellow-400 rounded">Edit</button>
-                      {/* future: add delete or more actions */}
                     </td>
                   </tr>
                 );
@@ -200,7 +189,6 @@ export default function StationsTable() {
         </div>
       )}
 
-      {/* Edit modal */}
       {editing && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
           <div className="bg-white p-6 rounded w-[90%] max-w-2xl">
