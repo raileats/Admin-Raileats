@@ -1,4 +1,3 @@
-// components/admin/RestroList.tsx
 'use client';
 import React, { useEffect, useState } from 'react';
 import RestroModal from './RestroModal';
@@ -32,7 +31,6 @@ export default function RestroList() {
     setSaving(true);
     try {
       if (editing && editing.RestroCode) {
-        // update
         const res = await fetch(`/api/restros/${encodeURIComponent(editing.RestroCode)}`, {
           method: 'PATCH',
           headers: {'Content-Type':'application/json'},
@@ -45,7 +43,6 @@ export default function RestroList() {
           alert('Update failed: ' + (json.error || 'unknown'));
         }
       } else {
-        // create
         const res = await fetch('/api/restros', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
