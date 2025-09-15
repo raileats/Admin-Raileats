@@ -1,4 +1,3 @@
-// components/Sidebar.tsx
 import Link from "next/link";
 import Image from "next/image";
 
@@ -80,11 +79,21 @@ export default function Sidebar() {
               Users
             </Link>
           </li>
+
+          {/* existing Vendors link left as-is */}
           <li style={{ marginBottom: 12 }}>
             <Link href="/admin/vendors" style={{ color: "#000", textDecoration: "none" }}>
               Vendors
             </Link>
           </li>
+
+          {/* NEW: Restro Master link (your new page) */}
+          <li style={{ marginBottom: 12 }}>
+            <Link href="/admin/restros" style={{ color: "#000", textDecoration: "none" }}>
+              Restro Master
+            </Link>
+          </li>
+
           <li style={{ marginTop: 20 }}>
             <Link
               href="/admin/logout"
