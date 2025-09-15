@@ -1,12 +1,11 @@
-// app/admin/restros/page.tsx
 import dynamic from 'next/dynamic';
-const RestroSidebar = dynamic(() => import('@/components/admin/RestroSidebar'), { ssr: false });
+const RestroList = dynamic(() => import('@/components/admin/RestroList'), { ssr: false });
 
 export default function RestrosPage() {
   return (
-    <div>
-      <h1 className="text-2xl mb-4">Restro Management</h1>
-      <RestroSidebar />
+    <div className="p-6">
+      <h1 className="text-2xl mb-4">Restro Master</h1>
+      <RestroList />
     </div>
   );
 }
