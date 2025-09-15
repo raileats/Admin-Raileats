@@ -1,102 +1,104 @@
+// components/admin/RestroList.tsx
 'use client';
 import React, { useEffect, useState } from 'react';
-import RestroModal from './RestroModal';
 
-export default function RestroMasterList() {
+export default function RestroList() {
   const [list, setList] = useState<any[]>([]);
-  const [q,setQ] = useState('');
-  const [loading,setLoading] = useState(false);
-  const [modalOpen,setModalOpen] = useState(false);
-  const [editing,setEditing] = useState<any|null>(null);
-  const [saving,setSaving] = useState(false);
+  const [q, setQ] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  async function fetchList(search='') {
+  async function fetchList(search = '') {
     setLoading(true);
     try {
-      const url = new URL('/api/restromaster', location.origin);
+      const url = new URL('/api/restromaster', location.origin); // make sure your API exists at this path
       if (search) url.searchParams.set('q', search);
       const res = await fetch(url.toString());
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({error: 'bad'}));
+        console.error('restromaster fetch error', err);
+        setList([]);
+        return;
+      }
       const json = await res.json();
       setList(Array.isArray(json) ? json : []);
-    } catch (e) { console.error(e); setList([]); }
-    finally { setLoading(false); }
+    } catch (e) {
+      console.error('fetchList error', e);
+      setList([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(()=>{ fetchList(); }, []);
-
-  function openAdd(){ setEditing(null); setModalOpen(true); }
-  function openEdit(r:any){ setEditing(r); setModalOpen(true); }
-
-  async function handleSave(payload:any){
-    setSaving(true);
-    try {
-      if (payload.RestroCode && editing) {
-        const res = await fetch('/api/restromaster', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-        const json = await res.json();
-        if (res.ok) setList(prev => prev.map(p => p.RestroCode===json.RestroCode ? json : p));
-        else alert('Update failed: '+(json.error||''));
-      } else {
-        const res = await fetch('/api/restromaster', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-        const json = await res.json();
-        if (res.ok || res.status===201) setList(prev => [json, ...prev]);
-        else alert('Create failed: '+(json.error||''));
-      }
-      setModalOpen(false);
-    } catch(e){ console.error(e); alert('Save error'); }
-    finally{ setSaving(false); }
-  }
+  useEffect(() => {
+    fetchList();
+  }, []);
 
   return (
     <div>
-      <div className="mb-4 flex gap-2">
-        <input placeholder="Search code/name/owner/station" value={q} onChange={(e)=>setQ(e.target.value)} className="border p-2 rounded flex-1" />
-        <button onClick={()=>fetchList(q)} className="px-4 py-2 bg-blue-600 text-white rounded">Search</button>
-        <button onClick={openAdd} className="px-4 py-2 bg-green-600 text-white rounded">+ Add New Restro</button>
+      <div style={{display:'flex', gap:8, marginBottom:12}}>
+        <input
+          placeholder="Search code / name / owner / station"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          style={{flex:1, padding:8, border:'1px solid #ddd', borderRadius:6}}
+        />
+        <button onClick={() => fetchList(q)} style={{padding:'8px 12px'}}>Search</button>
       </div>
 
       {loading ? <div>Loading...</div> : (
-        <div className="overflow-auto">
-          <table className="min-w-full border">
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%', borderCollapse:'collapse'}}>
             <thead>
               <tr>
-                <th className="p-2 border">Code</th>
-                <th className="p-2 border">Name</th>
-                <th className="p-2 border">Owner</th>
-                <th className="p-2 border">Station Code</th>
-                <th className="p-2 border">Station Name</th>
-                <th className="p-2 border">Phone</th>
-                <th className="p-2 border">FSSAI No</th>
-                <th className="p-2 border">FSSAI Expiry</th>
-                <th className="p-2 border">IRCTC</th>
-                <th className="p-2 border">Raileats</th>
-                <th className="p-2 border">IRCTC Approved</th>
-                <th className="p-2 border">Action</th>
+                <th style={th}>Code</th>
+                <th style={th}>Name</th>
+                <th style={th}>Owner</th>
+                <th style={th}>Station Code</th>
+                <th style={th}>Station Name</th>
+                <th style={th}>Phone</th>
+                <th style={th}>FSSAI No</th>
+                <th style={th}>FSSAI Expiry</th>
+                <th style={th}>IRCTC</th>
+                <th style={th}>Raileats</th>
+                <th style={th}>IRCTC Approved</th>
               </tr>
             </thead>
             <tbody>
-              {list.length===0 && <tr><td colSpan={12} className="p-4 text-center">No restros found</td></tr>}
-              {list.map((r:any)=>(
-                <tr key={r.RestroCode}>
-                  <td className="p-2 border">{r.RestroCode}</td>
-                  <td className="p-2 border">{r.RestroName}</td>
-                  <td className="p-2 border">{r.OwnerName}</td>
-                  <td className="p-2 border">{r.StationCode}</td>
-                  <td className="p-2 border">{r.StationName}</td>
-                  <td className="p-2 border">{r.OwnerPhone}</td>
-                  <td className="p-2 border">{r.FSSAINumber}</td>
-                  <td className="p-2 border">{r.FSSAIExpiryDate ? new Date(r.FSSAIExpiryDate).toLocaleDateString() : ''}</td>
-                  <td className="p-2 border">{r.IRCTCStatus}</td>
-                  <td className="p-2 border">{r.RaileatsStatus}</td>
-                  <td className="p-2 border">{r.IsIrctcApproved ? 'Yes' : 'No'}</td>
-                  <td className="p-2 border"><button onClick={()=>openEdit(r)} className="px-3 py-1 bg-yellow-400 rounded">Edit</button></td>
+              {list.length === 0 && (
+                <tr>
+                  <td style={cell} colSpan={11}>No restros found</td>
+                </tr>
+              )}
+              {list.map((r: any) => (
+                <tr key={String(r.RestroCode)}>
+                  <td style={cell}>{r.RestroCode}</td>
+                  <td style={cell}>{r.RestroName}</td>
+                  <td style={cell}>{r.OwnerName}</td>
+                  <td style={cell}>{r.StationCode}</td>
+                  <td style={cell}>{r.StationName}</td>
+                  <td style={cell}>{r.OwnerPhone}</td>
+                  <td style={cell}>{r.FSSAINumber}</td>
+                  <td style={cell}>{r.FSSAIExpiryDate ? new Date(r.FSSAIExpiryDate).toLocaleDateString() : ''}</td>
+                  <td style={cell}>{r.IRCTCStatus}</td>
+                  <td style={cell}>{r.RaileatsStatus}</td>
+                  <td style={cell}>{r.IsIrctcApproved ? 'Yes' : 'No'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-
-      <RestroModal open={modalOpen} onClose={()=>setModalOpen(false)} initial={editing} onSave={handleSave} saving={saving} />
     </div>
   );
 }
+
+const th: React.CSSProperties = {
+  textAlign: 'left',
+  padding: '8px',
+  borderBottom: '1px solid #eee',
+  background: '#fafafa'
+};
+const cell: React.CSSProperties = {
+  padding: '8px',
+  borderBottom: '1px solid #f3f3f3'
+};
