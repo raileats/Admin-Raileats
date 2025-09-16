@@ -13,7 +13,8 @@ export default function RestroList() {
     setLoading(true);
     setError(null);
     try {
-      const url = new URL('/api/restros', location.origin); // <-- corrected endpoint
+      const url = new URL('/api/restros', location.origin);
+
       if (search) url.searchParams.set('q', search);
       const res = await fetch(url.toString());
       if (!res.ok) {
