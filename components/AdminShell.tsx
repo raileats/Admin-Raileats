@@ -33,6 +33,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           <NavItem href="/admin/home" label="Dashboard" icon={<Home size={18} />} />
           <NavItem href="/admin/orders" label="Orders" icon={<ShoppingCart size={18} />} />
           <NavItem href="/admin/vendors" label="Outlets" icon={<Settings size={18} />} />
+          <NavItem href="/admin/restros" label="Restro Master" icon={<Home size={18} />} />
           <NavItem href="/admin/menu" label="Menu" icon={<Home size={18} />} />
           <NavItem href="/admin/trains" label="Trains" icon={<Home size={18} />} />
           <NavItem href="/admin/stations" label="Stations" icon={<Home size={18} />} />
