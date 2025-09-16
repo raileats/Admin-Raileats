@@ -6,24 +6,32 @@ export default function RestroList() {
   const [list, setList] = useState<any[]>([]);
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // NOTE: changed endpoint to /api/restros (collection GET)
   async function fetchList(search = '') {
     setLoading(true);
+    setError(null);
     try {
-      const url = new URL('/api/restromaster', location.origin); // make sure your API exists at this path
+      const url = new URL('/api/restros', location.origin); // <-- corrected endpoint
       if (search) url.searchParams.set('q', search);
       const res = await fetch(url.toString());
       if (!res.ok) {
-        const err = await res.json().catch(()=>({error: 'bad'}));
-        console.error('restromaster fetch error', err);
+        // try to parse error body, otherwise fallback
+        const err = await res.json().catch(() => ({ error: res.statusText || 'Fetch error' }));
+        console.error('restros fetch error', err);
         setList([]);
+        setError(err?.error || `Request failed (${res.status})`);
         return;
       }
-      const json = await res.json();
-      setList(Array.isArray(json) ? json : []);
-    } catch (e) {
+      const json = await res.json().catch(() => null);
+      // handle different shapes: { data: [...] } or direct array [...]
+      const rows = Array.isArray(json) ? json : (json && Array.isArray(json.data) ? json.data : []);
+      setList(rows);
+    } catch (e: any) {
       console.error('fetchList error', e);
       setList([]);
+      setError(String(e?.message || e));
     } finally {
       setLoading(false);
     }
@@ -45,7 +53,9 @@ export default function RestroList() {
         <button onClick={() => fetchList(q)} style={{padding:'8px 12px'}}>Search</button>
       </div>
 
-      {loading ? <div>Loading...</div> : (
+      {loading ? <div>Loading...</div> : error ? (
+        <div style={{color: 'red'}}>Error: {error}</div>
+      ) : (
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%', borderCollapse:'collapse'}}>
             <thead>
@@ -70,7 +80,7 @@ export default function RestroList() {
                 </tr>
               )}
               {list.map((r: any) => (
-                <tr key={String(r.RestroCode)}>
+                <tr key={String(r.RestroCode ?? r.id ?? Math.random())}>
                   <td style={cell}>{r.RestroCode}</td>
                   <td style={cell}>{r.RestroName}</td>
                   <td style={cell}>{r.OwnerName}</td>
@@ -79,8 +89,8 @@ export default function RestroList() {
                   <td style={cell}>{r.OwnerPhone}</td>
                   <td style={cell}>{r.FSSAINumber}</td>
                   <td style={cell}>{r.FSSAIExpiryDate ? new Date(r.FSSAIExpiryDate).toLocaleDateString() : ''}</td>
-                  <td style={cell}>{r.IRCTCStatus}</td>
-                  <td style={cell}>{r.RaileatsStatus}</td>
+                  <td style={cell}>{String(r.IRCTCStatus ?? '')}</td>
+                  <td style={cell}>{String(r.RaileatsStatus ?? '')}</td>
                   <td style={cell}>{r.IsIrctcApproved ? 'Yes' : 'No'}</td>
                 </tr>
               ))}
