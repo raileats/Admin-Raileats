@@ -13,7 +13,7 @@ export default function RestroList() {
     setLoading(true);
     setError(null);
     try {
-      const url = new URL('/api/restros', location.origin);
+      const url = new URL('/api/restrosmaster', location.origin); // <-- yaha change karo
 
       if (search) url.searchParams.set('q', search);
       const res = await fetch(url.toString());
