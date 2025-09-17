@@ -9,70 +9,53 @@ type Props = {
   imagePrefix?: string;
 };
 
-function getFieldCaseInsensitive(obj: any, candidates: string[]) {
-  if (!obj) return undefined;
-  const keys = Object.keys(obj);
-  for (const cand of candidates) {
-    // exact match first
-    if (obj[cand] !== undefined && obj[cand] !== null) return obj[cand];
-    // case-insensitive / underscore variants
-    const normalized = cand.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-    for (const k of keys) {
-      if (k.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === normalized) {
-        return obj[k];
-      }
-    }
-  }
-  return undefined;
-}
-
 export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props) {
   const router = useRouter();
 
   const [local, setLocal] = useState<any>({
-    RestroCode: initialData?.RestroCode ?? initialData?.restro_code ?? "",
-    OwnerName: initialData?.OwnerName ?? initialData?.owner_name ?? "",
-    StationCode: initialData?.StationCode ?? initialData?.station_code ?? "",
-    StationName: initialData?.StationName ?? initialData?.station_name ?? "",
-    OwnerEmail: initialData?.OwnerEmail ?? initialData?.owner_email ?? "",
-    RestroName: initialData?.RestroName ?? initialData?.restro_name ?? "",
-    OwnerPhone: initialData?.OwnerPhone ?? initialData?.owner_phone ?? "",
-    BrandNameifAny: initialData?.BrandNameifAny ?? initialData?.brand_name ?? "",
-    RestroEmail: initialData?.RestroEmail ?? initialData?.restro_email ?? "",
-    RestroPhone: initialData?.RestroPhone ?? initialData?.restro_phone ?? "",
-    IRCTCStatus: initialData?.IRCTCStatus ?? initialData?.irctc ?? 0,
-    RaileatsStatus: initialData?.RaileatsStatus ?? initialData?.raileats ?? 0,
-    IsIrctcApproved: initialData?.IsIrctcApproved ?? initialData?.is_irctc_approved ?? "0",
-    RestroRating: initialData?.RestroRating ?? initialData?.restro_rating ?? "",
-    IsPureVeg: initialData?.IsPureVeg ?? initialData?.is_pure_veg ?? 0,
-    RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? initialData?.restro_display_photo ?? "",
-    FSSAINumber: initialData?.FSSAINumber ?? initialData?.fssai_number ?? "",
-    FSSAIExpiryDate: initialData?.FSSAIExpiryDate ?? initialData?.fssai_expiry_date ?? "",
-    State: getFieldCaseInsensitive(initialData, ["State", "state", "state_name", "StateName", "StationState"]) ?? "",
+    RestroCode: initialData?.RestroCode ?? "",
+    OwnerName: initialData?.OwnerName ?? "",
+    StationCode: initialData?.StationCode ?? "",
+    StationName: initialData?.StationName ?? "",
+    OwnerEmail: initialData?.OwnerEmail ?? "",
+    RestroName: initialData?.RestroName ?? "",
+    OwnerPhone: initialData?.OwnerPhone ?? "",
+    BrandNameifAny: initialData?.BrandNameifAny ?? "",
+    RestroEmail: initialData?.RestroEmail ?? "",
+    RestroPhone: initialData?.RestroPhone ?? "",
+    IRCTCStatus: initialData?.IRCTCStatus ?? 0,
+    RaileatsStatus: initialData?.RaileatsStatus ?? 0,
+    IsIrctcApproved: initialData?.IsIrctcApproved ?? "0",
+    RestroRating: initialData?.RestroRating ?? "",
+    IsPureVeg: initialData?.IsPureVeg ?? 0,
+    RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? "",
+    FSSAINumber: initialData?.FSSAINumber ?? "",
+    FSSAIExpiryDate: initialData?.FSSAIExpiryDate ?? "",
+    State: initialData?.State ?? "",
   });
 
   useEffect(() => {
     setLocal((p: any) => ({
       ...p,
-      RestroCode: initialData?.RestroCode ?? initialData?.restro_code ?? p.RestroCode,
-      OwnerName: initialData?.OwnerName ?? initialData?.owner_name ?? p.OwnerName,
-      StationCode: initialData?.StationCode ?? initialData?.station_code ?? p.StationCode,
-      StationName: initialData?.StationName ?? initialData?.station_name ?? p.StationName,
-      OwnerEmail: initialData?.OwnerEmail ?? initialData?.owner_email ?? p.OwnerEmail,
-      RestroName: initialData?.RestroName ?? initialData?.restro_name ?? p.RestroName,
-      OwnerPhone: initialData?.OwnerPhone ?? initialData?.owner_phone ?? p.OwnerPhone,
-      BrandNameifAny: initialData?.BrandNameifAny ?? initialData?.brand_name ?? p.BrandNameifAny,
-      RestroEmail: initialData?.RestroEmail ?? initialData?.restro_email ?? p.RestroEmail,
-      RestroPhone: initialData?.RestroPhone ?? initialData?.restro_phone ?? p.RestroPhone,
-      IRCTCStatus: initialData?.IRCTCStatus ?? initialData?.irctc ?? p.IRCTCStatus,
-      RaileatsStatus: initialData?.RaileatsStatus ?? initialData?.raileats ?? p.RaileatsStatus,
-      IsIrctcApproved: initialData?.IsIrctcApproved ?? initialData?.is_irctc_approved ?? p.IsIrctcApproved,
-      RestroRating: initialData?.RestroRating ?? initialData?.restro_rating ?? p.RestroRating,
-      IsPureVeg: initialData?.IsPureVeg ?? initialData?.is_pure_veg ?? p.IsPureVeg,
-      RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? initialData?.restro_display_photo ?? p.RestroDisplayPhoto,
-      FSSAINumber: initialData?.FSSAINumber ?? initialData?.fssai_number ?? p.FSSAINumber,
-      FSSAIExpiryDate: initialData?.FSSAIExpiryDate ?? initialData?.fssai_expiry_date ?? p.FSSAIExpiryDate,
-      State: getFieldCaseInsensitive(initialData, ["State", "state", "state_name", "StateName", "StationState"]) ?? p.State ?? "",
+      RestroCode: initialData?.RestroCode ?? p.RestroCode,
+      OwnerName: initialData?.OwnerName ?? p.OwnerName,
+      StationCode: initialData?.StationCode ?? p.StationCode,
+      StationName: initialData?.StationName ?? p.StationName,
+      OwnerEmail: initialData?.OwnerEmail ?? p.OwnerEmail,
+      RestroName: initialData?.RestroName ?? p.RestroName,
+      OwnerPhone: initialData?.OwnerPhone ?? p.OwnerPhone,
+      BrandNameifAny: initialData?.BrandNameifAny ?? p.BrandNameifAny,
+      RestroEmail: initialData?.RestroEmail ?? p.RestroEmail,
+      RestroPhone: initialData?.RestroPhone ?? p.RestroPhone,
+      IRCTCStatus: initialData?.IRCTCStatus ?? p.IRCTCStatus,
+      RaileatsStatus: initialData?.RaileatsStatus ?? p.RaileatsStatus,
+      IsIrctcApproved: initialData?.IsIrctcApproved ?? p.IsIrctcApproved,
+      RestroRating: initialData?.RestroRating ?? p.RestroRating,
+      IsPureVeg: initialData?.IsPureVeg ?? p.IsPureVeg,
+      RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? p.RestroDisplayPhoto,
+      FSSAINumber: initialData?.FSSAINumber ?? p.FSSAINumber,
+      FSSAIExpiryDate: initialData?.FSSAIExpiryDate ?? p.FSSAIExpiryDate,
+      State: initialData?.State ?? p.State ?? "",
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData]);
@@ -143,52 +126,25 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
     return (imagePrefix ?? "") + p;
   };
 
-  // Compose Station display: "StationName (StationCode) - State"
+  // ---- exact composition using CSV/DB columns: StationName, StationCode, State
   const getStationDisplay = () => {
-    // If API already returns a full-looking string, prefer that
-    const rawFull = getFieldCaseInsensitive(initialData, [
-      "StationDisplay",
-      "StationFullName",
-      "StationFull",
-      "StationNameFull",
-      "station_display",
-      "station_full_name",
-      "station_full",
-      "stationName",
-      "stationname",
-    ]);
-    if (rawFull && typeof rawFull === "string" && rawFull.trim()) {
-      const s = rawFull.trim();
-      // prefer strings that already contain "(" and ")" or " - " (looks like full)
-      if (s.includes("(") || s.includes("-")) return s;
-      // else still return trimmed s (safe)
-      return s;
+    // if initialData already supplied a full-looking string under StationDisplay, prefer it
+    if (typeof initialData?.StationDisplay === "string" && initialData.StationDisplay.trim()) {
+      return initialData.StationDisplay.trim();
     }
 
-    const stationName =
-      (getFieldCaseInsensitive(initialData, ["StationName", "station_name", "stationName"]) ??
-        local.StationName ??
-        ""
-      )
-        .toString()
-        .trim();
-    const stationCode =
-      (getFieldCaseInsensitive(initialData, ["StationCode", "station_code", "stationCode"]) ?? local.StationCode ?? "")
-        .toString()
-        .trim();
-    const stateName =
-      (getFieldCaseInsensitive(initialData, ["State", "state", "state_name", "station_state", "StateName"]) ?? local.State ?? "")
-        .toString()
-        .trim();
+    const sName = (initialData?.StationName ?? local.StationName ?? "").toString().trim();
+    const sCode = (initialData?.StationCode ?? local.StationCode ?? "").toString().trim();
+    const state = (initialData?.State ?? local.State ?? "").toString().trim();
 
     const leftParts: string[] = [];
-    if (stationName) leftParts.push(stationName);
-    if (stationCode) leftParts.push(`(${stationCode})`);
+    if (sName) leftParts.push(sName);
+    if (sCode) leftParts.push(`(${sCode})`);
 
     const left = leftParts.join(" ");
-    if (left && stateName) return `${left} - ${stateName}`;
+    if (left && state) return `${left} - ${state}`;
     if (left) return left;
-    if (stateName) return stateName;
+    if (state) return state;
     return "—";
   };
 
@@ -307,8 +263,8 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
         <button className="btn-save" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
       </div>
 
-      {msg && <div className="msg ok">{msg}</div>}
-      {err && <div className="msg err">{err}</div>}
+      {msg && <div style={{ color: "green", marginTop: 10 }}>{msg}</div>}
+      {err && <div style={{ color: "red", marginTop: 10 }}>{err}</div>}
 
       <style jsx>{`
         .compact-grid {
@@ -369,10 +325,6 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
           color: #fff;
           cursor: pointer;
         }
-        .msg { max-width: 1100px; margin: 10px auto; font-size: 13px; }
-        .msg.ok { color: green; }
-        .msg.err { color: red; }
-
         @media (max-width: 1100px) {
           .compact-grid { grid-template-columns: repeat(2, 1fr); }
         }
