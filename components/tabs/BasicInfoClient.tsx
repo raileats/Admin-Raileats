@@ -4,9 +4,9 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Props = { initialData: any };
+type Props = { initialData: any; imagePrefix?: string };
 
-export default function BasicInfoClient({ initialData }: Props) {
+export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props) {
   const router = useRouter();
 
   const [local, setLocal] = useState<any>({
@@ -20,11 +20,11 @@ export default function BasicInfoClient({ initialData }: Props) {
     owner_phone: initialData?.owner_phone ?? initialData?.OwnerPhone ?? "",
     restro_email: initialData?.restro_email ?? initialData?.RestroEmail ?? "",
     restro_phone: initialData?.restro_phone ?? initialData?.RestroPhone ?? "",
-    raileats: initialData?.raileats ?? (initialData?.Raileats ? 1 : 0) ?? 0,
-    irctc: initialData?.irctc ?? (initialData?.IRCTC ? 1 : 0) ?? 0,
-    is_irctc_approved: initialData?.is_irctc_approved ?? (initialData?.IsIrctcApproved ? 1 : 0) ?? 0,
+    raileats: !!(initialData?.raileats ?? initialData?.Raileats),
+    irctc: !!(initialData?.irctc ?? initialData?.IRCTC),
+    is_irctc_approved: !!(initialData?.is_irctc_approved ?? initialData?.IsIrctcApproved),
     rating: initialData?.rating ?? initialData?.Rating ?? "",
-    is_pure_veg: initialData?.is_pure_veg ?? (initialData?.IsPureVeg ? 1 : 0) ?? 0,
+    is_pure_veg: !!(initialData?.is_pure_veg ?? initialData?.IsPureVeg),
     restro_display_photo: initialData?.restro_display_photo ?? initialData?.RestroDisplayPhoto ?? "",
     fssai_number: initialData?.fssai_number ?? initialData?.FSSAINumber ?? "",
     fssai_expiry_date: initialData?.fssai_expiry_date ?? initialData?.FSSAIExpiryDate ?? "",
@@ -34,11 +34,31 @@ export default function BasicInfoClient({ initialData }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // keep local in sync if initialData changes (rare)
   useEffect(() => {
-    // if initialData changes, refresh local
-    setLocal((p: any) => ({ ...p, restro_code: initialData?.restro_code ?? initialData?.RestroCode ?? p.restro_code }));
+    setLocal((p: any) => ({
+      ...p,
+      restro_code: initialData?.restro_code ?? initialData?.RestroCode ?? p.restro_code,
+      restro_name: initialData?.restro_name ?? initialData?.RestroName ?? p.restro_name,
+      brand_name: initialData?.brand_name ?? initialData?.BrandName ?? p.brand_name,
+      station_code: initialData?.station_code ?? initialData?.StationCode ?? p.station_code,
+      station_name: initialData?.station_name ?? initialData?.StationName ?? p.station_name,
+      owner_name: initialData?.owner_name ?? initialData?.OwnerName ?? p.owner_name,
+      owner_email: initialData?.owner_email ?? initialData?.OwnerEmail ?? p.owner_email,
+      owner_phone: initialData?.owner_phone ?? initialData?.OwnerPhone ?? p.owner_phone,
+      restro_email: initialData?.restro_email ?? initialData?.RestroEmail ?? p.restro_email,
+      restro_phone: initialData?.restro_phone ?? initialData?.RestroPhone ?? p.restro_phone,
+      raileats: !!(initialData?.raileats ?? initialData?.Raileats ?? p.raileats),
+      irctc: !!(initialData?.irctc ?? initialData?.IRCTC ?? p.irctc),
+      is_irctc_approved: !!(initialData?.is_irctc_approved ?? initialData?.IsIrctcApproved ?? p.is_irctc_approved),
+      rating: initialData?.rating ?? initialData?.Rating ?? p.rating,
+      is_pure_veg: !!(initialData?.is_pure_veg ?? initialData?.IsPureVeg ?? p.is_pure_veg),
+      restro_display_photo: initialData?.restro_display_photo ?? initialData?.RestroDisplayPhoto ?? p.restro_display_photo,
+      fssai_number: initialData?.fssai_number ?? initialData?.FSSAINumber ?? p.fssai_number,
+      fssai_expiry_date: initialData?.fssai_expiry_date ?? initialData?.FSSAIExpiryDate ?? p.fssai_expiry_date,
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData?.restro_code]);
+  }, [initialData]);
 
   function update(k: string, v: any) {
     setLocal((p: any) => ({ ...p, [k]: v }));
@@ -50,9 +70,11 @@ export default function BasicInfoClient({ initialData }: Props) {
     setSaving(true);
     setMsg(null);
     setErr(null);
+
     try {
       const id = encodeURIComponent(String(local.restro_code));
-      const payload: any = {
+      // snake_case payload (server accepts PascalCase too, but prefer snake_case)
+      const payload: Record<string, any> = {
         restro_name: local.restro_name,
         brand_name: local.brand_name,
         station_code: local.station_code,
@@ -65,7 +87,7 @@ export default function BasicInfoClient({ initialData }: Props) {
         raileats: local.raileats ? 1 : 0,
         irctc: local.irctc ? 1 : 0,
         is_irctc_approved: local.is_irctc_approved ? 1 : 0,
-        rating: local.rating !== "" ? Number(local.rating) : null,
+        rating: local.rating === "" ? null : Number(local.rating),
         is_pure_veg: local.is_pure_veg ? 1 : 0,
         restro_display_photo: local.restro_display_photo,
         fssai_number: local.fssai_number,
@@ -73,7 +95,7 @@ export default function BasicInfoClient({ initialData }: Props) {
       };
 
       const res = await fetch(`/api/restros/${id}`, {
-        method: "PUT",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -84,11 +106,15 @@ export default function BasicInfoClient({ initialData }: Props) {
       }
 
       const json = await res.json().catch(() => null);
-      setMsg("Saved successfully");
-      // optional: refresh page data (client-side)
-      // router.refresh(); // uncomment if you want to re-fetch server data
+      if (json?.ok) {
+        setMsg("Saved successfully");
+        // optionally refresh parent/server data:
+        // router.refresh();
+      } else {
+        throw new Error(json?.error ?? "Unknown error");
+      }
     } catch (e: any) {
-      console.error(e);
+      console.error("Save error:", e);
       setErr(e?.message ?? "Save failed");
     } finally {
       setSaving(false);
@@ -185,13 +211,19 @@ export default function BasicInfoClient({ initialData }: Props) {
         <div style={{ gridColumn: "1 / -1" }}>
           <label style={{ fontWeight: 600 }}>Restro Display Photo (path or URL)</label>
           <input value={local.restro_display_photo} onChange={(e) => update("restro_display_photo", e.target.value)} style={{ width: "100%", padding: 8 }} />
-          {local.restro_display_photo ? <div style={{ marginTop: 8 }}><img src={local.restro_display_photo} alt="restro" style={{ height: 90, objectFit: "cover" }} /></div> : null}
+          {local.restro_display_photo ? (
+            <div style={{ marginTop: 8 }}>
+              <img src={imagePrefix + local.restro_display_photo} alt="restro" style={{ height: 90, objectFit: "cover" }} />
+            </div>
+          ) : null}
         </div>
       </div>
 
       <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
         <button onClick={() => router.push("/admin/restros")} style={{ padding: "8px 12px" }}>Cancel</button>
-        <button onClick={save} disabled={saving} style={{ padding: "8px 12px", background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", border: "none" }}>{saving ? "Saving..." : "Save"}</button>
+        <button disabled={saving} onClick={save} style={{ padding: "8px 12px", background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", border: "none" }}>
+          {saving ? "Saving..." : "Save"}
+        </button>
       </div>
 
       {msg && <div style={{ color: "green", marginTop: 8 }}>{msg}</div>}
