@@ -31,6 +31,7 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
     RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? "",
     FSSAINumber: initialData?.FSSAINumber ?? "",
     FSSAIExpiryDate: initialData?.FSSAIExpiryDate ?? "",
+    State: initialData?.State ?? initialData?.StationState ?? "",
   });
 
   useEffect(() => {
@@ -54,6 +55,7 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
       RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? p.RestroDisplayPhoto,
       FSSAINumber: initialData?.FSSAINumber ?? p.FSSAINumber,
       FSSAIExpiryDate: initialData?.FSSAIExpiryDate ?? p.FSSAIExpiryDate,
+      State: initialData?.State ?? initialData?.StationState ?? p.State ?? "",
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData]);
@@ -78,7 +80,7 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
       const payload: Record<string, any> = {
         RestroName: local.RestroName,
         OwnerName: local.OwnerName,
-        StationCode: local.StationCode,
+        StationCode: local.StationCode, // sending station code as part of payload
         StationName: local.StationName,
         OwnerPhone: local.OwnerPhone,
         OwnerEmail: local.OwnerEmail,
@@ -93,6 +95,7 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
         RestroDisplayPhoto: local.RestroDisplayPhoto,
         FSSAINumber: local.FSSAINumber,
         FSSAIExpiryDate: local.FSSAIExpiryDate,
+        State: local.State ?? null,
       };
 
       const res = await fetch(`/api/restros/${id}`, {
@@ -108,7 +111,6 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
       }
 
       setMsg("Saved successfully");
-      // optional refresh
       router.refresh();
     } catch (e: any) {
       console.error("Save error:", e);
@@ -124,25 +126,38 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
     return (imagePrefix ?? "") + p;
   };
 
-  // compute station display string (tries common keys, then fallback)
+  // --- Compose Station display as "StationName (StationCode) - State"
   const getStationDisplay = () => {
-    // if Supabase already returns the full string in some key, prefer it
-    const candidates = [
+    // If API already included a full display string, prefer it
+    const fullCandidates = [
       initialData?.StationDisplay,
       initialData?.StationFullName,
       initialData?.StationFull,
       initialData?.StationNameFull,
-      initialData?.StationName, // sometimes holds the whole string
+      initialData?.StationName, // sometimes the API stores full
     ];
-    for (const c of candidates) {
-      if (c && typeof c === "string" && c.trim()) return c;
+    for (const c of fullCandidates) {
+      if (c && typeof c === "string" && c.trim()) {
+        // if it already contains parentheses or a dash, assume it's full; still trim
+        return c.trim();
+      }
     }
-    // fallback: compose from StationName + (StationCode) + maybe State if present
-    const parts: string[] = [];
-    if (initialData?.StationName) parts.push(initialData.StationName);
-    if (initialData?.StationCode) parts.push(`(${initialData.StationCode})`);
-    if (initialData?.State) parts.push(`- ${initialData.State}`);
-    return parts.join(" ").trim() || (local.StationCode ? `(${local.StationCode})` : "—");
+
+    const stationName = (initialData?.StationName ?? local.StationName ?? "").toString().trim();
+    const stationCode = (initialData?.StationCode ?? local.StationCode ?? "").toString().trim();
+    // state may be under different keys - try a few
+    const stateName =
+      (initialData?.State ?? initialData?.StationState ?? initialData?.StateName ?? local.State ?? "").toString().trim();
+
+    const leftParts: string[] = [];
+    if (stationName) leftParts.push(stationName);
+    if (stationCode) leftParts.push(`(${stationCode})`);
+
+    const left = leftParts.join(" ");
+    if (left && stateName) return `${left} - ${stateName}`;
+    if (left) return left;
+    if (stateName) return stateName;
+    return "—";
   };
 
   const stationDisplay = getStationDisplay();
@@ -151,9 +166,8 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
     <div style={{ padding: 18 }}>
       <h3 style={{ textAlign: "center", marginBottom: 18, fontSize: 20 }}>Basic Information</h3>
 
-      {/* compact multi-column form (labels above inputs) */}
+      {/* compact multi-column form */}
       <div className="compact-grid">
-        {/* Station — read-only (like Restro Code) */}
         <div className="field">
           <label>Station</label>
           <div className="readonly">{stationDisplay}</div>
