@@ -1,4 +1,3 @@
-// components/tabs/BasicInfoClient.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -131,86 +130,108 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
     return (imagePrefix ?? "") + p;
   };
 
+  /* Small helper to render a label + field pair */
+  function KVRow({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <>
+        <div className="kv-label">{label}</div>
+        <div className="kv-field">{children}</div>
+      </>
+    );
+  }
+
   return (
     <div style={{ padding: 20 }}>
       <h3 style={{ textAlign: "center", marginBottom: 12, fontSize: 20 }}>Basic Information</h3>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {/* left col */}
-        <div>
-          <label style={{ fontWeight: 600 }}>Restro Code</label>
-          <div style={{ padding: 8 }}>{local.RestroCode}</div>
+      <div className="kv-grid">
+        <KVRow label="Restro Code">
+          <div className="readonly-value">{local.RestroCode ?? "—"}</div>
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Station Code with Name</label>
-          <div style={{ padding: 8 }}>
-            ({local.StationCode}) {local.StationName}
-          </div>
+        <KVRow label="Station Code with Name">
+          <div className="readonly-value">({local.StationCode}) {local.StationName}</div>
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Restro Name</label>
-          <input value={local.RestroName} onChange={(e) => update("RestroName", e.target.value)} style={{ width: "100%", padding: 8 }} />
+        <KVRow label="Restro Name">
+          <input className="kv-input" value={local.RestroName ?? ""} onChange={(e) => update("RestroName", e.target.value)} />
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Brand Name if Any</label>
-          <input value={local.BrandNameifAny} onChange={(e) => update("BrandNameifAny", e.target.value)} style={{ width: "100%", padding: 8 }} />
+        <KVRow label="Brand Name if Any">
+          <input className="kv-input" value={local.BrandNameifAny ?? ""} onChange={(e) => update("BrandNameifAny", e.target.value)} />
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Raileats Status</label>
-          <select value={String(local.RaileatsStatus ?? 0)} onChange={(e) => update("RaileatsStatus", Number(e.target.value))} style={{ width: "100%", padding: 8 }}>
+        <KVRow label="Raileats Status">
+          <select className="kv-input" value={String(local.RaileatsStatus ?? 0)} onChange={(e) => update("RaileatsStatus", Number(e.target.value))}>
             <option value={1}>On</option>
             <option value={0}>Off</option>
           </select>
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Is Irctc Approved</label>
-          <select value={String(local.IsIrctcApproved ?? "0")} onChange={(e) => update("IsIrctcApproved", e.target.value)} style={{ width: "100%", padding: 8 }}>
+        <KVRow label="Is Irctc Approved">
+          <select className="kv-input" value={String(local.IsIrctcApproved ?? "0")} onChange={(e) => update("IsIrctcApproved", e.target.value)}>
             <option value="1">Yes</option>
             <option value="0">No</option>
           </select>
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Restro Rating</label>
-          <input type="number" step="0.1" value={local.RestroRating ?? ""} onChange={(e) => update("RestroRating", e.target.value)} style={{ width: "100%", padding: 8 }} />
+        <KVRow label="Restro Rating">
+          <input className="kv-input" type="number" step="0.1" value={local.RestroRating ?? ""} onChange={(e) => update("RestroRating", e.target.value)} />
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Restro Display Photo (path)</label>
-          <input value={local.RestroDisplayPhoto} onChange={(e) => update("RestroDisplayPhoto", e.target.value)} style={{ width: "100%", padding: 8 }} />
+        <KVRow label="Restro Display Photo (path)">
+          <input className="kv-input" value={local.RestroDisplayPhoto ?? ""} onChange={(e) => update("RestroDisplayPhoto", e.target.value)} />
+        </KVRow>
+
+        <KVRow label="Display Preview">
           {local.RestroDisplayPhoto ? (
-            <div style={{ marginTop: 8 }}>
-              <img src={imgSrc(local.RestroDisplayPhoto)} alt="display" style={{ height: 100, objectFit: "cover" }} />
-            </div>
-          ) : null}
-        </div>
+            <img src={imgSrc(local.RestroDisplayPhoto)} alt="display" className="preview-img" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+          ) : (
+            <div className="readonly-value">No image</div>
+          )}
+        </KVRow>
 
-        {/* right col */}
-        <div>
-          <label style={{ fontWeight: 600 }}>Owner Name</label>
-          <input value={local.OwnerName} onChange={(e) => update("OwnerName", e.target.value)} style={{ width: "100%", padding: 8 }} />
+        <KVRow label="Owner Name">
+          <input className="kv-input" value={local.OwnerName ?? ""} onChange={(e) => update("OwnerName", e.target.value)} />
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Owner Email</label>
-          <input value={local.OwnerEmail} onChange={(e) => update("OwnerEmail", e.target.value)} style={{ width: "100%", padding: 8 }} />
+        <KVRow label="Owner Email">
+          <input className="kv-input" value={local.OwnerEmail ?? ""} onChange={(e) => update("OwnerEmail", e.target.value)} />
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Owner Phone</label>
-          <input value={local.OwnerPhone} onChange={(e) => update("OwnerPhone", e.target.value)} style={{ width: "100%", padding: 8 }} />
+        <KVRow label="Owner Phone">
+          <input className="kv-input" value={local.OwnerPhone ?? ""} onChange={(e) => update("OwnerPhone", e.target.value)} />
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Restro Email</label>
-          <input value={local.RestroEmail} onChange={(e) => update("RestroEmail", e.target.value)} style={{ width: "100%", padding: 8 }} />
+        <KVRow label="Restro Email">
+          <input className="kv-input" value={local.RestroEmail ?? ""} onChange={(e) => update("RestroEmail", e.target.value)} />
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Restro Phone</label>
-          <input value={local.RestroPhone} onChange={(e) => update("RestroPhone", e.target.value)} style={{ width: "100%", padding: 8 }} />
+        <KVRow label="Restro Phone">
+          <input className="kv-input" value={local.RestroPhone ?? ""} onChange={(e) => update("RestroPhone", e.target.value)} />
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>IRCTC Status</label>
-          <select value={String(local.IRCTCStatus ?? 0)} onChange={(e) => update("IRCTCStatus", Number(e.target.value))} style={{ width: "100%", padding: 8 }}>
+        <KVRow label="IRCTC Status">
+          <select className="kv-input" value={String(local.IRCTCStatus ?? 0)} onChange={(e) => update("IRCTCStatus", Number(e.target.value))}>
             <option value={1}>On</option>
             <option value={0}>Off</option>
           </select>
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>Is Pure Veg</label>
-          <select value={String(local.IsPureVeg ?? 0)} onChange={(e) => update("IsPureVeg", Number(e.target.value))} style={{ width: "100%", padding: 8 }}>
+        <KVRow label="Is Pure Veg">
+          <select className="kv-input" value={String(local.IsPureVeg ?? 0)} onChange={(e) => update("IsPureVeg", Number(e.target.value))}>
             <option value={1}>Yes</option>
             <option value={0}>No</option>
           </select>
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>FSSAI Number</label>
-          <input value={local.FSSAINumber ?? ""} onChange={(e) => update("FSSAINumber", e.target.value)} style={{ width: "100%", padding: 8 }} />
+        <KVRow label="FSSAI Number">
+          <input className="kv-input" value={local.FSSAINumber ?? ""} onChange={(e) => update("FSSAINumber", e.target.value)} />
+        </KVRow>
 
-          <label style={{ display: "block", marginTop: 12, fontWeight: 600 }}>FSSAI Expiry Date</label>
-          <input type="date" value={local.FSSAIExpiryDate ?? ""} onChange={(e) => update("FSSAIExpiryDate", e.target.value)} style={{ width: "100%", padding: 8 }} />
-        </div>
+        <KVRow label="FSSAI Expiry Date">
+          <input className="kv-input" type="date" value={local.FSSAIExpiryDate ?? ""} onChange={(e) => update("FSSAIExpiryDate", e.target.value)} />
+        </KVRow>
       </div>
 
       {/* buttons */}
@@ -225,6 +246,66 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
 
       {msg && <div style={{ color: "green", marginTop: 10 }}>{msg}</div>}
       {err && <div style={{ color: "red", marginTop: 10 }}>{err}</div>}
+
+      <style jsx>{`
+        .kv-grid {
+          display: grid;
+          grid-template-columns: 220px 1fr;
+          gap: 12px 18px;
+          align-items: start;
+          max-width: 980px;
+          margin: 6px auto 40px;
+        }
+
+        .kv-label {
+          text-align: right;
+          padding-top: 8px;
+          color: #333;
+          font-weight: 600;
+          font-size: 13px;
+        }
+
+        .kv-field {
+          display: block;
+        }
+
+        .kv-input {
+          width: 100%;
+          padding: 10px;
+          border-radius: 6px;
+          border: 1px solid #e0e0e0;
+          font-size: 13px;
+          box-sizing: border-box;
+          background: #fff;
+        }
+
+        .readonly-value {
+          padding: 10px 12px;
+          border-radius: 6px;
+          border: 1px solid #f0f0f0;
+          background: #fafafa;
+          color: #222;
+          font-size: 13px;
+        }
+
+        .preview-img {
+          height: 96px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #eee;
+        }
+
+        @media (max-width: 820px) {
+          .kv-grid {
+            grid-template-columns: 1fr;
+            gap: 10px 0;
+          }
+          .kv-label {
+            text-align: left;
+            padding-top: 6px;
+          }
+        }
+      `}</style>
     </div>
   );
 }
