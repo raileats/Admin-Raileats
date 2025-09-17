@@ -21,8 +21,7 @@ type Restro = {
   OwnerPhone?: string;
   IRCTC?: any;
   Raileats?: any;
-  IsIrctcApproved?: boolean;
-  FSSAIExpiry?: string;
+  FSSAIExpiryDate?: string;
   FSSAINumber?: string;
   [k: string]: any;
 };
@@ -37,16 +36,15 @@ export default function RestroMasterPage(): JSX.Element {
   const [stationName, setStationName] = useState<string>("");
   const [restroName, setRestroName] = useState<string>("");
   const [ownerPhone, setOwnerPhone] = useState<string>("");
-  const [irctcStatus, setIrctcStatus] = useState<string>("any"); // "any" | "yes" | "no"
-  const [raileatsStatus, setRaileatsStatus] = useState<string>("any"); // "any" | "yes" | "no"
-  const [fssaiNumber, setFssaiNumber] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("any"); // replaces "Raileats (Any)" label
 
   const [results, setResults] = useState<Restro[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [updatingCode, setUpdatingCode] = useState<number | string | null>(null);
 
   useEffect(() => {
-    fetchRestros(); // initial load
+    fetchRestros();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -55,55 +53,29 @@ export default function RestroMasterPage(): JSX.Element {
     setError(null);
 
     try {
-      // start query
       let query = supabase.from("RestroMaster").select("*").limit(500);
 
-      // RestroCode: if numeric -> eq (exact). If empty -> ignore.
       if (filters?.restroCode) {
         const rc = String(filters.restroCode).trim();
-        if (rc !== "") {
-          if (/^\d+$/.test(rc)) {
-            // numeric exact match
-            query = query.eq("RestroCode", Number(rc));
-          } else {
-            // non-numeric search: try fallback to string match on RestroCode (cast not always supported)
-            // Instead we can do nothing or try matching on RestroName / OwnerName; choose to ilike RestroCode as text using filter
-            // Use PostgREST filter `like` on column, but for numeric columns this may still error.
-            // Safer option: match RestroName/OwnerName instead when non-numeric code entered.
-            query = query.ilike("RestroName", `%${rc}%`);
-          }
-        }
+        if (/^\d+$/.test(rc)) query = query.eq("RestroCode", Number(rc));
+        else query = query.ilike("RestroName", `%${rc}%`);
       }
-
-      const ilikeIf = (col: string, val?: string) => {
-        if (!val) return;
-        const v = String(val).trim();
-        if (v.length === 0) return;
-        query = (query as any).ilike(col, `%${v}%`);
+      const ilikeIf = (col: string, v?: string) => {
+        if (!v) return;
+        if (String(v).trim().length === 0) return;
+        (query as any) = (query as any).ilike(col, `%${v}%`);
       };
-
       ilikeIf("OwnerName", filters?.ownerName);
       ilikeIf("StationCode", filters?.stationCode);
       ilikeIf("StationName", filters?.stationName);
       ilikeIf("RestroName", filters?.restroName);
       ilikeIf("OwnerPhone", filters?.ownerPhone);
-      ilikeIf("FSSAINumber", filters?.fssaiNumber || filters?.fssaiNumber); // matches column if present
+      ilikeIf("FSSAINumber", filters?.fssaiNumber || filters?.FSSAINumber);
 
-      // Status dropdowns: map yes/no to 1/0 or true/false depending on DB
-      if (filters?.irctcStatus && filters.irctcStatus !== "any") {
-        const v = filters.irctcStatus;
-        if (v === "yes") {
-          // try numeric 1 then boolean true
-          query = query.eq("IRCTC", 1);
-        } else if (v === "no") {
-          query = query.eq("IRCTC", 0);
-        }
-      }
-
-      if (filters?.raileatsStatus && filters.raileatsStatus !== "any") {
-        const v = filters.raileatsStatus;
-        if (v === "yes") query = query.eq("Raileats", 1);
-        else if (v === "no") query = query.eq("Raileats", 0);
+      // statusFilter applies to Raileats column
+      if (filters?.statusFilter && filters.statusFilter !== "any") {
+        if (filters.statusFilter === "yes") query = query.eq("Raileats", 1);
+        else if (filters.statusFilter === "no") query = query.eq("Raileats", 0);
       }
 
       const { data, error: e } = await query;
@@ -111,9 +83,8 @@ export default function RestroMasterPage(): JSX.Element {
       setResults((data ?? []) as Restro[]);
     } catch (err: any) {
       console.error("fetchRestros error:", err);
-      // special handling: if error mentions bigint ~~* then user probably typed non-numeric into RestroCode
       if (String(err.message || err).includes("bigint ~~*")) {
-        setError("Restro Code search must be numeric. For partial matches search by Restro Name or Owner Name.");
+        setError("Restro Code search must be numeric. Use exact code or search other fields.");
       } else {
         setError(err?.message ?? String(err));
       }
@@ -132,9 +103,7 @@ export default function RestroMasterPage(): JSX.Element {
       stationName,
       restroName,
       ownerPhone,
-      irctcStatus,
-      raileatsStatus,
-      fssaiNumber,
+      statusFilter,
     });
   }
 
@@ -145,10 +114,30 @@ export default function RestroMasterPage(): JSX.Element {
     setStationName("");
     setRestroName("");
     setOwnerPhone("");
-    setIrctcStatus("any");
-    setRaileatsStatus("any");
-    setFssaiNumber("");
+    setStatusFilter("any");
     fetchRestros();
+  }
+
+  // utility to treat DB truthy values
+  const truthy = (v: any) => v === true || v === 1 || v === "1" || v === "true" || v === "yes";
+
+  // toggle Raileats status (optimistic update)
+  async function toggleRaileats(code: number | string, current: any) {
+    const newVal = truthy(current) ? 0 : 1;
+    setUpdatingCode(code);
+    // optimistic update in UI
+    setResults((prev) => prev.map((r) => (String(r.RestroCode) === String(code) ? { ...r, Raileats: newVal } : r)));
+    try {
+      const { error } = await supabase.from("RestroMaster").update({ Raileats: newVal }).eq("RestroCode", code);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error("toggle error:", err);
+      setError("Could not update Raileats status. Try again.");
+      // rollback: refetch single row or full list
+      fetchRestros({ restroCode });
+    } finally {
+      setUpdatingCode(null);
+    }
   }
 
   return (
@@ -193,22 +182,15 @@ export default function RestroMasterPage(): JSX.Element {
         <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
         <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} style={{ padding: 8 }} />
 
-        <select value={irctcStatus} onChange={(e) => setIrctcStatus(e.target.value)} style={{ padding: 8 }}>
-          <option value="any">IRCTC (Any)</option>
-          <option value="yes">IRCTC (Yes)</option>
-          <option value="no">IRCTC (No)</option>
+        {/* Status dropdown (label "Status") */}
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: 8 }}>
+          <option value="any">Status</option>
+          <option value="yes">On</option>
+          <option value="no">Off</option>
         </select>
 
-        <select value={raileatsStatus} onChange={(e) => setRaileatsStatus(e.target.value)} style={{ padding: 8 }}>
-          <option value="any">Raileats (Any)</option>
-          <option value="yes">Raileats (Yes)</option>
-          <option value="no">Raileats (No)</option>
-        </select>
-
-        <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={{ padding: 8 }} />
-
-        {/* buttons area: small on the right */}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", paddingLeft: 8 }}>
+        {/* placeholder to keep layout aligned */}
+        <div style={{ gridColumn: "span 5 / auto", display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" onClick={onClear} style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>
             Clear
           </button>
@@ -241,46 +223,87 @@ export default function RestroMasterPage(): JSX.Element {
               <th style={{ padding: 12 }}>Owner Name</th>
               <th style={{ padding: 12 }}>IRCTC Status</th>
               <th style={{ padding: 12 }}>Raileats Status</th>
-              <th style={{ padding: 12 }}>Is IRCTC Approved</th>
-              <th style={{ padding: 12 }}>FSSAI Expiry</th>
+              <th style={{ padding: 12 }}>FSSAI Expiry Date</th>
               <th style={{ padding: 12 }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={10} style={{ padding: 20, textAlign: "center" }}>
+                <td colSpan={9} style={{ padding: 20, textAlign: "center" }}>
                   Loading...
                 </td>
               </tr>
             ) : results.length === 0 ? (
               <tr>
-                <td colSpan={10} style={{ padding: 20, textAlign: "center", color: "#666" }}>
+                <td colSpan={9} style={{ padding: 20, textAlign: "center", color: "#666" }}>
                   No restros found
                 </td>
               </tr>
             ) : (
-              results.map((r) => (
-                <tr key={String(r.RestroCode ?? JSON.stringify(r))} style={{ borderBottom: "1px solid #fafafa" }}>
-                  <td style={{ padding: 12 }}>{r.RestroCode}</td>
-                  <td style={{ padding: 12 }}>{r.RestroName}</td>
-                  <td style={{ padding: 12 }}>{r.StationCode}</td>
-                  <td style={{ padding: 12 }}>{r.StationName}</td>
-                  <td style={{ padding: 12 }}>{r.OwnerName}</td>
-                  <td style={{ padding: 12 }}>{String(r.IRCTC ?? "")}</td>
-                  <td style={{ padding: 12 }}>{String(r.Raileats ?? "")}</td>
-                  <td style={{ padding: 12 }}>{r.IsIrctcApproved ? "Yes" : "No"}</td>
-                  <td style={{ padding: 12 }}>{r.FSSAIExpiry ?? "-"}</td>
-                  <td style={{ padding: 12 }}>
-                    <button
-                      onClick={() => router.push(`/admin/restros/edit/${r.RestroCode}`)}
-                      style={{ background: "#f59e0b", color: "#000", padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))
+              results.map((r) => {
+                const code = r.RestroCode ?? r.RestroId ?? "";
+                const isIrctc = truthy(r.IRCTC);
+                const isRaileats = truthy(r.Raileats);
+                return (
+                  <tr key={String(code)} style={{ borderBottom: "1px solid #fafafa" }}>
+                    <td style={{ padding: 12 }}>{code}</td>
+                    <td style={{ padding: 12 }}>{r.RestroName}</td>
+                    <td style={{ padding: 12 }}>{r.StationCode}</td>
+                    <td style={{ padding: 12 }}>{r.StationName}</td>
+                    <td style={{ padding: 12 }}>{r.OwnerName}</td>
+                    <td style={{ padding: 12 }}>{isIrctc ? "Yes" : "No"}</td>
+
+                    {/* Raileats toggle (slider-like) */}
+                    <td style={{ padding: 12 }}>
+                      <label style={{ display: "inline-block", position: "relative" }}>
+                        <input
+                          type="checkbox"
+                          checked={isRaileats}
+                          onChange={() => toggleRaileats(code, r.Raileats)}
+                          disabled={updatingCode === code}
+                          style={{ width: 0, height: 0, opacity: 0 }}
+                        />
+                        <span
+                          style={{
+                            display: "inline-block",
+                            width: 44,
+                            height: 24,
+                            background: isRaileats ? "#10b981" : "#ddd",
+                            borderRadius: 999,
+                            position: "relative",
+                            transition: "background .15s",
+                          }}
+                        >
+                          <span
+                            style={{
+                              position: "absolute",
+                              top: 2,
+                              left: isRaileats ? 22 : 2,
+                              width: 20,
+                              height: 20,
+                              background: "#fff",
+                              borderRadius: 999,
+                              boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                              transition: "left .15s",
+                            }}
+                          />
+                        </span>
+                      </label>
+                    </td>
+
+                    <td style={{ padding: 12 }}>{r.FSSAIExpiryDate ?? "-"}</td>
+                    <td style={{ padding: 12 }}>
+                      <button
+                        onClick={() => router.push(`/admin/restros/edit/${code}`)}
+                        style={{ background: "#f59e0b", color: "#000", padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
