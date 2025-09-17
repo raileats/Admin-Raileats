@@ -12,21 +12,18 @@ export default async function BasicPage({ params }: Props) {
   }
 
   let restro: Restro | null = null;
-
   try {
     restro = await getRestroById(code);
   } catch (err: any) {
     console.error("BasicPage getRestroById error:", err);
-    return (
-      <div style={{ padding: 20 }}>
-        Error loading restro: {String(err?.message ?? err)}
-      </div>
-    );
+    return <div style={{ padding: 20 }}>Error loading restro: {String(err?.message ?? err)}</div>;
   }
 
   if (!restro) {
     return <div style={{ padding: 20 }}>Restro not found</div>;
   }
 
-  return <BasicInfoClient initialData={restro} />;
+  // pass imagePrefix if you need full URL for stored images (optional)
+  // e.g. imagePrefix="https://your-supabase-bucket-url/"
+  return <BasicInfoClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
 }
