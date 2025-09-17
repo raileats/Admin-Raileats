@@ -30,10 +30,10 @@ export default function RestroMasterPage(): JSX.Element {
 
   // filter fields
   const [restroCode, setRestroCode] = useState<string>("");
+  const [restroName, setRestroName] = useState<string>("");
   const [ownerName, setOwnerName] = useState<string>("");
   const [stationCode, setStationCode] = useState<string>("");
   const [stationName, setStationName] = useState<string>("");
-  const [restroName, setRestroName] = useState<string>("");
   const [ownerPhone, setOwnerPhone] = useState<string>("");
   const [fssaiNumber, setFssaiNumber] = useState<string>("");
 
@@ -43,6 +43,7 @@ export default function RestroMasterPage(): JSX.Element {
 
   useEffect(() => {
     fetchRestros();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const truthy = (v: any) => v === true || v === 1 || v === "1" || v === "true" || v === "yes";
@@ -69,10 +70,10 @@ export default function RestroMasterPage(): JSX.Element {
         (query as any) = (query as any).ilike(col, `%${s}%`);
       };
 
+      ilikeIf("RestroName", filters?.restroName);
       ilikeIf("OwnerName", filters?.ownerName);
       ilikeIf("StationCode", filters?.stationCode);
       ilikeIf("StationName", filters?.stationName);
-      ilikeIf("RestroName", filters?.restroName);
       ilikeIf("OwnerPhone", filters?.ownerPhone);
       ilikeIf("FSSAINumber", filters?.fssaiNumber);
 
@@ -92,10 +93,10 @@ export default function RestroMasterPage(): JSX.Element {
     if (e) e.preventDefault();
     fetchRestros({
       restroCode,
+      restroName,
       ownerName,
       stationCode,
       stationName,
-      restroName,
       ownerPhone,
       fssaiNumber,
     });
@@ -103,10 +104,10 @@ export default function RestroMasterPage(): JSX.Element {
 
   function onClear() {
     setRestroCode("");
+    setRestroName("");
     setOwnerName("");
     setStationCode("");
     setStationName("");
-    setRestroName("");
     setOwnerPhone("");
     setFssaiNumber("");
     fetchRestros();
@@ -149,10 +150,10 @@ export default function RestroMasterPage(): JSX.Element {
         }}
       >
         <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} style={{ padding: 8 }} />
+        <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
         <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} style={{ padding: 8 }} />
         <input placeholder="Station Code" value={stationCode} onChange={(e) => setStationCode(e.target.value)} style={{ padding: 8 }} />
         <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} style={{ padding: 8 }} />
-        <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
         <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} style={{ padding: 8 }} />
         <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={{ padding: 8 }} />
 
