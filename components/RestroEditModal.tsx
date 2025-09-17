@@ -117,6 +117,17 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
     return `${process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}${p}`;
   };
 
+  // station display (tries to prefer any full-string the API returned)
+  const getStationDisplay = () => {
+    const candidates = [restro?.StationDisplay, restro?.StationFullName, restro?.StationFull, restro?.StationNameFull, restro?.StationName];
+    for (const c of candidates) if (c && typeof c === "string" && c.trim()) return c;
+    // fallback:
+    if (restro?.StationName && restro?.StationCode) return `${restro.StationName} (${restro.StationCode})`;
+    if (restro?.StationCode) return `(${restro.StationCode})`;
+    return "—";
+  };
+  const stationDisplay = getStationDisplay();
+
   return (
     <div
       style={{
@@ -147,15 +158,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         }}
       >
         {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "12px 20px",
-            borderBottom: "1px solid #e9e9e9",
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ fontWeight: 600 }}>
             {String(local.RestroCode ?? local.RestroId ?? "")} / {local.RestroName} / {local.StationCode} / {local.StationName}
           </div>
@@ -170,19 +173,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
               Open Outlet Page
             </a>
 
-            <button
-              onClick={onClose}
-              style={{
-                background: "transparent",
-                border: "none",
-                fontSize: 20,
-                cursor: "pointer",
-                padding: 6,
-              }}
-              aria-label="Close"
-            >
-              ✕
-            </button>
+            <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">✕</button>
           </div>
         </div>
 
@@ -208,27 +199,8 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         {/* Toolbar */}
         <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-          <button
-            onClick={onClose}
-            style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}
-            disabled={saving}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              background: saving ? "#7fcfe9" : "#0ea5e9",
-              color: "#fff",
-              padding: "8px 12px",
-              borderRadius: 6,
-              border: "none",
-              cursor: saving ? "not-allowed" : "pointer",
-            }}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
+          <button onClick={onClose} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }} disabled={saving}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>{saving ? "Saving..." : "Save"}</button>
         </div>
 
         {/* Content */}
@@ -238,19 +210,15 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
 
               <div className="compact-grid">
+                {/* Station - read-only */}
+                <div className="field">
+                  <label>Station</label>
+                  <div className="readonly">{stationDisplay}</div>
+                </div>
+
                 <div className="field">
                   <label>Restro Code</label>
-                  <div className="readonly">{local.RestroCode ?? local.RestroId ?? "—"}</div>
-                </div>
-
-                <div className="field">
-                  <label>Station Code</label>
-                  <input value={local.StationCode ?? ""} onChange={(e) => updateField("StationCode", e.target.value)} />
-                </div>
-
-                <div className="field">
-                  <label>Station Name</label>
-                  <input value={local.StationName ?? ""} onChange={(e) => updateField("StationName", e.target.value)} />
+                  <div className="readonly">{local.RestroCode ?? "—"}</div>
                 </div>
 
                 <div className="field">
