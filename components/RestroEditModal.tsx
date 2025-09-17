@@ -10,6 +10,21 @@ type Props = {
   saving?: boolean;
 };
 
+function getFieldCaseInsensitive(obj: any, candidates: string[]) {
+  if (!obj) return undefined;
+  const keys = Object.keys(obj);
+  for (const cand of candidates) {
+    if (obj[cand] !== undefined && obj[cand] !== null) return obj[cand];
+    const normalized = cand.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    for (const k of keys) {
+      if (k.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === normalized) {
+        return obj[k];
+      }
+    }
+  }
+  return undefined;
+}
+
 const tabs = [
   "Basic Information",
   "Station Settings",
@@ -28,22 +43,23 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
   const [local, setLocal] = useState<any>({});
   useEffect(() => {
     setLocal({
-      RestroName: restro?.RestroName ?? "",
-      StationCode: restro?.StationCode ?? "",
-      StationName: restro?.StationName ?? "",
-      OwnerName: restro?.OwnerName ?? "",
-      OwnerPhone: restro?.OwnerPhone ?? "",
-      FSSAINumber: restro?.FSSAINumber ?? "",
-      FSSAIExpiryDate: restro?.FSSAIExpiryDate ?? "",
+      RestroName: restro?.RestroName ?? restro?.restro_name ?? "",
+      StationCode: restro?.StationCode ?? restro?.station_code ?? "",
+      StationName: restro?.StationName ?? restro?.station_name ?? "",
+      OwnerName: restro?.OwnerName ?? restro?.owner_name ?? "",
+      OwnerPhone: restro?.OwnerPhone ?? restro?.owner_phone ?? "",
+      FSSAINumber: restro?.FSSAINumber ?? restro?.fssai_number ?? "",
+      FSSAIExpiryDate: restro?.FSSAIExpiryDate ?? restro?.fssai_expiry_date ?? "",
       IRCTC: restro?.IRCTC === 1 || restro?.IRCTC === "1" || restro?.IRCTC === true,
       Raileats: restro?.Raileats === 1 || restro?.Raileats === "1" || restro?.Raileats === true,
       IsIrctcApproved:
         restro?.IsIrctcApproved === 1 ||
         restro?.IsIrctcApproved === "1" ||
         restro?.IsIrctcApproved === true,
-      State: restro?.State ?? restro?.StationState ?? "",
+      State: getFieldCaseInsensitive(restro, ["State", "state", "state_name", "StationState", "StateName"]) ?? "",
       ...restro,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restro]);
 
   const saving = parentSaving ?? savingInternal;
@@ -54,7 +70,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
   async function defaultPatch(payload: any) {
     try {
-      const code = restro?.RestroCode ?? restro?.RestroId ?? restro?.code;
+      const code = restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? restro?.code;
       if (!code) throw new Error("Missing RestroCode for update");
       const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
         method: "PATCH",
@@ -77,8 +93,8 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
     setError(null);
     const payload: any = {
       RestroName: local.RestroName ?? "",
-      StationCode: local.StationCode ?? restro?.StationCode ?? "",
-      StationName: local.StationName ?? restro?.StationName ?? "",
+      StationCode: local.StationCode ?? restro?.StationCode ?? restro?.station_code ?? "",
+      StationName: local.StationName ?? restro?.StationName ?? restro?.station_name ?? "",
       OwnerName: local.OwnerName ?? "",
       OwnerPhone: local.OwnerPhone ?? "",
       FSSAINumber: local.FSSAINumber ?? "",
@@ -86,7 +102,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
       IRCTC: local.IRCTC ? 1 : 0,
       Raileats: local.Raileats ? 1 : 0,
       IsIrctcApproved: local.IsIrctcApproved ? 1 : 0,
-      State: local.State ?? restro?.State ?? restro?.StationState ?? null,
+      State: local.State ?? restro?.State ?? restro?.state ?? restro?.StationState ?? null,
     };
 
     try {
@@ -121,14 +137,37 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
   // Compose Station display: "StationName (StationCode) - State"
   const getStationDisplay = () => {
-    const fullCandidates = [restro?.StationDisplay, restro?.StationFullName, restro?.StationFull, restro?.StationNameFull, restro?.StationName];
-    for (const c of fullCandidates) {
-      if (c && typeof c === "string" && c.trim()) return c.trim();
+    // if restro already has a full display string, prefer it
+    const rawFull = getFieldCaseInsensitive(restro, [
+      "StationDisplay",
+      "StationFullName",
+      "StationFull",
+      "StationNameFull",
+      "station_display",
+      "station_full_name",
+      "station_full",
+    ]);
+    if (rawFull && typeof rawFull === "string" && rawFull.trim()) {
+      const s = rawFull.trim();
+      if (s.includes("(") || s.includes("-")) return s;
+      return s;
     }
 
-    const stationName = (restro?.StationName ?? local.StationName ?? "").toString().trim();
-    const stationCode = (restro?.StationCode ?? local.StationCode ?? "").toString().trim();
-    const stateName = (restro?.State ?? restro?.StationState ?? local.State ?? "").toString().trim();
+    const stationName =
+      (getFieldCaseInsensitive(restro, ["StationName", "station_name", "stationName"]) ??
+        local.StationName ??
+        ""
+      )
+        .toString()
+        .trim();
+    const stationCode =
+      (getFieldCaseInsensitive(restro, ["StationCode", "station_code", "stationCode"]) ?? local.StationCode ?? "")
+        .toString()
+        .trim();
+    const stateName =
+      (getFieldCaseInsensitive(restro, ["State", "state", "state_name", "StationState", "StateName"]) ?? local.State ?? "")
+        .toString()
+        .trim();
 
     const leftParts: string[] = [];
     if (stationName) leftParts.push(stationName);
@@ -175,12 +214,12 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ fontWeight: 600 }}>
-            {String(restro?.RestroCode ?? restro?.RestroId ?? "")} / {local.RestroName ?? restro?.RestroName} / {stationDisplay}
+            {String(restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? "")} / {local.RestroName ?? restro?.RestroName} / {stationDisplay}
           </div>
 
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <a
-              href={`/admin/restros/edit/${encodeURIComponent(String(restro?.RestroCode ?? restro?.RestroId ?? ""))}`}
+              href={`/admin/restros/edit/${encodeURIComponent(String(restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? ""))}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
@@ -237,7 +276,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
                 <div className="field">
                   <label>Restro Code</label>
-                  <div className="readonly">{restro?.RestroCode ?? restro?.RestroId ?? "—"}</div>
+                  <div className="readonly">{restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? "—"}</div>
                 </div>
 
                 <div className="field">
