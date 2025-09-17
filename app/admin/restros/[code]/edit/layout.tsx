@@ -1,21 +1,13 @@
 // app/admin/restros/[code]/edit/layout.tsx
 import React from "react";
 import Link from "next/link";
-import { getRestroById, Restro } from "@/lib/restroService";
+import { safeGetRestro } from "@/lib/restroService";
 
-type Props = { params: { code: string }, children: React.ReactNode };
+type Props = { params: { code: string }; children: React.ReactNode };
 
 export default async function RestroEditLayout({ params, children }: Props) {
   const codeNum = Number(params.code);
-
-  // सही type दें: Restro | null
-  let restro: Restro | null = null;
-
-  try {
-    restro = await getRestroById(codeNum);
-  } catch (err) {
-    console.error("layout getRestroById error:", err);
-  }
+  const { restro, error } = await safeGetRestro(codeNum);
 
   return (
     <div
@@ -84,3 +76,38 @@ export default async function RestroEditLayout({ params, children }: Props) {
             gap: 12,
             padding: 12,
             borderBottom: "1px solid #f1f1f1",
+            background: "#fafafa",
+          }}
+        >
+          <Link href={`/admin/restros/${params.code}/edit/basic`} style={{ padding: 8 }}>
+            Basic Information
+          </Link>
+          <Link href={`/admin/restros/${params.code}/edit/station-settings`} style={{ padding: 8 }}>
+            Station Settings
+          </Link>
+          <Link href={`/admin/restros/${params.code}/edit/address-docs`} style={{ padding: 8 }}>
+            Address & Documents
+          </Link>
+          <Link href={`/admin/restros/${params.code}/edit/contacts`} style={{ padding: 8 }}>
+            Contacts
+          </Link>
+          <Link href={`/admin/restros/${params.code}/edit/bank`} style={{ padding: 8 }}>
+            Bank
+          </Link>
+          <Link href={`/admin/restros/${params.code}/edit/future-closed`} style={{ padding: 8 }}>
+            Future Closed
+          </Link>
+          <Link href={`/admin/restros/${params.code}/edit/menu`} style={{ padding: 8 }}>
+            Menu
+          </Link>
+        </div>
+
+        {/* Tab content */}
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+          {error && <div style={{ color: "red" }}>Error: {error}</div>}
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
