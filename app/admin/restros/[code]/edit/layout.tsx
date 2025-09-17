@@ -45,12 +45,9 @@ export default async function RestroEditLayout({ params, children }: Props) {
           }}
         >
           <div style={{ fontWeight: 700 }}>
-            {restro?.restro_code ?? params.code} /{" "}
-            {restro?.restro_name ?? "Restro"}
+            {restro?.RestroCode ?? params.code} / {restro?.RestroName ?? "Restro"}
             <div style={{ fontSize: 13, color: "#666" }}>
-              {restro?.station_code
-                ? `(${restro.station_code}) ${restro.station_name ?? ""}`
-                : ""}
+              {restro?.StationCode ? `(${restro.StationCode}) ${restro.StationName ?? ""}` : ""}
             </div>
           </div>
 
@@ -61,10 +58,10 @@ export default async function RestroEditLayout({ params, children }: Props) {
             <a
               href={`/admin/restros/${params.code}/edit/basic`}
               style={{ textDecoration: "none" }}
+              target="_blank"
+              rel="noreferrer"
             >
-              <button style={{ padding: "8px 12px" }}>
-                Open Outlet Page
-              </button>
+              <button style={{ padding: "8px 12px" }}>Open Outlet Page</button>
             </a>
           </div>
         </div>
