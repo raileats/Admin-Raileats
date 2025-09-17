@@ -135,12 +135,12 @@ export default function RestroMasterPage(): JSX.Element {
         </div>
       </div>
 
-      {/* Search Form */}
+      {/* Search Form - updated grid widths */}
       <form
         onSubmit={onSearch}
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr) auto",
+          gridTemplateColumns: "120px 1fr 1fr 120px 1fr 160px 1fr auto",
           gap: 12,
           alignItems: "center",
           marginBottom: 12,
@@ -149,12 +149,33 @@ export default function RestroMasterPage(): JSX.Element {
           borderRadius: 8,
         }}
       >
-        <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} style={{ padding: 8 }} />
-        <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
+        <input
+          placeholder="Restro Code"
+          value={restroCode}
+          onChange={(e) => setRestroCode(e.target.value)}
+          style={{ padding: 8 }}
+        />
+        <input
+          placeholder="Restro Name"
+          value={restroName}
+          onChange={(e) => setRestroName(e.target.value)}
+          style={{ padding: 8 }}
+        />
         <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} style={{ padding: 8 }} />
-        <input placeholder="Station Code" value={stationCode} onChange={(e) => setStationCode(e.target.value)} style={{ padding: 8 }} />
+        <input
+          placeholder="Station Code"
+          value={stationCode}
+          onChange={(e) => setStationCode(e.target.value)}
+          style={{ padding: 8 }}
+        />
         <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} style={{ padding: 8 }} />
-        <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} style={{ padding: 8 }} />
+        <input
+          placeholder="Owner Phone"
+          value={ownerPhone}
+          onChange={(e) => setOwnerPhone(e.target.value)}
+          style={{ padding: 8 }}
+          maxLength={10}
+        />
         <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={{ padding: 8 }} />
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
@@ -169,7 +190,7 @@ export default function RestroMasterPage(): JSX.Element {
               border: "none",
               background: "#0ea5e9",
               color: "#fff",
-              minWidth: 90,
+              minWidth: 80,
             }}
           >
             Search
