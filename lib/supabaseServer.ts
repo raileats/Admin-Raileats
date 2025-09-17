@@ -1,13 +1,13 @@
 // lib/supabaseServer.ts
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Fail fast with clear message (build will be fine because envs are known at runtime)
-if (!url || !anon) {
-  // During build this prevents TypeScript error and provides readable runtime error if envs missing.
-  throw new Error('Missing SUPABASE envs. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel.');
+if (!url || !serviceKey) {
+  throw new Error(
+    "Missing Supabase environment variables. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_ equivalents) in Vercel."
+  );
 }
 
-export const supabaseServer = createClient(url, anon);
+export const supabaseServer = createClient(url, serviceKey);
