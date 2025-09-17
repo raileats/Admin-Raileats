@@ -1,15 +1,13 @@
 // lib/supabaseServer.ts
 import { createClient } from '@supabase/supabase-js';
 
-const url = process.env.SUPABASE_URL as string;
-const key = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!url || !key) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables');
+// Fail fast with clear message (build will be fine because envs are known at runtime)
+if (!url || !anon) {
+  // During build this prevents TypeScript error and provides readable runtime error if envs missing.
+  throw new Error('Missing SUPABASE envs. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel.');
 }
 
-export const supabaseServer = createClient(url, key, {
-  // optional: set global headers or fetch options
-  auth: { persistSession: false },
-  // Note: service-role-key gives full DB privileges; do not expose it to browser
-});
+export const supabaseServer = createClient(url, anon);
