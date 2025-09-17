@@ -1,215 +1,197 @@
+// app/admin/page.tsx
 "use client";
+
 import React, { useEffect, useState } from "react";
-import { supabaseServer } from "../../lib/supabaseServer"; // relative path from app/admin/page.tsx to lib/
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const supabase = supabaseServer;
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+type Station = {
+  id?: number;
+  stationid?: string | number;
+  stationname?: string;
+  [key: string]: any;
+};
 
-export default function AdminStationsPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [user, setUser] = useState(null);
-  const [stations, setStations] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  useEffect(() => {
-    const session = supabase.auth.getSession().then((r) => r.data.session);
-    // subscribe to auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) fetchStations();
-    });
-
-    // check initial signed-in user
-    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
-
-    return () => {
-      authListener?.subscription?.unsubscribe?.();
-    };
-  }, []);
-
-  async function signIn(e) {
-    e.preventDefault();
-    setErrorMsg("");
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) setErrorMsg(error.message);
-    else {
-      // fetchStations will be called by auth change
-    }
-  }
-
-  async function signOut() {
-    await supabase.auth.signOut();
-    setStations([]);
-    setUser(null);
-  }
-
-  async function fetchStations() {
-    setLoading(true);
-    const { data, error } = await supabase.from("Stations").select(`StationId, StationName, StationCode, Category, Division, RailwayZone, District, State, Lat, Long, Address`).limit(1000);
-    setLoading(false);
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      setStations(data || []);
-    }
-  }
-
-  async function updateStation(id, updates) {
-    setErrorMsg("");
-    const { data, error } = await supabase.from("Stations").update(updates).eq("StationId", id).select();
-    if (error) setErrorMsg(error.message);
-    else {
-      // reflect changes locally
-      setStations((s) => s.map((r) => (r.StationId === id ? { ...r, ...updates } : r)));
-    }
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="w-full max-w-md bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Admin Login</h2>
-          {errorMsg && <div className="mb-3 text-red-600">{errorMsg}</div>}
-          <form onSubmit={signIn}>
-            <label className="block text-sm font-medium">Email</label>
-            <input className="w-full border rounded px-3 py-2 mb-3" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <label className="block text-sm font-medium">Password</label>
-            <input type="password" className="w-full border rounded px-3 py-2 mb-4" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded" disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen p-6 bg-gray-50">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold">Stations — Admin</h1>
-          <div className="flex gap-2 items-center">
-            <div className="text-sm">{user.email}</div>
-            <button className="px-3 py-1 border rounded" onClick={signOut}>Sign out</button>
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <button className="px-3 py-2 bg-green-600 text-white rounded" onClick={fetchStations}>Reload Stations</button>
-        </div>
-
-        {errorMsg && <div className="mb-3 text-red-600">{errorMsg}</div>}
-        {loading && <div className="mb-3">Loading…</div>}
-
-        <div className="bg-white rounded shadow overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-gray-100 text-left">
-              <tr>
-                <th className="p-2">ID</th>
-                <th className="p-2">Name</th>
-                <th className="p-2">Code</th>
-                <th className="p-2">Category</th>
-                <th className="p-2">Division</th>
-                <th className="p-2">State</th>
-                <th className="p-2">Lat</th>
-                <th className="p-2">Long</th>
-                <th className="p-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stations.map((st) => (
-                <EditableRow key={st.StationId} station={st} onSave={updateStation} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  // Throwing makes build fail — if you prefer safer behavior remove the throw and handle gracefully.
+  throw new Error(
+    "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables."
   );
 }
 
-function EditableRow({ station, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({
-    StationName: station.StationName || "",
-    Category: station.Category || "",
-    Division: station.Division || "",
-    State: station.State || "",
-    Lat: station.Lat || "",
-    Long: station.Long || "",
-  });
+const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+export default function AdminStationsPage(): JSX.Element {
+  const [email, setEmail] = useState("");
+  const [stations, setStations] = useState<Station[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState<string>("");
+  const [newStationName, setNewStationName] = useState<string>("");
+
+  // Fetch stations (initial + refresh)
+  async function fetchStations() {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: e } = await supabase
+        .from("stations")
+        .select("*")
+        .order("id", { ascending: true })
+        .limit(500);
+      if (e) throw e;
+      setStations((data ?? []) as Station[]);
+    } catch (err: any) {
+      console.error("fetchStations error:", err);
+      setError(err?.message ?? String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    setForm({
-      StationName: station.StationName || "",
-      Category: station.Category || "",
-      Division: station.Division || "",
-      State: station.State || "",
-      Lat: station.Lat || "",
-      Long: station.Long || "",
-    });
-  }, [station]);
+    fetchStations();
+  }, []);
+
+  // Filtered view
+  const filtered = stations.filter((s) => {
+    if (!search) return true;
+    const name = String(s.stationname ?? "");
+    const id = String(s.stationid ?? s.id ?? "");
+    return (
+      name.toLowerCase().includes(search.toLowerCase()) ||
+      id.toLowerCase().includes(search.toLowerCase())
+    );
+  });
+
+  // Add station
+  async function addStation() {
+    if (!newStationName.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = { stationname: newStationName.trim() };
+      const { data, error: e } = await supabase.from("stations").insert(payload).select().single();
+      if (e) throw e;
+      // optimistic: append to list
+      setStations((prev) => (data ? [...prev, data as Station] : prev));
+      setNewStationName("");
+    } catch (err: any) {
+      console.error("addStation error:", err);
+      setError(err?.message ?? String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Delete station (by id)
+  async function deleteStation(id?: number | string) {
+    if (id === undefined || id === null) return;
+    if (!confirm("Delete this station?")) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const { error: e } = await supabase.from("stations").delete().eq("id", id).limit(1);
+      if (e) throw e;
+      setStations((prev) => prev.filter((s) => String(s.id) !== String(id)));
+    } catch (err: any) {
+      console.error("deleteStation error:", err);
+      setError(err?.message ?? String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <tr className="border-t">
-      <td className="p-2 align-top text-sm">{station.StationId}</td>
-      <td className="p-2 align-top">
-        {editing ? (
-          <input value={form.StationName} onChange={(e) => setForm(f => ({...f, StationName: e.target.value}))} className="w-64 border rounded px-2 py-1" />
-        ) : (
-          <div className="text-sm">{station.StationName}</div>
-        )}
-      </td>
-      <td className="p-2 align-top text-sm">{station.StationCode}</td>
-      <td className="p-2 align-top">
-        {editing ? (
-          <input value={form.Category} onChange={(e) => setForm(f => ({...f, Category: e.target.value}))} className="w-24 border rounded px-2 py-1" />
-        ) : station.Category}
-      </td>
-      <td className="p-2 align-top">
-        {editing ? (
-          <input value={form.Division} onChange={(e) => setForm(f => ({...f, Division: e.target.value}))} className="w-36 border rounded px-2 py-1" />
-        ) : station.Division}
-      </td>
-      <td className="p-2 align-top">
-        {editing ? (
-          <input value={form.State} onChange={(e) => setForm(f => ({...f, State: e.target.value}))} className="w-36 border rounded px-2 py-1" />
-        ) : station.State}
-      </td>
-      <td className="p-2 align-top">
-        {editing ? (
-          <input value={form.Lat} onChange={(e) => setForm(f => ({...f, Lat: e.target.value}))} className="w-24 border rounded px-2 py-1" />
-        ) : station.Lat}
-      </td>
-      <td className="p-2 align-top">
-        {editing ? (
-          <input value={form.Long} onChange={(e) => setForm(f => ({...f, Long: e.target.value}))} className="w-24 border rounded px-2 py-1" />
-        ) : station.Long}
-      </td>
-      <td className="p-2 align-top">
-        {editing ? (
-          <div className="flex gap-2">
-            <button className="px-2 py-1 bg-blue-600 text-white rounded" onClick={() => { onSave(station.StationId, {
-              StationName: form.StationName,
-              Category: form.Category,
-              Division: form.Division,
-              State: form.State,
-              Lat: form.Lat || null,
-              Long: form.Long || null
-            }); setEditing(false); }}>Save</button>
-            <button className="px-2 py-1 border rounded" onClick={() => setEditing(false)}>Cancel</button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <button className="px-2 py-1 border rounded" onClick={() => setEditing(true)}>Edit</button>
-          </div>
-        )}
-      </td>
-    </tr>
+    <main style={{ padding: 20, fontFamily: "system-ui, sans-serif", maxWidth: 1000, margin: "0 auto" }}>
+      <h1 style={{ marginBottom: 8 }}>Admin — Stations</h1>
+
+      <section style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          Admin email:
+          <input
+            style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc" }}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@company.com"
+          />
+        </label>
+
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <button onClick={fetchStations} disabled={loading} style={{ padding: "6px 10px", borderRadius: 6 }}>
+            Refresh
+          </button>
+        </div>
+      </section>
+
+      <section style={{ marginBottom: 18, display: "flex", gap: 12, alignItems: "center" }}>
+        <input
+          placeholder="Search stations by name or id..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid #ddd" }}
+        />
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            placeholder="New station name"
+            value={newStationName}
+            onChange={(e) => setNewStationName(e.target.value)}
+            style={{ padding: "6px 8px", borderRadius: 6 }}
+          />
+          <button onClick={addStation} disabled={loading || !newStationName.trim()} style={{ borderRadius: 6 }}>
+            Add
+          </button>
+        </div>
+      </section>
+
+      <section>
+        {loading && <div>Loading…</div>}
+        {error && <div style={{ color: "red", marginBottom: 8 }}>Error: {error}</div>}
+        {!loading && filtered.length === 0 && <div>No stations found.</div>}
+
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {filtered.map((s) => {
+            const key = s.id ?? s.stationid ?? JSON.stringify(s);
+            return (
+              <li
+                key={key}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 12px",
+                  borderBottom: "1px solid #f0f0f0",
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600 }}>{s.stationname ?? "(no name)"}</div>
+                  <div style={{ fontSize: 12, color: "#666" }}>
+                    id: {s.id ?? s.stationid ?? "—"} {s.category ? ` · ${s.category}` : ""}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(JSON.stringify(s))}
+                    title="Copy JSON"
+                    style={{ borderRadius: 6 }}
+                  >
+                    Copy
+                  </button>
+                  <button
+                    onClick={() => deleteStation(s.id ?? s.stationid)}
+                    style={{ borderRadius: 6, background: "#fff", border: "1px solid #f5c6c6" }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    </main>
   );
 }
