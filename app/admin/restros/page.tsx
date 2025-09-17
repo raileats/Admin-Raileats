@@ -61,7 +61,7 @@ export default function RestroMasterPage(): JSX.Element {
       ilikeIf("StationCode", filters?.stationCode);
       ilikeIf("StationName", filters?.stationName);
       ilikeIf("OwnerPhone", filters?.ownerPhone);
-      ilikeIf("FSSAINumber", filters?.fssaiNumber);
+      ilikeIf("FSSAINumber", filters?.fssainumber ?? filters?.fssaiNumber ?? filters?.fssainumber);
 
       const { data, error: e } = await query;
       if (e) throw e;
@@ -150,6 +150,26 @@ export default function RestroMasterPage(): JSX.Element {
     }
   }
 
+  // Called by modal when save success
+  function handleModalSave(updated: any) {
+    // update local results array in-place (preserve order)
+    if (!updated) {
+      // fallback: refetch
+      fetchRestros();
+      setEditingRestro(null);
+      return;
+    }
+    setResults((prev) =>
+      prev.map((r) => {
+        const a = r.RestroCode ?? r.RestroId;
+        const b = updated.RestroCode ?? updated.RestroId;
+        if (String(a) === String(b)) return { ...r, ...updated };
+        return r;
+      })
+    );
+    setEditingRestro(null);
+  }
+
   return (
     <main style={{ padding: 24 }}>
       {/* Header */}
@@ -206,81 +226,25 @@ export default function RestroMasterPage(): JSX.Element {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns:
-              "120px 1fr 1fr 120px 1fr 160px 1fr",
+            gridTemplateColumns: "120px 1fr 1fr 120px 1fr 160px 1fr",
             gap: 12,
             marginBottom: 12,
           }}
         >
-          <input
-            placeholder="Restro Code"
-            value={restroCode}
-            onChange={(e) => setRestroCode(e.target.value)}
-            style={{ padding: 8 }}
-          />
-          <input
-            placeholder="Restro Name"
-            value={restroName}
-            onChange={(e) => setRestroName(e.target.value)}
-            style={{ padding: 8 }}
-          />
-          <input
-            placeholder="Owner Name"
-            value={ownerName}
-            onChange={(e) => setOwnerName(e.target.value)}
-            style={{ padding: 8 }}
-          />
-          <input
-            placeholder="Station Code"
-            value={stationCode}
-            onChange={(e) => setStationCode(e.target.value)}
-            style={{ padding: 8 }}
-          />
-          <input
-            placeholder="Station Name"
-            value={stationName}
-            onChange={(e) => setStationName(e.target.value)}
-            style={{ padding: 8 }}
-          />
-          <input
-            placeholder="Owner Phone"
-            value={ownerPhone}
-            onChange={(e) => setOwnerPhone(e.target.value)}
-            style={{ padding: 8 }}
-            maxLength={10}
-          />
-          <input
-            placeholder="FSSAI Number"
-            value={fssaiNumber}
-            onChange={(e) => setFssaiNumber(e.target.value)}
-            style={{ padding: 8 }}
-          />
+          <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} style={{ padding: 8 }} />
+          <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
+          <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} style={{ padding: 8 }} />
+          <input placeholder="Station Code" value={stationCode} onChange={(e) => setStationCode(e.target.value)} style={{ padding: 8 }} />
+          <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} style={{ padding: 8 }} />
+          <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} style={{ padding: 8 }} maxLength={10} />
+          <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={{ padding: 8 }} />
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button
-            type="button"
-            onClick={onClear}
-            style={{
-              padding: "8px 10px",
-              borderRadius: 6,
-              border: "1px solid #ddd",
-              background: "#fff",
-            }}
-          >
+          <button type="button" onClick={onClear} style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>
             Clear
           </button>
-          <button
-            type="submit"
-            style={{
-              padding: "8px 12px",
-              borderRadius: 6,
-              border: "none",
-              background: "#0ea5e9",
-              color: "#fff",
-              minWidth: 90,
-            }}
-          >
+          <button type="submit" style={{ padding: "8px 12px", borderRadius: 6, border: "none", background: "#0ea5e9", color: "#fff", minWidth: 90 }}>
             Search
           </button>
         </div>
@@ -358,12 +322,7 @@ export default function RestroMasterPage(): JSX.Element {
       </div>
 
       {/* Modal */}
-      {editingRestro && (
-        <RestroEditModal
-          restro={editingRestro}
-          onClose={() => setEditingRestro(null)}
-        />
-      )}
+      {editingRestro && <RestroEditModal restro={editingRestro} onClose={() => setEditingRestro(null)} onSave={handleModalSave} />}
     </main>
   );
 }
