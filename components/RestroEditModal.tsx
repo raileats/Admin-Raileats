@@ -1,4 +1,3 @@
-// components/RestroEditModal.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -125,6 +124,16 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
     }
   }
 
+  /* Small helper to render a label + input block in pair */
+  function KVRow({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <>
+        <div className="kv-label">{label}</div>
+        <div className="kv-field">{children}</div>
+      </>
+    );
+  }
+
   return (
     <div
       style={{
@@ -244,40 +253,92 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           {activeTab === "Basic Information" && (
             <div>
-              <h3 style={{ marginTop: 0 }}>Basic Information</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Restro Name</label>
-                  <input value={local.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} style={{ width: "100%", padding: 8 }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Owner Name</label>
-                  <input value={local.OwnerName ?? ""} onChange={(e) => updateField("OwnerName", e.target.value)} style={{ width: "100%", padding: 8 }} />
-                </div>
+              <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
 
-                <div>
-                  <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Station Code</label>
-                  <input value={local.StationCode ?? ""} onChange={(e) => updateField("StationCode", e.target.value)} style={{ width: "100%", padding: 8 }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Station Name</label>
-                  <input value={local.StationName ?? ""} onChange={(e) => updateField("StationName", e.target.value)} style={{ width: "100%", padding: 8 }} />
-                </div>
+              <div className="kv-grid">
+                <KVRow label="Restro Code">
+                  <div className="readonly-value">{local.RestroCode ?? local.RestroId ?? "—"}</div>
+                </KVRow>
 
-                <div>
-                  <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Owner Phone</label>
-                  <input value={local.OwnerPhone ?? ""} onChange={(e) => updateField("OwnerPhone", e.target.value)} style={{ width: "100%", padding: 8 }} />
-                </div>
+                <KVRow label="Station Code with Name">
+                  <div className="readonly-value">
+                    {local.StationCode ? `(${local.StationCode}) ${local.StationName ?? ""}` : "—"}
+                  </div>
+                </KVRow>
 
-                <div>
-                  <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>FSSAI Number</label>
-                  <input value={local.FSSAINumber ?? ""} onChange={(e) => updateField("FSSAINumber", e.target.value)} style={{ width: "100%", padding: 8 }} />
-                </div>
+                <KVRow label="Restro Name">
+                  <input value={local.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} className="kv-input" />
+                </KVRow>
 
-                <div>
-                  <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>FSSAI Expiry Date</label>
-                  <input type="date" value={local.FSSAIExpiryDate ?? ""} onChange={(e) => updateField("FSSAIExpiryDate", e.target.value)} style={{ width: "100%", padding: 8 }} />
-                </div>
+                <KVRow label="Brand Name if Any">
+                  <input value={local.BrandName ?? ""} onChange={(e) => updateField("BrandName", e.target.value)} className="kv-input" />
+                </KVRow>
+
+                <KVRow label="Raileats Status">
+                  <label className="inline-label">
+                    <input type="checkbox" checked={!!local.Raileats} onChange={(e) => updateField("Raileats", e.target.checked)} />
+                    <span>{local.Raileats ? "On" : "Off"}</span>
+                  </label>
+                </KVRow>
+
+                <KVRow label="Is Irctc Approved">
+                  <label className="inline-label">
+                    <input type="checkbox" checked={!!local.IsIrctcApproved} onChange={(e) => updateField("IsIrctcApproved", e.target.checked)} />
+                    <span>{local.IsIrctcApproved ? "Yes" : "No"}</span>
+                  </label>
+                </KVRow>
+
+                <KVRow label="Restro Rating">
+                  <div className="readonly-value">{local.RestroRating ?? "—"}</div>
+                </KVRow>
+
+                <KVRow label="Restro Display Photo (path)">
+                  <input value={local.RestroDisplayPhoto ?? ""} onChange={(e) => updateField("RestroDisplayPhoto", e.target.value)} className="kv-input" />
+                </KVRow>
+
+                <KVRow label="Display Preview">
+                  {local.RestroDisplayPhoto ? (
+                    <img
+                      src={local.RestroDisplayPhoto.startsWith("http") ? local.RestroDisplayPhoto : `${process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}${local.RestroDisplayPhoto}`}
+                      alt="display"
+                      className="preview-img"
+                      onError={(e) => {
+                        // hide broken image
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="readonly-value">No image</div>
+                  )}
+                </KVRow>
+
+                <KVRow label="Owner Name">
+                  <input value={local.OwnerName ?? ""} onChange={(e) => updateField("OwnerName", e.target.value)} className="kv-input" />
+                </KVRow>
+
+                <KVRow label="Owner Email">
+                  <input value={local.OwnerEmail ?? ""} onChange={(e) => updateField("OwnerEmail", e.target.value)} className="kv-input" />
+                </KVRow>
+
+                <KVRow label="Owner Phone">
+                  <input value={local.OwnerPhone ?? ""} onChange={(e) => updateField("OwnerPhone", e.target.value)} className="kv-input" />
+                </KVRow>
+
+                <KVRow label="Restro Email">
+                  <input value={local.RestroEmail ?? ""} onChange={(e) => updateField("RestroEmail", e.target.value)} className="kv-input" />
+                </KVRow>
+
+                <KVRow label="Restro Phone">
+                  <input value={local.RestroPhone ?? ""} onChange={(e) => updateField("RestroPhone", e.target.value)} className="kv-input" />
+                </KVRow>
+
+                <KVRow label="FSSAI Number">
+                  <input value={local.FSSAINumber ?? ""} onChange={(e) => updateField("FSSAINumber", e.target.value)} className="kv-input" />
+                </KVRow>
+
+                <KVRow label="FSSAI Expiry Date">
+                  <input type="date" value={local.FSSAIExpiryDate ?? ""} onChange={(e) => updateField("FSSAIExpiryDate", e.target.value)} className="kv-input" />
+                </KVRow>
               </div>
             </div>
           )}
@@ -313,6 +374,69 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
           )}
         </div>
       </div>
+
+      {/* local styles */}
+      <style jsx>{`
+        .kv-grid {
+          display: grid;
+          grid-template-columns: 220px 1fr;
+          gap: 12px 18px;
+          align-items: start;
+          max-width: 980px;
+          margin: 14px auto 40px;
+        }
+        .kv-label {
+          text-align: right;
+          padding-top: 8px;
+          color: #333;
+          font-weight: 600;
+          font-size: 13px;
+        }
+        .kv-field {
+          display: block;
+        }
+        .kv-input {
+          width: 100%;
+          padding: 10px;
+          border-radius: 6px;
+          border: 1px solid #e0e0e0;
+          font-size: 13px;
+          box-sizing: border-box;
+          background: #fff;
+        }
+        .readonly-value {
+          padding: 10px 12px;
+          border-radius: 6px;
+          border: 1px solid #f0f0f0;
+          background: #fafafa;
+          color: #222;
+          font-size: 13px;
+        }
+        .inline-label {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+        }
+        .preview-img {
+          height: 96px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #eee;
+        }
+
+        /* responsive: collapse to single column on small screens */
+        @media (max-width: 820px) {
+          .kv-grid {
+            grid-template-columns: 1fr;
+            gap: 10px 0;
+          }
+          .kv-label {
+            text-align: left;
+            padding-top: 6px;
+          }
+        }
+      `}</style>
     </div>
   );
 }
