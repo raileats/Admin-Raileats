@@ -108,6 +108,7 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
       }
 
       setMsg("Saved successfully");
+      // optional refresh
       router.refresh();
     } catch (e: any) {
       console.error("Save error:", e);
@@ -123,26 +124,44 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
     return (imagePrefix ?? "") + p;
   };
 
+  // compute station display string (tries common keys, then fallback)
+  const getStationDisplay = () => {
+    // if Supabase already returns the full string in some key, prefer it
+    const candidates = [
+      initialData?.StationDisplay,
+      initialData?.StationFullName,
+      initialData?.StationFull,
+      initialData?.StationNameFull,
+      initialData?.StationName, // sometimes holds the whole string
+    ];
+    for (const c of candidates) {
+      if (c && typeof c === "string" && c.trim()) return c;
+    }
+    // fallback: compose from StationName + (StationCode) + maybe State if present
+    const parts: string[] = [];
+    if (initialData?.StationName) parts.push(initialData.StationName);
+    if (initialData?.StationCode) parts.push(`(${initialData.StationCode})`);
+    if (initialData?.State) parts.push(`- ${initialData.State}`);
+    return parts.join(" ").trim() || (local.StationCode ? `(${local.StationCode})` : "—");
+  };
+
+  const stationDisplay = getStationDisplay();
+
   return (
     <div style={{ padding: 18 }}>
       <h3 style={{ textAlign: "center", marginBottom: 18, fontSize: 20 }}>Basic Information</h3>
 
-      {/* compact multi-column form */}
+      {/* compact multi-column form (labels above inputs) */}
       <div className="compact-grid">
-        {/* Row items: label above input */}
+        {/* Station — read-only (like Restro Code) */}
+        <div className="field">
+          <label>Station</label>
+          <div className="readonly">{stationDisplay}</div>
+        </div>
+
         <div className="field">
           <label>Restro Code</label>
           <div className="readonly">{local.RestroCode ?? "—"}</div>
-        </div>
-
-        <div className="field">
-          <label>Station Code</label>
-          <input value={local.StationCode ?? ""} onChange={(e) => update("StationCode", e.target.value)} />
-        </div>
-
-        <div className="field">
-          <label>Station Name</label>
-          <input value={local.StationName ?? ""} onChange={(e) => update("StationName", e.target.value)} />
         </div>
 
         <div className="field">
