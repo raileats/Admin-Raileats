@@ -29,14 +29,14 @@ type Restro = {
 export default function RestroMasterPage(): JSX.Element {
   const router = useRouter();
 
-  // search fields
+  // filters
   const [restroCode, setRestroCode] = useState<string>("");
   const [ownerName, setOwnerName] = useState<string>("");
   const [stationCode, setStationCode] = useState<string>("");
   const [stationName, setStationName] = useState<string>("");
   const [restroName, setRestroName] = useState<string>("");
   const [ownerPhone, setOwnerPhone] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("any"); // replaces "Raileats (Any)" label
+  const [statusFilter, setStatusFilter] = useState<string>("any");
 
   const [results, setResults] = useState<Restro[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -48,10 +48,11 @@ export default function RestroMasterPage(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const truthy = (v: any) => v === true || v === 1 || v === "1" || v === "true" || v === "yes";
+
   async function fetchRestros(filters?: { [k: string]: any }) {
     setLoading(true);
     setError(null);
-
     try {
       let query = supabase.from("RestroMaster").select("*").limit(500);
 
@@ -72,7 +73,6 @@ export default function RestroMasterPage(): JSX.Element {
       ilikeIf("OwnerPhone", filters?.ownerPhone);
       ilikeIf("FSSAINumber", filters?.fssaiNumber || filters?.FSSAINumber);
 
-      // statusFilter applies to Raileats column
       if (filters?.statusFilter && filters.statusFilter !== "any") {
         if (filters.statusFilter === "yes") query = query.eq("Raileats", 1);
         else if (filters.statusFilter === "no") query = query.eq("Raileats", 0);
@@ -118,23 +118,35 @@ export default function RestroMasterPage(): JSX.Element {
     fetchRestros();
   }
 
-  // utility to treat DB truthy values
-  const truthy = (v: any) => v === true || v === 1 || v === "1" || v === "true" || v === "yes";
-
-  // toggle Raileats status (optimistic update)
+  // Toggle Raileats (1/0)
   async function toggleRaileats(code: number | string, current: any) {
     const newVal = truthy(current) ? 0 : 1;
     setUpdatingCode(code);
-    // optimistic update in UI
     setResults((prev) => prev.map((r) => (String(r.RestroCode) === String(code) ? { ...r, Raileats: newVal } : r)));
     try {
       const { error } = await supabase.from("RestroMaster").update({ Raileats: newVal }).eq("RestroCode", code);
       if (error) throw error;
     } catch (err: any) {
-      console.error("toggle error:", err);
+      console.error("toggleRaileats error:", err);
       setError("Could not update Raileats status. Try again.");
-      // rollback: refetch single row or full list
-      fetchRestros({ restroCode });
+      fetchRestros({ restroCode: code });
+    } finally {
+      setUpdatingCode(null);
+    }
+  }
+
+  // Toggle IRCTC (1/0)
+  async function toggleIrctc(code: number | string, current: any) {
+    const newVal = truthy(current) ? 0 : 1;
+    setUpdatingCode(code);
+    setResults((prev) => prev.map((r) => (String(r.RestroCode) === String(code) ? { ...r, IRCTC: newVal } : r)));
+    try {
+      const { error } = await supabase.from("RestroMaster").update({ IRCTC: newVal }).eq("RestroCode", code);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error("toggleIrctc error:", err);
+      setError("Could not update IRCTC status. Try again.");
+      fetchRestros({ restroCode: code });
     } finally {
       setUpdatingCode(null);
     }
@@ -182,15 +194,13 @@ export default function RestroMasterPage(): JSX.Element {
         <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
         <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} style={{ padding: 8 }} />
 
-        {/* Status dropdown (label "Status") */}
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: 8 }}>
           <option value="any">Status</option>
           <option value="yes">On</option>
           <option value="no">Off</option>
         </select>
 
-        {/* placeholder to keep layout aligned */}
-        <div style={{ gridColumn: "span 5 / auto", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <div style={{ gridColumn: "span 5 / auto", display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
           <button type="button" onClick={onClear} style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>
             Clear
           </button>
@@ -252,9 +262,46 @@ export default function RestroMasterPage(): JSX.Element {
                     <td style={{ padding: 12 }}>{r.StationCode}</td>
                     <td style={{ padding: 12 }}>{r.StationName}</td>
                     <td style={{ padding: 12 }}>{r.OwnerName}</td>
-                    <td style={{ padding: 12 }}>{isIrctc ? "Yes" : "No"}</td>
 
-                    {/* Raileats toggle (slider-like) */}
+                    {/* IRCTC toggle */}
+                    <td style={{ padding: 12 }}>
+                      <label style={{ display: "inline-block", position: "relative" }}>
+                        <input
+                          type="checkbox"
+                          checked={isIrctc}
+                          onChange={() => toggleIrctc(code, r.IRCTC)}
+                          disabled={updatingCode === code}
+                          style={{ width: 0, height: 0, opacity: 0 }}
+                        />
+                        <span
+                          style={{
+                            display: "inline-block",
+                            width: 44,
+                            height: 24,
+                            background: isIrctc ? "#10b981" : "#ddd",
+                            borderRadius: 999,
+                            position: "relative",
+                            transition: "background .15s",
+                          }}
+                        >
+                          <span
+                            style={{
+                              position: "absolute",
+                              top: 2,
+                              left: isIrctc ? 22 : 2,
+                              width: 20,
+                              height: 20,
+                              background: "#fff",
+                              borderRadius: 999,
+                              boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                              transition: "left .15s",
+                            }}
+                          />
+                        </span>
+                      </label>
+                    </td>
+
+                    {/* Raileats toggle */}
                     <td style={{ padding: 12 }}>
                       <label style={{ display: "inline-block", position: "relative" }}>
                         <input
