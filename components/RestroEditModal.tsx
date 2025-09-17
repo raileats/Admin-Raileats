@@ -1,11 +1,20 @@
+// components/RestroEditModal.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 type Props = {
   restro: any;
   onClose: () => void;
-  onSave?: (updated: any) => void; // optional callback parent can provide
+  /**
+   * Optional: parent can provide onSave(updatedFields) and handle the PATCH.
+   * If provided, modal will call it and rely on the parent's saving boolean (optional).
+   */
+  onSave?: (updatedFields: any) => Promise<{ ok: boolean; row?: any; error?: any }>;
+  /**
+   * Optional: parent-provided saving indicator. If provided, modal uses this to disable UI.
+   */
+  saving?: boolean;
 };
 
 const tabs = [
@@ -18,73 +27,101 @@ const tabs = [
   "Menu",
 ];
 
-export default function RestroEditModal({ restro, onClose, onSave }: Props) {
+export default function RestroEditModal({ restro, onClose, onSave, saving: parentSaving }: Props) {
   const [activeTab, setActiveTab] = useState(tabs[0]);
-  const [saving, setSaving] = useState(false);
+  const [savingInternal, setSavingInternal] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Local editable state (initialize from restro)
-  const [RestroName, setRestroName] = useState(restro?.RestroName ?? "");
-  const [StationCode, setStationCode] = useState(restro?.StationCode ?? "");
-  const [StationName, setStationName] = useState(restro?.StationName ?? "");
-  const [OwnerName, setOwnerName] = useState(restro?.OwnerName ?? "");
-  const [OwnerPhone, setOwnerPhone] = useState(restro?.OwnerPhone ?? "");
-  const [FSSAINumber, setFSSAINumber] = useState(restro?.FSSAINumber ?? "");
-  const [FSSAIExpiryDate, setFSSAIExpiryDate] = useState(restro?.FSSAIExpiryDate ?? "");
-  // boolean-like fields stored as 1/0 in db
-  const toBool = (v: any) => v === 1 || v === "1" || v === true || v === "true";
-  const [IRCTC, setIRCTC] = useState<boolean>(toBool(restro?.IRCTC));
-  const [Raileats, setRaileats] = useState<boolean>(toBool(restro?.Raileats));
-  const [IsIrctcApproved, setIsIrctcApproved] = useState<boolean>(toBool(restro?.IsIrctcApproved));
+  const [local, setLocal] = useState<any>({});
+  useEffect(() => {
+    setLocal({
+      RestroName: restro?.RestroName ?? "",
+      StationCode: restro?.StationCode ?? "",
+      StationName: restro?.StationName ?? "",
+      OwnerName: restro?.OwnerName ?? "",
+      OwnerPhone: restro?.OwnerPhone ?? "",
+      FSSAINumber: restro?.FSSAINumber ?? "",
+      FSSAIExpiryDate: restro?.FSSAIExpiryDate ?? "",
+      IRCTC: restro?.IRCTC === 1 || restro?.IRCTC === "1" || restro?.IRCTC === true,
+      Raileats: restro?.Raileats === 1 || restro?.Raileats === "1" || restro?.Raileats === true,
+      IsIrctcApproved:
+        restro?.IsIrctcApproved === 1 ||
+        restro?.IsIrctcApproved === "1" ||
+        restro?.IsIrctcApproved === true,
+      // copy any other fields you want editable by default:
+      ...restro,
+    });
+  }, [restro]);
 
-  async function handleSave() {
-    setSaving(true);
-    setError(null);
+  const saving = parentSaving ?? savingInternal;
 
+  function updateField(key: string, value: any) {
+    setLocal((s: any) => ({ ...s, [key]: value }));
+  }
+
+  async function defaultPatch(payload: any) {
+    // fallback: modal does PATCH itself if parent onSave not provided
     try {
-      const payload: any = {
-        RestroName,
-        StationCode,
-        StationName,
-        OwnerName,
-        OwnerPhone,
-        FSSAINumber,
-        FSSAIExpiryDate,
-        // send 1/0 for boolean flags
-        IRCTC: IRCTC ? 1 : 0,
-        Raileats: Raileats ? 1 : 0,
-        IsIrctcApproved: IsIrctcApproved ? 1 : 0,
-      };
-
-      // call server PATCH endpoint which expects 'code' param (RestroCode)
-      const code = restro?.RestroCode ?? restro?.code ?? restro?.RestroId;
+      const code = restro?.RestroCode ?? restro?.RestroId ?? restro?.code;
       if (!code) throw new Error("Missing RestroCode for update");
-
       const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
         throw new Error(txt || `Update failed (${res.status})`);
       }
-
       const json = await res.json().catch(() => null);
-      // server may return updated row as json or wrapper — try to extract
-      const updatedRow = (json && (json.row || json.data || json)) ?? null;
+      const updated = json?.row ?? json ?? null;
+      return { ok: true, row: updated };
+    } catch (err: any) {
+      return { ok: false, error: err?.message ?? String(err) };
+    }
+  }
 
-      // Call parent's onSave if present so parent can update UI
-      if (onSave) onSave(updatedRow ?? { ...restro, ...payload });
+  async function handleSave() {
+    setError(null);
+    const payload: any = {
+      RestroName: local.RestroName ?? "",
+      StationCode: local.StationCode ?? "",
+      StationName: local.StationName ?? "",
+      OwnerName: local.OwnerName ?? "",
+      OwnerPhone: local.OwnerPhone ?? "",
+      FSSAINumber: local.FSSAINumber ?? "",
+      FSSAIExpiryDate: local.FSSAIExpiryDate ?? "",
+      // send 1/0 for boolean flags if your DB uses 1/0
+      IRCTC: local.IRCTC ? 1 : 0,
+      Raileats: local.Raileats ? 1 : 0,
+      IsIrctcApproved: local.IsIrctcApproved ? 1 : 0,
+    };
 
-      // close modal
-      onClose();
+    try {
+      if (onSave) {
+        // parent will handle PATCH; show internal saving only if parent doesn't provide saving prop
+        if (parentSaving === undefined) setSavingInternal(true);
+        const result = await onSave(payload);
+        if (!result || !result.ok) {
+          throw new Error(result?.error ?? "Save failed");
+        }
+        // closing modal; parent should update list using returned row
+        onClose();
+      } else {
+        // modal handles patch itself
+        setSavingInternal(true);
+        const result = await defaultPatch(payload);
+        if (!result.ok) {
+          throw new Error(result.error ?? "Save failed");
+        }
+        onClose();
+      }
     } catch (err: any) {
       console.error("Save error:", err);
       setError(err?.message ?? String(err));
     } finally {
-      setSaving(false);
+      if (parentSaving === undefined) setSavingInternal(false);
     }
   }
 
@@ -128,12 +165,13 @@ export default function RestroEditModal({ restro, onClose, onSave }: Props) {
           }}
         >
           <div style={{ fontWeight: 600 }}>
-            {restro?.RestroCode} / {restro?.RestroName} / {restro?.StationCode} / {restro?.StationName}
+            {String(local.RestroCode ?? local.RestroId ?? "")} / {local.RestroName} / {local.StationCode} /{" "}
+            {local.StationName}
           </div>
 
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <a
-              href={`/admin/restros/edit/${encodeURIComponent(String(restro?.RestroCode ?? ""))}`}
+              href={`/admin/restros/edit/${encodeURIComponent(String(local.RestroCode ?? local.RestroId ?? ""))}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
@@ -176,7 +214,7 @@ export default function RestroEditModal({ restro, onClose, onSave }: Props) {
           ))}
         </div>
 
-        {/* Toolbar (Save) */}
+        {/* Toolbar */}
         <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
           <button
@@ -202,7 +240,7 @@ export default function RestroEditModal({ restro, onClose, onSave }: Props) {
           </button>
         </div>
 
-        {/* Tab content */}
+        {/* Content */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           {activeTab === "Basic Information" && (
             <div>
@@ -210,35 +248,35 @@ export default function RestroEditModal({ restro, onClose, onSave }: Props) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Restro Name</label>
-                  <input value={RestroName} onChange={(e) => setRestroName(e.target.value)} style={{ width: "100%", padding: 8 }} />
+                  <input value={local.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} style={{ width: "100%", padding: 8 }} />
                 </div>
                 <div>
                   <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Owner Name</label>
-                  <input value={OwnerName} onChange={(e) => setOwnerName(e.target.value)} style={{ width: "100%", padding: 8 }} />
+                  <input value={local.OwnerName ?? ""} onChange={(e) => updateField("OwnerName", e.target.value)} style={{ width: "100%", padding: 8 }} />
                 </div>
 
                 <div>
                   <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Station Code</label>
-                  <input value={StationCode} onChange={(e) => setStationCode(e.target.value)} style={{ width: "100%", padding: 8 }} />
+                  <input value={local.StationCode ?? ""} onChange={(e) => updateField("StationCode", e.target.value)} style={{ width: "100%", padding: 8 }} />
                 </div>
                 <div>
                   <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Station Name</label>
-                  <input value={StationName} onChange={(e) => setStationName(e.target.value)} style={{ width: "100%", padding: 8 }} />
+                  <input value={local.StationName ?? ""} onChange={(e) => updateField("StationName", e.target.value)} style={{ width: "100%", padding: 8 }} />
                 </div>
 
                 <div>
                   <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Owner Phone</label>
-                  <input value={OwnerPhone} onChange={(e) => setOwnerPhone(e.target.value)} style={{ width: "100%", padding: 8 }} />
+                  <input value={local.OwnerPhone ?? ""} onChange={(e) => updateField("OwnerPhone", e.target.value)} style={{ width: "100%", padding: 8 }} />
                 </div>
 
                 <div>
                   <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>FSSAI Number</label>
-                  <input value={FSSAINumber} onChange={(e) => setFSSAINumber(e.target.value)} style={{ width: "100%", padding: 8 }} />
+                  <input value={local.FSSAINumber ?? ""} onChange={(e) => updateField("FSSAINumber", e.target.value)} style={{ width: "100%", padding: 8 }} />
                 </div>
 
                 <div>
                   <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>FSSAI Expiry Date</label>
-                  <input type="date" value={FSSAIExpiryDate ?? ""} onChange={(e) => setFSSAIExpiryDate(e.target.value)} style={{ width: "100%", padding: 8 }} />
+                  <input type="date" value={local.FSSAIExpiryDate ?? ""} onChange={(e) => updateField("FSSAIExpiryDate", e.target.value)} style={{ width: "100%", padding: 8 }} />
                 </div>
               </div>
             </div>
@@ -249,17 +287,17 @@ export default function RestroEditModal({ restro, onClose, onSave }: Props) {
               <h3 style={{ marginTop: 0 }}>Station Settings</h3>
               <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
                 <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="checkbox" checked={IRCTC} onChange={(e) => setIRCTC(e.target.checked)} />
+                  <input type="checkbox" checked={!!local.IRCTC} onChange={(e) => updateField("IRCTC", e.target.checked)} />
                   <span>IRCTC Status (On / Off)</span>
                 </label>
 
                 <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="checkbox" checked={Raileats} onChange={(e) => setRaileats(e.target.checked)} />
+                  <input type="checkbox" checked={!!local.Raileats} onChange={(e) => updateField("Raileats", e.target.checked)} />
                   <span>Raileats Status (On / Off)</span>
                 </label>
 
                 <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="checkbox" checked={IsIrctcApproved} onChange={(e) => setIsIrctcApproved(e.target.checked)} />
+                  <input type="checkbox" checked={!!local.IsIrctcApproved} onChange={(e) => updateField("IsIrctcApproved", e.target.checked)} />
                   <span>Is IRCTC Approved</span>
                 </label>
               </div>
