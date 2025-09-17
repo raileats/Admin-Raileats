@@ -1,62 +1,43 @@
-// components/RestroEditModal.tsx
+// components/VendorEditModal.jsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import KeyValueGrid, { KVRow } from "@/components/ui/KeyValueGrid";
+import KeyValueGrid from "@/components/ui/KeyValueGrid";
 
-type Props = {
-  restro: any;
-  onClose: () => void;
-  onSave?: (updatedFields: any) => Promise<{ ok: boolean; row?: any; error?: any }>;
-  saving?: boolean;
-};
-
-const tabs = [
-  "Basic Information",
-  "Station Settings",
-  "Address & Documents",
-  "Contacts",
-  "Bank",
-  "Future Closed",
-  "Menu",
-];
-
-export default function RestroEditModal({ restro, onClose, onSave, saving: parentSaving }: Props) {
+export default function VendorEditModal({ vendor, onClose, onSave, saving: parentSaving }) {
+  const tabs = ["Basic Information", "Contacts", "Bank", "Other"];
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [savingInternal, setSavingInternal] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
 
-  const [local, setLocal] = useState<any>({});
+  const [local, setLocal] = useState({});
+
   useEffect(() => {
     setLocal({
-      RestroName: restro?.RestroName ?? "",
-      StationCode: restro?.StationCode ?? "",
-      StationName: restro?.StationName ?? "",
-      OwnerName: restro?.OwnerName ?? "",
-      OwnerPhone: restro?.OwnerPhone ?? "",
-      FSSAINumber: restro?.FSSAINumber ?? "",
-      FSSAIExpiryDate: restro?.FSSAIExpiryDate ?? "",
-      IRCTC: restro?.IRCTC === 1 || restro?.IRCTC === "1" || restro?.IRCTC === true,
-      Raileats: restro?.Raileats === 1 || restro?.Raileats === "1" || restro?.Raileats === true,
-      IsIrctcApproved:
-        restro?.IsIrctcApproved === 1 ||
-        restro?.IsIrctcApproved === "1" ||
-        restro?.IsIrctcApproved === true,
-      ...restro,
+      VendorCode: vendor?.VendorCode ?? "",
+      VendorName: vendor?.VendorName ?? "",
+      ContactName: vendor?.ContactName ?? "",
+      ContactEmail: vendor?.ContactEmail ?? "",
+      ContactPhone: vendor?.ContactPhone ?? "",
+      BankAccount: vendor?.BankAccount ?? "",
+      IFSC: vendor?.IFSC ?? "",
+      VendorLogo: vendor?.VendorLogo ?? "",
+      Active: vendor?.Active === 1 || vendor?.Active === "1" || vendor?.Active === true,
+      ...vendor,
     });
-  }, [restro]);
+  }, [vendor]);
 
   const saving = parentSaving ?? savingInternal;
 
-  function updateField(key: string, value: any) {
-    setLocal((s: any) => ({ ...s, [key]: value }));
+  function updateField(key, value) {
+    setLocal((s) => ({ ...s, [key]: value }));
   }
 
-  async function defaultPatch(payload: any) {
+  async function defaultPatch(payload) {
     try {
-      const code = restro?.RestroCode ?? restro?.RestroId ?? restro?.code;
-      if (!code) throw new Error("Missing RestroCode for update");
-      const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
+      const code = vendor?.VendorCode ?? vendor?.id ?? vendor?.code;
+      if (!code) throw new Error("Missing VendorCode for update");
+      const res = await fetch(`/api/vendors/${encodeURIComponent(String(code))}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -68,24 +49,22 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
       const json = await res.json().catch(() => null);
       const updated = json?.row ?? json ?? null;
       return { ok: true, row: updated };
-    } catch (err: any) {
+    } catch (err) {
       return { ok: false, error: err?.message ?? String(err) };
     }
   }
 
   async function handleSave() {
     setError(null);
-    const payload: any = {
-      RestroName: local.RestroName ?? "",
-      StationCode: local.StationCode ?? "",
-      StationName: local.StationName ?? "",
-      OwnerName: local.OwnerName ?? "",
-      OwnerPhone: local.OwnerPhone ?? "",
-      FSSAINumber: local.FSSAINumber ?? "",
-      FSSAIExpiryDate: local.FSSAIExpiryDate ?? "",
-      IRCTC: local.IRCTC ? 1 : 0,
-      Raileats: local.Raileats ? 1 : 0,
-      IsIrctcApproved: local.IsIrctcApproved ? 1 : 0,
+    const payload = {
+      VendorName: local.VendorName ?? "",
+      ContactName: local.ContactName ?? "",
+      ContactEmail: local.ContactEmail ?? "",
+      ContactPhone: local.ContactPhone ?? "",
+      BankAccount: local.BankAccount ?? "",
+      IFSC: local.IFSC ?? "",
+      VendorLogo: local.VendorLogo ?? "",
+      Active: local.Active ? 1 : 0,
     };
 
     try {
@@ -104,7 +83,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         }
         onClose();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Save error:", err);
       setError(err?.message ?? String(err));
     } finally {
@@ -112,30 +91,23 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
     }
   }
 
-  const imgSrc = (p: string) => {
+  const imgSrc = (p) => {
     if (!p) return "";
     if (p.startsWith("http://") || p.startsWith("https://")) return p;
     return `${process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}${p}`;
   };
 
-  // build rows
-  const rows: KVRow[] = [
-    { keyLabel: "Restro Code", value: <div className="readonly-value">{local.RestroCode ?? local.RestroId ?? "—"}</div> },
-    { keyLabel: "Station Code with Name", value: <div className="readonly-value">{local.StationCode ? `(${local.StationCode}) ${local.StationName ?? ""}` : "—"}</div> },
-    { keyLabel: "Restro Name", value: <input className="kv-input" value={local.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} /> },
-    { keyLabel: "Brand Name if Any", value: <input className="kv-input" value={local.BrandName ?? ""} onChange={(e) => updateField("BrandName", e.target.value)} /> },
-    { keyLabel: "Raileats Status", value: <label className="inline-label"><input type="checkbox" checked={!!local.Raileats} onChange={(e) => updateField("Raileats", e.target.checked)} /> <span>{local.Raileats ? "On" : "Off"}</span></label> },
-    { keyLabel: "Is Irctc Approved", value: <label className="inline-label"><input type="checkbox" checked={!!local.IsIrctcApproved} onChange={(e) => updateField("IsIrctcApproved", e.target.checked)} /> <span>{local.IsIrctcApproved ? "Yes" : "No"}</span></label> },
-    { keyLabel: "Restro Rating", value: <div className="readonly-value">{local.RestroRating ?? "—"}</div> },
-    { keyLabel: "Restro Display Photo (path)", value: <input className="kv-input" value={local.RestroDisplayPhoto ?? ""} onChange={(e) => updateField("RestroDisplayPhoto", e.target.value)} /> },
-    { keyLabel: "Display Preview", value: local.RestroDisplayPhoto ? <img className="preview-img" src={imgSrc(local.RestroDisplayPhoto)} alt="display" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} /> : <div className="readonly-value">No image</div> },
-    { keyLabel: "Owner Name", value: <input className="kv-input" value={local.OwnerName ?? ""} onChange={(e) => updateField("OwnerName", e.target.value)} /> },
-    { keyLabel: "Owner Email", value: <input className="kv-input" value={local.OwnerEmail ?? ""} onChange={(e) => updateField("OwnerEmail", e.target.value)} /> },
-    { keyLabel: "Owner Phone", value: <input className="kv-input" value={local.OwnerPhone ?? ""} onChange={(e) => updateField("OwnerPhone", e.target.value)} /> },
-    { keyLabel: "Restro Email", value: <input className="kv-input" value={local.RestroEmail ?? ""} onChange={(e) => updateField("RestroEmail", e.target.value)} /> },
-    { keyLabel: "Restro Phone", value: <input className="kv-input" value={local.RestroPhone ?? ""} onChange={(e) => updateField("RestroPhone", e.target.value)} /> },
-    { keyLabel: "FSSAI Number", value: <input className="kv-input" value={local.FSSAINumber ?? ""} onChange={(e) => updateField("FSSAINumber", e.target.value)} /> },
-    { keyLabel: "FSSAI Expiry Date", value: <input className="kv-input" type="date" value={local.FSSAIExpiryDate ?? ""} onChange={(e) => updateField("FSSAIExpiryDate", e.target.value)} /> },
+  const rows = [
+    { keyLabel: "Vendor Code", value: <div className="readonly-value">{local.VendorCode ?? "—"}</div> },
+    { keyLabel: "Vendor Name", value: <input className="kv-input" value={local.VendorName ?? ""} onChange={(e) => updateField("VendorName", e.target.value)} /> },
+    { keyLabel: "Contact Name", value: <input className="kv-input" value={local.ContactName ?? ""} onChange={(e) => updateField("ContactName", e.target.value)} /> },
+    { keyLabel: "Contact Email", value: <input className="kv-input" value={local.ContactEmail ?? ""} onChange={(e) => updateField("ContactEmail", e.target.value)} /> },
+    { keyLabel: "Contact Phone", value: <input className="kv-input" value={local.ContactPhone ?? ""} onChange={(e) => updateField("ContactPhone", e.target.value)} /> },
+    { keyLabel: "Vendor Logo (path)", value: <input className="kv-input" value={local.VendorLogo ?? ""} onChange={(e) => updateField("VendorLogo", e.target.value)} /> },
+    { keyLabel: "Logo Preview", value: local.VendorLogo ? <img className="preview-img" src={imgSrc(local.VendorLogo)} alt="logo" onError={(e) => ((e.target).style.display = "none")} /> : <div className="readonly-value">No image</div> },
+    { keyLabel: "Bank Account", value: <input className="kv-input" value={local.BankAccount ?? ""} onChange={(e) => updateField("BankAccount", e.target.value)} /> },
+    { keyLabel: "IFSC", value: <input className="kv-input" value={local.IFSC ?? ""} onChange={(e) => updateField("IFSC", e.target.value)} /> },
+    { keyLabel: "Active", value: <label className="inline-label"><input type="checkbox" checked={!!local.Active} onChange={(e) => updateField("Active", e.target.checked)} /> <span>{local.Active ? "Yes" : "No"}</span></label> },
   ];
 
   return (
@@ -160,104 +132,95 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
           borderRadius: 8,
           width: "92%",
           height: "92%",
-          maxWidth: "1700px",
+          maxWidth: "1200px",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
           boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
         }}
       >
-        {/* Header */}
+        {/* header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
-          <div style={{ fontWeight: 600 }}>
-            {String(local.RestroCode ?? local.RestroId ?? "")} / {local.RestroName} / {local.StationCode} / {local.StationName}
-          </div>
-
+          <div style={{ fontWeight: 600 }}>{String(local.VendorCode ?? "")} / {local.VendorName}</div>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <a
-              href={`/admin/restros/edit/${encodeURIComponent(String(local.RestroCode ?? local.RestroId ?? ""))}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
-            >
-              Open Outlet Page
-            </a>
-
-            <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">
-              ✕
-            </button>
+            <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">✕</button>
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid #eee", background: "#fafafa" }}>
-          {tabs.map((tab) => (
+          {tabs.map((t) => (
             <div
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={t}
+              onClick={() => setActiveTab(t)}
               style={{
-                padding: "12px 16px",
+                padding: "10px 14px",
                 cursor: "pointer",
-                borderBottom: activeTab === tab ? "3px solid #0ea5e9" : "3px solid transparent",
-                fontWeight: activeTab === tab ? 600 : 500,
-                color: activeTab === tab ? "#0ea5e9" : "#333",
+                borderBottom: activeTab === t ? "3px solid #0ea5e9" : "3px solid transparent",
+                fontWeight: activeTab === t ? 600 : 500,
+                color: activeTab === t ? "#0ea5e9" : "#333",
               }}
             >
-              {tab}
+              {t}
             </div>
           ))}
         </div>
 
-        {/* Toolbar */}
+        {/* toolbar */}
         <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-          <button onClick={onClose} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }} disabled={saving}>
-            Cancel
-          </button>
-          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>
-            {saving ? "Saving..." : "Save"}
-          </button>
+          <button onClick={() => { onClose(); }} disabled={saving} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>{saving ? "Saving..." : "Save"}</button>
         </div>
 
-        {/* Content */}
+        {/* content */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           {activeTab === "Basic Information" && (
             <div>
-              <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
-              <KeyValueGrid rows={rows} labelWidth={220} maxWidth={980} />
+              <h3 style={{ marginTop: 0, textAlign: "center" }}>Vendor - Basic Information</h3>
+              <KeyValueGrid rows={rows} labelWidth={200} maxWidth={900} />
             </div>
           )}
 
-          {activeTab === "Station Settings" && (
-            <div>
-              <h3 style={{ marginTop: 0 }}>Station Settings</h3>
-              <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="checkbox" checked={!!local.IRCTC} onChange={(e) => updateField("IRCTC", e.target.checked)} />
-                  <span>IRCTC Status (On / Off)</span>
-                </label>
-
-                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="checkbox" checked={!!local.Raileats} onChange={(e) => updateField("Raileats", e.target.checked)} />
-                  <span>Raileats Status (On / Off)</span>
-                </label>
-
-                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="checkbox" checked={!!local.IsIrctcApproved} onChange={(e) => updateField("IsIrctcApproved", e.target.checked)} />
-                  <span>Is IRCTC Approved</span>
-                </label>
-              </div>
-            </div>
-          )}
-
-          {activeTab !== "Basic Information" && activeTab !== "Station Settings" && (
+          {activeTab !== "Basic Information" && (
             <div>
               <h3 style={{ marginTop: 0 }}>{activeTab}</h3>
-              <p>Placeholder area for <b>{activeTab}</b> content — implement forms/fields here as needed.</p>
+              <p style={{ color: "#555" }}>Content for <b>{activeTab}</b> — implement fields as needed.</p>
             </div>
           )}
         </div>
       </div>
+      <style jsx>{`
+        .kv-input {
+          width: 100%;
+          padding: 10px;
+          border-radius: 6px;
+          border: 1px solid #e0e0e0;
+          font-size: 13px;
+          box-sizing: border-box;
+          background: #fff;
+        }
+        .readonly-value {
+          padding: 10px 12px;
+          border-radius: 6px;
+          border: 1px solid #f0f0f0;
+          background: #fafafa;
+          color: #222;
+          font-size: 13px;
+        }
+        .inline-label {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+        }
+        .preview-img {
+          height: 96px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #eee;
+        }
+      `}</style>
     </div>
   );
 }
