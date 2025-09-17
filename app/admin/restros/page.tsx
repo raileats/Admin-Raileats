@@ -1,339 +1,247 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
-import RestroEditModal from "@/components/RestroEditModal";  // ✅ modal import
+import React, { useEffect, useRef, useState } from "react";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
-}
-const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+type Props = {
+  restro: any;
+  onClose: () => void;
+};
 
-type Restro = { [k: string]: any };
+const TABS = [
+  "Basic Information",
+  "Station Settings",
+  "Address & Documents",
+  "Contacts",
+  "Bank",
+  "Future Closed",
+  "Menu",
+];
 
-export default function RestroMasterPage(): JSX.Element {
-  const router = useRouter();
-
-  // filter fields
-  const [restroCode, setRestroCode] = useState<string>("");
-  const [restroName, setRestroName] = useState<string>("");
-  const [ownerName, setOwnerName] = useState<string>("");
-  const [stationCode, setStationCode] = useState<string>("");
-  const [stationName, setStationName] = useState<string>("");
-  const [ownerPhone, setOwnerPhone] = useState<string>("");
-  const [fssaiNumber, setFssaiNumber] = useState<string>("");
-
-  const [results, setResults] = useState<Restro[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // export state
-  const [exporting, setExporting] = useState<boolean>(false);
-
-  // ✅ state for modal
-  const [editingRestro, setEditingRestro] = useState<Restro | null>(null);
+export default function RestroEditModal({ restro, onClose }: Props) {
+  const [activeTab, setActiveTab] = useState<string>(TABS[0]);
+  const backdropRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    fetchRestros();
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    // trap focus into modal
+    const prev = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      prev?.focus();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function fetchRestros(filters?: { [k: string]: any }) {
-    setLoading(true);
-    setError(null);
-    try {
-      let query = supabase.from("RestroMaster").select("*").limit(500);
+  if (!restro) return null;
 
-      if (filters?.restroCode) {
-        const rc = String(filters.restroCode).trim();
-        if (/^\d+$/.test(rc)) {
-          query = query.eq("RestroCode", Number(rc));
-        } else {
-          query = (query as any).ilike("RestroName", `%${rc}%`);
-        }
-      }
+  const restroCode = restro.RestroCode ?? restro.RestroId ?? "";
 
-      const ilikeIf = (col: string, v?: string) => {
-        if (!v) return;
-        const s = String(v).trim();
-        if (s.length === 0) return;
-        (query as any) = (query as any).ilike(col, `%${s}%`);
-      };
-
-      ilikeIf("RestroName", filters?.restroName);
-      ilikeIf("OwnerName", filters?.ownerName);
-      ilikeIf("StationCode", filters?.stationCode);
-      ilikeIf("StationName", filters?.stationName);
-      ilikeIf("OwnerPhone", filters?.ownerPhone);
-      ilikeIf("FSSAINumber", filters?.fssaiNumber);
-
-      const { data, error: e } = await query;
-      if (e) throw e;
-      setResults((data ?? []) as Restro[]);
-    } catch (err: any) {
-      console.error("fetchRestros error:", err);
-      setError(err?.message ?? String(err));
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function onSearch(e?: React.FormEvent) {
-    if (e) e.preventDefault();
-    fetchRestros({
-      restroCode,
-      restroName,
-      ownerName,
-      stationCode,
-      stationName,
-      ownerPhone,
-      fssaiNumber,
-    });
-  }
-
-  function onClear() {
-    setRestroCode("");
-    setRestroName("");
-    setOwnerName("");
-    setStationCode("");
-    setStationName("");
-    setOwnerPhone("");
-    setFssaiNumber("");
-    fetchRestros();
-  }
-
-  // CSV helpers
-  const escapeCsv = (val: any) => {
-    if (val === null || val === undefined) return "";
-    const s = String(val);
-    if (/[",\n\r]/.test(s)) {
-      return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
-  };
-
-  async function handleExportAll() {
-    try {
-      setExporting(true);
-      setError(null);
-
-      // fetch full table
-      const { data, error } = await supabase.from("RestroMaster").select("*");
-      if (error) throw error;
-
-      const rows = data ?? [];
-      if (!rows.length) {
-        setError("No data found in RestroMaster table.");
-        return;
-      }
-
-      // Use keys from the first row as header order
-      const headers = Object.keys(rows[0]);
-
-      // build CSV string with BOM
-      const BOM = "\uFEFF";
-      const csv =
-        BOM +
-        headers.join(",") +
-        "\n" +
-        rows
-          .map((r: any) =>
-            headers.map((h) => escapeCsv(r[h])).join(",")
-          )
-          .join("\n");
-
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `RestroMaster.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      console.error("export error:", err);
-      setError(err?.message ?? "Export failed");
-    } finally {
-      setExporting(false);
-    }
+  function onBackdropClick(e: React.MouseEvent) {
+    if (e.target === backdropRef.current) onClose();
   }
 
   return (
-    <main style={{ padding: 24 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <h1 style={{ margin: 0 }}>Restro Master</h1>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={handleExportAll}
-            disabled={exporting}
-            style={{
-              background: "#0ea5e9",
-              color: "white",
-              padding: "8px 12px",
-              borderRadius: 6,
-              border: "none",
-              cursor: exporting ? "not-allowed" : "pointer",
-            }}
-            title="Download all RestroMaster rows as CSV"
-          >
-            {exporting ? "Exporting..." : "Download Restro Master"}
-          </button>
-
-          <button
-            onClick={() => router.push("/admin/restros/new")}
-            style={{
-              background: "#10b981",
-              color: "white",
-              padding: "8px 12px",
-              borderRadius: 6,
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            + Add New Restro
-          </button>
-        </div>
-      </div>
-
-      {/* Search Form */}
-      <form
-        onSubmit={onSearch}
+    <div
+      ref={backdropRef}
+      onMouseDown={onBackdropClick}
+      aria-modal="true"
+      role="dialog"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.55)",
+        zIndex: 2000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 12,
+      }}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="document"
         style={{
           background: "#fff",
-          padding: 12,
           borderRadius: 8,
-          marginBottom: 12,
+          width: "92%",
+          maxWidth: "1700px",
+          height: "92%",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+          overflow: "hidden",
         }}
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        {/* First row - search fields */}
+        {/* Header */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "120px 1fr 1fr 120px 1fr 160px 1fr",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 18px",
+            borderBottom: "1px solid #e9e9e9",
             gap: 12,
-            marginBottom: 12,
           }}
         >
-          <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} style={{ padding: 8 }} />
-          <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
-          <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} style={{ padding: 8 }} />
-          <input placeholder="Station Code" value={stationCode} onChange={(e) => setStationCode(e.target.value)} style={{ padding: 8 }} />
-          <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} style={{ padding: 8 }} />
-          <input
-            placeholder="Owner Phone"
-            value={ownerPhone}
-            onChange={(e) => setOwnerPhone(e.target.value)}
-            style={{ padding: 8 }}
-            maxLength={10}
-          />
-          <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={{ padding: 8 }} />
+          <div style={{ fontSize: 15, fontWeight: 600, color: "#111" }}>
+            {restroCode} / {restro.RestroName ?? "-"} / {restro.StationCode ?? "-"} /{" "}
+            {restro.StationName ?? "-"}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <a
+              href={`https://admin.raileats.in/admin/restros/edit/${restroCode}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: "#0ea5e9",
+                textDecoration: "none",
+                fontWeight: 600,
+                background: "transparent",
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "1px solid rgba(14,165,233,0.12)",
+                cursor: "pointer",
+              }}
+            >
+              Open Outlet Page
+            </a>
+
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: 20,
+                cursor: "pointer",
+                padding: 6,
+                lineHeight: 1,
+              }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
-        {/* Second row - buttons */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" onClick={onClear} style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>
-            Clear
-          </button>
-          <button
-            type="submit"
-            style={{
-              padding: "8px 12px",
-              borderRadius: 6,
-              border: "none",
-              background: "#0ea5e9",
-              color: "#fff",
-              minWidth: 90,
-            }}
-          >
-            Search
-          </button>
+        {/* Tabs */}
+        <div
+          style={{
+            display: "flex",
+            gap: 18,
+            padding: "12px 18px",
+            borderBottom: "1px solid #f0f0f0",
+            overflowX: "auto",
+            alignItems: "center",
+            background: "#fff",
+          }}
+        >
+          {TABS.map((t) => {
+            const active = t === activeTab;
+            return (
+              <button
+                key={t}
+                onClick={() => setActiveTab(t)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: "8px 6px",
+                  cursor: "pointer",
+                  color: active ? "#0ea5e9" : "#333",
+                  fontWeight: active ? 700 : 500,
+                  borderBottom: active ? "3px solid #0ea5e9" : "3px solid transparent",
+                  outline: "none",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {t}
+              </button>
+            );
+          })}
         </div>
-      </form>
 
-      {error && <div style={{ color: "red", marginBottom: 12 }}>{error}</div>}
+        {/* Content */}
+        <div style={{ flex: 1, overflow: "auto", padding: 18 }}>
+          {/* You can replace these placeholders with real forms/components */}
+          {activeTab === "Basic Information" && (
+            <section>
+              <h3 style={{ marginTop: 0 }}>Basic Information</h3>
+              <p style={{ color: "#444" }}>
+                Content for <strong>Basic Information</strong> will go here.
+              </p>
 
-      {/* Results Table */}
-      <div style={{ background: "#fff", borderRadius: 8, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
-              <th style={{ padding: 12 }}>Restro Code</th>
-              <th style={{ padding: 12 }}>Restro Name</th>
-              <th style={{ padding: 12 }}>Station Code</th>
-              <th style={{ padding: 12 }}>Station Name</th>
-              <th style={{ padding: 12 }}>Owner Name</th>
-              <th style={{ padding: 12 }}>Owner Phone</th>
-              <th style={{ padding: 12 }}>FSSAI Number</th>
-              <th style={{ padding: 12 }}>IRCTC Status</th>
-              <th style={{ padding: 12 }}>Raileats Status</th>
-              <th style={{ padding: 12 }}>FSSAI Expiry Date</th>
-              <th style={{ padding: 12 }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={11} style={{ padding: 20, textAlign: "center" }}>
-                  Loading...
-                </td>
-              </tr>
-            ) : results.length === 0 ? (
-              <tr>
-                <td colSpan={11} style={{ padding: 20, textAlign: "center", color: "#666" }}>
-                  No restros found
-                </td>
-              </tr>
-            ) : (
-              results.map((r) => {
-                const code = r.RestroCode ?? r.RestroId ?? "";
-                return (
-                  <tr key={String(code)} style={{ borderBottom: "1px solid #fafafa" }}>
-                    <td style={{ padding: 12 }}>{code}</td>
-                    <td style={{ padding: 12 }}>{r.RestroName}</td>
-                    <td style={{ padding: 12 }}>{r.StationCode}</td>
-                    <td style={{ padding: 12 }}>{r.StationName}</td>
-                    <td style={{ padding: 12 }}>{r.OwnerName}</td>
-                    <td style={{ padding: 12 }}>{r.OwnerPhone ?? "-"}</td>
-                    <td style={{ padding: 12 }}>{r.FSSAINumber ?? "-"}</td>
-                    <td style={{ padding: 12 }}>{r.IRCTC ? "On" : "Off"}</td>
-                    <td style={{ padding: 12 }}>{r.Raileats ? "On" : "Off"}</td>
-                    <td style={{ padding: 12 }}>{r.FSSAIExpiryDate ?? "-"}</td>
-                    <td style={{ padding: 12 }}>
-                      <button
-                        onClick={() => setEditingRestro(r)}   // ✅ modal open
-                        style={{
-                          background: "#f59e0b",
-                          color: "#000",
-                          padding: "6px 10px",
-                          borderRadius: 6,
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+              {/* Example quick preview */}
+              <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 13, color: "#666" }}>Restro Code</label>
+                  <div style={{ marginTop: 6, fontWeight: 600 }}>{restroCode}</div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, color: "#666" }}>Restro Name</label>
+                  <div style={{ marginTop: 6 }}>{restro.RestroName ?? "-"}</div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, color: "#666" }}>Station Code</label>
+                  <div style={{ marginTop: 6 }}>{restro.StationCode ?? "-"}</div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, color: "#666" }}>Station Name</label>
+                  <div style={{ marginTop: 6 }}>{restro.StationName ?? "-"}</div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {activeTab === "Station Settings" && (
+            <section>
+              <h3 style={{ marginTop: 0 }}>Station Settings</h3>
+              <p style={{ color: "#444" }}>Content for <strong>Station Settings</strong> will go here.</p>
+            </section>
+          )}
+
+          {activeTab === "Address & Documents" && (
+            <section>
+              <h3 style={{ marginTop: 0 }}>Address & Documents</h3>
+              <p style={{ color: "#444" }}>Upload / view documents and address details here.</p>
+            </section>
+          )}
+
+          {activeTab === "Contacts" && (
+            <section>
+              <h3 style={{ marginTop: 0 }}>Contacts</h3>
+              <p style={{ color: "#444" }}>Contact person, phone, email etc.</p>
+            </section>
+          )}
+
+          {activeTab === "Bank" && (
+            <section>
+              <h3 style={{ marginTop: 0 }}>Bank</h3>
+              <p style={{ color: "#444" }}>Bank account details, IFSC etc.</p>
+            </section>
+          )}
+
+          {activeTab === "Future Closed" && (
+            <section>
+              <h3 style={{ marginTop: 0 }}>Future Closed</h3>
+              <p style={{ color: "#444" }}>Manage future closed dates / holidays.</p>
+            </section>
+          )}
+
+          {activeTab === "Menu" && (
+            <section>
+              <h3 style={{ marginTop: 0 }}>Menu</h3>
+              <p style={{ color: "#444" }}>Menu management (link to menu editor or inline UI).</p>
+            </section>
+          )}
+        </div>
       </div>
-
-      {/* ✅ Modal render */}
-      {editingRestro && (
-        <RestroEditModal
-          restro={editingRestro}
-          onClose={() => setEditingRestro(null)}
-        />
-      )}
-    </main>
+    </div>
   );
 }
