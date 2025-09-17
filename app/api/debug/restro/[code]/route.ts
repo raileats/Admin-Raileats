@@ -1,47 +1,51 @@
-// app/api/debug/restro/[code]/route.ts
+// app/admin/api/debug/restro/[code]/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { supabaseServer } from "@/lib/supabaseServer"; // if exists in your repo
+import { supabaseServer } from "@/lib/supabaseServer"; // अगर आपके repo में है
 
-const PUB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const PUB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const PUB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const PUB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
 export async function GET(req: Request, { params }: { params: { code: string } }) {
   const code = params.code;
   const numeric = Number(code);
 
-  const results: any = {};
+  const out: any = {};
 
-  // 1) try public client (lib/restroService style)
+  // public client try
   try {
-    const pub = createClient(PUB_URL, PUB_KEY);
-    let q = pub.from("RestroMaster").select("*");
-    if (!Number.isNaN(numeric)) q = (q as any).eq("RestroCode", numeric);
-    else q = (q as any).eq("RestroCode", code);
-    const { data, error } = await q.limit(1);
-    results.public = { data, error: error ? String(error) : null };
+    if (!PUB_URL || !PUB_KEY) {
+      out.public = { error: "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY" };
+    } else {
+      const pub = createClient(PUB_URL, PUB_KEY);
+      let q: any = pub.from("RestroMaster").select("*");
+      q = !Number.isNaN(numeric) ? q.eq("RestroCode", numeric) : q.eq("RestroCode", code);
+      const { data, error } = await q.limit(1);
+      out.public = { data: data ?? null, error: error ? String(error) : null };
+    }
   } catch (e: any) {
-    results.public = { error: String(e) };
+    out.public = { error: String(e) };
   }
 
-  // 2) try server client if available
+  // server client try
   try {
-    if (!supabaseServer) throw new Error("supabaseServer not found/importable");
-    let q2 = supabaseServer.from("RestroMaster").select("*");
-    if (!Number.isNaN(numeric)) q2 = (q2 as any).eq("RestroCode", numeric);
-    else q2 = (q2 as any).eq("RestroCode", code);
-    const { data, error } = await q2.limit(1);
-    results.server = { data, error: error ? String(error) : null };
+    if (!supabaseServer) {
+      out.server = { error: "supabaseServer import not found" };
+    } else {
+      let q2: any = supabaseServer.from("RestroMaster").select("*");
+      q2 = !Number.isNaN(numeric) ? q2.eq("RestroCode", numeric) : q2.eq("RestroCode", code);
+      const { data, error } = await q2.limit(1);
+      out.server = { data: data ?? null, error: error ? String(error) : null };
+    }
   } catch (e: any) {
-    results.server = { error: String(e) };
+    out.server = { error: String(e) };
   }
 
-  // 3) return environment snapshot (non-secret)
-  results.env = {
+  out.env = {
     has_pub_url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
     has_pub_key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     has_service_role: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
   };
 
-  return NextResponse.json(results);
+  return NextResponse.json(out);
 }
