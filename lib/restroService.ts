@@ -6,51 +6,52 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Type definition for one Restro row
 export type Restro = {
-  restro_code: number;
-  station_code: string;
-  station_name: string;
-  restro_name: string;
-  brand_name?: string | null;
-  raileats?: number | boolean | null;
-  is_irctc_approved?: number | boolean | null;
-  irctc?: number | boolean | null;
-  rating?: number | null;
-  is_pure_veg?: number | boolean | null;
-  restro_display_photo?: string | null;
-  owner_name?: string | null;
-  owner_email?: string | null;
-  owner_phone?: string | null;
-  restro_email?: string | null;
-  restro_phone?: string | null;
-  fssai_number?: string | null;
-  fssai_expiry_date?: string | null;
+  RestroCode: number;
+  StationCode: string;
+  StationName: string;
+  RestroName: string;
+  BrandName?: string | null;
+  Raileats?: number | boolean | null;
+  IsIrctcApproved?: number | boolean | null;
+  IRCTC?: number | boolean | null;
+  Rating?: number | null;
+  IsPureVeg?: number | boolean | null;
+  RestroDisplayPhoto?: string | null;
+  OwnerName?: string | null;
+  OwnerEmail?: string | null;
+  OwnerPhone?: string | null;
+  RestroEmail?: string | null;
+  RestroPhone?: string | null;
+  FSSAINumber?: string | null;
+  FSSAIExpiryDate?: string | null;
 };
 
 export async function getRestroById(restroCode: number): Promise<Restro | null> {
   const { data, error } = await supabase
     .from("RestroMaster")
     .select(`
-      restro_code,
-      station_code,
-      station_name,
-      restro_name,
-      brand_name,
-      raileats,
-      is_irctc_approved,
-      irctc,
-      rating,
-      is_pure_veg,
-      restro_display_photo,
-      owner_name,
-      owner_email,
-      owner_phone,
-      restro_email,
-      restro_phone,
-      fssai_number,
-      fssai_expiry_date
+      RestroCode,
+      StationCode,
+      StationName,
+      RestroName,
+      BrandName,
+      Raileats,
+      IsIrctcApproved,
+      IRCTC,
+      Rating,
+      IsPureVeg,
+      RestroDisplayPhoto,
+      OwnerName,
+      OwnerEmail,
+      OwnerPhone,
+      RestroEmail,
+      RestroPhone,
+      FSSAINumber,
+      FSSAIExpiryDate
     `)
-    .eq("restro_code", restroCode)
+    .eq("RestroCode", restroCode)
     .single();
 
   if (error) {
@@ -61,14 +62,12 @@ export async function getRestroById(restroCode: number): Promise<Restro | null> 
   return data as Restro;
 }
 
-/**
- * Safe wrapper for fetching a Restro.
- * It always resolves (never throws) and normalizes errors.
- */
-export async function safeGetRestro(code: number): Promise<{ restro: Restro | null; error: string | null }> {
+// Helper safe wrapper
+export async function safeGetRestro(restroCode: number) {
   try {
-    const restro = await getRestroById(code);
-    return { restro, error: restro ? null : "Not found" };
+    const restro = await getRestroById(restroCode);
+    if (!restro) return { restro: null, error: "Not found" };
+    return { restro, error: null };
   } catch (err: any) {
     return { restro: null, error: err?.message ?? "Unknown error" };
   }
