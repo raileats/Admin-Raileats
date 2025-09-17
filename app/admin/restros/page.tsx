@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import RestroEditModal from "@/components/RestroEditModal";  // ✅ modal import
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -11,9 +12,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 }
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-type Restro = {
-  [k: string]: any;
-};
+type Restro = { [k: string]: any };
 
 export default function RestroMasterPage(): JSX.Element {
   const router = useRouter();
@@ -33,6 +32,9 @@ export default function RestroMasterPage(): JSX.Element {
 
   // export state
   const [exporting, setExporting] = useState<boolean>(false);
+
+  // ✅ state for modal
+  const [editingRestro, setEditingRestro] = useState<Restro | null>(null);
 
   useEffect(() => {
     fetchRestros();
@@ -140,13 +142,7 @@ export default function RestroMasterPage(): JSX.Element {
         "\n" +
         rows
           .map((r: any) =>
-            headers
-              .map((h) => {
-                // Convert boolean-like numeric fields to readable values if desired
-                // but we keep raw values to preserve DB data; you can customize here
-                return escapeCsv(r[h]);
-              })
-              .join(",")
+            headers.map((h) => escapeCsv(r[h])).join(",")
           )
           .join("\n");
 
@@ -310,7 +306,7 @@ export default function RestroMasterPage(): JSX.Element {
                     <td style={{ padding: 12 }}>{r.FSSAIExpiryDate ?? "-"}</td>
                     <td style={{ padding: 12 }}>
                       <button
-                        onClick={() => router.push(`/admin/restros/edit/${code}`)}
+                        onClick={() => setEditingRestro(r)}   // ✅ modal open
                         style={{
                           background: "#f59e0b",
                           color: "#000",
@@ -330,6 +326,14 @@ export default function RestroMasterPage(): JSX.Element {
           </tbody>
         </table>
       </div>
+
+      {/* ✅ Modal render */}
+      {editingRestro && (
+        <RestroEditModal
+          restro={editingRestro}
+          onClose={() => setEditingRestro(null)}
+        />
+      )}
     </main>
   );
 }
