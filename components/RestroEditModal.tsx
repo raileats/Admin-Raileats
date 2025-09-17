@@ -8,6 +8,11 @@ type Props = {
   onClose: () => void;
   onSave?: (updatedFields: any) => Promise<{ ok: boolean; row?: any; error?: any }>;
   saving?: boolean;
+  /**
+   * Optional stations options array: [{ label: "NIZAMABAD (NZB) - Telangana", value: "NZB" }, ...]
+   * If provided, the Station select will use this list. Otherwise station will show read-only display.
+   */
+  stationsOptions?: { label: string; value: string }[];
 };
 
 const tabs = [
@@ -20,28 +25,44 @@ const tabs = [
   "Menu",
 ];
 
-export default function RestroEditModal({ restro, onClose, onSave, saving: parentSaving }: Props) {
+export default function RestroEditModal({ restro, onClose, onSave, saving: parentSaving, stationsOptions = [] }: Props) {
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [savingInternal, setSavingInternal] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // local editable copy
   const [local, setLocal] = useState<any>({});
   useEffect(() => {
     setLocal({
-      RestroName: restro?.RestroName ?? "",
-      StationCode: restro?.StationCode ?? "",
-      StationName: restro?.StationName ?? "",
-      OwnerName: restro?.OwnerName ?? "",
-      OwnerPhone: restro?.OwnerPhone ?? "",
-      FSSAINumber: restro?.FSSAINumber ?? "",
-      FSSAIExpiryDate: restro?.FSSAIExpiryDate ?? "",
+      // basic
+      RestroName: restro?.RestroName ?? restro?.restro_name ?? "",
+      RestroCode: restro?.RestroCode ?? restro?.restro_code ?? "",
+      StationCode: restro?.StationCode ?? restro?.station_code ?? "",
+      StationName: restro?.StationName ?? restro?.station_name ?? "",
+      // station settings (from your CSV/DB)
+      StationCategory: restro?.StationCategory ?? restro?.station_category ?? "A",
+      WeeklyOff: restro?.WeeklyOff ?? restro?.weekly_off ?? "SUN",
+      OpenTime: restro?.OpenTime ?? restro?.open_time ?? "10:00",
+      ClosedTime: restro?.ClosedTime ?? restro?.closed_time ?? "23:00",
+      MinimumOrderValue: restro?.MinimumOrderValue ?? restro?.minimum_order_value ?? 0,
+      CutOffTime: restro?.CutOffTime ?? restro?.cut_off_time ?? 0,
+      RaileatsDeliveryCharge: restro?.RaileatsDeliveryCharge ?? restro?.raileats_delivery_charge ?? 0,
+      RaileatsDeliveryChargeGSTRate: restro?.RaileatsDeliveryChargeGSTRate ?? restro?.raileats_delivery_charge_gst_rate ?? 0,
+      RaileatsDeliveryChargeGST: restro?.RaileatsDeliveryChargeGST ?? restro?.raileats_delivery_charge_gst ?? 0,
+      RaileatsDeliveryChargeTotalInclGST: restro?.RaileatsDeliveryChargeTotalInclGST ?? restro?.raileats_delivery_charge_total_incl_gst ?? 0,
+      OrdersPaymentOptionForCustomer: restro?.OrdersPaymentOptionForCustomer ?? restro?.orders_payment_option_for_customer ?? "BOTH", // BOTH / PREPAID / COD
+      IRCTCOrdersPaymentOptionForCustomer: restro?.IRCTCOrdersPaymentOptionForCustomer ?? restro?.irctc_orders_payment_option ?? "BOTH",
+      RestroTypeOfDelivery: restro?.RestroTypeOfDelivery ?? restro?.restro_type_of_delivery ?? "RAILEATS", // RAILEATS / VENDOR
+      // flags
       IRCTC: restro?.IRCTC === 1 || restro?.IRCTC === "1" || restro?.IRCTC === true,
       Raileats: restro?.Raileats === 1 || restro?.Raileats === "1" || restro?.Raileats === true,
       IsIrctcApproved:
-        restro?.IsIrctcApproved === 1 ||
-        restro?.IsIrctcApproved === "1" ||
-        restro?.IsIrctcApproved === true,
-      State: restro?.State ?? "",
+        restro?.IsIrctcApproved === 1 || restro?.IsIrctcApproved === "1" || restro?.IsIrctcApproved === true,
+      // fallback image, owner etc.
+      OwnerName: restro?.OwnerName ?? restro?.owner_name ?? "",
+      OwnerPhone: restro?.OwnerPhone ?? restro?.owner_phone ?? "",
+      FSSAINumber: restro?.FSSAINumber ?? restro?.fssai_number ?? "",
+      FSSAIExpiryDate: restro?.FSSAIExpiryDate ?? restro?.fssai_expiry_date ?? "",
       ...restro,
     });
   }, [restro]);
@@ -54,7 +75,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
   async function defaultPatch(payload: any) {
     try {
-      const code = restro?.RestroCode ?? restro?.RestroId ?? restro?.code;
+      const code = restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? restro?.code;
       if (!code) throw new Error("Missing RestroCode for update");
       const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
         method: "PATCH",
@@ -75,18 +96,30 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
   async function handleSave() {
     setError(null);
+    // include station settings fields in payload
     const payload: any = {
+      // keep basic fields minimal (parent may send others)
       RestroName: local.RestroName ?? "",
       StationCode: local.StationCode ?? restro?.StationCode ?? "",
       StationName: local.StationName ?? restro?.StationName ?? "",
-      OwnerName: local.OwnerName ?? "",
-      OwnerPhone: local.OwnerPhone ?? "",
-      FSSAINumber: local.FSSAINumber ?? "",
-      FSSAIExpiryDate: local.FSSAIExpiryDate ?? "",
+      // station settings fields
+      StationCategory: local.StationCategory ?? null,
+      WeeklyOff: local.WeeklyOff ?? null,
+      OpenTime: local.OpenTime ?? null,
+      ClosedTime: local.ClosedTime ?? null,
+      MinimumOrderValue: local.MinimumOrderValue ?? null,
+      CutOffTime: local.CutOffTime ?? null,
+      RaileatsDeliveryCharge: local.RaileatsDeliveryCharge ?? null,
+      RaileatsDeliveryChargeGSTRate: local.RaileatsDeliveryChargeGSTRate ?? null,
+      RaileatsDeliveryChargeGST: local.RaileatsDeliveryChargeGST ?? null,
+      RaileatsDeliveryChargeTotalInclGST: local.RaileatsDeliveryChargeTotalInclGST ?? null,
+      OrdersPaymentOptionForCustomer: local.OrdersPaymentOptionForCustomer ?? null,
+      IRCTCOrdersPaymentOptionForCustomer: local.IRCTCOrdersPaymentOptionForCustomer ?? null,
+      RestroTypeOfDelivery: local.RestroTypeOfDelivery ?? null,
+      // flags
       IRCTC: local.IRCTC ? 1 : 0,
       Raileats: local.Raileats ? 1 : 0,
       IsIrctcApproved: local.IsIrctcApproved ? 1 : 0,
-      State: local.State ?? restro?.State ?? null,
     };
 
     try {
@@ -113,34 +146,25 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
     }
   }
 
-  const imgSrc = (p: string) => {
-    if (!p) return "";
-    if (p.startsWith("http://") || p.startsWith("https://")) return p;
-    return `${process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}${p}`;
-  };
-
-  // ---- exact composition using DB columns: StationName, StationCode, State
+  // helper to create station display string (NIZAMABAD (NZB) - Telangana)
   const getStationDisplay = () => {
-    if (typeof restro?.StationDisplay === "string" && restro.StationDisplay.trim()) {
-      return restro.StationDisplay.trim();
-    }
-
+    if (typeof restro?.StationDisplay === "string" && restro.StationDisplay.trim()) return restro.StationDisplay.trim();
     const sName = (restro?.StationName ?? local.StationName ?? "").toString().trim();
     const sCode = (restro?.StationCode ?? local.StationCode ?? "").toString().trim();
     const state = (restro?.State ?? local.State ?? "").toString().trim();
-
     const leftParts: string[] = [];
     if (sName) leftParts.push(sName);
     if (sCode) leftParts.push(`(${sCode})`);
-
     const left = leftParts.join(" ");
     if (left && state) return `${left} - ${state}`;
     if (left) return left;
     if (state) return state;
     return "—";
   };
-
   const stationDisplay = getStationDisplay();
+
+  // station select options: use provided stationsOptions if available, otherwise show display as readonly
+  const stationSelectOptions = stationsOptions && stationsOptions.length ? stationsOptions : [{ label: stationDisplay, value: local.StationCode ?? restro?.StationCode ?? "" }];
 
   return (
     <div
@@ -172,22 +196,14 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         }}
       >
         {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "12px 20px",
-            borderBottom: "1px solid #e9e9e9",
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ fontWeight: 600 }}>
-            {String(restro?.RestroCode ?? "")} / {local.RestroName ?? restro?.RestroName} / {stationDisplay}
+            {String(local.RestroCode ?? restro?.RestroCode ?? "")} / {local.RestroName ?? restro?.RestroName} / {stationDisplay}
           </div>
 
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <a
-              href={`/admin/restros/edit/${encodeURIComponent(String(restro?.RestroCode ?? ""))}`}
+              href={`/admin/restros/edit/${encodeURIComponent(String(local.RestroCode ?? restro?.RestroCode ?? ""))}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
@@ -195,17 +211,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
               Open Outlet Page
             </a>
 
-            <button
-              onClick={onClose}
-              style={{
-                background: "transparent",
-                border: "none",
-                fontSize: 20,
-                cursor: "pointer",
-                padding: 6,
-              }}
-              aria-label="Close"
-            >
+            <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">
               ✕
             </button>
           </div>
@@ -233,25 +239,10 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         {/* Toolbar */}
         <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-          <button
-            onClick={onClose}
-            style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}
-            disabled={saving}
-          >
+          <button onClick={onClose} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }} disabled={saving}>
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              background: saving ? "#7fcfe9" : "#0ea5e9",
-              color: "#fff",
-              padding: "8px 12px",
-              borderRadius: 6,
-              border: "none",
-              cursor: saving ? "not-allowed" : "pointer",
-            }}
-          >
+          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>
             {saving ? "Saving..." : "Save"}
           </button>
         </div>
@@ -260,8 +251,8 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           {activeTab === "Basic Information" && (
             <div>
+              {/* keep Basic Information compact layout (unchanged) */}
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
-
               <div className="compact-grid">
                 <div className="field">
                   <label>Station</label>
@@ -270,7 +261,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
                 <div className="field">
                   <label>Restro Code</label>
-                  <div className="readonly">{restro?.RestroCode ?? "—"}</div>
+                  <div className="readonly">{local.RestroCode ?? "—"}</div>
                 </div>
 
                 <div className="field">
@@ -311,7 +302,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
                 <div className="field">
                   <label>Display Preview</label>
-                  {local.RestroDisplayPhoto ? <img src={imgSrc(local.RestroDisplayPhoto)} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} /> : <div className="readonly">No image</div>}
+                  {local.RestroDisplayPhoto ? <img src={(process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "") + local.RestroDisplayPhoto} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} /> : <div className="readonly">No image</div>}
                 </div>
 
                 <div className="field">
@@ -354,22 +345,126 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
           {activeTab === "Station Settings" && (
             <div>
-              <h3 style={{ marginTop: 0 }}>Station Settings</h3>
-              <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="checkbox" checked={!!local.IRCTC} onChange={(e) => updateField("IRCTC", e.target.checked)} />
-                  <span>IRCTC Status (On / Off)</span>
-                </label>
+              <h3 style={{ marginTop: 0, textAlign: "center" }}>Station Settings</h3>
 
-                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="checkbox" checked={!!local.Raileats} onChange={(e) => updateField("Raileats", e.target.checked)} />
-                  <span>Raileats Status (On / Off)</span>
-                </label>
+              <div className="compact-grid">
+                {/* Station Code with Name (dropdown from stationsOptions OR readonly) */}
+                <div className="field">
+                  <label>Station Code with Name</label>
+                  {stationsOptions && stationsOptions.length ? (
+                    <select
+                      value={local.StationCode ?? ""}
+                      onChange={(e) => {
+                        const selected = stationsOptions.find((s) => String(s.value) === String(e.target.value));
+                        if (selected) {
+                          // attempt to parse label into pieces if label contains name/code/state
+                          updateField("StationCode", selected.value);
+                          // don't overwrite StationName/State if not present
+                          // if label looks like "NAME (CODE) - STATE", parse it:
+                          const m = selected.label.match(/^(.+?)\s*\(([^)]+)\)\s*(?:-\s*(.+))?$/);
+                          if (m) {
+                            updateField("StationName", m[1].trim());
+                            if (m[3]) updateField("State", m[3].trim());
+                          }
+                        } else {
+                          updateField("StationCode", e.target.value);
+                        }
+                      }}
+                    >
+                      {stationsOptions.map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="readonly">{stationDisplay}</div>
+                  )}
+                </div>
 
-                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="checkbox" checked={!!local.IsIrctcApproved} onChange={(e) => updateField("IsIrctcApproved", e.target.checked)} />
-                  <span>Is IRCTC Approved</span>
-                </label>
+                <div className="field">
+                  <label>Station Category</label>
+                  <input value={local.StationCategory ?? ""} onChange={(e) => updateField("StationCategory", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>Raileats Customer Delivery Charge</label>
+                  <input type="number" value={local.RaileatsDeliveryCharge ?? 0} onChange={(e) => updateField("RaileatsDeliveryCharge", Number(e.target.value))} />
+                </div>
+
+                <div className="field">
+                  <label>Weekly Off</label>
+                  <select value={local.WeeklyOff ?? "SUN"} onChange={(e) => updateField("WeeklyOff", e.target.value)}>
+                    <option value="SUN">SUN</option>
+                    <option value="MON">MON</option>
+                    <option value="TUE">TUE</option>
+                    <option value="WED">WED</option>
+                    <option value="THU">THU</option>
+                    <option value="FRI">FRI</option>
+                    <option value="SAT">SAT</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>Raileats Customer Delivery Charge GST Rate (%)</label>
+                  <input type="number" value={local.RaileatsDeliveryChargeGSTRate ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeGSTRate", Number(e.target.value))} />
+                </div>
+
+                <div className="field">
+                  <label>Open Time</label>
+                  <input type="time" value={local.OpenTime ?? ""} onChange={(e) => updateField("OpenTime", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>Raileats Customer Delivery Charge GST (absolute)</label>
+                  <input type="number" value={local.RaileatsDeliveryChargeGST ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeGST", Number(e.target.value))} />
+                </div>
+
+                <div className="field">
+                  <label>Closed Time</label>
+                  <input type="time" value={local.ClosedTime ?? ""} onChange={(e) => updateField("ClosedTime", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>Raileats Customer Delivery Charge Total Incl GST</label>
+                  <input type="number" value={local.RaileatsDeliveryChargeTotalInclGST ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeTotalInclGST", Number(e.target.value))} />
+                </div>
+
+                <div className="field">
+                  <label>Minimum Order Value</label>
+                  <input type="number" value={local.MinimumOrderValue ?? 0} onChange={(e) => updateField("MinimumOrderValue", Number(e.target.value))} />
+                </div>
+
+                <div className="field">
+                  <label>Cut Off Time (mins)</label>
+                  <input type="number" value={local.CutOffTime ?? 0} onChange={(e) => updateField("CutOffTime", Number(e.target.value))} />
+                </div>
+
+                <div className="field">
+                  <label>Raileats Orders Payment Option for Customer</label>
+                  <select value={local.OrdersPaymentOptionForCustomer ?? "BOTH"} onChange={(e) => updateField("OrdersPaymentOptionForCustomer", e.target.value)}>
+                    <option value="BOTH">Both</option>
+                    <option value="PREPAID">Prepaid Only</option>
+                    <option value="COD">COD Only</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>IRCTC Orders Payment Option for Customer</label>
+                  <select value={local.IRCTCOrdersPaymentOptionForCustomer ?? "BOTH"} onChange={(e) => updateField("IRCTCOrdersPaymentOptionForCustomer", e.target.value)}>
+                    <option value="BOTH">Both</option>
+                    <option value="PREPAID">Prepaid Only</option>
+                    <option value="COD">COD Only</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>Restro Type of Delivery (Vendor / Raileats)</label>
+                  <select value={local.RestroTypeOfDelivery ?? "RAILEATS"} onChange={(e) => updateField("RestroTypeOfDelivery", e.target.value)}>
+                    <option value="RAILEATS">Raileats Delivery</option>
+                    <option value="VENDOR">Vendor Self</option>
+                  </select>
+                </div>
               </div>
             </div>
           )}
@@ -388,7 +483,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 12px 18px;
-          max-width: 980px;
+          max-width: 1100px;
           margin: 8px auto;
         }
         .field label {
