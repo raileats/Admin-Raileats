@@ -41,6 +41,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         restro?.IsIrctcApproved === 1 ||
         restro?.IsIrctcApproved === "1" ||
         restro?.IsIrctcApproved === true,
+      State: restro?.State ?? restro?.StationState ?? "",
       ...restro,
     });
   }, [restro]);
@@ -76,8 +77,8 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
     setError(null);
     const payload: any = {
       RestroName: local.RestroName ?? "",
-      StationCode: local.StationCode ?? "",
-      StationName: local.StationName ?? "",
+      StationCode: local.StationCode ?? restro?.StationCode ?? "",
+      StationName: local.StationName ?? restro?.StationName ?? "",
       OwnerName: local.OwnerName ?? "",
       OwnerPhone: local.OwnerPhone ?? "",
       FSSAINumber: local.FSSAINumber ?? "",
@@ -85,6 +86,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
       IRCTC: local.IRCTC ? 1 : 0,
       Raileats: local.Raileats ? 1 : 0,
       IsIrctcApproved: local.IsIrctcApproved ? 1 : 0,
+      State: local.State ?? restro?.State ?? restro?.StationState ?? null,
     };
 
     try {
@@ -117,15 +119,28 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
     return `${process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}${p}`;
   };
 
-  // station display (tries to prefer any full-string the API returned)
+  // Compose Station display: "StationName (StationCode) - State"
   const getStationDisplay = () => {
-    const candidates = [restro?.StationDisplay, restro?.StationFullName, restro?.StationFull, restro?.StationNameFull, restro?.StationName];
-    for (const c of candidates) if (c && typeof c === "string" && c.trim()) return c;
-    // fallback:
-    if (restro?.StationName && restro?.StationCode) return `${restro.StationName} (${restro.StationCode})`;
-    if (restro?.StationCode) return `(${restro.StationCode})`;
+    const fullCandidates = [restro?.StationDisplay, restro?.StationFullName, restro?.StationFull, restro?.StationNameFull, restro?.StationName];
+    for (const c of fullCandidates) {
+      if (c && typeof c === "string" && c.trim()) return c.trim();
+    }
+
+    const stationName = (restro?.StationName ?? local.StationName ?? "").toString().trim();
+    const stationCode = (restro?.StationCode ?? local.StationCode ?? "").toString().trim();
+    const stateName = (restro?.State ?? restro?.StationState ?? local.State ?? "").toString().trim();
+
+    const leftParts: string[] = [];
+    if (stationName) leftParts.push(stationName);
+    if (stationCode) leftParts.push(`(${stationCode})`);
+
+    const left = leftParts.join(" ");
+    if (left && stateName) return `${left} - ${stateName}`;
+    if (left) return left;
+    if (stateName) return stateName;
     return "—";
   };
+
   const stationDisplay = getStationDisplay();
 
   return (
@@ -160,12 +175,12 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ fontWeight: 600 }}>
-            {String(local.RestroCode ?? local.RestroId ?? "")} / {local.RestroName} / {local.StationCode} / {local.StationName}
+            {String(restro?.RestroCode ?? restro?.RestroId ?? "")} / {local.RestroName ?? restro?.RestroName} / {stationDisplay}
           </div>
 
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <a
-              href={`/admin/restros/edit/${encodeURIComponent(String(local.RestroCode ?? local.RestroId ?? ""))}`}
+              href={`/admin/restros/edit/${encodeURIComponent(String(restro?.RestroCode ?? restro?.RestroId ?? ""))}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
@@ -199,8 +214,12 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         {/* Toolbar */}
         <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-          <button onClick={onClose} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }} disabled={saving}>Cancel</button>
-          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>{saving ? "Saving..." : "Save"}</button>
+          <button onClick={onClose} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }} disabled={saving}>
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>
+            {saving ? "Saving..." : "Save"}
+          </button>
         </div>
 
         {/* Content */}
@@ -218,7 +237,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
                 <div className="field">
                   <label>Restro Code</label>
-                  <div className="readonly">{local.RestroCode ?? "—"}</div>
+                  <div className="readonly">{restro?.RestroCode ?? restro?.RestroId ?? "—"}</div>
                 </div>
 
                 <div className="field">
