@@ -5,6 +5,7 @@ import React, { useState } from "react";
 type Props = {
   restro: any;
   onClose: () => void;
+  isPage?: boolean; // ✅ नया prop
 };
 
 const tabs = [
@@ -17,31 +18,31 @@ const tabs = [
   "Menu",
 ];
 
-export default function RestroEditModal({ restro, onClose }: Props) {
+export default function RestroEditModal({ restro, onClose, isPage }: Props) {
   const [activeTab, setActiveTab] = useState(tabs[0]);
 
   return (
     <div
       style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
-        background: "rgba(0,0,0,0.5)",
+        position: isPage ? "relative" : "fixed", // ✅ Page mode vs Modal
+        top: isPage ? "0" : "0",
+        left: isPage ? "0" : "0",
+        width: isPage ? "100%" : "100%",
+        height: isPage ? "100%" : "100%",
+        background: isPage ? "#fff" : "rgba(0,0,0,0.5)", // ✅ Page mode में overlay नहीं होगा
         display: "flex",
         justifyContent: "center",
-        alignItems: "center",
+        alignItems: isPage ? "flex-start" : "center",
         zIndex: 1000,
       }}
     >
       <div
         style={{
           background: "#fff",
-          borderRadius: 8,
-          width: "92%",
-          maxWidth: "1700px",
-          height: "92%",
+          borderRadius: isPage ? 0 : 8,
+          width: isPage ? "100%" : "92%",
+          maxWidth: isPage ? "100%" : "1700px",
+          height: isPage ? "100%" : "92%",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -65,7 +66,7 @@ export default function RestroEditModal({ restro, onClose }: Props) {
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
             {/* Outlet Page Link */}
             <a
-              href={`https://admin.raileats.in/admin/restros/edit/${restro.RestroCode}`}
+              href={`/admin/restros/edit/${restro.RestroCode}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
@@ -73,18 +74,20 @@ export default function RestroEditModal({ restro, onClose }: Props) {
               Open Outlet Page
             </a>
 
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              style={{
-                background: "transparent",
-                border: "none",
-                fontSize: 20,
-                cursor: "pointer",
-              }}
-            >
-              ✕
-            </button>
+            {/* Close button (Page mode में नहीं दिखेगा) */}
+            {!isPage && (
+              <button
+                onClick={onClose}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: 20,
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
 
