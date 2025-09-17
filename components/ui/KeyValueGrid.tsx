@@ -1,59 +1,95 @@
 // components/ui/KeyValueGrid.tsx
 import React from "react";
 
-type Row = [string, React.ReactNode];
+export type KVRow = {
+  keyLabel: string;
+  value: React.ReactNode;
+  // optional: small hint for label or custom className for value cell
+  hint?: string | null;
+  valueClassName?: string;
+};
 
-export default function KeyValueGrid({ rows }: { rows: Row[] }) {
+type Props = {
+  rows: KVRow[];
+  labelWidth?: number; // px, default 220
+  maxWidth?: number; // px, default 980
+};
+
+export default function KeyValueGrid({ rows, labelWidth = 220, maxWidth = 980 }: Props) {
   return (
-    <div style={{ padding: 20 }}>
-      <h3 style={{ marginTop: 0, marginBottom: 12, textAlign: "center", fontSize: 18 }}>
-        Basic Information
-      </h3>
-
-      <dl className="kv-grid">
-        {rows.map(([k, v]) => (
-          <React.Fragment key={k}>
-            <dt>{k}</dt>
-            <dd>{v ?? <span style={{ color: "#888" }}>—</span>}</dd>
+    <div className="kv-wrap">
+      <div className="kv-grid" style={{ gridTemplateColumns: `${labelWidth}px 1fr`, maxWidth: `${maxWidth}px` }}>
+        {rows.map((r, i) => (
+          <React.Fragment key={`${r.keyLabel}-${i}`}>
+            <div className="kv-label">{r.keyLabel}</div>
+            <div className={`kv-field ${r.valueClassName ?? ""}`}>
+              {r.value}
+              {r.hint ? <div className="kv-hint">{r.hint}</div> : null}
+            </div>
           </React.Fragment>
         ))}
-      </dl>
+      </div>
 
       <style jsx>{`
+        .kv-wrap {
+          padding: 12px 0 28px;
+        }
         .kv-grid {
           display: grid;
-          grid-template-columns: 220px 1fr;
-          column-gap: 24px;
-          row-gap: 12px;
+          gap: 12px 18px;
           align-items: start;
-          max-width: 980px;
           margin: 0 auto;
         }
-        dt {
-          margin: 0;
+        .kv-label {
           text-align: right;
+          padding-top: 8px;
           color: #333;
           font-weight: 600;
-          padding-top: 6px;
           font-size: 13px;
         }
-        dd {
-          margin: 0;
-          padding: 8px 12px;
-          border: 1px solid #e6e6e6;
+        .kv-field {
+          display: block;
+        }
+        .kv-field .kv-hint {
+          margin-top: 6px;
+          color: #666;
+          font-size: 12px;
+        }
+        /* default input/read-only boxes - you can override by passing valueClassName */
+        .kv-field input,
+        .kv-field select,
+        .kv-field textarea {
+          width: 100%;
+          padding: 10px;
           border-radius: 6px;
-          background: #fff;
-          color: #111;
+          border: 1px solid #e0e0e0;
           font-size: 13px;
+          box-sizing: border-box;
+          background: #fff;
+        }
+        .kv-field .readonly-value {
+          padding: 10px 12px;
+          border-radius: 6px;
+          border: 1px solid #f0f0f0;
+          background: #fafafa;
+          color: #222;
+          font-size: 13px;
+        }
+        .kv-field img.preview-img {
+          height: 96px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #eee;
+          display: inline-block;
         }
 
         @media (max-width: 820px) {
           .kv-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr !important;
+            gap: 10px 0;
           }
-          dt {
+          .kv-label {
             text-align: left;
-            padding-right: 0;
           }
         }
       `}</style>
