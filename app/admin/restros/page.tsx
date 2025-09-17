@@ -2,9 +2,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import RestroEditModal from "@/components/RestroEditModal";
-
+// removed: RestroEditModal import (we now use nested routes)
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -30,10 +30,6 @@ export default function RestroMasterPage(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-
-  // modal / save
-  const [editingRestro, setEditingRestro] = useState<Restro | null>(null);
-  const [savingModal, setSavingModal] = useState<boolean>(false);
 
   useEffect(() => {
     fetchRestros();
@@ -156,57 +152,8 @@ export default function RestroMasterPage(): JSX.Element {
     }
   }
 
-  // ----- handleModalSave must return a Promise<SaveResult> -----
-  async function handleModalSave(updatedFields: any): Promise<SaveResult> {
-    if (!editingRestro) {
-      return { ok: false, error: "No restro selected" };
-    }
-
-    setSavingModal(true);
-    try {
-      const code = editingRestro.RestroCode ?? editingRestro.RestroId ?? editingRestro.code;
-      if (code === undefined || code === null) {
-        throw new Error("Missing RestroCode to update");
-      }
-
-      const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedFields),
-      });
-
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const errMsg = json?.error ?? json ?? `Update failed (${res.status})`;
-        throw new Error(errMsg);
-      }
-
-      // try to extract updated row
-      const updatedRow = json?.row ?? json?.data ?? json ?? null;
-
-      // update local results array
-      setResults((prev) =>
-        prev.map((r) => {
-          const rcode = r.RestroCode ?? r.RestroId ?? r.code;
-          if (String(rcode) === String(code)) {
-            return updatedRow ? { ...r, ...updatedRow } : { ...r, ...updatedFields };
-          }
-          return r;
-        })
-      );
-
-      // refresh editingRestro shown in modal (so if modal stays open it shows latest)
-      setEditingRestro((prev) => (prev ? (updatedRow ? updatedRow : { ...prev, ...updatedFields }) : prev));
-
-      return { ok: true, row: updatedRow ?? { ...editingRestro, ...updatedFields } };
-    } catch (err: any) {
-      console.error("modal save error:", err);
-      return { ok: false, error: err?.message ?? String(err) };
-    } finally {
-      setSavingModal(false);
-    }
-  }
+  // NOTE: we removed modal save flow; if you want modal-based inline edit later,
+  // you can re-add RestroEditModal and keep handleModalSave from older code.
 
   return (
     <main style={{ padding: 24 }}>
@@ -303,19 +250,26 @@ export default function RestroMasterPage(): JSX.Element {
                     <td style={{ padding: 12 }}>{r.Raileats ? "On" : "Off"}</td>
                     <td style={{ padding: 12 }}>{r.FSSAIExpiryDate ?? "-"}</td>
                     <td style={{ padding: 12 }}>
-                      <button
-                        onClick={() => setEditingRestro(r)}
-                        style={{
-                          background: "#f59e0b",
-                          color: "#000",
-                          padding: "6px 10px",
-                          borderRadius: 6,
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Edit
-                      </button>
+                      {/* Use Link to new nested edit route (basic tab) */}
+                      <Link href={`/admin/restros/${encodeURIComponent(String(code))}/edit/basic`}>
+                        <button
+                          style={{
+                            background: "#f59e0b",
+                            color: "#000",
+                            padding: "6px 10px",
+                            borderRadius: 6,
+                            border: "none",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </Link>
+
+                      {/* If you want to keep modal as quick edit, you can re-enable modal button here.
+                          Example (commented):
+                          <button onClick={() => setEditingRestro(r)}>Quick Edit</button>
+                      */}
                     </td>
                   </tr>
                 );
@@ -324,11 +278,6 @@ export default function RestroMasterPage(): JSX.Element {
           </tbody>
         </table>
       </div>
-
-      {/* Modal (pass onSave that returns Promise<SaveResult>) */}
-      {editingRestro && (
-        <RestroEditModal restro={editingRestro} onClose={() => setEditingRestro(null)} onSave={handleModalSave} saving={savingModal} />
-      )}
     </main>
   );
 }
