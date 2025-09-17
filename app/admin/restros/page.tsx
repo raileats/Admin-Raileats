@@ -29,7 +29,7 @@ type Restro = {
 export default function RestroMasterPage(): JSX.Element {
   const router = useRouter();
 
-  // filters
+  // filter fields
   const [restroCode, setRestroCode] = useState<string>("");
   const [ownerName, setOwnerName] = useState<string>("");
   const [stationCode, setStationCode] = useState<string>("");
@@ -58,14 +58,22 @@ export default function RestroMasterPage(): JSX.Element {
 
       if (filters?.restroCode) {
         const rc = String(filters.restroCode).trim();
-        if (/^\d+$/.test(rc)) query = query.eq("RestroCode", Number(rc));
-        else query = query.ilike("RestroName", `%${rc}%`);
+        if (/^\d+$/.test(rc)) {
+          // numeric exact match
+          query = query.eq("RestroCode", Number(rc));
+        } else {
+          // fallback: search by name if non-numeric input
+          query = (query as any).ilike("RestroName", `%${rc}%`);
+        }
       }
+
       const ilikeIf = (col: string, v?: string) => {
         if (!v) return;
-        if (String(v).trim().length === 0) return;
-        (query as any) = (query as any).ilike(col, `%${v}%`);
+        const s = String(v).trim();
+        if (s.length === 0) return;
+        (query as any) = (query as any).ilike(col, `%${s}%`);
       };
+
       ilikeIf("OwnerName", filters?.ownerName);
       ilikeIf("StationCode", filters?.stationCode);
       ilikeIf("StationName", filters?.stationName);
@@ -84,7 +92,7 @@ export default function RestroMasterPage(): JSX.Element {
     } catch (err: any) {
       console.error("fetchRestros error:", err);
       if (String(err.message || err).includes("bigint ~~*")) {
-        setError("Restro Code search must be numeric. Use exact code or search other fields.");
+        setError("Restro Code search must be numeric. Use exact code or search by name.");
       } else {
         setError(err?.message ?? String(err));
       }
@@ -118,38 +126,48 @@ export default function RestroMasterPage(): JSX.Element {
     fetchRestros();
   }
 
-  // Toggle Raileats (1/0)
-  async function toggleRaileats(code: number | string, current: any) {
-    const newVal = truthy(current) ? 0 : 1;
+  // Generic numeric-column toggle with optimistic UI + verification + rollback
+  async function toggleColumnNumeric(code: number | string, colName: string, currentValue: any) {
+    const newVal = truthy(currentValue) ? 0 : 1;
     setUpdatingCode(code);
-    setResults((prev) => prev.map((r) => (String(r.RestroCode) === String(code) ? { ...r, Raileats: newVal } : r)));
+
+    // optimistic UI
+    setResults((prev) => prev.map((r) => (String(r.RestroCode) === String(code) ? { ...r, [colName]: newVal } : r)));
+
     try {
-      const { error } = await supabase.from("RestroMaster").update({ Raileats: newVal }).eq("RestroCode", code);
-      if (error) throw error;
+      // send update and request updated row back
+      const { data, error } = await supabase
+        .from("RestroMaster")
+        .update({ [colName]: newVal })
+        .eq("RestroCode", Number(code)) // if RestroCode is text in your DB, remove Number(...)
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        console.error(`Update ${colName} failed:`, error);
+        throw error;
+      }
+
+      // patch canonical server row if returned
+      if (data) {
+        setResults((prev) => prev.map((r) => (String(r.RestroCode) === String(code) ? { ...r, ...data } : r)));
+      }
     } catch (err: any) {
-      console.error("toggleRaileats error:", err);
-      setError("Could not update Raileats status. Try again.");
-      fetchRestros({ restroCode: code });
+      console.error("toggleColumnNumeric error:", err);
+      setError("Could not update status. Reloading list.");
+      // rollback by reloading full list (no filter)
+      await fetchRestros();
     } finally {
       setUpdatingCode(null);
     }
   }
 
-  // Toggle IRCTC (1/0)
+  // wrappers
   async function toggleIrctc(code: number | string, current: any) {
-    const newVal = truthy(current) ? 0 : 1;
-    setUpdatingCode(code);
-    setResults((prev) => prev.map((r) => (String(r.RestroCode) === String(code) ? { ...r, IRCTC: newVal } : r)));
-    try {
-      const { error } = await supabase.from("RestroMaster").update({ IRCTC: newVal }).eq("RestroCode", code);
-      if (error) throw error;
-    } catch (err: any) {
-      console.error("toggleIrctc error:", err);
-      setError("Could not update IRCTC status. Try again.");
-      fetchRestros({ restroCode: code });
-    } finally {
-      setUpdatingCode(null);
-    }
+    return toggleColumnNumeric(code, "IRCTC", current);
+  }
+  async function toggleRaileats(code: number | string, current: any) {
+    return toggleColumnNumeric(code, "Raileats", current);
   }
 
   return (
