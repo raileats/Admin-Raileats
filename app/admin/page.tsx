@@ -1,8 +1,8 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseServer } from "../../lib/supabaseServer"; // relative path from app/admin/page.tsx to lib/
 
-const supabase = createClient(
+const supabase = supabaseServer;
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
