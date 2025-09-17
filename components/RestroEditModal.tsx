@@ -10,21 +10,6 @@ type Props = {
   saving?: boolean;
 };
 
-function getFieldCaseInsensitive(obj: any, candidates: string[]) {
-  if (!obj) return undefined;
-  const keys = Object.keys(obj);
-  for (const cand of candidates) {
-    if (obj[cand] !== undefined && obj[cand] !== null) return obj[cand];
-    const normalized = cand.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-    for (const k of keys) {
-      if (k.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() === normalized) {
-        return obj[k];
-      }
-    }
-  }
-  return undefined;
-}
-
 const tabs = [
   "Basic Information",
   "Station Settings",
@@ -43,23 +28,22 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
   const [local, setLocal] = useState<any>({});
   useEffect(() => {
     setLocal({
-      RestroName: restro?.RestroName ?? restro?.restro_name ?? "",
-      StationCode: restro?.StationCode ?? restro?.station_code ?? "",
-      StationName: restro?.StationName ?? restro?.station_name ?? "",
-      OwnerName: restro?.OwnerName ?? restro?.owner_name ?? "",
-      OwnerPhone: restro?.OwnerPhone ?? restro?.owner_phone ?? "",
-      FSSAINumber: restro?.FSSAINumber ?? restro?.fssai_number ?? "",
-      FSSAIExpiryDate: restro?.FSSAIExpiryDate ?? restro?.fssai_expiry_date ?? "",
+      RestroName: restro?.RestroName ?? "",
+      StationCode: restro?.StationCode ?? "",
+      StationName: restro?.StationName ?? "",
+      OwnerName: restro?.OwnerName ?? "",
+      OwnerPhone: restro?.OwnerPhone ?? "",
+      FSSAINumber: restro?.FSSAINumber ?? "",
+      FSSAIExpiryDate: restro?.FSSAIExpiryDate ?? "",
       IRCTC: restro?.IRCTC === 1 || restro?.IRCTC === "1" || restro?.IRCTC === true,
       Raileats: restro?.Raileats === 1 || restro?.Raileats === "1" || restro?.Raileats === true,
       IsIrctcApproved:
         restro?.IsIrctcApproved === 1 ||
         restro?.IsIrctcApproved === "1" ||
         restro?.IsIrctcApproved === true,
-      State: getFieldCaseInsensitive(restro, ["State", "state", "state_name", "StationState", "StateName"]) ?? "",
+      State: restro?.State ?? "",
       ...restro,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restro]);
 
   const saving = parentSaving ?? savingInternal;
@@ -70,7 +54,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
   async function defaultPatch(payload: any) {
     try {
-      const code = restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? restro?.code;
+      const code = restro?.RestroCode ?? restro?.RestroId ?? restro?.code;
       if (!code) throw new Error("Missing RestroCode for update");
       const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
         method: "PATCH",
@@ -93,8 +77,8 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
     setError(null);
     const payload: any = {
       RestroName: local.RestroName ?? "",
-      StationCode: local.StationCode ?? restro?.StationCode ?? restro?.station_code ?? "",
-      StationName: local.StationName ?? restro?.StationName ?? restro?.station_name ?? "",
+      StationCode: local.StationCode ?? restro?.StationCode ?? "",
+      StationName: local.StationName ?? restro?.StationName ?? "",
       OwnerName: local.OwnerName ?? "",
       OwnerPhone: local.OwnerPhone ?? "",
       FSSAINumber: local.FSSAINumber ?? "",
@@ -102,7 +86,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
       IRCTC: local.IRCTC ? 1 : 0,
       Raileats: local.Raileats ? 1 : 0,
       IsIrctcApproved: local.IsIrctcApproved ? 1 : 0,
-      State: local.State ?? restro?.State ?? restro?.state ?? restro?.StationState ?? null,
+      State: local.State ?? restro?.State ?? null,
     };
 
     try {
@@ -135,48 +119,24 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
     return `${process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}${p}`;
   };
 
-  // Compose Station display: "StationName (StationCode) - State"
+  // ---- exact composition using DB columns: StationName, StationCode, State
   const getStationDisplay = () => {
-    // if restro already has a full display string, prefer it
-    const rawFull = getFieldCaseInsensitive(restro, [
-      "StationDisplay",
-      "StationFullName",
-      "StationFull",
-      "StationNameFull",
-      "station_display",
-      "station_full_name",
-      "station_full",
-    ]);
-    if (rawFull && typeof rawFull === "string" && rawFull.trim()) {
-      const s = rawFull.trim();
-      if (s.includes("(") || s.includes("-")) return s;
-      return s;
+    if (typeof restro?.StationDisplay === "string" && restro.StationDisplay.trim()) {
+      return restro.StationDisplay.trim();
     }
 
-    const stationName =
-      (getFieldCaseInsensitive(restro, ["StationName", "station_name", "stationName"]) ??
-        local.StationName ??
-        ""
-      )
-        .toString()
-        .trim();
-    const stationCode =
-      (getFieldCaseInsensitive(restro, ["StationCode", "station_code", "stationCode"]) ?? local.StationCode ?? "")
-        .toString()
-        .trim();
-    const stateName =
-      (getFieldCaseInsensitive(restro, ["State", "state", "state_name", "StationState", "StateName"]) ?? local.State ?? "")
-        .toString()
-        .trim();
+    const sName = (restro?.StationName ?? local.StationName ?? "").toString().trim();
+    const sCode = (restro?.StationCode ?? local.StationCode ?? "").toString().trim();
+    const state = (restro?.State ?? local.State ?? "").toString().trim();
 
     const leftParts: string[] = [];
-    if (stationName) leftParts.push(stationName);
-    if (stationCode) leftParts.push(`(${stationCode})`);
+    if (sName) leftParts.push(sName);
+    if (sCode) leftParts.push(`(${sCode})`);
 
     const left = leftParts.join(" ");
-    if (left && stateName) return `${left} - ${stateName}`;
+    if (left && state) return `${left} - ${state}`;
     if (left) return left;
-    if (stateName) return stateName;
+    if (state) return state;
     return "—";
   };
 
@@ -212,14 +172,22 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         }}
       >
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "12px 20px",
+            borderBottom: "1px solid #e9e9e9",
+          }}
+        >
           <div style={{ fontWeight: 600 }}>
-            {String(restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? "")} / {local.RestroName ?? restro?.RestroName} / {stationDisplay}
+            {String(restro?.RestroCode ?? "")} / {local.RestroName ?? restro?.RestroName} / {stationDisplay}
           </div>
 
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <a
-              href={`/admin/restros/edit/${encodeURIComponent(String(restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? ""))}`}
+              href={`/admin/restros/edit/${encodeURIComponent(String(restro?.RestroCode ?? ""))}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
@@ -227,7 +195,19 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
               Open Outlet Page
             </a>
 
-            <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">✕</button>
+            <button
+              onClick={onClose}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: 20,
+                cursor: "pointer",
+                padding: 6,
+              }}
+              aria-label="Close"
+            >
+              ✕
+            </button>
           </div>
         </div>
 
@@ -253,10 +233,25 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         {/* Toolbar */}
         <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-          <button onClick={onClose} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }} disabled={saving}>
+          <button
+            onClick={onClose}
+            style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}
+            disabled={saving}
+          >
             Cancel
           </button>
-          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              background: saving ? "#7fcfe9" : "#0ea5e9",
+              color: "#fff",
+              padding: "8px 12px",
+              borderRadius: 6,
+              border: "none",
+              cursor: saving ? "not-allowed" : "pointer",
+            }}
+          >
             {saving ? "Saving..." : "Save"}
           </button>
         </div>
@@ -268,7 +263,6 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
 
               <div className="compact-grid">
-                {/* Station - read-only */}
                 <div className="field">
                   <label>Station</label>
                   <div className="readonly">{stationDisplay}</div>
@@ -276,7 +270,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
                 <div className="field">
                   <label>Restro Code</label>
-                  <div className="readonly">{restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? "—"}</div>
+                  <div className="readonly">{restro?.RestroCode ?? "—"}</div>
                 </div>
 
                 <div className="field">
