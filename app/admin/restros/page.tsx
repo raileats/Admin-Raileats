@@ -12,16 +12,6 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 type Restro = {
-  RestroCode?: number | string;
-  RestroName?: string;
-  StationCode?: string;
-  StationName?: string;
-  OwnerName?: string;
-  OwnerPhone?: string;
-  IRCTC?: any;
-  Raileats?: any;
-  FSSAIExpiryDate?: string;
-  FSSAINumber?: string;
   [k: string]: any;
 };
 
@@ -114,79 +104,57 @@ export default function RestroMasterPage(): JSX.Element {
     fetchRestros();
   }
 
-  // build CSV from array of objects
-  function toCSV(rows: Restro[], columns: string[], headers: string[]) {
-    // CSV with BOM for excel
-    const BOM = "\uFEFF";
-    const escape = (val: any) => {
-      if (val === null || val === undefined) return "";
-      const s = String(val);
-      // if contains comma/quote/newline, wrap in quotes and escape quotes
-      if (/[",\n\r]/.test(s)) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
-    };
-    const head = headers.join(",");
-    const body = rows
-      .map((r) =>
-        columns
-          .map((c) => {
-            // For boolean-like fields convert 1/0 to On/Off for readability
-            if (c === "IRCTC" || c === "Raileats") {
-              const v = r[c];
-              return escape(v === 1 || v === "1" || v === true || v === "true" ? "On" : "Off");
-            }
-            return escape(r[c] ?? "");
-          })
-          .join(",")
-      )
-      .join("\n");
-    return BOM + head + "\n" + body;
-  }
+  // CSV helpers
+  const escapeCsv = (val: any) => {
+    if (val === null || val === undefined) return "";
+    const s = String(val);
+    if (/[",\n\r]/.test(s)) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
 
   async function handleExportAll() {
     try {
       setExporting(true);
       setError(null);
-      // fetch full table without limit (if large, you may want pagination)
+
+      // fetch full table
       const { data, error } = await supabase.from("RestroMaster").select("*");
       if (error) throw error;
-      const rows = (data ?? []) as Restro[];
 
-      // define column order and header labels
-      const columns = [
-        "RestroCode",
-        "RestroName",
-        "StationCode",
-        "StationName",
-        "OwnerName",
-        "OwnerPhone",
-        "FSSAINumber",
-        "IRCTC",
-        "Raileats",
-        "FSSAIExpiryDate",
-      ];
-      const headers = [
-        "RestroCode",
-        "RestroName",
-        "StationCode",
-        "StationName",
-        "OwnerName",
-        "OwnerPhone",
-        "FSSAINumber",
-        "IRCTC",
-        "Raileats",
-        "FSSAIExpiryDate",
-      ];
+      const rows = data ?? [];
+      if (!rows.length) {
+        setError("No data found in RestroMaster table.");
+        return;
+      }
 
-      const csv = toCSV(rows, columns, headers);
+      // Use keys from the first row as header order
+      const headers = Object.keys(rows[0]);
+
+      // build CSV string with BOM
+      const BOM = "\uFEFF";
+      const csv =
+        BOM +
+        headers.join(",") +
+        "\n" +
+        rows
+          .map((r: any) =>
+            headers
+              .map((h) => {
+                // Convert boolean-like numeric fields to readable values if desired
+                // but we keep raw values to preserve DB data; you can customize here
+                return escapeCsv(r[h]);
+              })
+              .join(",")
+          )
+          .join("\n");
+
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
       a.href = url;
-      a.download = `restro_master_${ts}.csv`;
+      a.download = `RestroMaster.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -209,16 +177,16 @@ export default function RestroMasterPage(): JSX.Element {
             onClick={handleExportAll}
             disabled={exporting}
             style={{
-              background: "#0ea5e9", // blue like search
+              background: "#0ea5e9",
               color: "white",
               padding: "8px 12px",
               borderRadius: 6,
               border: "none",
               cursor: exporting ? "not-allowed" : "pointer",
             }}
-            title="Export all RestroMaster rows as CSV"
+            title="Download all RestroMaster rows as CSV"
           >
-            {exporting ? "Exporting..." : "Export CSV"}
+            {exporting ? "Exporting..." : "Download Restro Master"}
           </button>
 
           <button
