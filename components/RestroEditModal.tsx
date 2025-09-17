@@ -20,20 +20,18 @@ const tabs = [
 export default function RestroEditModal({ restro, onClose }: Props) {
   const [activeTab, setActiveTab] = useState(tabs[0]);
 
-  if (!restro) return null;
-
   return (
     <div
       style={{
         position: "fixed",
         top: 0,
         left: 0,
-        width: "100vw",
-        height: "100vh",
-        background: "rgba(0,0,0,0.6)",
+        width: "100%",
+        height: "100%",
+        background: "rgba(0,0,0,0.5)",
         display: "flex",
-        alignItems: "center",
         justifyContent: "center",
+        alignItems: "center",
         zIndex: 1000,
       }}
     >
@@ -41,72 +39,88 @@ export default function RestroEditModal({ restro, onClose }: Props) {
         style={{
           background: "#fff",
           borderRadius: 8,
-          width: "85vw",
-          height: "90vh",
+          width: "92%",
+          maxWidth: "1700px",
+          height: "92%",
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
         }}
       >
         {/* Header */}
         <div
           style={{
-            padding: "12px 16px",
-            borderBottom: "1px solid #eee",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            padding: "12px 20px",
+            borderBottom: "1px solid #ddd",
+            fontWeight: "bold",
           }}
         >
-          <div style={{ fontWeight: 600 }}>
+          <div>
             {restro.RestroCode} / {restro.RestroName} / {restro.StationCode} /{" "}
             {restro.StationName}
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              fontSize: 18,
-              cursor: "pointer",
-            }}
-          >
-            ✕
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            {/* Outlet Page Link */}
+            <a
+              href={`https://admin.raileats.in/admin/restros/edit/${restro.RestroCode}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
+            >
+              Open Outlet Page
+            </a>
+
+            {/* Close button */}
+            <button
+              onClick={onClose}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: 20,
+                cursor: "pointer",
+              }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
         <div
           style={{
             display: "flex",
-            gap: 24,
-            padding: "10px 16px",
-            borderBottom: "1px solid #eee",
-            overflowX: "auto",
+            borderBottom: "1px solid #ddd",
+            background: "#f9f9f9",
           }}
         >
-          {tabs.map((t) => (
+          {tabs.map((tab) => (
             <div
-              key={t}
-              onClick={() => setActiveTab(t)}
+              key={tab}
+              onClick={() => setActiveTab(tab)}
               style={{
+                padding: "12px 16px",
                 cursor: "pointer",
-                paddingBottom: 6,
-                borderBottom: activeTab === t ? "2px solid #0ea5e9" : "none",
-                color: activeTab === t ? "#0ea5e9" : "#333",
-                fontWeight: activeTab === t ? 600 : 400,
-                whiteSpace: "nowrap",
+                borderBottom:
+                  activeTab === tab ? "3px solid #0ea5e9" : "3px solid transparent",
+                fontWeight: activeTab === tab ? "bold" : "normal",
+                color: activeTab === tab ? "#0ea5e9" : "#333",
               }}
             >
-              {t}
+              {tab}
             </div>
           ))}
         </div>
 
         {/* Tab Content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           <h2 style={{ marginTop: 0 }}>{activeTab}</h2>
           <p>
-            Content for <b>{activeTab}</b> will go here.
+            {/* Placeholder content */}
+            Here you can implement forms and fields for{" "}
+            <b>{activeTab}</b>.
           </p>
         </div>
       </div>
