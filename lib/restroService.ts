@@ -6,7 +6,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// Type definition for one Restro row
 export type Restro = {
   restro_code: number;
   station_code: string;
@@ -60,4 +59,17 @@ export async function getRestroById(restroCode: number): Promise<Restro | null> 
   }
 
   return data as Restro;
+}
+
+/**
+ * Safe wrapper for fetching a Restro.
+ * It always resolves (never throws) and normalizes errors.
+ */
+export async function safeGetRestro(code: number): Promise<{ restro: Restro | null; error: string | null }> {
+  try {
+    const restro = await getRestroById(code);
+    return { restro, error: restro ? null : "Not found" };
+  } catch (err: any) {
+    return { restro: null, error: err?.message ?? "Unknown error" };
+  }
 }
