@@ -6,12 +6,12 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// Type definition for one Restro row
+// Restro type following your DB column casing (PascalCase)
 export type Restro = {
   RestroCode: number;
-  StationCode: string;
-  StationName: string;
-  RestroName: string;
+  StationCode?: string | null;
+  StationName?: string | null;
+  RestroName?: string | null;
   BrandName?: string | null;
   Raileats?: number | boolean | null;
   IsIrctcApproved?: number | boolean | null;
@@ -26,6 +26,7 @@ export type Restro = {
   RestroPhone?: string | null;
   FSSAINumber?: string | null;
   FSSAIExpiryDate?: string | null;
+  // add any other DB columns here (with exact casing)
 };
 
 export async function getRestroById(restroCode: number): Promise<Restro | null> {
@@ -55,14 +56,13 @@ export async function getRestroById(restroCode: number): Promise<Restro | null> 
     .single();
 
   if (error) {
-    console.error("getRestroById error:", error.message);
+    console.error("getRestroById error:", error.message ?? error);
     return null;
   }
 
-  return data as Restro;
+  return (data as Restro) ?? null;
 }
 
-// Helper safe wrapper
 export async function safeGetRestro(restroCode: number) {
   try {
     const restro = await getRestroById(restroCode);
