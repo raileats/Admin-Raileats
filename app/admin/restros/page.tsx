@@ -46,8 +46,6 @@ export default function RestroMasterPage(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const truthy = (v: any) => v === true || v === 1 || v === "1" || v === "true" || v === "yes";
-
   async function fetchRestros(filters?: { [k: string]: any }) {
     setLoading(true);
     setError(null);
@@ -115,70 +113,60 @@ export default function RestroMasterPage(): JSX.Element {
 
   return (
     <main style={{ padding: 24 }}>
+      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <h1 style={{ margin: 0 }}>Restro Master</h1>
-        <div>
-          <button
-            onClick={() => router.push("/admin/restros/new")}
-            style={{
-              background: "#10b981",
-              color: "white",
-              padding: "8px 12px",
-              borderRadius: 6,
-              border: "none",
-              cursor: "pointer",
-              marginRight: 8,
-            }}
-          >
-            + Add New Restro
-          </button>
-        </div>
+        <button
+          onClick={() => router.push("/admin/restros/new")}
+          style={{
+            background: "#10b981",
+            color: "white",
+            padding: "8px 12px",
+            borderRadius: 6,
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          + Add New Restro
+        </button>
       </div>
 
-      {/* Search Form - updated grid widths */}
+      {/* Search Form */}
       <form
         onSubmit={onSearch}
         style={{
-          display: "grid",
-          gridTemplateColumns: "120px 1fr 1fr 120px 1fr 160px 1fr auto",
-          gap: 12,
-          alignItems: "center",
-          marginBottom: 12,
           background: "#fff",
           padding: 12,
           borderRadius: 8,
+          marginBottom: 12,
         }}
       >
-        <input
-          placeholder="Restro Code"
-          value={restroCode}
-          onChange={(e) => setRestroCode(e.target.value)}
-          style={{ padding: 8 }}
-        />
-        <input
-          placeholder="Restro Name"
-          value={restroName}
-          onChange={(e) => setRestroName(e.target.value)}
-          style={{ padding: 8 }}
-        />
-        <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} style={{ padding: 8 }} />
-        <input
-          placeholder="Station Code"
-          value={stationCode}
-          onChange={(e) => setStationCode(e.target.value)}
-          style={{ padding: 8 }}
-        />
-        <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} style={{ padding: 8 }} />
-        <input
-          placeholder="Owner Phone"
-          value={ownerPhone}
-          onChange={(e) => setOwnerPhone(e.target.value)}
-          style={{ padding: 8 }}
-          maxLength={10}
-        />
-        <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={{ padding: 8 }} />
+        {/* First row - search fields */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "120px 1fr 1fr 120px 1fr 160px 1fr",
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} style={{ padding: 8 }} />
+          <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
+          <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} style={{ padding: 8 }} />
+          <input placeholder="Station Code" value={stationCode} onChange={(e) => setStationCode(e.target.value)} style={{ padding: 8 }} />
+          <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} style={{ padding: 8 }} />
+          <input
+            placeholder="Owner Phone"
+            value={ownerPhone}
+            onChange={(e) => setOwnerPhone(e.target.value)}
+            style={{ padding: 8 }}
+            maxLength={10}
+          />
+          <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={{ padding: 8 }} />
+        </div>
 
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+        {/* Second row - buttons */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button type="button" onClick={onClear} style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>
             Clear
           </button>
@@ -190,7 +178,7 @@ export default function RestroMasterPage(): JSX.Element {
               border: "none",
               background: "#0ea5e9",
               color: "#fff",
-              minWidth: 80,
+              minWidth: 90,
             }}
           >
             Search
@@ -249,7 +237,14 @@ export default function RestroMasterPage(): JSX.Element {
                     <td style={{ padding: 12 }}>
                       <button
                         onClick={() => router.push(`/admin/restros/edit/${code}`)}
-                        style={{ background: "#f59e0b", color: "#000", padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}
+                        style={{
+                          background: "#f59e0b",
+                          color: "#000",
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          border: "none",
+                          cursor: "pointer",
+                        }}
                       >
                         Edit
                       </button>
