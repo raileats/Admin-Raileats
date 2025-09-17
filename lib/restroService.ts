@@ -1,66 +1,68 @@
 // lib/restroService.ts
+// Lightweight, robust restro service.
+// - uses public client by default (works on server/client), but you can swap to supabaseServer for server-only secure calls.
+// - uses select('*') to avoid missing-column issues, then returns the first row (or null).
+
 import { createClient } from "@supabase/supabase-js";
+// If you have a server-only client file (recommended for server pages), you can import it instead:
+// import { supabaseServer } from "./supabaseServer";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const PUB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const PUB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Restro type following your DB column casing (PascalCase)
+if (!PUB_URL || !PUB_KEY) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in environment");
+}
+
+const supabase = createClient(PUB_URL, PUB_KEY);
+
 export type Restro = {
-  RestroCode: number;
-  StationCode?: string | null;
-  StationName?: string | null;
-  RestroName?: string | null;
-  BrandName?: string | null;
-  Raileats?: number | boolean | null;
-  IsIrctcApproved?: number | boolean | null;
-  IRCTC?: number | boolean | null;
-  Rating?: number | null;
-  IsPureVeg?: number | boolean | null;
+  RestroCode?: number;
+  RestroName?: string;
+  OwnerName?: string;
+  StationCode?: string;
+  StationName?: string;
+  OwnerEmail?: string;
+  OwnerPhone?: any;
+  BrandNameifAny?: string;
+  RestroEmail?: string;
+  RestroPhone?: any;
+  IRCTCStatus?: number | string;
+  RaileatsStatus?: number | string;
+  IsIrctcApproved?: number | string;
+  RestroRating?: number | null;
+  IsPureVeg?: number | string;
   RestroDisplayPhoto?: string | null;
-  OwnerName?: string | null;
-  OwnerEmail?: string | null;
-  OwnerPhone?: string | null;
-  RestroEmail?: string | null;
-  RestroPhone?: string | null;
-  FSSAINumber?: string | null;
+  FSSAINumber?: any;
   FSSAIExpiryDate?: string | null;
-  // add any other DB columns here (with exact casing)
+  // plus any other DB columns — they'll be returned as-is
+  [k: string]: any;
 };
 
+/**
+ * Fetch restro by code.
+ * Uses `select('*')` to avoid missing-column/field-name mismatches.
+ * Prefer to call this on the server (app/page server components) so anonymous/public client isn't exposed in the browser.
+ */
 export async function getRestroById(restroCode: number): Promise<Restro | null> {
-  const { data, error } = await supabase
-    .from("RestroMaster")
-    .select(`
-      RestroCode,
-      StationCode,
-      StationName,
-      RestroName,
-      BrandName,
-      Raileats,
-      IsIrctcApproved,
-      IRCTC,
-      Rating,
-      IsPureVeg,
-      RestroDisplayPhoto,
-      OwnerName,
-      OwnerEmail,
-      OwnerPhone,
-      RestroEmail,
-      RestroPhone,
-      FSSAINumber,
-      FSSAIExpiryDate
-    `)
-    .eq("RestroCode", restroCode)
-    .single();
+  // If you prefer server-only client, uncomment below and comment the public client:
+  // const client = supabaseServer;
+  const client = supabase;
 
-  if (error) {
-    console.error("getRestroById error:", error.message ?? error);
+  try {
+    const q = client.from("RestroMaster").select("*").eq("RestroCode", restroCode).limit(1);
+    const { data, error } = await q;
+    if (error) {
+      // log to server console (Vercel logs) — helpful for debugging
+      console.error("getRestroById supabase error:", error);
+      return null;
+    }
+    if (!data || data.length === 0) return null;
+    return data[0] as Restro;
+  } catch (err: any) {
+    console.error("getRestroById unexpected error:", err);
     return null;
   }
-
-  return (data as Restro) ?? null;
 }
 
 export async function safeGetRestro(restroCode: number) {
