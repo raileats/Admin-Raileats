@@ -1,215 +1,290 @@
+// app/admin/restros/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+}
+const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 type Restro = {
-  RestroCode: number;
-  RestroName: string;
-  StationCode: string;
-  StationName: string;
-  OwnerName: string;
-  IRCTCStatus?: string;
-  RaileatsStatus?: string;
+  RestroCode?: number | string;
+  RestroName?: string;
+  StationCode?: string;
+  StationName?: string;
+  OwnerName?: string;
+  OwnerPhone?: string;
+  IRCTC?: any;
+  Raileats?: any;
   IsIrctcApproved?: boolean;
   FSSAIExpiry?: string;
+  FSSAINumber?: string;
+  [k: string]: any;
 };
 
-export default function RestroMasterPage() {
+export default function RestroMasterPage(): JSX.Element {
   const router = useRouter();
 
-  // Search fields
-  const [restroCode, setRestroCode] = useState("");
-  const [ownerName, setOwnerName] = useState("");
-  const [stationCode, setStationCode] = useState("");
-  const [stationName, setStationName] = useState("");
-  const [restroName, setRestroName] = useState("");
+  // search fields
+  const [restroCode, setRestroCode] = useState<string>("");
+  const [ownerName, setOwnerName] = useState<string>("");
+  const [stationCode, setStationCode] = useState<string>("");
+  const [stationName, setStationName] = useState<string>("");
+  const [restroName, setRestroName] = useState<string>("");
+  const [ownerPhone, setOwnerPhone] = useState<string>("");
+  const [irctcStatus, setIrctcStatus] = useState<string>("any"); // "any" | "yes" | "no"
+  const [raileatsStatus, setRaileatsStatus] = useState<string>("any"); // "any" | "yes" | "no"
+  const [fssaiNumber, setFssaiNumber] = useState<string>("");
 
-  const [restros, setRestros] = useState<Restro[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<Restro[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initial load
   useEffect(() => {
-    fetchRestros();
+    fetchRestros(); // initial load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function fetchRestros(filters?: any) {
+  async function fetchRestros(filters?: { [k: string]: any }) {
     setLoading(true);
     setError(null);
 
-    let query = supabase.from("RestroMaster").select("*").limit(200);
+    try {
+      // start query
+      let query = supabase.from("RestroMaster").select("*").limit(500);
 
-    if (filters?.restroCode) {
-      query = query.ilike("RestroCode", `%${filters.restroCode}%`);
-    }
-    if (filters?.ownerName) {
-      query = query.ilike("OwnerName", `%${filters.ownerName}%`);
-    }
-    if (filters?.stationCode) {
-      query = query.ilike("StationCode", `%${filters.stationCode}%`);
-    }
-    if (filters?.stationName) {
-      query = query.ilike("StationName", `%${filters.stationName}%`);
-    }
-    if (filters?.restroName) {
-      query = query.ilike("RestroName", `%${filters.restroName}%`);
-    }
+      // RestroCode: if numeric -> eq (exact). If empty -> ignore.
+      if (filters?.restroCode) {
+        const rc = String(filters.restroCode).trim();
+        if (rc !== "") {
+          if (/^\d+$/.test(rc)) {
+            // numeric exact match
+            query = query.eq("RestroCode", Number(rc));
+          } else {
+            // non-numeric search: try fallback to string match on RestroCode (cast not always supported)
+            // Instead we can do nothing or try matching on RestroName / OwnerName; choose to ilike RestroCode as text using filter
+            // Use PostgREST filter `like` on column, but for numeric columns this may still error.
+            // Safer option: match RestroName/OwnerName instead when non-numeric code entered.
+            query = query.ilike("RestroName", `%${rc}%`);
+          }
+        }
+      }
 
-    const { data, error } = await query;
-    if (error) {
-      setError(error.message);
-    } else {
-      setRestros(data as Restro[]);
+      const ilikeIf = (col: string, val?: string) => {
+        if (!val) return;
+        const v = String(val).trim();
+        if (v.length === 0) return;
+        query = (query as any).ilike(col, `%${v}%`);
+      };
+
+      ilikeIf("OwnerName", filters?.ownerName);
+      ilikeIf("StationCode", filters?.stationCode);
+      ilikeIf("StationName", filters?.stationName);
+      ilikeIf("RestroName", filters?.restroName);
+      ilikeIf("OwnerPhone", filters?.ownerPhone);
+      ilikeIf("FSSAINumber", filters?.fssaiNumber || filters?.fssaiNumber); // matches column if present
+
+      // Status dropdowns: map yes/no to 1/0 or true/false depending on DB
+      if (filters?.irctcStatus && filters.irctcStatus !== "any") {
+        const v = filters.irctcStatus;
+        if (v === "yes") {
+          // try numeric 1 then boolean true
+          query = query.eq("IRCTC", 1);
+        } else if (v === "no") {
+          query = query.eq("IRCTC", 0);
+        }
+      }
+
+      if (filters?.raileatsStatus && filters.raileatsStatus !== "any") {
+        const v = filters.raileatsStatus;
+        if (v === "yes") query = query.eq("Raileats", 1);
+        else if (v === "no") query = query.eq("Raileats", 0);
+      }
+
+      const { data, error: e } = await query;
+      if (e) throw e;
+      setResults((data ?? []) as Restro[]);
+    } catch (err: any) {
+      console.error("fetchRestros error:", err);
+      // special handling: if error mentions bigint ~~* then user probably typed non-numeric into RestroCode
+      if (String(err.message || err).includes("bigint ~~*")) {
+        setError("Restro Code search must be numeric. For partial matches search by Restro Name or Owner Name.");
+      } else {
+        setError(err?.message ?? String(err));
+      }
+      setResults([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
-  function onSearch(e: React.FormEvent) {
-    e.preventDefault();
-    fetchRestros({ restroCode, ownerName, stationCode, stationName, restroName });
+  function onSearch(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    fetchRestros({
+      restroCode,
+      ownerName,
+      stationCode,
+      stationName,
+      restroName,
+      ownerPhone,
+      irctcStatus,
+      raileatsStatus,
+      fssaiNumber,
+    });
+  }
+
+  function onClear() {
+    setRestroCode("");
+    setOwnerName("");
+    setStationCode("");
+    setStationName("");
+    setRestroName("");
+    setOwnerPhone("");
+    setIrctcStatus("any");
+    setRaileatsStatus("any");
+    setFssaiNumber("");
+    fetchRestros();
   }
 
   return (
     <main style={{ padding: 24 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, margin: 0 }}>Restro Master</h1>
-        <button
-          onClick={() => router.push("/admin/restros/new")}
-          style={{
-            background: "#16a34a",
-            color: "white",
-            padding: "8px 14px",
-            borderRadius: 6,
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          + Add New Restro
-        </button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <h1 style={{ margin: 0 }}>Restro Master</h1>
+        <div>
+          <button
+            onClick={() => router.push("/admin/restros/new")}
+            style={{
+              background: "#10b981",
+              color: "white",
+              padding: "8px 12px",
+              borderRadius: 6,
+              border: "none",
+              cursor: "pointer",
+              marginRight: 8,
+            }}
+          >
+            + Add New Restro
+          </button>
+        </div>
       </div>
 
-      {/* Search Form */}
       <form
         onSubmit={onSearch}
-        style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 16 }}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(6, 1fr) auto",
+          gap: 12,
+          alignItems: "center",
+          marginBottom: 12,
+          background: "#fff",
+          padding: 12,
+          borderRadius: 8,
+        }}
       >
-        <input
-          placeholder="Restro Code"
-          value={restroCode}
-          onChange={(e) => setRestroCode(e.target.value)}
-          style={{ padding: 8 }}
-        />
-        <input
-          placeholder="Owner Name"
-          value={ownerName}
-          onChange={(e) => setOwnerName(e.target.value)}
-          style={{ padding: 8 }}
-        />
-        <input
-          placeholder="Station Code"
-          value={stationCode}
-          onChange={(e) => setStationCode(e.target.value)}
-          style={{ padding: 8 }}
-        />
-        <input
-          placeholder="Station Name"
-          value={stationName}
-          onChange={(e) => setStationName(e.target.value)}
-          style={{ padding: 8 }}
-        />
-        <input
-          placeholder="Restro Name"
-          value={restroName}
-          onChange={(e) => setRestroName(e.target.value)}
-          style={{ padding: 8 }}
-        />
-        <button
-          type="submit"
-          style={{
-            gridColumn: "span 5",
-            background: "#0ea5e9",
-            color: "white",
-            padding: "10px",
-            borderRadius: 6,
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          Search
-        </button>
+        <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} style={{ padding: 8 }} />
+        <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} style={{ padding: 8 }} />
+        <input placeholder="Station Code" value={stationCode} onChange={(e) => setStationCode(e.target.value)} style={{ padding: 8 }} />
+        <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} style={{ padding: 8 }} />
+        <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
+        <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} style={{ padding: 8 }} />
+
+        <select value={irctcStatus} onChange={(e) => setIrctcStatus(e.target.value)} style={{ padding: 8 }}>
+          <option value="any">IRCTC (Any)</option>
+          <option value="yes">IRCTC (Yes)</option>
+          <option value="no">IRCTC (No)</option>
+        </select>
+
+        <select value={raileatsStatus} onChange={(e) => setRaileatsStatus(e.target.value)} style={{ padding: 8 }}>
+          <option value="any">Raileats (Any)</option>
+          <option value="yes">Raileats (Yes)</option>
+          <option value="no">Raileats (No)</option>
+        </select>
+
+        <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={{ padding: 8 }} />
+
+        {/* buttons area: small on the right */}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center", paddingLeft: 8 }}>
+          <button type="button" onClick={onClear} style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>
+            Clear
+          </button>
+          <button
+            type="submit"
+            style={{
+              padding: "8px 12px",
+              borderRadius: 6,
+              border: "none",
+              background: "#0ea5e9",
+              color: "#fff",
+              minWidth: 90,
+            }}
+          >
+            Search
+          </button>
+        </div>
       </form>
 
-      {/* Error */}
-      {error && <div style={{ color: "red", marginBottom: 12 }}>Error: {error}</div>}
+      {error && <div style={{ color: "red", marginBottom: 12 }}>{error}</div>}
 
-      {/* Table */}
-      <table style={{ width: "100%", borderCollapse: "collapse", background: "white" }}>
-        <thead>
-          <tr style={{ textAlign: "left", borderBottom: "2px solid #ddd" }}>
-            <th style={{ padding: 10 }}>Restro Code</th>
-            <th style={{ padding: 10 }}>Restro Name</th>
-            <th style={{ padding: 10 }}>Station Code</th>
-            <th style={{ padding: 10 }}>Station Name</th>
-            <th style={{ padding: 10 }}>Owner Name</th>
-            <th style={{ padding: 10 }}>IRCTC Status</th>
-            <th style={{ padding: 10 }}>Raileats Status</th>
-            <th style={{ padding: 10 }}>Is IRCTC Approved</th>
-            <th style={{ padding: 10 }}>FSSAI Expiry</th>
-            <th style={{ padding: 10 }}>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading ? (
-            <tr>
-              <td colSpan={10} style={{ padding: 20, textAlign: "center" }}>
-                Loading...
-              </td>
+      <div style={{ background: "#fff", borderRadius: 8, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
+              <th style={{ padding: 12 }}>Restro Code</th>
+              <th style={{ padding: 12 }}>Restro Name</th>
+              <th style={{ padding: 12 }}>Station Code</th>
+              <th style={{ padding: 12 }}>Station Name</th>
+              <th style={{ padding: 12 }}>Owner Name</th>
+              <th style={{ padding: 12 }}>IRCTC Status</th>
+              <th style={{ padding: 12 }}>Raileats Status</th>
+              <th style={{ padding: 12 }}>Is IRCTC Approved</th>
+              <th style={{ padding: 12 }}>FSSAI Expiry</th>
+              <th style={{ padding: 12 }}>Action</th>
             </tr>
-          ) : restros.length === 0 ? (
-            <tr>
-              <td colSpan={10} style={{ padding: 20, textAlign: "center" }}>
-                No restros found
-              </td>
-            </tr>
-          ) : (
-            restros.map((r) => (
-              <tr key={r.RestroCode} style={{ borderBottom: "1px solid #eee" }}>
-                <td style={{ padding: 8 }}>{r.RestroCode}</td>
-                <td style={{ padding: 8 }}>{r.RestroName}</td>
-                <td style={{ padding: 8 }}>{r.StationCode}</td>
-                <td style={{ padding: 8 }}>{r.StationName}</td>
-                <td style={{ padding: 8 }}>{r.OwnerName}</td>
-                <td style={{ padding: 8 }}>{r.IRCTCStatus ?? "-"}</td>
-                <td style={{ padding: 8 }}>{r.RaileatsStatus ?? "-"}</td>
-                <td style={{ padding: 8 }}>{r.IsIrctcApproved ? "Yes" : "No"}</td>
-                <td style={{ padding: 8 }}>{r.FSSAIExpiry ?? "-"}</td>
-                <td style={{ padding: 8 }}>
-                  <button
-                    onClick={() => router.push(`/admin/restros/edit/${r.RestroCode}`)}
-                    style={{
-                      background: "#facc15",
-                      padding: "6px 10px",
-                      border: "none",
-                      borderRadius: 4,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Edit
-                  </button>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={10} style={{ padding: 20, textAlign: "center" }}>
+                  Loading...
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : results.length === 0 ? (
+              <tr>
+                <td colSpan={10} style={{ padding: 20, textAlign: "center", color: "#666" }}>
+                  No restros found
+                </td>
+              </tr>
+            ) : (
+              results.map((r) => (
+                <tr key={String(r.RestroCode ?? JSON.stringify(r))} style={{ borderBottom: "1px solid #fafafa" }}>
+                  <td style={{ padding: 12 }}>{r.RestroCode}</td>
+                  <td style={{ padding: 12 }}>{r.RestroName}</td>
+                  <td style={{ padding: 12 }}>{r.StationCode}</td>
+                  <td style={{ padding: 12 }}>{r.StationName}</td>
+                  <td style={{ padding: 12 }}>{r.OwnerName}</td>
+                  <td style={{ padding: 12 }}>{String(r.IRCTC ?? "")}</td>
+                  <td style={{ padding: 12 }}>{String(r.Raileats ?? "")}</td>
+                  <td style={{ padding: 12 }}>{r.IsIrctcApproved ? "Yes" : "No"}</td>
+                  <td style={{ padding: 12 }}>{r.FSSAIExpiry ?? "-"}</td>
+                  <td style={{ padding: 12 }}>
+                    <button
+                      onClick={() => router.push(`/admin/restros/edit/${r.RestroCode}`)}
+                      style={{ background: "#f59e0b", color: "#000", padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </main>
   );
 }
