@@ -1,4 +1,3 @@
-// app/admin/restros/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -36,16 +35,14 @@ export default function RestroMasterPage(): JSX.Element {
   const [stationName, setStationName] = useState<string>("");
   const [restroName, setRestroName] = useState<string>("");
   const [ownerPhone, setOwnerPhone] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("any");
+  const [fssaiNumber, setFssaiNumber] = useState<string>("");
 
   const [results, setResults] = useState<Restro[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [updatingCode, setUpdatingCode] = useState<number | string | null>(null);
 
   useEffect(() => {
     fetchRestros();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const truthy = (v: any) => v === true || v === 1 || v === "1" || v === "true" || v === "yes";
@@ -59,10 +56,8 @@ export default function RestroMasterPage(): JSX.Element {
       if (filters?.restroCode) {
         const rc = String(filters.restroCode).trim();
         if (/^\d+$/.test(rc)) {
-          // numeric exact match
           query = query.eq("RestroCode", Number(rc));
         } else {
-          // fallback: search by name if non-numeric input
           query = (query as any).ilike("RestroName", `%${rc}%`);
         }
       }
@@ -79,23 +74,14 @@ export default function RestroMasterPage(): JSX.Element {
       ilikeIf("StationName", filters?.stationName);
       ilikeIf("RestroName", filters?.restroName);
       ilikeIf("OwnerPhone", filters?.ownerPhone);
-      ilikeIf("FSSAINumber", filters?.fssaiNumber || filters?.FSSAINumber);
-
-      if (filters?.statusFilter && filters.statusFilter !== "any") {
-        if (filters.statusFilter === "yes") query = query.eq("Raileats", 1);
-        else if (filters.statusFilter === "no") query = query.eq("Raileats", 0);
-      }
+      ilikeIf("FSSAINumber", filters?.fssaiNumber);
 
       const { data, error: e } = await query;
       if (e) throw e;
       setResults((data ?? []) as Restro[]);
     } catch (err: any) {
       console.error("fetchRestros error:", err);
-      if (String(err.message || err).includes("bigint ~~*")) {
-        setError("Restro Code search must be numeric. Use exact code or search by name.");
-      } else {
-        setError(err?.message ?? String(err));
-      }
+      setError(err?.message ?? String(err));
       setResults([]);
     } finally {
       setLoading(false);
@@ -111,7 +97,7 @@ export default function RestroMasterPage(): JSX.Element {
       stationName,
       restroName,
       ownerPhone,
-      statusFilter,
+      fssaiNumber,
     });
   }
 
@@ -122,52 +108,8 @@ export default function RestroMasterPage(): JSX.Element {
     setStationName("");
     setRestroName("");
     setOwnerPhone("");
-    setStatusFilter("any");
+    setFssaiNumber("");
     fetchRestros();
-  }
-
-  // Generic numeric-column toggle with optimistic UI + verification + rollback
-  async function toggleColumnNumeric(code: number | string, colName: string, currentValue: any) {
-    const newVal = truthy(currentValue) ? 0 : 1;
-    setUpdatingCode(code);
-
-    // optimistic UI
-    setResults((prev) => prev.map((r) => (String(r.RestroCode) === String(code) ? { ...r, [colName]: newVal } : r)));
-
-    try {
-      // send update and request updated row back
-      const { data, error } = await supabase
-        .from("RestroMaster")
-        .update({ [colName]: newVal })
-        .eq("RestroCode", Number(code)) // if RestroCode is text in your DB, remove Number(...)
-        .select()
-        .maybeSingle();
-
-      if (error) {
-        console.error(`Update ${colName} failed:`, error);
-        throw error;
-      }
-
-      // patch canonical server row if returned
-      if (data) {
-        setResults((prev) => prev.map((r) => (String(r.RestroCode) === String(code) ? { ...r, ...data } : r)));
-      }
-    } catch (err: any) {
-      console.error("toggleColumnNumeric error:", err);
-      setError("Could not update status. Reloading list.");
-      // rollback by reloading full list (no filter)
-      await fetchRestros();
-    } finally {
-      setUpdatingCode(null);
-    }
-  }
-
-  // wrappers
-  async function toggleIrctc(code: number | string, current: any) {
-    return toggleColumnNumeric(code, "IRCTC", current);
-  }
-  async function toggleRaileats(code: number | string, current: any) {
-    return toggleColumnNumeric(code, "Raileats", current);
   }
 
   return (
@@ -192,11 +134,12 @@ export default function RestroMasterPage(): JSX.Element {
         </div>
       </div>
 
+      {/* Search Form */}
       <form
         onSubmit={onSearch}
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(6, 1fr) auto",
+          gridTemplateColumns: "repeat(7, 1fr) auto",
           gap: 12,
           alignItems: "center",
           marginBottom: 12,
@@ -211,14 +154,9 @@ export default function RestroMasterPage(): JSX.Element {
         <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} style={{ padding: 8 }} />
         <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
         <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} style={{ padding: 8 }} />
+        <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={{ padding: 8 }} />
 
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: 8 }}>
-          <option value="any">Status</option>
-          <option value="yes">On</option>
-          <option value="no">Off</option>
-        </select>
-
-        <div style={{ gridColumn: "span 5 / auto", display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
           <button type="button" onClick={onClear} style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>
             Clear
           </button>
@@ -240,6 +178,7 @@ export default function RestroMasterPage(): JSX.Element {
 
       {error && <div style={{ color: "red", marginBottom: 12 }}>{error}</div>}
 
+      {/* Results Table */}
       <div style={{ background: "#fff", borderRadius: 8, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -249,6 +188,8 @@ export default function RestroMasterPage(): JSX.Element {
               <th style={{ padding: 12 }}>Station Code</th>
               <th style={{ padding: 12 }}>Station Name</th>
               <th style={{ padding: 12 }}>Owner Name</th>
+              <th style={{ padding: 12 }}>Owner Phone</th>
+              <th style={{ padding: 12 }}>FSSAI Number</th>
               <th style={{ padding: 12 }}>IRCTC Status</th>
               <th style={{ padding: 12 }}>Raileats Status</th>
               <th style={{ padding: 12 }}>FSSAI Expiry Date</th>
@@ -258,21 +199,19 @@ export default function RestroMasterPage(): JSX.Element {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} style={{ padding: 20, textAlign: "center" }}>
+                <td colSpan={11} style={{ padding: 20, textAlign: "center" }}>
                   Loading...
                 </td>
               </tr>
             ) : results.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: 20, textAlign: "center", color: "#666" }}>
+                <td colSpan={11} style={{ padding: 20, textAlign: "center", color: "#666" }}>
                   No restros found
                 </td>
               </tr>
             ) : (
               results.map((r) => {
                 const code = r.RestroCode ?? r.RestroId ?? "";
-                const isIrctc = truthy(r.IRCTC);
-                const isRaileats = truthy(r.Raileats);
                 return (
                   <tr key={String(code)} style={{ borderBottom: "1px solid #fafafa" }}>
                     <td style={{ padding: 12 }}>{code}</td>
@@ -280,83 +219,10 @@ export default function RestroMasterPage(): JSX.Element {
                     <td style={{ padding: 12 }}>{r.StationCode}</td>
                     <td style={{ padding: 12 }}>{r.StationName}</td>
                     <td style={{ padding: 12 }}>{r.OwnerName}</td>
-
-                    {/* IRCTC toggle */}
-                    <td style={{ padding: 12 }}>
-                      <label style={{ display: "inline-block", position: "relative" }}>
-                        <input
-                          type="checkbox"
-                          checked={isIrctc}
-                          onChange={() => toggleIrctc(code, r.IRCTC)}
-                          disabled={updatingCode === code}
-                          style={{ width: 0, height: 0, opacity: 0 }}
-                        />
-                        <span
-                          style={{
-                            display: "inline-block",
-                            width: 44,
-                            height: 24,
-                            background: isIrctc ? "#10b981" : "#ddd",
-                            borderRadius: 999,
-                            position: "relative",
-                            transition: "background .15s",
-                          }}
-                        >
-                          <span
-                            style={{
-                              position: "absolute",
-                              top: 2,
-                              left: isIrctc ? 22 : 2,
-                              width: 20,
-                              height: 20,
-                              background: "#fff",
-                              borderRadius: 999,
-                              boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
-                              transition: "left .15s",
-                            }}
-                          />
-                        </span>
-                      </label>
-                    </td>
-
-                    {/* Raileats toggle */}
-                    <td style={{ padding: 12 }}>
-                      <label style={{ display: "inline-block", position: "relative" }}>
-                        <input
-                          type="checkbox"
-                          checked={isRaileats}
-                          onChange={() => toggleRaileats(code, r.Raileats)}
-                          disabled={updatingCode === code}
-                          style={{ width: 0, height: 0, opacity: 0 }}
-                        />
-                        <span
-                          style={{
-                            display: "inline-block",
-                            width: 44,
-                            height: 24,
-                            background: isRaileats ? "#10b981" : "#ddd",
-                            borderRadius: 999,
-                            position: "relative",
-                            transition: "background .15s",
-                          }}
-                        >
-                          <span
-                            style={{
-                              position: "absolute",
-                              top: 2,
-                              left: isRaileats ? 22 : 2,
-                              width: 20,
-                              height: 20,
-                              background: "#fff",
-                              borderRadius: 999,
-                              boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
-                              transition: "left .15s",
-                            }}
-                          />
-                        </span>
-                      </label>
-                    </td>
-
+                    <td style={{ padding: 12 }}>{r.OwnerPhone ?? "-"}</td>
+                    <td style={{ padding: 12 }}>{r.FSSAINumber ?? "-"}</td>
+                    <td style={{ padding: 12 }}>{r.IRCTC ? "On" : "Off"}</td>
+                    <td style={{ padding: 12 }}>{r.Raileats ? "On" : "Off"}</td>
                     <td style={{ padding: 12 }}>{r.FSSAIExpiryDate ?? "-"}</td>
                     <td style={{ padding: 12 }}>
                       <button
