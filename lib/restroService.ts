@@ -1,45 +1,45 @@
 // lib/restroService.ts
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-// Client with anon key (safe for reads)
-const supabase = createClient(supabaseUrl, supabaseAnon);
-
-// Type definition for one row (optional, for TypeScript)
+// Type definition for one Restro row
 export type Restro = {
   restro_code: number;
   station_code: string;
   station_name: string;
   restro_name: string;
   brand_name?: string | null;
-  raileats_status?: "On" | "Off" | number | null;
-  is_irctc_approved?: boolean | number | null;
-  irctc_status?: "On" | "Off" | number | null;
+  raileats?: number | boolean | null;
+  is_irctc_approved?: number | boolean | null;
+  irctc?: number | boolean | null;
   rating?: number | null;
-  is_pure_veg?: boolean | number | null;
+  is_pure_veg?: number | boolean | null;
   restro_display_photo?: string | null;
   owner_name?: string | null;
   owner_email?: string | null;
   owner_phone?: string | null;
   restro_email?: string | null;
   restro_phone?: string | null;
+  fssai_number?: string | null;
+  fssai_expiry_date?: string | null;
 };
 
 export async function getRestroById(restroCode: number): Promise<Restro | null> {
   const { data, error } = await supabase
     .from("RestroMaster")
-    .select(
-      `
+    .select(`
       restro_code,
       station_code,
       station_name,
       restro_name,
       brand_name,
-      raileats_status,
+      raileats,
       is_irctc_approved,
-      irctc_status,
+      irctc,
       rating,
       is_pure_veg,
       restro_display_photo,
@@ -47,16 +47,17 @@ export async function getRestroById(restroCode: number): Promise<Restro | null> 
       owner_email,
       owner_phone,
       restro_email,
-      restro_phone
-    `
-    )
+      restro_phone,
+      fssai_number,
+      fssai_expiry_date
+    `)
     .eq("restro_code", restroCode)
     .single();
 
   if (error) {
     console.error("getRestroById error:", error.message);
-    throw error;
+    return null;
   }
 
-  return data;
+  return data as Restro;
 }
