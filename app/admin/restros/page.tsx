@@ -41,6 +41,9 @@ export default function RestroMasterPage(): JSX.Element {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // export state
+  const [exporting, setExporting] = useState<boolean>(false);
+
   useEffect(() => {
     fetchRestros();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,24 +114,127 @@ export default function RestroMasterPage(): JSX.Element {
     fetchRestros();
   }
 
+  // build CSV from array of objects
+  function toCSV(rows: Restro[], columns: string[], headers: string[]) {
+    // CSV with BOM for excel
+    const BOM = "\uFEFF";
+    const escape = (val: any) => {
+      if (val === null || val === undefined) return "";
+      const s = String(val);
+      // if contains comma/quote/newline, wrap in quotes and escape quotes
+      if (/[",\n\r]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const head = headers.join(",");
+    const body = rows
+      .map((r) =>
+        columns
+          .map((c) => {
+            // For boolean-like fields convert 1/0 to On/Off for readability
+            if (c === "IRCTC" || c === "Raileats") {
+              const v = r[c];
+              return escape(v === 1 || v === "1" || v === true || v === "true" ? "On" : "Off");
+            }
+            return escape(r[c] ?? "");
+          })
+          .join(",")
+      )
+      .join("\n");
+    return BOM + head + "\n" + body;
+  }
+
+  async function handleExportAll() {
+    try {
+      setExporting(true);
+      setError(null);
+      // fetch full table without limit (if large, you may want pagination)
+      const { data, error } = await supabase.from("RestroMaster").select("*");
+      if (error) throw error;
+      const rows = (data ?? []) as Restro[];
+
+      // define column order and header labels
+      const columns = [
+        "RestroCode",
+        "RestroName",
+        "StationCode",
+        "StationName",
+        "OwnerName",
+        "OwnerPhone",
+        "FSSAINumber",
+        "IRCTC",
+        "Raileats",
+        "FSSAIExpiryDate",
+      ];
+      const headers = [
+        "RestroCode",
+        "RestroName",
+        "StationCode",
+        "StationName",
+        "OwnerName",
+        "OwnerPhone",
+        "FSSAINumber",
+        "IRCTC",
+        "Raileats",
+        "FSSAIExpiryDate",
+      ];
+
+      const csv = toCSV(rows, columns, headers);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      a.href = url;
+      a.download = `restro_master_${ts}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error("export error:", err);
+      setError(err?.message ?? "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <main style={{ padding: 24 }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <h1 style={{ margin: 0 }}>Restro Master</h1>
-        <button
-          onClick={() => router.push("/admin/restros/new")}
-          style={{
-            background: "#10b981",
-            color: "white",
-            padding: "8px 12px",
-            borderRadius: 6,
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          + Add New Restro
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={handleExportAll}
+            disabled={exporting}
+            style={{
+              background: "#0ea5e9", // blue like search
+              color: "white",
+              padding: "8px 12px",
+              borderRadius: 6,
+              border: "none",
+              cursor: exporting ? "not-allowed" : "pointer",
+            }}
+            title="Export all RestroMaster rows as CSV"
+          >
+            {exporting ? "Exporting..." : "Export CSV"}
+          </button>
+
+          <button
+            onClick={() => router.push("/admin/restros/new")}
+            style={{
+              background: "#10b981",
+              color: "white",
+              padding: "8px 12px",
+              borderRadius: 6,
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            + Add New Restro
+          </button>
+        </div>
       </div>
 
       {/* Search Form */}
