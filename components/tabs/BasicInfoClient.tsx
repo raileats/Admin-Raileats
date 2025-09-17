@@ -3,7 +3,6 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import KeyValueGrid, { KVRow } from "@/components/ui/KeyValueGrid";
 
 type Props = {
   initialData: any;
@@ -124,83 +123,200 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
     return (imagePrefix ?? "") + p;
   };
 
-  // build rows for KeyValueGrid
-  const rows: KVRow[] = [
-    { keyLabel: "Restro Code", value: <div className="readonly-value">{local.RestroCode ?? "—"}</div> },
-    {
-      keyLabel: "Station Code with Name",
-      value: <div className="readonly-value">({local.StationCode ?? ""}) {local.StationName ?? ""}</div>,
-    },
-    { keyLabel: "Restro Name", value: <input className="kv-input" value={local.RestroName ?? ""} onChange={(e) => update("RestroName", e.target.value)} /> },
-    { keyLabel: "Brand Name if Any", value: <input className="kv-input" value={local.BrandNameifAny ?? ""} onChange={(e) => update("BrandNameifAny", e.target.value)} /> },
-    {
-      keyLabel: "Raileats Status",
-      value: (
-        <select className="kv-input" value={String(local.RaileatsStatus ?? 0)} onChange={(e) => update("RaileatsStatus", Number(e.target.value))}>
-          <option value={1}>On</option>
-          <option value={0}>Off</option>
-        </select>
-      ),
-    },
-    {
-      keyLabel: "Is Irctc Approved",
-      value: (
-        <select className="kv-input" value={String(local.IsIrctcApproved ?? "0")} onChange={(e) => update("IsIrctcApproved", e.target.value)}>
-          <option value="1">Yes</option>
-          <option value="0">No</option>
-        </select>
-      ),
-    },
-    { keyLabel: "Restro Rating", value: <input className="kv-input" type="number" step="0.1" value={local.RestroRating ?? ""} onChange={(e) => update("RestroRating", e.target.value)} /> },
-    { keyLabel: "Restro Display Photo (path)", value: <input className="kv-input" value={local.RestroDisplayPhoto ?? ""} onChange={(e) => update("RestroDisplayPhoto", e.target.value)} /> },
-    {
-      keyLabel: "Display Preview",
-      value: local.RestroDisplayPhoto ? <img className="preview-img" src={imgSrc(local.RestroDisplayPhoto)} alt="display" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} /> : <div className="readonly-value">No image</div>,
-    },
-    { keyLabel: "Owner Name", value: <input className="kv-input" value={local.OwnerName ?? ""} onChange={(e) => update("OwnerName", e.target.value)} /> },
-    { keyLabel: "Owner Email", value: <input className="kv-input" value={local.OwnerEmail ?? ""} onChange={(e) => update("OwnerEmail", e.target.value)} /> },
-    { keyLabel: "Owner Phone", value: <input className="kv-input" value={local.OwnerPhone ?? ""} onChange={(e) => update("OwnerPhone", e.target.value)} /> },
-    { keyLabel: "Restro Email", value: <input className="kv-input" value={local.RestroEmail ?? ""} onChange={(e) => update("RestroEmail", e.target.value)} /> },
-    { keyLabel: "Restro Phone", value: <input className="kv-input" value={local.RestroPhone ?? ""} onChange={(e) => update("RestroPhone", e.target.value)} /> },
-    {
-      keyLabel: "IRCTC Status",
-      value: (
-        <select className="kv-input" value={String(local.IRCTCStatus ?? 0)} onChange={(e) => update("IRCTCStatus", Number(e.target.value))}>
-          <option value={1}>On</option>
-          <option value={0}>Off</option>
-        </select>
-      ),
-    },
-    {
-      keyLabel: "Is Pure Veg",
-      value: (
-        <select className="kv-input" value={String(local.IsPureVeg ?? 0)} onChange={(e) => update("IsPureVeg", Number(e.target.value))}>
-          <option value={1}>Yes</option>
-          <option value={0}>No</option>
-        </select>
-      ),
-    },
-    { keyLabel: "FSSAI Number", value: <input className="kv-input" value={local.FSSAINumber ?? ""} onChange={(e) => update("FSSAINumber", e.target.value)} /> },
-    { keyLabel: "FSSAI Expiry Date", value: <input className="kv-input" type="date" value={local.FSSAIExpiryDate ?? ""} onChange={(e) => update("FSSAIExpiryDate", e.target.value)} /> },
-  ];
-
   return (
-    <div style={{ padding: 20 }}>
-      <h3 style={{ textAlign: "center", marginBottom: 12, fontSize: 20 }}>Basic Information</h3>
+    <div style={{ padding: 18 }}>
+      <h3 style={{ textAlign: "center", marginBottom: 18, fontSize: 20 }}>Basic Information</h3>
 
-      <KeyValueGrid rows={rows} labelWidth={220} maxWidth={980} />
+      {/* compact multi-column form */}
+      <div className="compact-grid">
+        {/* Row items: label above input */}
+        <div className="field">
+          <label>Restro Code</label>
+          <div className="readonly">{local.RestroCode ?? "—"}</div>
+        </div>
 
-      <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <button onClick={() => router.push("/admin/restros")} style={{ padding: "8px 12px" }}>
-          Cancel
-        </button>
-        <button onClick={save} disabled={saving} style={{ padding: "8px 12px", background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", border: "none" }}>
-          {saving ? "Saving..." : "Save"}
-        </button>
+        <div className="field">
+          <label>Station Code</label>
+          <input value={local.StationCode ?? ""} onChange={(e) => update("StationCode", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Station Name</label>
+          <input value={local.StationName ?? ""} onChange={(e) => update("StationName", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Restro Name</label>
+          <input value={local.RestroName ?? ""} onChange={(e) => update("RestroName", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Brand Name</label>
+          <input value={local.BrandNameifAny ?? ""} onChange={(e) => update("BrandNameifAny", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Raileats Status</label>
+          <select value={String(local.RaileatsStatus ?? 0)} onChange={(e) => update("RaileatsStatus", Number(e.target.value))}>
+            <option value={1}>On</option>
+            <option value={0}>Off</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label>IRCTC Status</label>
+          <select value={String(local.IRCTCStatus ?? 0)} onChange={(e) => update("IRCTCStatus", Number(e.target.value))}>
+            <option value={1}>On</option>
+            <option value={0}>Off</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label>Is IRCTC Approved</label>
+          <select value={String(local.IsIrctcApproved ?? "0")} onChange={(e) => update("IsIrctcApproved", e.target.value)}>
+            <option value="1">Yes</option>
+            <option value="0">No</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label>Restro Rating</label>
+          <input type="number" step="0.1" value={local.RestroRating ?? ""} onChange={(e) => update("RestroRating", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Restro Display Photo (path)</label>
+          <input value={local.RestroDisplayPhoto ?? ""} onChange={(e) => update("RestroDisplayPhoto", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Display Preview</label>
+          {local.RestroDisplayPhoto ? <img src={imgSrc(local.RestroDisplayPhoto)} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} /> : <div className="readonly">No image</div>}
+        </div>
+
+        <div className="field">
+          <label>Owner Name</label>
+          <input value={local.OwnerName ?? ""} onChange={(e) => update("OwnerName", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Owner Email</label>
+          <input value={local.OwnerEmail ?? ""} onChange={(e) => update("OwnerEmail", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Owner Phone</label>
+          <input value={local.OwnerPhone ?? ""} onChange={(e) => update("OwnerPhone", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Restro Email</label>
+          <input value={local.RestroEmail ?? ""} onChange={(e) => update("RestroEmail", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Restro Phone</label>
+          <input value={local.RestroPhone ?? ""} onChange={(e) => update("RestroPhone", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Is Pure Veg</label>
+          <select value={String(local.IsPureVeg ?? 0)} onChange={(e) => update("IsPureVeg", Number(e.target.value))}>
+            <option value={1}>Yes</option>
+            <option value={0}>No</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label>FSSAI Number</label>
+          <input value={local.FSSAINumber ?? ""} onChange={(e) => update("FSSAINumber", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>FSSAI Expiry Date</label>
+          <input type="date" value={local.FSSAIExpiryDate ?? ""} onChange={(e) => update("FSSAIExpiryDate", e.target.value)} />
+        </div>
       </div>
 
-      {msg && <div style={{ color: "green", marginTop: 10 }}>{msg}</div>}
-      {err && <div style={{ color: "red", marginTop: 10 }}>{err}</div>}
+      <div className="actions">
+        <button className="btn-cancel" onClick={() => router.push("/admin/restros")} disabled={saving}>Cancel</button>
+        <button className="btn-save" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+      </div>
+
+      {msg && <div className="msg ok">{msg}</div>}
+      {err && <div className="msg err">{err}</div>}
+
+      <style jsx>{`
+        .compact-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px 18px;
+          max-width: 1100px;
+          margin: 0 auto;
+        }
+        .field label {
+          display: block;
+          font-size: 13px;
+          color: #444;
+          margin-bottom: 6px;
+          font-weight: 600;
+        }
+        .field input, .field select {
+          width: 100%;
+          padding: 8px;
+          border-radius: 6px;
+          border: 1px solid #e3e3e3;
+          font-size: 13px;
+          background: #fff;
+          box-sizing: border-box;
+        }
+        .readonly {
+          padding: 8px 10px;
+          border-radius: 6px;
+          background: #fafafa;
+          border: 1px solid #f0f0f0;
+          font-size: 13px;
+        }
+        .preview {
+          height: 80px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #eee;
+        }
+        .actions {
+          max-width: 1100px;
+          margin: 18px auto 0;
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+        }
+        .btn-cancel {
+          padding: 8px 12px;
+          border-radius: 6px;
+          border: 1px solid #ddd;
+          background: #fff;
+          cursor: pointer;
+        }
+        .btn-save {
+          padding: 8px 12px;
+          border-radius: 6px;
+          border: none;
+          background: #0ea5e9;
+          color: #fff;
+          cursor: pointer;
+        }
+        .msg { max-width: 1100px; margin: 10px auto; font-size: 13px; }
+        .msg.ok { color: green; }
+        .msg.err { color: red; }
+
+        @media (max-width: 1100px) {
+          .compact-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 720px) {
+          .compact-grid { grid-template-columns: 1fr; }
+          .actions { padding: 0 12px; }
+        }
+      `}</style>
     </div>
   );
 }
