@@ -1,6 +1,6 @@
 // app/api/restromaster/route.ts
-import { NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabaseServer';
+import { NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabaseServer"; // use the new lib
 
 const TABLENAME = 'RestroMaster'; // ensure this matches your Supabase table name
 
