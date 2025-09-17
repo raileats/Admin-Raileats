@@ -2,63 +2,58 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
-// Mapping client keys (PascalCase or snake_case) to DB column names (snake_case)
+/**
+ * mapping incoming client keys -> actual DB column names
+ * Accepts both PascalCase (used in your DB) and some common alternatives.
+ */
 const ALLOWED_MAP: Record<string, string> = {
-  RestroName: "restro_name",
-  restro_name: "restro_name",
+  // PascalCase DB columns (primary)
+  RestroName: "RestroName",
+  OwnerName: "OwnerName",
+  StationCode: "StationCode",
+  StationName: "StationName",
+  OwnerPhone: "OwnerPhone",
+  OwnerEmail: "OwnerEmail",
+  RestroEmail: "RestroEmail",
+  RestroPhone: "RestroPhone",
+  BrandNameifAny: "BrandNameifAny", // this exists in your DB
+  RestroRating: "RestroRating",
+  RestroDisplayPhoto: "RestroDisplayPhoto",
+  FSSAINumber: "FSSAINumber",
+  FSSAIExpiryDate: "FSSAIExpiryDate",
+  IRCTCStatus: "IRCTCStatus",
+  RaileatsStatus: "RaileatsStatus",
+  IsIrctcApproved: "IsIrctcApproved",
+  IsPureVeg: "IsPureVeg",
 
-  OwnerName: "owner_name",
-  owner_name: "owner_name",
-
-  StationCode: "station_code",
-  station_code: "station_code",
-
-  StationName: "station_name",
-  station_name: "station_name",
-
-  OwnerPhone: "owner_phone",
-  owner_phone: "owner_phone",
-
-  OwnerEmail: "owner_email",
-  owner_email: "owner_email",
-
-  RestroEmail: "restro_email",
-  restro_email: "restro_email",
-
-  RestroPhone: "restro_phone",
-  restro_phone: "restro_phone",
-
-  BrandName: "brand_name",
-  brand_name: "brand_name",
-
-  RaileatsStatus: "raileats",
-  raileats: "raileats",
-
-  IRCTCStatus: "irctc",
-  irctc: "irctc",
-
-  IsIrctcApproved: "is_irctc_approved",
-  is_irctc_approved: "is_irctc_approved",
-
-  Rating: "rating",
-  rating: "rating",
-
-  IsPureVeg: "is_pure_veg",
-  is_pure_veg: "is_pure_veg",
-
-  RestroDisplayPhoto: "restro_display_photo",
-  restro_display_photo: "restro_display_photo",
-
-  FSSAINumber: "fssai_number",
-  fssai_number: "fssai_number",
-
-  FSSAIExpiryDate: "fssai_expiry_date",
-  fssai_expiry_date: "fssai_expiry_date",
+  // common snake_case alternatives that client may send (map them to PascalCase columns)
+  restro_name: "RestroName",
+  owner_name: "OwnerName",
+  station_code: "StationCode",
+  station_name: "StationName",
+  owner_phone: "OwnerPhone",
+  owner_email: "OwnerEmail",
+  restro_email: "RestroEmail",
+  restro_phone: "RestroPhone",
+  brand_nameifany: "BrandNameifAny",
+  restro_rating: "RestroRating",
+  restro_display_photo: "RestroDisplayPhoto",
+  fssai_number: "FSSAINumber",
+  fssai_expiry_date: "FSSAIExpiryDate",
+  irctc_status: "IRCTCStatus",
+  raileats_status: "RaileatsStatus",
+  is_irctc_approved: "IsIrctcApproved",
+  is_pure_veg: "IsPureVeg",
+  raileats: "RaileatsStatus",
+  irctc: "IRCTCStatus",
+  rating: "RestroRating",
 };
 
-function normalizeValue(key: string, value: any) {
-  // handle boolean-ish values for status fields
-  if (["raileats", "irctc", "is_irctc_approved", "is_pure_veg"].includes(key)) {
+/** normalize values for DB columns (convert booleans, numbers, empty -> null) */
+function normalizeValue(dbCol: string, value: any) {
+  // boolean-ish flags stored as 1/0 or "1"/"0" or "On"/"Off"
+  const booleanCols = new Set(["RaileatsStatus", "IRCTCStatus", "IsIrctcApproved", "IsPureVeg"]);
+  if (booleanCols.has(dbCol)) {
     if (
       value === true ||
       value === 1 ||
@@ -66,30 +61,46 @@ function normalizeValue(key: string, value: any) {
       String(value).toLowerCase() === "true" ||
       String(value).toLowerCase() === "yes" ||
       String(value).toLowerCase() === "on"
-    )
+    ) {
       return 1;
+    }
     return 0;
   }
-  if (key === "rating") {
-    if (value === "" || value == null) return null;
+
+  // rating -> nullable number
+  if (dbCol === "RestroRating") {
+    if (value === "" || value === null || value === undefined) return null;
     const n = Number(value);
     return Number.isFinite(n) ? n : null;
   }
-  // leave other values as-is
+
+  // phone/account/order numeric fields: return as-is (DB can handle)
+  if (dbCol === "OwnerPhone" || dbCol === "RestroPhone" || dbCol === "FSSAINumber") {
+    // if empty string treat as null
+    if (value === "" || value === null || value === undefined) return null;
+    return value;
+  }
+
+  // strings: trim
+  if (typeof value === "string") return value.trim();
+
+  // default
   return value;
 }
 
+/** PATCH handler */
 export async function PATCH(req: Request, { params }: { params: { code: string } }) {
   try {
     const codeParam = params.code;
     const body = (await req.json()) || {};
 
-    // Build updates object mapped to DB columns
+    // build updates mapped to DB column names
     const updates: Record<string, any> = {};
     for (const k of Object.keys(body)) {
-      const dbCol = ALLOWED_MAP[k];
-      if (dbCol) {
-        updates[dbCol] = normalizeValue(dbCol, body[k]);
+      const lookup = k as string;
+      const mapKey = lookup in ALLOWED_MAP ? ALLOWED_MAP[lookup] : ALLOWED_MAP[lookup.toLowerCase()];
+      if (mapKey) {
+        updates[mapKey] = normalizeValue(mapKey, (body as any)[k]);
       }
     }
 
@@ -97,15 +108,17 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
       return NextResponse.json({ ok: false, error: "No valid fields to update" }, { status: 400 });
     }
 
-    // Numeric or string code
+    // prefer numeric match when code looks numeric
     const numeric = Number(codeParam);
-    let query = supabaseServer.from("RestroMaster").update(updates).select();
+    let query: any = supabaseServer.from("RestroMaster").update(updates).select();
+
     if (!Number.isNaN(numeric)) {
-      query = (query as any).eq("restro_code", numeric);
+      query = query.eq("RestroCode", numeric);
     } else {
-      query = (query as any).eq("restro_code", codeParam);
+      query = query.eq("RestroCode", codeParam);
     }
 
+    // execute update
     const { data, error } = await query.limit(1);
 
     if (error) {
@@ -113,7 +126,8 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
       return NextResponse.json({ ok: false, error: error.message ?? "Update failed" }, { status: 500 });
     }
 
-    const row = Array.isArray(data) ? data[0] ?? null : data ?? null;
+    // normalize row to single object
+    const row = Array.isArray(data) ? (data[0] ?? null) : data ?? null;
     return NextResponse.json({ ok: true, row });
   } catch (err: any) {
     console.error("API error (PATCH /api/restros/[code]):", err);
@@ -121,6 +135,7 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
   }
 }
 
+/** other methods not allowed */
 export function GET() {
   return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
 }
