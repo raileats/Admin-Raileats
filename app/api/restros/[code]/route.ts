@@ -59,13 +59,23 @@ const ALLOWED_MAP: Record<string, string> = {
 function normalizeValue(key: string, value: any) {
   // handle boolean-ish values for status fields
   if (["raileats", "irctc", "is_irctc_approved", "is_pure_veg"].includes(key)) {
-    if (value === true || value === 1 || value === "1" || value === "yes" || value === "on") return 1;
+    if (
+      value === true ||
+      value === 1 ||
+      value === "1" ||
+      String(value).toLowerCase() === "true" ||
+      String(value).toLowerCase() === "yes" ||
+      String(value).toLowerCase() === "on"
+    )
+      return 1;
     return 0;
   }
   if (key === "rating") {
     if (value === "" || value == null) return null;
-    return Number(value);
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
   }
+  // leave other values as-is
   return value;
 }
 
@@ -74,7 +84,7 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
     const codeParam = params.code;
     const body = (await req.json()) || {};
 
-    // Build updates object
+    // Build updates object mapped to DB columns
     const updates: Record<string, any> = {};
     for (const k of Object.keys(body)) {
       const dbCol = ALLOWED_MAP[k];
@@ -84,7 +94,7 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
     }
 
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "No valid fields to update" }, { status: 400 });
     }
 
     // Numeric or string code
@@ -97,16 +107,17 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
     }
 
     const { data, error } = await query.limit(1);
+
     if (error) {
       console.error("Supabase update error:", error);
-      return NextResponse.json({ error: error.message ?? "Update failed" }, { status: 500 });
+      return NextResponse.json({ ok: false, error: error.message ?? "Update failed" }, { status: 500 });
     }
 
     const row = Array.isArray(data) ? data[0] ?? null : data ?? null;
     return NextResponse.json({ ok: true, row });
   } catch (err: any) {
-    console.error("API error:", err);
-    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500 });
+    console.error("API error (PATCH /api/restros/[code]):", err);
+    return NextResponse.json({ ok: false, error: err?.message ?? String(err) }, { status: 500 });
   }
 }
 
