@@ -1,4 +1,3 @@
-// app/admin/restros/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -13,7 +12,6 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 type Restro = { [k: string]: any };
-type SaveResult = { ok: boolean; row?: any; error?: any };
 
 export default function RestroMasterPage(): JSX.Element {
   // filters
@@ -30,10 +28,7 @@ export default function RestroMasterPage(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-
-  // modal / save
   const [editingRestro, setEditingRestro] = useState<Restro | null>(null);
-  const [savingModal, setSavingModal] = useState<boolean>(false);
 
   useEffect(() => {
     fetchRestros();
@@ -44,14 +39,14 @@ export default function RestroMasterPage(): JSX.Element {
     setLoading(true);
     setError(null);
     try {
-      let query: any = supabase.from("RestroMaster").select("*").limit(500);
+      let query = supabase.from("RestroMaster").select("*").limit(500);
 
       if (filters?.restroCode) {
         const rc = String(filters.restroCode).trim();
         if (/^\d+$/.test(rc)) {
           query = query.eq("RestroCode", Number(rc));
         } else {
-          query = query.ilike("RestroName", `%${rc}%`);
+          (query as any) = (query as any).ilike("RestroName", `%${rc}%`);
         }
       }
 
@@ -59,7 +54,7 @@ export default function RestroMasterPage(): JSX.Element {
         if (!v) return;
         const s = String(v).trim();
         if (s.length === 0) return;
-        query = query.ilike(col, `%${s}%`);
+        (query as any) = (query as any).ilike(col, `%${s}%`);
       };
 
       ilikeIf("RestroName", filters?.restroName);
@@ -67,7 +62,7 @@ export default function RestroMasterPage(): JSX.Element {
       ilikeIf("StationCode", filters?.stationCode);
       ilikeIf("StationName", filters?.stationName);
       ilikeIf("OwnerPhone", filters?.ownerPhone);
-      ilikeIf("FSSAINumber", filters?.fssaiNumber ?? filters?.fssainumber);
+      ilikeIf("FSSAINumber", filters?.fssaiNumber);
 
       const { data, error: e } = await query;
       if (e) throw e;
@@ -143,7 +138,7 @@ export default function RestroMasterPage(): JSX.Element {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `restro_master_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`;
+      a.download = `RestroMaster.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -156,57 +151,13 @@ export default function RestroMasterPage(): JSX.Element {
     }
   }
 
-  // ----- handleModalSave must return a Promise<SaveResult> -----
-  async function handleModalSave(updatedFields: any): Promise<SaveResult> {
-    if (!editingRestro) {
-      return { ok: false, error: "No restro selected" };
-    }
-
-    setSavingModal(true);
-    try {
-      const code = editingRestro.RestroCode ?? editingRestro.RestroId ?? editingRestro.code;
-      if (code === undefined || code === null) {
-        throw new Error("Missing RestroCode to update");
-      }
-
-      const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedFields),
-      });
-
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        const errMsg = json?.error ?? json ?? `Update failed (${res.status})`;
-        throw new Error(errMsg);
-      }
-
-      // try to extract updated row
-      const updatedRow = json?.row ?? json?.data ?? json ?? null;
-
-      // update local results array
-      setResults((prev) =>
-        prev.map((r) => {
-          const rcode = r.RestroCode ?? r.RestroId ?? r.code;
-          if (String(rcode) === String(code)) {
-            return updatedRow ? { ...r, ...updatedRow } : { ...r, ...updatedFields };
-          }
-          return r;
-        })
-      );
-
-      // refresh editingRestro shown in modal (so if modal stays open it shows latest)
-      setEditingRestro((prev) => (prev ? (updatedRow ? updatedRow : { ...prev, ...updatedFields }) : prev));
-
-      return { ok: true, row: updatedRow ?? { ...editingRestro, ...updatedFields } };
-    } catch (err: any) {
-      console.error("modal save error:", err);
-      return { ok: false, error: err?.message ?? String(err) };
-    } finally {
-      setSavingModal(false);
-    }
-  }
+  // Called after modal save to update list in UI
+  const handleModalSavedRow = (updatedRow: Restro) => {
+    setResults((prev) =>
+      prev.map((r) => (String(r.RestroCode) === String(updatedRow.RestroCode) ? updatedRow : r))
+    );
+    setEditingRestro(null);
+  };
 
   return (
     <main style={{ padding: 24 }}>
@@ -217,15 +168,27 @@ export default function RestroMasterPage(): JSX.Element {
           <button
             onClick={handleExportAll}
             disabled={exporting}
-            style={{ background: "#0ea5e9", color: "white", padding: "8px 12px", borderRadius: 6, border: "none", cursor: exporting ? "not-allowed" : "pointer" }}
-            title="Download Restro Master CSV"
+            style={{
+              background: "#0ea5e9",
+              color: "white",
+              padding: "8px 12px",
+              borderRadius: 6,
+              border: "none",
+              cursor: exporting ? "not-allowed" : "pointer",
+            }}
           >
             {exporting ? "Exporting..." : "Download Restro Master"}
           </button>
-
           <button
-            onClick={() => alert("New Restro route not implemented")}
-            style={{ background: "#10b981", color: "white", padding: "8px 12px", borderRadius: 6, border: "none", cursor: "pointer" }}
+            onClick={() => alert("New Restro page route not added yet")}
+            style={{
+              background: "#10b981",
+              color: "white",
+              padding: "8px 12px",
+              borderRadius: 6,
+              border: "none",
+              cursor: "pointer",
+            }}
           >
             + Add New Restro
           </button>
@@ -234,7 +197,14 @@ export default function RestroMasterPage(): JSX.Element {
 
       {/* Search Form */}
       <form onSubmit={onSearch} style={{ background: "#fff", padding: 12, borderRadius: 8, marginBottom: 12 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr 120px 1fr 160px 1fr", gap: 12, marginBottom: 12 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "120px 1fr 1fr 120px 1fr 160px 1fr",
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
           <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} style={{ padding: 8 }} />
           <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
           <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} style={{ padding: 8 }} />
@@ -325,9 +295,9 @@ export default function RestroMasterPage(): JSX.Element {
         </table>
       </div>
 
-      {/* Modal (pass onSave that returns Promise<SaveResult>) */}
+      {/* Modal */}
       {editingRestro && (
-        <RestroEditModal restro={editingRestro} onClose={() => setEditingRestro(null)} onSave={handleModalSave} saving={savingModal} />
+        <RestroEditModal restro={editingRestro} onClose={() => setEditingRestro(null)} onSave={handleModalSavedRow} />
       )}
     </main>
   );
