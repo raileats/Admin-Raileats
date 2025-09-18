@@ -77,41 +77,59 @@ export default function RestroEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose]);
 
+  // robust getter to accept many column name variants
+  const get = (obj: any, ...keys: string[]) => {
+    for (const k of keys) {
+      if (!obj) continue;
+      if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined && obj[k] !== null) return obj[k];
+    }
+    return undefined;
+  };
+
   const [local, setLocal] = useState<any>({});
   useEffect(() => {
     setLocal({
-      RestroName: restro?.RestroName ?? restro?.restro_name ?? "",
-      RestroCode: restro?.RestroCode ?? restro?.restro_code ?? "",
-      StationCode: restro?.StationCode ?? restro?.station_code ?? "",
-      StationName: restro?.StationName ?? restro?.station_name ?? "",
-      State: restro?.State ?? restro?.state ?? restro?.state_name ?? "",
-      StationCategory: restro?.StationCategory ?? restro?.station_category ?? "",
-      WeeklyOff: restro?.WeeklyOff ?? restro?.weekly_off ?? "SUN",
-      OpenTime: restro?.OpenTime ?? restro?.open_time ?? "10:00",
-      ClosedTime: restro?.ClosedTime ?? restro?.closed_time ?? "23:00",
-      MinimumOrderValue: restro?.MinimumOrderValue ?? restro?.minimum_order_value ?? 0,
-      CutOffTime: restro?.CutOffTime ?? restro?.cut_off_time ?? 0,
-      RaileatsDeliveryCharge: restro?.RaileatsDeliveryCharge ?? restro?.raileats_delivery_charge ?? 0,
-      RaileatsDeliveryChargeGSTRate: restro?.RaileatsDeliveryChargeGSTRate ?? restro?.raileats_delivery_charge_gst_rate ?? 0,
-      RaileatsDeliveryChargeGST: restro?.RaileatsDeliveryChargeGST ?? restro?.raileats_delivery_charge_gst ?? 0,
+      RestroName: get(restro, "RestroName", "restro_name", "name") ?? "",
+      RestroCode: get(restro, "RestroCode", "restro_code", "code", "RestroId", "restro_id") ?? "",
+      StationCode: get(restro, "StationCode", "station_code", "Station_Code", "stationCode") ?? "",
+      StationName: get(restro, "StationName", "station_name", "station") ?? "",
+      State: get(restro, "State", "state", "state_name", "StateName") ?? "",
+      StationCategory: get(restro, "StationCategory", "station_category", "stationType", "Station_Type", "Category", "category") ?? "",
+
+      WeeklyOff: get(restro, "WeeklyOff", "weekly_off") ?? "SUN",
+      OpenTime: get(restro, "OpenTime", "open_time") ?? "10:00",
+      ClosedTime: get(restro, "ClosedTime", "closed_time") ?? "23:00",
+      MinimumOrderValue: get(restro, "MinimumOrderValue", "minimum_order_value", "min_order_value") ?? 0,
+      CutOffTime: get(restro, "CutOffTime", "cut_off_time") ?? 0,
+
+      RaileatsDeliveryCharge: get(restro, "RaileatsDeliveryCharge", "raileats_delivery_charge") ?? 0,
+      RaileatsDeliveryChargeGSTRate: get(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0,
+      RaileatsDeliveryChargeGST: get(restro, "RaileatsDeliveryChargeGST", "raileats_delivery_charge_gst") ?? 0,
       RaileatsDeliveryChargeTotalInclGST:
-        restro?.RaileatsDeliveryChargeTotalInclGST ?? restro?.raileats_delivery_charge_total_incl_gst ?? 0,
-      OrdersPaymentOptionForCustomer: restro?.OrdersPaymentOptionForCustomer ?? restro?.orders_payment_option_for_customer ?? "BOTH",
-      IRCTCOrdersPaymentOptionForCustomer: restro?.IRCTCOrdersPaymentOptionForCustomer ?? restro?.irctc_orders_payment_option ?? "BOTH",
-      RestroTypeOfDelivery: restro?.RestroTypeOfDelivery ?? restro?.restro_type_of_delivery ?? "RAILEATS",
-      IRCTC: restro?.IRCTC === 1 || restro?.IRCTC === "1" || restro?.IRCTC === true,
-      Raileats: restro?.Raileats === 1 || restro?.Raileats === "1" || restro?.Raileats === true,
+        get(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0,
+
+      OrdersPaymentOptionForCustomer: get(restro, "OrdersPaymentOptionForCustomer", "orders_payment_option_for_customer") ?? "BOTH",
+      IRCTCOrdersPaymentOptionForCustomer: get(restro, "IRCTCOrdersPaymentOptionForCustomer", "irctc_orders_payment_option") ?? "BOTH",
+      RestroTypeOfDelivery: get(restro, "RestroTypeOfDelivery", "restro_type_of_delivery") ?? "RAILEATS",
+
+      IRCTC: get(restro, "IRCTC", "irctc") === 1 || get(restro, "IRCTC", "irctc") === "1" || get(restro, "IRCTC", "irctc") === true,
+      Raileats: get(restro, "Raileats", "raileats") === 1 || get(restro, "Raileats", "raileats") === "1" || get(restro, "Raileats", "raileats") === true,
       IsIrctcApproved:
-        restro?.IsIrctcApproved === 1 || restro?.IsIrctcApproved === "1" || restro?.IsIrctcApproved === true,
-      OwnerName: restro?.OwnerName ?? restro?.owner_name ?? "",
-      OwnerPhone: restro?.OwnerPhone ?? restro?.owner_phone ?? "",
-      FSSAINumber: restro?.FSSAINumber ?? restro?.fssai_number ?? "",
-      FSSAIExpiryDate: restro?.FSSAIExpiryDate ?? restro?.fssai_expiry_date ?? "",
-      RestroDisplayPhoto: restro?.RestroDisplayPhoto ?? restro?.restro_display_photo ?? "",
-      RestroRating: restro?.RestroRating ?? restro?.restro_rating ?? "",
-      BrandName: restro?.BrandName ?? restro?.brand_name ?? "",
-      RestroEmail: restro?.RestroEmail ?? restro?.restro_email ?? "",
-      RestroPhone: restro?.RestroPhone ?? restro?.restro_phone ?? "",
+        get(restro, "IsIrctcApproved", "is_irctc_approved", "isIrctcApproved") === 1 ||
+        get(restro, "IsIrctcApproved", "is_irctc_approved", "isIrctcApproved") === "1" ||
+        get(restro, "IsIrctcApproved", "is_irctc_approved", "isIrctcApproved") === true,
+
+      OwnerName: get(restro, "OwnerName", "owner_name") ?? "",
+      OwnerPhone: get(restro, "OwnerPhone", "owner_phone") ?? "",
+      FSSAINumber: get(restro, "FSSAINumber", "fssai_number") ?? "",
+      FSSAIExpiryDate: get(restro, "FSSAIExpiryDate", "fssai_expiry_date") ?? "",
+
+      RestroDisplayPhoto: get(restro, "RestroDisplayPhoto", "restro_display_photo") ?? "",
+      RestroRating: get(restro, "RestroRating", "restro_rating") ?? "",
+      BrandName: get(restro, "BrandName", "brand_name") ?? "",
+      RestroEmail: get(restro, "RestroEmail", "restro_email") ?? "",
+      RestroPhone: get(restro, "RestroPhone", "restro_phone") ?? "",
+
       ...restro,
     });
   }, [restro]);
@@ -227,10 +245,9 @@ export default function RestroEditModal({
           boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
         }}
       >
-        {/* ------------------ FIXED HEADER (always visible) ------------------ */}
+        {/* FIXED HEADER */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ fontWeight: 600 }}>
-            {/* This will not change when switching tabs */}
             {String(local.RestroCode ?? restro?.RestroCode ?? "")} / {local.RestroName ?? restro?.RestroName} / {stationDisplay}
           </div>
 
@@ -262,7 +279,7 @@ export default function RestroEditModal({
           </div>
         </div>
 
-        {/* ------------------ TABS ------------------ */}
+        {/* TABS */}
         <div style={{ display: "flex", borderBottom: "1px solid #eee", background: "#fafafa" }}>
           {tabs.map((tab) => (
             <div
@@ -281,7 +298,7 @@ export default function RestroEditModal({
           ))}
         </div>
 
-        {/* ------------------ TOOLBAR (Save only, top-right) ------------------ */}
+        {/* TOOLBAR (Save only) */}
         <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
           <button
@@ -300,14 +317,13 @@ export default function RestroEditModal({
           </button>
         </div>
 
-        {/* ------------------ CONTENT ------------------ */}
+        {/* CONTENT */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           {/* Basic Information */}
           {activeTab === "Basic Information" && (
             <div>
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
               <div className="compact-grid">
-                {/* left column */}
                 <div className="field">
                   <label>Station</label>
                   <div className="readonly">{stationDisplay}</div>
@@ -323,7 +339,6 @@ export default function RestroEditModal({
                   <input value={local.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} />
                 </div>
 
-                {/* ... other Basic fields (same as previous) */}
                 <div className="field">
                   <label>Brand Name</label>
                   <input value={local.BrandName ?? ""} onChange={(e) => updateField("BrandName", e.target.value)} />
@@ -407,29 +422,17 @@ export default function RestroEditModal({
             </div>
           )}
 
-          {/* Station Settings */}
+          {/* Station Settings - show single readonly Station */}
           {activeTab === "Station Settings" && (
             <div>
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Station Settings</h3>
 
               <div className="compact-grid">
-                {/* Row: Station Name | Station Code | State (readonly like Basic) */}
                 <div className="field">
-                  <label>Station Name</label>
-                  <div className="readonly">{local.StationName ?? restro?.StationName ?? "—"}</div>
+                  <label>Station</label>
+                  <div className="readonly">{stationDisplay}</div>
                 </div>
 
-                <div className="field">
-                  <label>Station Code</label>
-                  <div className="readonly">{local.StationCode ?? restro?.StationCode ?? "—"}</div>
-                </div>
-
-                <div className="field">
-                  <label>State</label>
-                  <div className="readonly">{local.State ?? restro?.State ?? "—"}</div>
-                </div>
-
-                {/* Station Category | Raileats Charge | Weekly Off */}
                 <div className="field">
                   <label>Station Category</label>
                   <input value={local.StationCategory ?? ""} onChange={(e) => updateField("StationCategory", e.target.value)} />
@@ -453,7 +456,6 @@ export default function RestroEditModal({
                   </select>
                 </div>
 
-                {/* GST Rate | Open Time | Closed Time  <-- Open + Closed now adjacent */}
                 <div className="field">
                   <label>Raileats Customer Delivery Charge GST Rate (%)</label>
                   <input type="number" value={local.RaileatsDeliveryChargeGSTRate ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeGSTRate", Number(e.target.value))} />
@@ -469,7 +471,6 @@ export default function RestroEditModal({
                   <input type="time" value={local.ClosedTime ?? ""} onChange={(e) => updateField("ClosedTime", e.target.value)} />
                 </div>
 
-                {/* GST absolute | Total incl GST | Minimum Order Value */}
                 <div className="field">
                   <label>Raileats Customer Delivery Charge GST (absolute)</label>
                   <input type="number" value={local.RaileatsDeliveryChargeGST ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeGST", Number(e.target.value))} />
@@ -485,7 +486,6 @@ export default function RestroEditModal({
                   <input type="number" value={local.MinimumOrderValue ?? 0} onChange={(e) => updateField("MinimumOrderValue", Number(e.target.value))} />
                 </div>
 
-                {/* Cut Off | Orders Payment Option | IRCTC Orders Payment Option */}
                 <div className="field">
                   <label>Cut Off Time (mins)</label>
                   <input type="number" value={local.CutOffTime ?? 0} onChange={(e) => updateField("CutOffTime", Number(e.target.value))} />
@@ -509,7 +509,6 @@ export default function RestroEditModal({
                   </select>
                 </div>
 
-                {/* Restro Type of Delivery */}
                 <div className="field">
                   <label>Restro Type of Delivery (Vendor / Raileats)</label>
                   <select value={local.RestroTypeOfDelivery ?? "RAILEATS"} onChange={(e) => updateField("RestroTypeOfDelivery", e.target.value)}>
