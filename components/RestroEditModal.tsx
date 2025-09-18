@@ -2,17 +2,15 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Props = {
   restro: any;
-  onClose: () => void;
+  onClose?: () => void;
   onSave?: (updatedFields: any) => Promise<{ ok: boolean; row?: any; error?: any }>;
   saving?: boolean;
-  /**
-   * Optional stations options array: [{ label: "NIZAMABAD (NZB) - Telangana", value: "NZB" }, ...]
-   * If provided, the Station select will use this list. Otherwise station will show read-only display.
-   */
   stationsOptions?: { label: string; value: string }[];
+  initialTab?: string;
 };
 
 const tabs = [
@@ -25,22 +23,72 @@ const tabs = [
   "Menu",
 ];
 
-export default function RestroEditModal({ restro, onClose, onSave, saving: parentSaving, stationsOptions = [] }: Props) {
-  const [activeTab, setActiveTab] = useState(tabs[0]);
+function getStationDisplayFrom(obj: any) {
+  const sName = (obj?.StationName ?? obj?.station_name ?? "").toString().trim();
+  const sCode = (obj?.StationCode ?? obj?.station_code ?? "").toString().trim();
+  const state = (obj?.State ?? obj?.state ?? obj?.state_name ?? "").toString().trim();
+  const parts: string[] = [];
+  if (sName) parts.push(sName);
+  if (sCode) parts.push(`(${sCode})`);
+  const left = parts.join(" ");
+  if (left && state) return `${left} - ${state}`;
+  if (left) return left;
+  if (state) return state;
+  return "—";
+}
+
+export default function RestroEditModal({
+  restro,
+  onClose,
+  onSave,
+  saving: parentSaving,
+  stationsOptions = [],
+  initialTab,
+}: Props) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<string>(initialTab ?? tabs[0]);
   const [savingInternal, setSavingInternal] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // local editable copy
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
+
+  // close handler (use provided onClose or navigate back)
+  function doClose() {
+    if (onClose) {
+      try {
+        onClose();
+      } catch (e) {
+        // fallback to navigation
+        router.push("/admin/restros");
+      }
+    } else {
+      router.push("/admin/restros");
+    }
+  }
+
+  // close on Escape key
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" || e.key === "Esc") {
+        doClose();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose]);
+
   const [local, setLocal] = useState<any>({});
   useEffect(() => {
     setLocal({
-      // basic
       RestroName: restro?.RestroName ?? restro?.restro_name ?? "",
       RestroCode: restro?.RestroCode ?? restro?.restro_code ?? "",
       StationCode: restro?.StationCode ?? restro?.station_code ?? "",
       StationName: restro?.StationName ?? restro?.station_name ?? "",
-      // station settings (from your CSV/DB)
-      StationCategory: restro?.StationCategory ?? restro?.station_category ?? "A",
+      State: restro?.State ?? restro?.state ?? restro?.state_name ?? "",
+      StationCategory: restro?.StationCategory ?? restro?.station_category ?? "",
       WeeklyOff: restro?.WeeklyOff ?? restro?.weekly_off ?? "SUN",
       OpenTime: restro?.OpenTime ?? restro?.open_time ?? "10:00",
       ClosedTime: restro?.ClosedTime ?? restro?.closed_time ?? "23:00",
@@ -49,20 +97,24 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
       RaileatsDeliveryCharge: restro?.RaileatsDeliveryCharge ?? restro?.raileats_delivery_charge ?? 0,
       RaileatsDeliveryChargeGSTRate: restro?.RaileatsDeliveryChargeGSTRate ?? restro?.raileats_delivery_charge_gst_rate ?? 0,
       RaileatsDeliveryChargeGST: restro?.RaileatsDeliveryChargeGST ?? restro?.raileats_delivery_charge_gst ?? 0,
-      RaileatsDeliveryChargeTotalInclGST: restro?.RaileatsDeliveryChargeTotalInclGST ?? restro?.raileats_delivery_charge_total_incl_gst ?? 0,
-      OrdersPaymentOptionForCustomer: restro?.OrdersPaymentOptionForCustomer ?? restro?.orders_payment_option_for_customer ?? "BOTH", // BOTH / PREPAID / COD
+      RaileatsDeliveryChargeTotalInclGST:
+        restro?.RaileatsDeliveryChargeTotalInclGST ?? restro?.raileats_delivery_charge_total_incl_gst ?? 0,
+      OrdersPaymentOptionForCustomer: restro?.OrdersPaymentOptionForCustomer ?? restro?.orders_payment_option_for_customer ?? "BOTH",
       IRCTCOrdersPaymentOptionForCustomer: restro?.IRCTCOrdersPaymentOptionForCustomer ?? restro?.irctc_orders_payment_option ?? "BOTH",
-      RestroTypeOfDelivery: restro?.RestroTypeOfDelivery ?? restro?.restro_type_of_delivery ?? "RAILEATS", // RAILEATS / VENDOR
-      // flags
+      RestroTypeOfDelivery: restro?.RestroTypeOfDelivery ?? restro?.restro_type_of_delivery ?? "RAILEATS",
       IRCTC: restro?.IRCTC === 1 || restro?.IRCTC === "1" || restro?.IRCTC === true,
       Raileats: restro?.Raileats === 1 || restro?.Raileats === "1" || restro?.Raileats === true,
       IsIrctcApproved:
         restro?.IsIrctcApproved === 1 || restro?.IsIrctcApproved === "1" || restro?.IsIrctcApproved === true,
-      // fallback image, owner etc.
       OwnerName: restro?.OwnerName ?? restro?.owner_name ?? "",
       OwnerPhone: restro?.OwnerPhone ?? restro?.owner_phone ?? "",
       FSSAINumber: restro?.FSSAINumber ?? restro?.fssai_number ?? "",
       FSSAIExpiryDate: restro?.FSSAIExpiryDate ?? restro?.fssai_expiry_date ?? "",
+      RestroDisplayPhoto: restro?.RestroDisplayPhoto ?? restro?.restro_display_photo ?? "",
+      RestroRating: restro?.RestroRating ?? restro?.restro_rating ?? "",
+      BrandName: restro?.BrandName ?? restro?.brand_name ?? "",
+      RestroEmail: restro?.RestroEmail ?? restro?.restro_email ?? "",
+      RestroPhone: restro?.RestroPhone ?? restro?.restro_phone ?? "",
       ...restro,
     });
   }, [restro]);
@@ -71,11 +123,13 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
   function updateField(key: string, value: any) {
     setLocal((s: any) => ({ ...s, [key]: value }));
+    setError(null);
   }
 
   async function defaultPatch(payload: any) {
     try {
-      const code = restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? restro?.code;
+      const code =
+        restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? restro?.code;
       if (!code) throw new Error("Missing RestroCode for update");
       const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
         method: "PATCH",
@@ -87,8 +141,7 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         throw new Error(txt || `Update failed (${res.status})`);
       }
       const json = await res.json().catch(() => null);
-      const updated = json?.row ?? json ?? null;
-      return { ok: true, row: updated };
+      return { ok: true, row: json?.row ?? json ?? null };
     } catch (err: any) {
       return { ok: false, error: err?.message ?? String(err) };
     }
@@ -96,27 +149,25 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
   async function handleSave() {
     setError(null);
-    // include station settings fields in payload
+
     const payload: any = {
-      // keep basic fields minimal (parent may send others)
       RestroName: local.RestroName ?? "",
-      StationCode: local.StationCode ?? restro?.StationCode ?? "",
-      StationName: local.StationName ?? restro?.StationName ?? "",
-      // station settings fields
+      StationCode: local.StationCode ?? null,
+      StationName: local.StationName ?? null,
+      State: local.State ?? null,
       StationCategory: local.StationCategory ?? null,
       WeeklyOff: local.WeeklyOff ?? null,
       OpenTime: local.OpenTime ?? null,
       ClosedTime: local.ClosedTime ?? null,
-      MinimumOrderValue: local.MinimumOrderValue ?? null,
-      CutOffTime: local.CutOffTime ?? null,
-      RaileatsDeliveryCharge: local.RaileatsDeliveryCharge ?? null,
-      RaileatsDeliveryChargeGSTRate: local.RaileatsDeliveryChargeGSTRate ?? null,
-      RaileatsDeliveryChargeGST: local.RaileatsDeliveryChargeGST ?? null,
-      RaileatsDeliveryChargeTotalInclGST: local.RaileatsDeliveryChargeTotalInclGST ?? null,
+      MinimumOrderValue: Number(local.MinimumOrderValue) || 0,
+      CutOffTime: Number(local.CutOffTime) || 0,
+      RaileatsDeliveryCharge: Number(local.RaileatsDeliveryCharge) || 0,
+      RaileatsDeliveryChargeGSTRate: Number(local.RaileatsDeliveryChargeGSTRate) || 0,
+      RaileatsDeliveryChargeGST: Number(local.RaileatsDeliveryChargeGST) || 0,
+      RaileatsDeliveryChargeTotalInclGST: Number(local.RaileatsDeliveryChargeTotalInclGST) || 0,
       OrdersPaymentOptionForCustomer: local.OrdersPaymentOptionForCustomer ?? null,
       IRCTCOrdersPaymentOptionForCustomer: local.IRCTCOrdersPaymentOptionForCustomer ?? null,
       RestroTypeOfDelivery: local.RestroTypeOfDelivery ?? null,
-      // flags
       IRCTC: local.IRCTC ? 1 : 0,
       Raileats: local.Raileats ? 1 : 0,
       IsIrctcApproved: local.IsIrctcApproved ? 1 : 0,
@@ -126,17 +177,13 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
       if (onSave) {
         if (parentSaving === undefined) setSavingInternal(true);
         const result = await onSave(payload);
-        if (!result || !result.ok) {
-          throw new Error(result?.error ?? "Save failed");
-        }
-        onClose();
+        if (!result || !result.ok) throw new Error(result?.error ?? "Save failed");
+        doClose();
       } else {
         setSavingInternal(true);
         const result = await defaultPatch(payload);
-        if (!result.ok) {
-          throw new Error(result.error ?? "Save failed");
-        }
-        onClose();
+        if (!result.ok) throw new Error(result.error ?? "Save failed");
+        doClose();
       }
     } catch (err: any) {
       console.error("Save error:", err);
@@ -146,25 +193,12 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
     }
   }
 
-  // helper to create station display string (NIZAMABAD (NZB) - Telangana)
-  const getStationDisplay = () => {
-    if (typeof restro?.StationDisplay === "string" && restro.StationDisplay.trim()) return restro.StationDisplay.trim();
-    const sName = (restro?.StationName ?? local.StationName ?? "").toString().trim();
-    const sCode = (restro?.StationCode ?? local.StationCode ?? "").toString().trim();
-    const state = (restro?.State ?? local.State ?? "").toString().trim();
-    const leftParts: string[] = [];
-    if (sName) leftParts.push(sName);
-    if (sCode) leftParts.push(`(${sCode})`);
-    const left = leftParts.join(" ");
-    if (left && state) return `${left} - ${state}`;
-    if (left) return left;
-    if (state) return state;
-    return "—";
-  };
-  const stationDisplay = getStationDisplay();
+  const stationDisplay = getStationDisplayFrom({ ...restro, ...local });
 
-  // station select options: use provided stationsOptions if available, otherwise show display as readonly
-  const stationSelectOptions = stationsOptions && stationsOptions.length ? stationsOptions : [{ label: stationDisplay, value: local.StationCode ?? restro?.StationCode ?? "" }];
+  const stationSelectOptions =
+    stationsOptions && stationsOptions.length
+      ? stationsOptions
+      : [{ label: stationDisplay, value: local.StationCode ?? restro?.StationCode ?? "" }];
 
   return (
     <div
@@ -181,13 +215,15 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         zIndex: 1100,
         padding: 16,
       }}
+      aria-modal="true"
+      role="dialog"
     >
       <div
         style={{
           background: "#fff",
           borderRadius: 8,
-          width: "92%",
-          height: "92%",
+          width: "98%",
+          height: "98%",
           maxWidth: "1700px",
           display: "flex",
           flexDirection: "column",
@@ -211,7 +247,20 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
               Open Outlet Page
             </a>
 
-            <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">
+            {/* top-right X close button */}
+            <button
+              onClick={doClose}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: 20,
+                cursor: "pointer",
+                padding: 6,
+                lineHeight: 1,
+              }}
+              aria-label="Close"
+              title="Close (Esc)"
+            >
               ✕
             </button>
           </div>
@@ -236,13 +285,22 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
           ))}
         </div>
 
-        {/* Toolbar */}
+        {/* Toolbar (removed Cancel button; Save only) */}
         <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-          <button onClick={onClose} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }} disabled={saving}>
-            Cancel
-          </button>
-          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              background: saving ? "#7fcfe9" : "#0ea5e9",
+              color: "#fff",
+              padding: "8px 12px",
+              borderRadius: 6,
+              border: "none",
+              cursor: saving ? "not-allowed" : "pointer",
+            }}
+          >
             {saving ? "Saving..." : "Save"}
           </button>
         </div>
@@ -251,7 +309,6 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           {activeTab === "Basic Information" && (
             <div>
-              {/* keep Basic Information compact layout (unchanged) */}
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
               <div className="compact-grid">
                 <div className="field">
@@ -302,7 +359,16 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
 
                 <div className="field">
                   <label>Display Preview</label>
-                  {local.RestroDisplayPhoto ? <img src={(process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "") + local.RestroDisplayPhoto} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} /> : <div className="readonly">No image</div>}
+                  {local.RestroDisplayPhoto ? (
+                    <img
+                      src={(process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "") + local.RestroDisplayPhoto}
+                      alt="display"
+                      className="preview"
+                      onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                    />
+                  ) : (
+                    <div className="readonly">No image</div>
+                  )}
                 </div>
 
                 <div className="field">
@@ -348,30 +414,24 @@ export default function RestroEditModal({ restro, onClose, onSave, saving: paren
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Station Settings</h3>
 
               <div className="compact-grid">
-                {/* Station Code with Name (dropdown from stationsOptions OR readonly) */}
                 <div className="field">
                   <label>Station Code with Name</label>
-                  {stationsOptions && stationsOptions.length ? (
+                  {stationSelectOptions && stationSelectOptions.length > 1 ? (
                     <select
                       value={local.StationCode ?? ""}
                       onChange={(e) => {
-                        const selected = stationsOptions.find((s) => String(s.value) === String(e.target.value));
+                        const selected = stationSelectOptions.find((s) => String(s.value) === String(e.target.value));
+                        updateField("StationCode", e.target.value);
                         if (selected) {
-                          // attempt to parse label into pieces if label contains name/code/state
-                          updateField("StationCode", selected.value);
-                          // don't overwrite StationName/State if not present
-                          // if label looks like "NAME (CODE) - STATE", parse it:
                           const m = selected.label.match(/^(.+?)\s*\(([^)]+)\)\s*(?:-\s*(.+))?$/);
                           if (m) {
                             updateField("StationName", m[1].trim());
                             if (m[3]) updateField("State", m[3].trim());
                           }
-                        } else {
-                          updateField("StationCode", e.target.value);
                         }
                       }}
                     >
-                      {stationsOptions.map((s) => (
+                      {stationSelectOptions.map((s) => (
                         <option key={s.value} value={s.value}>
                           {s.label}
                         </option>
