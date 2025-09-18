@@ -56,7 +56,13 @@ export default async function Page({ params }: Props) {
   return (
     <div>
       {/* You can render a header or keep blank so modal overlays */}
-      <RestroEditModal restro={restro ?? {}} onClose={() => { /* client-side navigation will handle close */ }} stationsOptions={stationsOptions} />
+      <RestroEditModal
+  restro={restro ?? {}}
+  // don't pass empty onClose — let modal navigate back to list by default
+  stationsOptions={stationsOptions}
+  initialTab="Station Settings"
+/>
+
       <script
         // small client-side script to switch modal to "Station Settings" tab after mount
         // (RestroEditModal sets activeTab internally; if you want to force tab, you can add a prop to RestroEditModal)
