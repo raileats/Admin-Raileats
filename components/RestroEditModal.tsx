@@ -22,22 +22,89 @@ const tabs = [
   "Menu",
 ];
 
+/**
+ * Robust station display builder:
+ * - tries many possible key names and nested shapes
+ * - returns a readable string or "—"
+ */
 function getStationDisplayFrom(obj: any) {
-  // Accepts many possible key names and builds a friendly string,
-  // including the Station Category if available.
-  const sName = (obj?.StationName ?? obj?.station_name ?? obj?.station ?? "").toString().trim();
-  const sCode = (obj?.StationCode ?? obj?.station_code ?? obj?.Station_Code ?? obj?.stationCode ?? "").toString().trim();
-  const state = (obj?.State ?? obj?.state ?? obj?.state_name ?? obj?.StateName ?? "").toString().trim();
-  const cat = (obj?.StationCategory ?? obj?.station_category ?? obj?.stationType ?? obj?.Station_Type ?? obj?.Category ?? "").toString().trim();
+  if (!obj) return "—";
+
+  // helper to safely read deeply
+  const read = (...keys: string[]) => {
+    for (const k of keys) {
+      if (!k) continue;
+      // support dot paths like "station.name"
+      if (k.indexOf(".") >= 0) {
+        const parts = k.split(".");
+        let cur: any = obj;
+        let ok = true;
+        for (const p of parts) {
+          if (cur && (p in cur)) cur = cur[p];
+          else {
+            ok = false;
+            break;
+          }
+        }
+        if (ok && cur !== undefined && cur !== null) return cur;
+      } else {
+        if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined && obj[k] !== null) return obj[k];
+      }
+    }
+    return undefined;
+  };
+
+  // Common places fields might live (add more if your API uses other names)
+  const potentials = {
+    name: read(
+      "StationName",
+      "station_name",
+      "station",
+      "station?.name",
+      "station.name",
+      "stationName",
+      "name"
+    ),
+    code: read("StationCode", "station_code", "station?.code", "station.code", "code", "stationCode"),
+    state: read("State", "state", "state_name", "stateName", "StateName"),
+    category: read(
+      "StationCategory",
+      "station_category",
+      "stationType",
+      "Station_Type",
+      "Category",
+      "category"
+    ),
+  };
+
+  // If `station` property is an object (nested), try pulling from there
+  if (!potentials.name && obj.station && typeof obj.station === "object") {
+    potentials.name = obj.station.name ?? obj.station.station_name ?? obj.station.StationName;
+    potentials.code = potentials.code ?? obj.station.code ?? obj.station.station_code ?? obj.station.StationCode;
+    potentials.state = potentials.state ?? obj.station.state ?? obj.station.state_name;
+    potentials.category = potentials.category ?? obj.station.category ?? obj.station.type;
+  }
+
+  // Fallback: sometimes API returns "station_string" preformatted
+  if (!potentials.name) {
+    const pre = read("station_string", "station_display", "stationDisplay", "station_label");
+    if (pre) {
+      return String(pre).trim();
+    }
+  }
+
+  const sName = potentials.name ? String(potentials.name).trim() : "";
+  const sCode = potentials.code ? String(potentials.code).trim() : "";
+  const state = potentials.state ? String(potentials.state).trim() : "";
+  const cat = potentials.category ? String(potentials.category).trim() : "";
 
   const parts: string[] = [];
   if (sName) parts.push(sName);
   if (sCode) parts.push(`(${sCode})`);
   let left = parts.join(" ");
   if (left && state) left = `${left} - ${state}`;
-  else if (state && !left) left = state;
+  else if (!left && state) left = state;
   if (cat) {
-    // append category in square brackets so it's visually distinct
     left = left ? `${left} [${cat}]` : `[${cat}]`;
   }
   return left || "—";
@@ -83,7 +150,6 @@ export default function RestroEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose]);
 
-  // robust getter to accept many column name variants
   const get = (obj: any, ...keys: string[]) => {
     for (const k of keys) {
       if (!obj) continue;
@@ -139,6 +205,14 @@ export default function RestroEditModal({
       ...restro,
     });
   }, [restro]);
+
+  // log for debugging — paste this output if still broken
+  useEffect(() => {
+    // only log in dev usually — but leaving unconditional so we get outputs from user env too
+    console.info("RestroEditModal: restro keys:", restro ? Object.keys(restro) : "no-restro");
+    console.info("RestroEditModal: restro sample:", restro);
+    console.info("RestroEditModal: local sample:", local);
+  }, [restro, local]);
 
   const saving = parentSaving ?? savingInternal;
 
@@ -221,6 +295,9 @@ export default function RestroEditModal({
       ? stationsOptions
       : [{ label: stationDisplay, value: local.StationCode ?? restro?.StationCode ?? "" }];
 
+  // debug panel visible if NODE_ENV !== "production" or you can toggle here
+  const [debugOpen, setDebugOpen] = useState<boolean>(false);
+
   return (
     <div
       style={{
@@ -252,10 +329,7 @@ export default function RestroEditModal({
           boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
         }}
       >
-        {/* Header + Tabs + Toolbar are kept out of the scrolling content intentionally.
-            They are non-scrolling and pinned in place so they never disappear. */}
         <div style={{ flex: "0 0 auto", zIndex: 12 }}>
-          {/* FIXED HEADER */}
           <div
             style={{
               display: "flex",
@@ -305,7 +379,6 @@ export default function RestroEditModal({
             </div>
           </div>
 
-          {/* TABS */}
           <div
             style={{
               display: "flex",
@@ -332,7 +405,6 @@ export default function RestroEditModal({
             ))}
           </div>
 
-          {/* TOOLBAR (Save only) */}
           <div
             style={{
               padding: 12,
@@ -361,9 +433,7 @@ export default function RestroEditModal({
           </div>
         </div>
 
-        {/* CONTENT (scrollable) */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {/* Basic Information */}
           {activeTab === "Basic Information" && (
             <div>
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
@@ -466,7 +536,6 @@ export default function RestroEditModal({
             </div>
           )}
 
-          {/* Station Settings - show single readonly Station */}
           {activeTab === "Station Settings" && (
             <div>
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Station Settings</h3>
@@ -564,11 +633,43 @@ export default function RestroEditModal({
             </div>
           )}
 
-          {/* other tabs placeholder */}
           {activeTab !== "Basic Information" && activeTab !== "Station Settings" && (
             <div>
               <h3 style={{ marginTop: 0 }}>{activeTab}</h3>
               <p>Placeholder area for <b>{activeTab}</b> content — implement forms/fields here as needed.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* DEBUG PANEL — toggleable, shows restro/local JSON and keys */}
+      <div style={{ position: "fixed", right: 18, bottom: 18, zIndex: 1200 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            onClick={() => setDebugOpen((s) => !s)}
+            style={{
+              background: "#111827",
+              color: "#fff",
+              padding: "8px 10px",
+              borderRadius: 6,
+              border: "none",
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            {debugOpen ? "Hide Debug" : "Show Debug"}
+          </button>
+
+          {debugOpen && (
+            <div style={{ width: 420, maxHeight: 420, overflow: "auto", background: "#fff", border: "1px solid #ddd", padding: 10, borderRadius: 6, boxShadow: "0 6px 18px rgba(0,0,0,0.12)" }}>
+              <div style={{ fontSize: 13, marginBottom: 6, fontWeight: 700 }}>restro keys</div>
+              <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{restro ? JSON.stringify(Object.keys(restro), null, 2) : "no restro"}</pre>
+
+              <div style={{ fontSize: 13, marginTop: 8, marginBottom: 6, fontWeight: 700 }}>restro (sample)</div>
+              <pre style={{ fontSize: 11, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{restro ? JSON.stringify(restro, null, 2).slice(0, 15000) : "no restro"}</pre>
+
+              <div style={{ fontSize: 13, marginTop: 8, marginBottom: 6, fontWeight: 700 }}>local (sample)</div>
+              <pre style={{ fontSize: 11, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{JSON.stringify(local, null, 2)}</pre>
             </div>
           )}
         </div>
