@@ -12,6 +12,37 @@ function normalizeIncoming(value: any) {
 }
 
 /**
+ * Safe getter that accepts multiple candidate keys and returns the first non-null value.
+ * Uses bracket-access so TypeScript does not complain about property names that aren't declared.
+ */
+function getMaybe(obj: any, ...keys: string[]) {
+  if (!obj) return undefined;
+  for (const k of keys) {
+    if (k.includes(".")) {
+      // support simple dot path like "station.name"
+      const parts = k.split(".");
+      let cur: any = obj;
+      let ok = true;
+      for (const p of parts) {
+        if (cur && Object.prototype.hasOwnProperty.call(cur, p) && cur[p] !== undefined && cur[p] !== null) {
+          cur = cur[p];
+        } else {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return cur;
+    } else {
+      if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined && obj[k] !== null) return obj[k];
+      // try bracket access too (covers cases where obj is typed differently)
+      const v = (obj as any)[k];
+      if (v !== undefined && v !== null) return v;
+    }
+  }
+  return undefined;
+}
+
+/**
  * GET handler - fetch a single restro by code (RestroCode / restro_code / RestroId ...)
  * Also attempts to enrich with station details from Stations table if StationCode present.
  */
@@ -66,31 +97,44 @@ export async function GET(_req: Request, { params }: { params: { code: string } 
     }
 
     // If the Restro row has StationCode (or station_code), try fetching Station details to enrich the response
-    const stationCode = row.StationCode ?? row.station_code ?? row.stationCode ?? null;
+    const stationCode = getMaybe(row, "StationCode", "station_code", "stationCode", "station?.code", "station.code") ?? null;
     if (stationCode) {
       try {
+        // Select a few common fields - the actual DB may return them in different casing.
         const sres = await supabaseServer
           .from("Stations")
           .select("StationId,StationName,StationCode,State,station_category,station_type,StateName")
           .eq("StationCode", stationCode)
           .limit(1)
           .maybeSingle();
+
         if (sres.error) {
           console.warn("Station fetch warning:", sres.error);
         } else if (sres.data) {
-          // Merge a few station fields onto the restro row (client expects StationName, StationCode, State, StationCategory)
-          const s = sres.data;
+          const s: any = sres.data;
+
+          // Use getMaybe to find whichever of the candidate fields exist.
+          const mergedStationName =
+            getMaybe(row, "StationName", "station_name", "station", "station?.name") ??
+            getMaybe(s, "StationName", "station_name", "name");
+          const mergedStationCode =
+            getMaybe(row, "StationCode", "station_code", "stationCode") ??
+            getMaybe(s, "StationCode", "station_code", "code");
+          const mergedState =
+            getMaybe(row, "State", "state", "StateName") ??
+            getMaybe(s, "State", "state", "StateName");
+          const mergedCategory =
+            getMaybe(row, "StationCategory", "station_category", "stationType", "Station_Type", "Category") ??
+            getMaybe(s, "station_category", "station_type", "category", "type");
+
           row = {
             ...row,
-            StationName: row.StationName ?? row.station_name ?? s.StationName ?? s.station_name ?? s.name ?? row.StationName,
-            StationCode: row.StationCode ?? row.station_code ?? s.StationCode ?? s.station_code ?? s.code ?? row.StationCode,
-            State: row.State ?? row.state ?? row.StateName ?? s.State ?? s.state ?? s.StateName ?? row.State,
+            StationName: mergedStationName ?? (row.StationName ?? (row as any)["station_name"] ?? (s as any).StationName ?? (s as any)["station_name"] ?? (s as any).name ?? null),
+            StationCode: mergedStationCode ?? (row.StationCode ?? (row as any)["station_code"] ?? (s as any).StationCode ?? (s as any)["station_code"] ?? (s as any).code ?? null),
+            State: mergedState ?? (row.State ?? (row as any).state ?? (row as any).StateName ?? (s as any).State ?? (s as any).state ?? (s as any).StateName ?? null),
             StationCategory:
-              row.StationCategory ??
-              row.station_category ??
-              s.station_category ??
-              s.station_type ??
-              row.StationCategory,
+              mergedCategory ??
+              (row.StationCategory ?? (row as any).station_category ?? (s as any).station_category ?? (s as any).station_type ?? (s as any).type ?? null),
             // keep all other fields as-is
           };
         }
@@ -153,7 +197,7 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
     const updates: Record<string, any> = {};
     for (const k of Object.keys(body || {})) {
       if (allowedKeys.has(k)) {
-        updates[k] = normalizeIncoming(body[k]);
+        updates[k] = normalizeIncoming((body as any)[k]);
       }
     }
 
