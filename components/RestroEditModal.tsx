@@ -1,4 +1,3 @@
-// components/RestroEditModal.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -24,17 +23,24 @@ const tabs = [
 ];
 
 function getStationDisplayFrom(obj: any) {
-  const sName = (obj?.StationName ?? obj?.station_name ?? "").toString().trim();
-  const sCode = (obj?.StationCode ?? obj?.station_code ?? "").toString().trim();
-  const state = (obj?.State ?? obj?.state ?? obj?.state_name ?? "").toString().trim();
+  // Accepts many possible key names and builds a friendly string,
+  // including the Station Category if available.
+  const sName = (obj?.StationName ?? obj?.station_name ?? obj?.station ?? "").toString().trim();
+  const sCode = (obj?.StationCode ?? obj?.station_code ?? obj?.Station_Code ?? obj?.stationCode ?? "").toString().trim();
+  const state = (obj?.State ?? obj?.state ?? obj?.state_name ?? obj?.StateName ?? "").toString().trim();
+  const cat = (obj?.StationCategory ?? obj?.station_category ?? obj?.stationType ?? obj?.Station_Type ?? obj?.Category ?? "").toString().trim();
+
   const parts: string[] = [];
   if (sName) parts.push(sName);
   if (sCode) parts.push(`(${sCode})`);
-  const left = parts.join(" ");
-  if (left && state) return `${left} - ${state}`;
-  if (left) return left;
-  if (state) return state;
-  return "—";
+  let left = parts.join(" ");
+  if (left && state) left = `${left} - ${state}`;
+  else if (state && !left) left = state;
+  if (cat) {
+    // append category in square brackets so it's visually distinct
+    left = left ? `${left} [${cat}]` : `[${cat}]`;
+  }
+  return left || "—";
 }
 
 export default function RestroEditModal({
@@ -208,6 +214,7 @@ export default function RestroEditModal({
     }
   }
 
+  // Build display from combined restro + local so edits update immediately in header.
   const stationDisplay = getStationDisplayFrom({ ...restro, ...local });
   const stationSelectOptions =
     stationsOptions && stationsOptions.length
@@ -245,79 +252,116 @@ export default function RestroEditModal({
           boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
         }}
       >
-        {/* FIXED HEADER */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
-          <div style={{ fontWeight: 600 }}>
-            {String(local.RestroCode ?? restro?.RestroCode ?? "")} / {local.RestroName ?? restro?.RestroName} / {stationDisplay}
+        {/* Header + Tabs + Toolbar are kept out of the scrolling content intentionally.
+            They are non-scrolling and pinned in place so they never disappear. */}
+        <div style={{ flex: "0 0 auto", zIndex: 12 }}>
+          {/* FIXED HEADER */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "12px 20px",
+              borderBottom: "1px solid #e9e9e9",
+              background: "#fff",
+              position: "relative",
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ fontWeight: 600, fontSize: 15 }}>
+              {String(local.RestroCode ?? restro?.RestroCode ?? "")} / {local.RestroName ?? restro?.RestroName} /{" "}
+              <span style={{ color: "#0b7285", fontWeight: 600 }}>{stationDisplay}</span>
+            </div>
+
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <a
+                href={`/admin/restros/edit/${encodeURIComponent(String(local.RestroCode ?? restro?.RestroCode ?? ""))}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
+              >
+                Open Outlet Page
+              </a>
+
+              <button
+                onClick={doClose}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: 20,
+                  cursor: "pointer",
+                  padding: 6,
+                  lineHeight: 1,
+                  minWidth: 36,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                aria-label="Close"
+                title="Close (Esc)"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <a
-              href={`/admin/restros/edit/${encodeURIComponent(String(local.RestroCode ?? restro?.RestroCode ?? ""))}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
-            >
-              Open Outlet Page
-            </a>
+          {/* TABS */}
+          <div
+            style={{
+              display: "flex",
+              borderBottom: "1px solid #eee",
+              background: "#fafafa",
+              paddingLeft: 6,
+              paddingRight: 6,
+            }}
+          >
+            {tabs.map((tab) => (
+              <div
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  padding: "12px 16px",
+                  cursor: "pointer",
+                  borderBottom: activeTab === tab ? "3px solid #0ea5e9" : "3px solid transparent",
+                  fontWeight: activeTab === tab ? 600 : 500,
+                  color: activeTab === tab ? "#0ea5e9" : "#333",
+                }}
+              >
+                {tab}
+              </div>
+            ))}
+          </div>
 
+          {/* TOOLBAR (Save only) */}
+          <div
+            style={{
+              padding: 12,
+              borderBottom: "1px solid #eee",
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 8,
+              background: "#fff",
+            }}
+          >
+            {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
             <button
-              onClick={doClose}
+              onClick={handleSave}
+              disabled={saving}
               style={{
-                background: "transparent",
+                background: saving ? "#7fcfe9" : "#0ea5e9",
+                color: "#fff",
+                padding: "8px 12px",
+                borderRadius: 6,
                 border: "none",
-                fontSize: 20,
-                cursor: "pointer",
-                padding: 6,
-                lineHeight: 1,
+                cursor: saving ? "not-allowed" : "pointer",
               }}
-              aria-label="Close"
-              title="Close (Esc)"
             >
-              ✕
+              {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
 
-        {/* TABS */}
-        <div style={{ display: "flex", borderBottom: "1px solid #eee", background: "#fafafa" }}>
-          {tabs.map((tab) => (
-            <div
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: "12px 16px",
-                cursor: "pointer",
-                borderBottom: activeTab === tab ? "3px solid #0ea5e9" : "3px solid transparent",
-                fontWeight: activeTab === tab ? 600 : 500,
-                color: activeTab === tab ? "#0ea5e9" : "#333",
-              }}
-            >
-              {tab}
-            </div>
-          ))}
-        </div>
-
-        {/* TOOLBAR (Save only) */}
-        <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              background: saving ? "#7fcfe9" : "#0ea5e9",
-              color: "#fff",
-              padding: "8px 12px",
-              borderRadius: 6,
-              border: "none",
-              cursor: saving ? "not-allowed" : "pointer",
-            }}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-        </div>
-
-        {/* CONTENT */}
+        {/* CONTENT (scrollable) */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           {/* Basic Information */}
           {activeTab === "Basic Information" && (
