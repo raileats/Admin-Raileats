@@ -4,7 +4,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
-// import your tab components (these files should exist under components/restro-edit/)
+// Import your tab components (must already exist in components/restro-edit/)
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
 import AddressDocumentsTab from "./restro-edit/AddressDocumentsTab";
@@ -87,9 +87,9 @@ export default function RestroEditModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restro, onClose]);
+  }, [restro]);
 
-  // if no restro prop, fetch using URL (/admin/restros/:code/edit)
+  // If no restro prop, try to fetch by parsing URL /restros/:code/edit
   useEffect(() => {
     async function fetchRestro(code: string) {
       try {
@@ -118,7 +118,7 @@ export default function RestroEditModal({
     }
   }, [restro]);
 
-  // Load stations list if not provided
+  // Load stations if no options provided
   useEffect(() => {
     if (stations && stations.length) return;
     (async () => {
@@ -144,7 +144,7 @@ export default function RestroEditModal({
     })();
   }, []);
 
-  // populate local state from restro (robust keys)
+  // Populate local state from restro (but we do NOT render fields here)
   useEffect(() => {
     if (!restro) return;
     setLocal({
@@ -153,29 +153,24 @@ export default function RestroEditModal({
       StationCode: safeGet(restro, "StationCode", "station_code", "Station_Code", "stationCode") ?? "",
       StationName: safeGet(restro, "StationName", "station_name", "station") ?? "",
       State: safeGet(restro, "State", "state", "state_name", "StateName") ?? "",
-
       WeeklyOff: safeGet(restro, "WeeklyOff", "weekly_off") ?? "SUN",
       OpenTime: safeGet(restro, "OpenTime", "open_time") ?? "10:00",
       ClosedTime: safeGet(restro, "ClosedTime", "closed_time") ?? "23:00",
       MinimumOrderValue: Number(safeGet(restro, "MinimumOrderValue", "minimum_order_value") ?? 0),
       CutOffTime: Number(safeGet(restro, "CutOffTime", "cut_off_time") ?? 0),
-
       RaileatsDeliveryCharge: Number(safeGet(restro, "RaileatsDeliveryCharge", "raileats_delivery_charge") ?? 0),
       RaileatsDeliveryChargeGSTRate: Number(safeGet(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0),
       RaileatsDeliveryChargeGST: Number(safeGet(restro, "RaileatsDeliveryChargeGST", "raileats_delivery_charge_gst") ?? 0),
       RaileatsDeliveryChargeTotalInclGST: Number(safeGet(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0),
-
       OrdersPaymentOptionForCustomer: safeGet(restro, "OrdersPaymentOptionForCustomer", "orders_payment_option_for_customer") ?? "BOTH",
       IRCTCOrdersPaymentOptionForCustomer: safeGet(restro, "IRCTCOrdersPaymentOptionForCustomer", "irctc_orders_payment_option") ?? "BOTH",
       RestroTypeOfDelivery: safeGet(restro, "RestroTypeOfDelivery", "restro_type_of_delivery") ?? "RAILEATS",
-
       OwnerName: safeGet(restro, "OwnerName", "owner_name") ?? "",
       OwnerPhone: safeGet(restro, "OwnerPhone", "owner_phone") ?? "",
       RestroDisplayPhoto: safeGet(restro, "RestroDisplayPhoto", "restro_display_photo") ?? "",
       BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
       RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
       RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
-
       ...restro,
     });
   }, [restro]);
@@ -242,7 +237,6 @@ export default function RestroEditModal({
         const result = await defaultPatch(payload);
         if (!result.ok) throw new Error(result.error ?? "Save failed");
       }
-      // close after success
       doClose();
     } catch (err: any) {
       console.error("Save error:", err);
@@ -266,7 +260,7 @@ export default function RestroEditModal({
 
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
-  // Map tab name to component - components accept (local, updateField, stationDisplay, stations, loadingStations)
+  // Map tab name -> component render (only renders the external tab components)
   const renderTab = () => {
     const common = { local, updateField, stationDisplay, stations, loadingStations };
     switch (activeTab) {
@@ -379,49 +373,7 @@ export default function RestroEditModal({
       </div>
 
       <style jsx>{`
-        /* grid & fields */
-        .compact-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 12px 18px;
-          max-width: 1200px;
-          margin: 8px auto;
-        }
-        .field label {
-          display: block;
-          font-size: 13px;
-          color: #444;
-          margin-bottom: 6px;
-          font-weight: 600;
-        }
-        .field input, .field select {
-          width: 100%;
-          padding: 8px;
-          border-radius: 6px;
-          border: 1px solid #e3e3e3;
-          font-size: 13px;
-          background: #fff;
-          box-sizing: border-box;
-        }
-        .readonly {
-          padding: 8px 10px;
-          border-radius: 6px;
-          background: #fafafa;
-          border: 1px solid #f0f0f0;
-          font-size: 13px;
-        }
-        .preview {
-          height: 80px;
-          object-fit: cover;
-          border-radius: 6px;
-          border: 1px solid #eee;
-        }
-        @media (max-width: 1100px) {
-          .compact-grid { grid-template-columns: repeat(2, 1fr); max-width: 900px; }
-        }
-        @media (max-width: 720px) {
-          .compact-grid { grid-template-columns: 1fr; max-width: 680px; }
-        }
+        /* minimal shared styles (tab components should style their own forms) */
       `}</style>
     </div>
   );
