@@ -1,3 +1,4 @@
+// components/RestroEditModal.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -49,9 +50,9 @@ function getStationDisplayFrom(obj: any) {
     return undefined;
   };
 
-  const sName = (read("StationName", "station_name", "station", "station.name", "stationName", "name") ?? "").toString().trim();
-  const sCode = (read("StationCode", "station_code", "station.code", "stationCode", "code") ?? "").toString().trim();
-  const state = (read("State", "state", "state_name", "StateName", "stateName") ?? "").toString().trim();
+  const sName = (read("StationName", "station_name", "station", "name") ?? "").toString().trim();
+  const sCode = (read("StationCode", "station_code", "station.code", "code") ?? "").toString().trim();
+  const state = (read("State", "state", "state_name") ?? "").toString().trim();
 
   const parts: string[] = [];
   if (sName) parts.push(sName);
@@ -129,7 +130,6 @@ export default function RestroEditModal({
     if (!restro) {
       const code = getCodeFromPath();
       if (code) fetchRestro(code);
-      else console.warn("No restro prop and cannot parse code from path");
     }
   }, [restro]);
 
@@ -140,7 +140,6 @@ export default function RestroEditModal({
       try {
         const res = await fetch("/api/stations");
         if (!res.ok) {
-          console.warn("/api/stations not available:", res.status);
           setLoadingStations(false);
           return;
         }
@@ -219,27 +218,7 @@ export default function RestroEditModal({
   const saving = parentSaving ?? savingInternal;
 
   function updateField(key: string, value: any) {
-    setLocal((s: any) => {
-      const next = { ...s, [key]: value };
-
-      if (key === "RaileatsDeliveryCharge" || key === "RaileatsDeliveryChargeGSTRate") {
-        const charge = Number(next.RaileatsDeliveryCharge) || 0;
-        const rate = Number(next.RaileatsDeliveryChargeGSTRate) || 0;
-        const gstAbs = Math.round((charge * rate) / 100 * 100) / 100;
-        next.RaileatsDeliveryChargeGST = gstAbs;
-        next.RaileatsDeliveryChargeTotalInclGST = Math.round((charge + gstAbs) * 100) / 100;
-      }
-
-      if (key === "RaileatsDeliveryChargeGST") {
-        const charge = Number(next.RaileatsDeliveryCharge) || 0;
-        const gstAbs = Number(next.RaileatsDeliveryChargeGST) || 0;
-        next.RaileatsDeliveryChargeTotalInclGST = Math.round((charge + gstAbs) * 100) / 100;
-        const rate = charge ? Math.round((gstAbs / charge) * 10000) / 100 : 0;
-        next.RaileatsDeliveryChargeGSTRate = rate;
-      }
-
-      return next;
-    });
+    setLocal((s: any) => ({ ...s, [key]: value }));
     setError(null);
   }
 
@@ -266,6 +245,7 @@ export default function RestroEditModal({
 
   async function handleSave() {
     setError(null);
+
     const payload: any = {
       RestroName: local.RestroName ?? "",
       StationCode: local.StationCode ?? null,
@@ -293,13 +273,11 @@ export default function RestroEditModal({
         if (parentSaving === undefined) setSavingInternal(true);
         const result = await onSave(payload);
         if (!result || !result.ok) throw new Error(result?.error ?? "Save failed");
-        if (result.row) setRestro(result.row);
         doClose();
       } else {
         setSavingInternal(true);
         const result = await defaultPatch(payload);
         if (!result.ok) throw new Error(result.error ?? "Save failed");
-        if (result.row) setRestro(result.row);
         doClose();
       }
     } catch (err: any) {
@@ -355,32 +333,27 @@ export default function RestroEditModal({
           boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
         }}
       >
-        {/* Header (sticky) */}
-        <div style={{ flex: "0 0 auto", zIndex: 12 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "12px 20px",
-              borderBottom: "1px solid #e9e9e9",
-              background: "#fff",
-              position: "sticky",
-              top: 0,
-              zIndex: 1200,
-            }}
-          >
+        {/* ========== FIXED header (always visible) ========== */}
+        <div
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 1200,
+            background: "#fff",
+            borderBottom: "1px solid #e9e9e9",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px" }}>
             <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.25 }}>
-              <span>
+              <div>
                 {String(local.RestroCode ?? restro?.RestroCode ?? "")}
                 {local.RestroName || restro?.RestroName ? " / " : ""} {local.RestroName ?? restro?.RestroName ?? ""}
-              </span>
-              <br />
-              <span style={{ fontWeight: 600, fontSize: 13, color: "#0b7285" }}>{stationDisplay}</span>
+              </div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#0b7285", marginTop: 4 }}>{stationDisplay}</div>
             </div>
 
-            {/* right: only red close button */}
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            {/* ONLY red close X (no "Close" text, no open link) */}
+            <div>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -394,43 +367,44 @@ export default function RestroEditModal({
                   cursor: "pointer",
                   padding: "8px 10px",
                   borderRadius: 6,
-                  lineHeight: 1,
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
                 }}
-                aria-label="Close"
                 title="Close (Esc)"
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div style={{ display: "flex", borderBottom: "1px solid #eee", background: "#fafafa", paddingLeft: 6, paddingRight: 6 }}>
-            {tabs.map((tab) => (
-              <div
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  padding: "12px 16px",
-                  cursor: "pointer",
-                  borderBottom: activeTab === tab ? "3px solid #0ea5e9" : "3px solid transparent",
-                  fontWeight: activeTab === tab ? 600 : 500,
-                  color: activeTab === tab ? "#0ea5e9" : "#333",
-                }}
-              >
-                {tab}
-              </div>
-            ))}
+          {/* Tabs row (below header) */}
+          <div style={{ background: "#fafafa", borderTop: "1px solid #fff", borderBottom: "1px solid #eee" }}>
+            <div style={{ display: "flex", gap: 6, padding: "8px 12px" }}>
+              {tabs.map((tab) => (
+                <div
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    padding: "10px 14px",
+                    cursor: "pointer",
+                    borderBottom: activeTab === tab ? "3px solid #0ea5e9" : "3px solid transparent",
+                    fontWeight: activeTab === tab ? 600 : 500,
+                    color: activeTab === tab ? "#0ea5e9" : "#333",
+                  }}
+                >
+                  {tab}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Content */}
+        {/* ========== Scrollable content area ========= */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           {/* Basic Information */}
           {activeTab === "Basic Information" && (
             <div>
-              <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
+              <h3 style={{ textAlign: "center", marginTop: 0 }}>Basic Information</h3>
+
               <div className="compact-grid">
                 <div className="field">
                   <label>Station</label>
@@ -495,10 +469,10 @@ export default function RestroEditModal({
             </div>
           )}
 
-          {/* Station Settings - SHOW readonly Station (from Basic Information) */}
+          {/* Station Settings - show readonly Station from Basic Information */}
           {activeTab === "Station Settings" && (
             <div>
-              <h3 style={{ marginTop: 0, textAlign: "center" }}>Station Settings</h3>
+              <h3 style={{ textAlign: "center", marginTop: 0 }}>Station Settings</h3>
 
               <div className="compact-grid">
                 <div className="field">
@@ -508,11 +482,7 @@ export default function RestroEditModal({
 
                 <div className="field">
                   <label>Raileats Customer Delivery Charge</label>
-                  <input
-                    type="number"
-                    value={Number(local.RaileatsDeliveryCharge ?? 0)}
-                    onChange={(e) => updateField("RaileatsDeliveryCharge", Number(e.target.value || 0))}
-                  />
+                  <input type="number" value={local.RaileatsDeliveryCharge ?? 0} onChange={(e) => updateField("RaileatsDeliveryCharge", Number(e.target.value || 0))} />
                 </div>
 
                 <div className="field">
@@ -530,12 +500,7 @@ export default function RestroEditModal({
 
                 <div className="field">
                   <label>Raileats Customer Delivery Charge GST Rate (%)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number(local.RaileatsDeliveryChargeGSTRate ?? 0)}
-                    onChange={(e) => updateField("RaileatsDeliveryChargeGSTRate", Number(e.target.value || 0))}
-                  />
+                  <input type="number" step="0.01" value={local.RaileatsDeliveryChargeGSTRate ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeGSTRate", Number(e.target.value || 0))} />
                 </div>
 
                 <div className="field">
@@ -550,32 +515,22 @@ export default function RestroEditModal({
 
                 <div className="field">
                   <label>Raileats Customer Delivery Charge GST (absolute)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number(local.RaileatsDeliveryChargeGST ?? 0)}
-                    onChange={(e) => updateField("RaileatsDeliveryChargeGST", Number(e.target.value || 0))}
-                  />
+                  <input type="number" step="0.01" value={local.RaileatsDeliveryChargeGST ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeGST", Number(e.target.value || 0))} />
                 </div>
 
                 <div className="field">
                   <label>Raileats Customer Delivery Charge Total Incl GST</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={Number(local.RaileatsDeliveryChargeTotalInclGST ?? 0)}
-                    onChange={(e) => updateField("RaileatsDeliveryChargeTotalInclGST", Number(e.target.value || 0))}
-                  />
+                  <input type="number" step="0.01" value={local.RaileatsDeliveryChargeTotalInclGST ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeTotalInclGST", Number(e.target.value || 0))} />
                 </div>
 
                 <div className="field">
                   <label>Minimum Order Value</label>
-                  <input type="number" value={Number(local.MinimumOrderValue ?? 0)} onChange={(e) => updateField("MinimumOrderValue", Number(e.target.value || 0))} />
+                  <input type="number" value={local.MinimumOrderValue ?? 0} onChange={(e) => updateField("MinimumOrderValue", Number(e.target.value || 0))} />
                 </div>
 
                 <div className="field">
                   <label>Cut Off Time (mins)</label>
-                  <input type="number" value={Number(local.CutOffTime ?? 0)} onChange={(e) => updateField("CutOffTime", Number(e.target.value || 0))} />
+                  <input type="number" value={local.CutOffTime ?? 0} onChange={(e) => updateField("CutOffTime", Number(e.target.value || 0))} />
                 </div>
 
                 <div className="field">
@@ -607,16 +562,16 @@ export default function RestroEditModal({
             </div>
           )}
 
-          {/* other tabs placeholder */}
+          {/* placeholders for other tabs */}
           {activeTab !== "Basic Information" && activeTab !== "Station Settings" && (
             <div>
               <h3 style={{ marginTop: 0 }}>{activeTab}</h3>
-              <p>Placeholder area for <b>{activeTab}</b> content — implement forms/fields here as needed.</p>
+              <p>Content for <b>{activeTab}</b> goes here.</p>
             </div>
           )}
         </div>
 
-        {/* Footer (fixed) */}
+        {/* ========== FOOTER fixed (every tab) ========== */}
         <div
           style={{
             flex: "0 0 auto",
