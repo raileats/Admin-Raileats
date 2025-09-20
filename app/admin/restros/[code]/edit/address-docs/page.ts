@@ -25,11 +25,12 @@ export default async function AddressDocsPage({ params }: Props) {
     );
   }
 
-  // pass the restro row to the client form as initialData
   return (
     <div>
       <h3 style={{ textAlign: "center", marginTop: 0 }}>Address & Documents</h3>
       <div style={{ maxWidth: 1200, margin: "8px auto 40px", padding: "0 6px" }}>
+        {/* AddressDocsForm is a client component */}
+        {/* Make sure components/AddressDocsForm.tsx exists */}
         <AddressDocsForm initialData={restro} />
       </div>
     </div>
