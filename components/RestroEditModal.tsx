@@ -1,9 +1,10 @@
 // components/RestroEditModal.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
+// import your tab components (these files should exist under components/restro-edit/)
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
 import AddressDocumentsTab from "./restro-edit/AddressDocumentsTab";
@@ -31,7 +32,7 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-function get(obj: any, ...keys: string[]) {
+function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
     if (!obj) continue;
     if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined && obj[k] !== null) return obj[k];
@@ -39,10 +40,10 @@ function get(obj: any, ...keys: string[]) {
   return undefined;
 }
 
-function getStationDisplayFrom(obj: any) {
-  const sName = (get(obj, "StationName", "station_name", "station", "name") ?? "").toString().trim();
-  const sCode = (get(obj, "StationCode", "station_code", "station.code", "code") ?? "").toString().trim();
-  const state = (get(obj, "State", "state", "state_name") ?? "").toString().trim();
+function buildStationDisplay(obj: any) {
+  const sName = (safeGet(obj, "StationName", "station_name", "station", "name") ?? "").toString().trim();
+  const sCode = (safeGet(obj, "StationCode", "station_code", "Station_Code", "stationCode") ?? "").toString().trim();
+  const state = (safeGet(obj, "State", "state", "state_name", "StateName") ?? "").toString().trim();
   const parts: string[] = [];
   if (sName) parts.push(sName);
   if (sCode) parts.push(`(${sCode})`);
@@ -78,120 +79,174 @@ export default function RestroEditModal({
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
 
-  // fill local from restro whenever it arrives
+  // ESC to close
   useEffect(() => {
-    if (!restro) return;
-    setLocal({
-      RestroName: get(restro, "RestroName", "restro_name", "name") ?? "",
-      RestroCode: get(restro, "RestroCode", "restro_code", "code", "RestroId", "restro_id") ?? "",
-      StationCode: get(restro, "StationCode", "station_code") ?? "",
-      StationName: get(restro, "StationName", "station_name") ?? "",
-      State: get(restro, "State", "state", "state_name") ?? "",
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" || e.key === "Esc") doClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restro, onClose]);
 
-      WeeklyOff: get(restro, "WeeklyOff", "weekly_off") ?? "SUN",
-      OpenTime: get(restro, "OpenTime", "open_time") ?? "10:00",
-      ClosedTime: get(restro, "ClosedTime", "closed_time") ?? "23:00",
-      MinimumOrderValue: Number(get(restro, "MinimumOrderValue", "minimum_order_value") ?? 0),
-      CutOffTime: Number(get(restro, "CutOffTime", "cut_off_time") ?? 0),
-
-      RaileatsDeliveryCharge: Number(get(restro, "RaileatsDeliveryCharge", "raileats_delivery_charge") ?? 0),
-      RaileatsDeliveryChargeGSTRate: Number(get(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0),
-      RaileatsDeliveryChargeGST: Number(get(restro, "RaileatsDeliveryChargeGST", "raileats_delivery_charge_gst") ?? 0),
-      RaileatsDeliveryChargeTotalInclGST: Number(get(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0),
-
-      OrdersPaymentOptionForCustomer: get(restro, "OrdersPaymentOptionForCustomer", "orders_payment_option_for_customer") ?? "BOTH",
-      IRCTCOrdersPaymentOptionForCustomer: get(restro, "IRCTCOrdersPaymentOptionForCustomer", "irctc_orders_payment_option") ?? "BOTH",
-      RestroTypeOfDelivery: get(restro, "RestroTypeOfDelivery", "restro_type_of_delivery") ?? "RAILEATS",
-
-      OwnerName: get(restro, "OwnerName", "owner_name") ?? "",
-      OwnerPhone: get(restro, "OwnerPhone", "owner_phone") ?? "",
-      RestroDisplayPhoto: get(restro, "RestroDisplayPhoto", "restro_display_photo") ?? "",
-      BrandName: get(restro, "BrandName", "brand_name") ?? "",
-      RestroEmail: get(restro, "RestroEmail", "restro_email") ?? "",
-      RestroPhone: get(restro, "RestroPhone", "restro_phone") ?? "",
-
-      ...restro,
-    });
-  }, [restro]);
-
-  // try to fetch restro if not passed in props (parses code from url)
+  // if no restro prop, fetch using URL (/admin/restros/:code/edit)
   useEffect(() => {
     async function fetchRestro(code: string) {
       try {
         const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`);
-        if (!res.ok) return;
-        const json = await res.json();
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(txt || `Fetch failed (${res.status})`);
+        }
+        const json = await res.json().catch(() => null);
         const row = json?.row ?? json ?? null;
         if (row) setRestro(row);
       } catch (err) {
-        console.warn("fetchRestro failed", err);
+        console.warn("Restro fetch error", err);
+        setError("Failed to load outlet data.");
       }
     }
+
     if (!restro) {
-      const p = typeof window !== "undefined" ? window.location.pathname : "";
-      const m = p.match(/\/restros\/([^\/]+)\/edit/);
-      if (m && m[1]) fetchRestro(decodeURIComponent(m[1]));
+      try {
+        const path = typeof window !== "undefined" ? window.location.pathname : "";
+        const match = path.match(/\/restros\/([^\/]+)\/edit/);
+        if (match && match[1]) fetchRestro(decodeURIComponent(match[1]));
+      } catch (e) {
+        // ignore
+      }
     }
   }, [restro]);
 
-  // load stations list (optional)
+  // Load stations list if not provided
   useEffect(() => {
     if (stations && stations.length) return;
     (async () => {
       setLoadingStations(true);
       try {
         const res = await fetch("/api/stations");
-        if (!res.ok) return;
-        const json = await res.json();
+        if (!res.ok) {
+          setLoadingStations(false);
+          return;
+        }
+        const json = await res.json().catch(() => null);
         const rows = json?.rows ?? json?.data ?? json ?? [];
         const opts = (rows || []).map((r: any) => {
-          const label = `${(r.StationName ?? r.station_name ?? r.name ?? "").toString().trim()} ${(r.StationCode || r.station_code) ? `(${r.StationCode ?? r.station_code})` : ""}${r.State ? ` - ${r.State}` : ""}`.trim();
+          const label = `${(r.StationName ?? r.station_name ?? r.name ?? "").toString().trim()} ${(r.StationCode ?? r.station_code) ? `(${r.StationCode ?? r.station_code})` : ""}${r.State ? ` - ${r.State}` : ""}`.trim();
           return { label, value: (r.StationCode ?? r.station_code ?? "").toString() };
         });
         if (opts.length) setStations(opts);
       } catch (err) {
-        console.warn(err);
+        console.warn("stations fetch failed", err);
       } finally {
         setLoadingStations(false);
       }
     })();
   }, []);
 
-  // generic updater used by tabs
-  function updateField(key: string, value: any) {
-    setLocal((s: any) => ({ ...s, [key]: value }));
-    setError(null);
-  }
+  // populate local state from restro (robust keys)
+  useEffect(() => {
+    if (!restro) return;
+    setLocal({
+      RestroName: safeGet(restro, "RestroName", "restro_name", "name") ?? "",
+      RestroCode: safeGet(restro, "RestroCode", "restro_code", "code", "RestroId", "restro_id") ?? "",
+      StationCode: safeGet(restro, "StationCode", "station_code", "Station_Code", "stationCode") ?? "",
+      StationName: safeGet(restro, "StationName", "station_name", "station") ?? "",
+      State: safeGet(restro, "State", "state", "state_name", "StateName") ?? "",
+
+      WeeklyOff: safeGet(restro, "WeeklyOff", "weekly_off") ?? "SUN",
+      OpenTime: safeGet(restro, "OpenTime", "open_time") ?? "10:00",
+      ClosedTime: safeGet(restro, "ClosedTime", "closed_time") ?? "23:00",
+      MinimumOrderValue: Number(safeGet(restro, "MinimumOrderValue", "minimum_order_value") ?? 0),
+      CutOffTime: Number(safeGet(restro, "CutOffTime", "cut_off_time") ?? 0),
+
+      RaileatsDeliveryCharge: Number(safeGet(restro, "RaileatsDeliveryCharge", "raileats_delivery_charge") ?? 0),
+      RaileatsDeliveryChargeGSTRate: Number(safeGet(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0),
+      RaileatsDeliveryChargeGST: Number(safeGet(restro, "RaileatsDeliveryChargeGST", "raileats_delivery_charge_gst") ?? 0),
+      RaileatsDeliveryChargeTotalInclGST: Number(safeGet(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0),
+
+      OrdersPaymentOptionForCustomer: safeGet(restro, "OrdersPaymentOptionForCustomer", "orders_payment_option_for_customer") ?? "BOTH",
+      IRCTCOrdersPaymentOptionForCustomer: safeGet(restro, "IRCTCOrdersPaymentOptionForCustomer", "irctc_orders_payment_option") ?? "BOTH",
+      RestroTypeOfDelivery: safeGet(restro, "RestroTypeOfDelivery", "restro_type_of_delivery") ?? "RAILEATS",
+
+      OwnerName: safeGet(restro, "OwnerName", "owner_name") ?? "",
+      OwnerPhone: safeGet(restro, "OwnerPhone", "owner_phone") ?? "",
+      RestroDisplayPhoto: safeGet(restro, "RestroDisplayPhoto", "restro_display_photo") ?? "",
+      BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
+      RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
+      RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
+
+      ...restro,
+    });
+  }, [restro]);
 
   const saving = parentSaving ?? savingInternal;
 
+  const updateField = useCallback((key: string, value: any) => {
+    setLocal((s: any) => ({ ...s, [key]: value }));
+    setError(null);
+  }, []);
+
+  async function defaultPatch(payload: any) {
+    try {
+      const code =
+        restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? restro?.code ?? local?.RestroCode;
+      if (!code) throw new Error("Missing RestroCode for update");
+      const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(txt || `Update failed (${res.status})`);
+      }
+      const json = await res.json().catch(() => null);
+      return { ok: true, row: json?.row ?? json ?? null };
+    } catch (err: any) {
+      return { ok: false, error: err?.message ?? String(err) };
+    }
+  }
+
   async function handleSave() {
     setError(null);
-    const payload = { ...local }; // you can filter only allowed fields if you want
+    const payload: any = {
+      RestroName: local.RestroName ?? "",
+      StationCode: local.StationCode ?? null,
+      StationName: local.StationName ?? null,
+      State: local.State ?? null,
+      WeeklyOff: local.WeeklyOff ?? null,
+      OpenTime: local.OpenTime ?? null,
+      ClosedTime: local.ClosedTime ?? null,
+      MinimumOrderValue: Number(local.MinimumOrderValue) || 0,
+      CutOffTime: Number(local.CutOffTime) || 0,
+      RaileatsDeliveryCharge: Number(local.RaileatsDeliveryCharge) || 0,
+      RaileatsDeliveryChargeGSTRate: Number(local.RaileatsDeliveryChargeGSTRate) || 0,
+      RaileatsDeliveryChargeGST: Number(local.RaileatsDeliveryChargeGST) || 0,
+      RaileatsDeliveryChargeTotalInclGST: Number(local.RaileatsDeliveryChargeTotalInclGST) || 0,
+      OrdersPaymentOptionForCustomer: local.OrdersPaymentOptionForCustomer ?? null,
+      IRCTCOrdersPaymentOptionForCustomer: local.IRCTCOrdersPaymentOptionForCustomer ?? null,
+      RestroTypeOfDelivery: local.RestroTypeOfDelivery ?? null,
+      IRCTC: local.IRCTC ? 1 : 0,
+      Raileats: local.Raileats ? 1 : 0,
+      IsIrctcApproved: local.IsIrctcApproved ? 1 : 0,
+    };
+
     try {
       if (onSave) {
         if (parentSaving === undefined) setSavingInternal(true);
         const result = await onSave(payload);
         if (!result || !result.ok) throw new Error(result?.error ?? "Save failed");
       } else {
-        // default patch
-        const code = local.RestroCode ?? local.restro_code ?? restro?.RestroCode ?? restro?.restro_code;
-        if (!code) throw new Error("Missing restro code");
-        const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => "");
-          throw new Error(txt || `Update failed (${res.status})`);
-        }
+        if (parentSaving === undefined) setSavingInternal(true);
+        const result = await defaultPatch(payload);
+        if (!result.ok) throw new Error(result.error ?? "Save failed");
       }
-      // on success close
+      // close after success
       doClose();
     } catch (err: any) {
-      console.error(err);
-      setError(String(err?.message || err));
+      console.error("Save error:", err);
+      setError(err?.message ?? String(err));
     } finally {
       if (parentSaving === undefined) setSavingInternal(false);
     }
@@ -209,26 +264,26 @@ export default function RestroEditModal({
     }
   }
 
-  const stationDisplay = getStationDisplayFrom({ ...restro, ...local });
+  const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
-  // mapping tab -> component
-  const renderActiveTab = () => {
-    const commonProps = { local, updateField, stationDisplay, stations, loadingStations };
+  // Map tab name to component - components accept (local, updateField, stationDisplay, stations, loadingStations)
+  const renderTab = () => {
+    const common = { local, updateField, stationDisplay, stations, loadingStations };
     switch (activeTab) {
       case "Basic Information":
-        return <BasicInformationTab {...commonProps} />;
+        return <BasicInformationTab {...common} />;
       case "Station Settings":
-        return <StationSettingsTab {...commonProps} />;
+        return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        return <AddressDocumentsTab {...commonProps} />;
+        return <AddressDocumentsTab {...common} />;
       case "Contacts":
-        return <ContactsTab {...commonProps} />;
+        return <ContactsTab {...common} />;
       case "Bank":
-        return <BankTab {...commonProps} />;
+        return <BankTab {...common} />;
       case "Future Closed":
-        return <FutureClosedTab {...commonProps} />;
+        return <FutureClosedTab {...common} />;
       case "Menu":
-        return <MenuTab {...commonProps} />;
+        return <MenuTab {...common} />;
       default:
         return <div>Unknown tab</div>;
     }
@@ -250,26 +305,39 @@ export default function RestroEditModal({
       aria-modal="true"
     >
       <div style={{ background: "#fff", width: "98%", height: "98%", maxWidth: 1700, borderRadius: 8, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* header */}
-        <div style={{ position: "sticky", top: 0, background: "#fff", zIndex: 12, borderBottom: "1px solid #eee" }}>
+        {/* Header */}
+        <div style={{ position: "sticky", top: 0, zIndex: 1200, background: "#fff", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px" }}>
             <div style={{ fontWeight: 700 }}>
               <div style={{ fontSize: 15 }}>
                 {String(local.RestroCode ?? restro?.RestroCode ?? "")}
                 {(local.RestroName ?? restro?.RestroName) ? " / " : ""}{local.RestroName ?? restro?.RestroName ?? ""}
               </div>
-              <div style={{ fontWeight: 600, color: "#0b7285", marginTop: 4 }}>{stationDisplay}</div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#0b7285", marginTop: 4 }}>{stationDisplay}</div>
             </div>
 
             <div>
-              <button onClick={doClose} title="Close (Esc)" aria-label="Close" style={{ background: "#ef4444", color: "#fff", border: "none", padding: "8px 10px", borderRadius: 6, cursor: "pointer" }}>
+              <button
+                onClick={doClose}
+                aria-label="Close"
+                title="Close (Esc)"
+                style={{
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: 18,
+                  cursor: "pointer",
+                  padding: 8,
+                  borderRadius: 6,
+                }}
+              >
                 ✕
               </button>
             </div>
           </div>
 
-          {/* tabs */}
-          <div style={{ background: "#fafafa", borderTop: "1px solid #fff", borderBottom: "1px solid #eee" }}>
+          {/* Tabs row */}
+          <div style={{ background: "#fafafa", borderBottom: "1px solid #eee" }}>
             <div style={{ display: "flex", gap: 6, padding: "8px 12px" }}>
               {TAB_NAMES.map((t) => (
                 <div
@@ -290,24 +358,71 @@ export default function RestroEditModal({
           </div>
         </div>
 
-        {/* content */}
-        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>{renderActiveTab()}</div>
+        {/* Content */}
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>{renderTab()}</div>
 
-        {/* footer */}
-        <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", background: "#fff" }}>
+        {/* Footer */}
+        <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff" }}>
           <div>
-            <button onClick={doClose} style={{ background: "#fff", border: "1px solid #e3e3e3", padding: "8px 12px", borderRadius: 6 }}>
+            <button onClick={() => doClose()} style={{ background: "#fff", color: "#333", border: "1px solid #e3e3e3", padding: "8px 12px", borderRadius: 6, cursor: "pointer" }}>
               Cancel
             </button>
           </div>
+
           <div>
-            {error && <span style={{ color: "red", marginRight: 12 }}>{error}</span>}
-            <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none" }}>
+            {error && <div style={{ color: "red", marginRight: 12, display: "inline-block" }}>{error}</div>}
+            <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>
               {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        /* grid & fields */
+        .compact-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px 18px;
+          max-width: 1200px;
+          margin: 8px auto;
+        }
+        .field label {
+          display: block;
+          font-size: 13px;
+          color: #444;
+          margin-bottom: 6px;
+          font-weight: 600;
+        }
+        .field input, .field select {
+          width: 100%;
+          padding: 8px;
+          border-radius: 6px;
+          border: 1px solid #e3e3e3;
+          font-size: 13px;
+          background: #fff;
+          box-sizing: border-box;
+        }
+        .readonly {
+          padding: 8px 10px;
+          border-radius: 6px;
+          background: #fafafa;
+          border: 1px solid #f0f0f0;
+          font-size: 13px;
+        }
+        .preview {
+          height: 80px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #eee;
+        }
+        @media (max-width: 1100px) {
+          .compact-grid { grid-template-columns: repeat(2, 1fr); max-width: 900px; }
+        }
+        @media (max-width: 720px) {
+          .compact-grid { grid-template-columns: 1fr; max-width: 680px; }
+        }
+      `}</style>
     </div>
   );
 }
