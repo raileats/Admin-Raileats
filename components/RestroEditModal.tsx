@@ -87,7 +87,7 @@ export default function RestroEditModal({
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
 
-  // close on ESC
+  // ESC to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape" || e.key === "Esc") doClose();
@@ -324,13 +324,6 @@ export default function RestroEditModal({
 
   const stationDisplay = getStationDisplayFrom({ ...restro, ...local });
 
-  const currentOpt = { label: stationDisplay, value: (local.StationCode ?? restro?.StationCode ?? "").toString() };
-  const selectOptions = (() => {
-    const opts = stations && stations.length ? [...stations] : [];
-    if (!opts.find((o) => o.value === currentOpt.value)) opts.unshift(currentOpt);
-    return opts;
-  })();
-
   return (
     <div
       style={{
@@ -386,6 +379,7 @@ export default function RestroEditModal({
               <span style={{ fontWeight: 600, fontSize: 13, color: "#0b7285" }}>{stationDisplay}</span>
             </div>
 
+            {/* right: only red close button */}
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               <button
                 onClick={(e) => {
@@ -501,7 +495,7 @@ export default function RestroEditModal({
             </div>
           )}
 
-          {/* Station Settings */}
+          {/* Station Settings - SHOW readonly Station (from Basic Information) */}
           {activeTab === "Station Settings" && (
             <div>
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Station Settings</h3>
@@ -509,25 +503,7 @@ export default function RestroEditModal({
               <div className="compact-grid">
                 <div className="field">
                   <label>Station</label>
-                  <select
-                    value={local.StationCode ?? ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const selected = selectOptions.find((s) => s.value === val);
-                      updateField("StationCode", val);
-                      if (selected) {
-                        const name = selected.label.split("(")[0].trim();
-                        updateField("StationName", name);
-                      }
-                    }}
-                  >
-                    <option value="">{loadingStations ? "Loading stations…" : "Select station"}</option>
-                    {selectOptions.map((opt) => (
-                      <option key={opt.value || opt.label} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="readonly">{stationDisplay}</div>
                 </div>
 
                 <div className="field">
@@ -640,7 +616,7 @@ export default function RestroEditModal({
           )}
         </div>
 
-        {/* Footer with Save & Cancel - fixed at bottom of modal */}
+        {/* Footer (fixed) */}
         <div
           style={{
             flex: "0 0 auto",
