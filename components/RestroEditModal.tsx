@@ -76,9 +76,13 @@ export default function RestroEditModal({
   const [error, setError] = useState<string | null>(null);
   const [restro, setRestro] = useState<any | undefined>(restroProp);
   const [local, setLocal] = useState<any>({});
-  const [loading, setLoading] = useState(false);
+  const [stations, setStations] = useState<{ label: string; value: string }[]>(stationsOptions ?? []);
+  const [loadingStations, setLoadingStations] = useState(false);
 
-  // If parent passes restro later, sync it
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
+
   useEffect(() => {
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
@@ -87,7 +91,6 @@ export default function RestroEditModal({
   function getCodeFromPath(): string | null {
     try {
       const p = typeof window !== "undefined" ? window.location.pathname : "";
-      // match /restros/:code/...
       const m = p.match(/\/restros\/([^\/]+)\/edit/);
       if (m && m[1]) return decodeURIComponent(m[1]);
       return null;
@@ -100,7 +103,6 @@ export default function RestroEditModal({
   useEffect(() => {
     async function fetchRestro(code: string) {
       try {
-        setLoading(true);
         const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`);
         if (!res.ok) {
           const txt = await res.text().catch(() => "");
@@ -108,32 +110,52 @@ export default function RestroEditModal({
         }
         const json = await res.json().catch(() => null);
         const row = json?.row ?? json ?? null;
-        if (row) {
-          setRestro(row);
-        } else {
-          console.warn("RestroEditModal: GET returned no row for", code, json);
-        }
+        if (row) setRestro(row);
+        else console.warn("RestroEditModal GET returned no row for", code, json);
       } catch (err: any) {
         console.error("RestroEditModal fetch error:", err);
         setError("Failed to load restro data");
-      } finally {
-        setLoading(false);
       }
     }
 
-    // if no restro prop, try URL
     if (!restro) {
       const code = getCodeFromPath();
-      if (code) {
-        fetchRestro(code);
-      } else {
-        // no code in path either
-        console.warn("RestroEditModal: no restro prop and cannot parse code from path");
-      }
+      if (code) fetchRestro(code);
+      else console.warn("No restro prop and cannot parse code from path");
     }
   }, [restro]);
 
-  // robust getter to accept many column name variants
+  // fetch stations list if not provided
+  useEffect(() => {
+    if (stations && stations.length) return; // already have
+    async function loadStations() {
+      setLoadingStations(true);
+      try {
+        const res = await fetch("/api/stations");
+        if (!res.ok) {
+          // Endpoint might not exist, fall back silently
+          console.warn("/api/stations not available:", res.status);
+          setLoadingStations(false);
+          return;
+        }
+        const json = await res.json();
+        const rows = json?.rows ?? json?.data ?? json ?? [];
+        const opts = (rows || []).map((r: any) => {
+          const label = `${(r.StationName ?? r.station_name ?? r.name ?? "").toString().trim()} ${(r.StationCode || r.station_code) ? `(${r.StationCode ?? r.station_code})` : ""}${r.State ? ` - ${r.State}` : ""}`.trim();
+          return { label, value: (r.StationCode ?? r.station_code ?? r.StationCode ?? "").toString() };
+        });
+        if (opts.length) setStations(opts);
+      } catch (err) {
+        console.warn("Failed to load stations list:", err);
+      } finally {
+        setLoadingStations(false);
+      }
+    }
+    loadStations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // robust getter for many column names
   const get = (obj: any, ...keys: string[]) => {
     for (const k of keys) {
       if (!obj) continue;
@@ -156,14 +178,14 @@ export default function RestroEditModal({
       WeeklyOff: get(restro, "WeeklyOff", "weekly_off") ?? "SUN",
       OpenTime: get(restro, "OpenTime", "open_time") ?? "10:00",
       ClosedTime: get(restro, "ClosedTime", "closed_time") ?? "23:00",
-      MinimumOrderValue: get(restro, "MinimumOrderValue", "minimum_order_value", "min_order_value") ?? 0,
-      CutOffTime: get(restro, "CutOffTime", "cut_off_time") ?? 0,
+      MinimumOrderValue: Number(get(restro, "MinimumOrderValue", "minimum_order_value", "min_order_value") ?? 0),
+      CutOffTime: Number(get(restro, "CutOffTime", "cut_off_time") ?? 0),
 
-      RaileatsDeliveryCharge: get(restro, "RaileatsDeliveryCharge", "raileats_delivery_charge") ?? 0,
-      RaileatsDeliveryChargeGSTRate: get(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0,
-      RaileatsDeliveryChargeGST: get(restro, "RaileatsDeliveryChargeGST", "raileats_delivery_charge_gst") ?? 0,
+      RaileatsDeliveryCharge: Number(get(restro, "RaileatsDeliveryCharge", "raileats_delivery_charge") ?? 0),
+      RaileatsDeliveryChargeGSTRate: Number(get(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0),
+      RaileatsDeliveryChargeGST: Number(get(restro, "RaileatsDeliveryChargeGST", "raileats_delivery_charge_gst") ?? 0),
       RaileatsDeliveryChargeTotalInclGST:
-        get(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0,
+        Number(get(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0),
 
       OrdersPaymentOptionForCustomer: get(restro, "OrdersPaymentOptionForCustomer", "orders_payment_option_for_customer") ?? "BOTH",
       IRCTCOrdersPaymentOptionForCustomer: get(restro, "IRCTCOrdersPaymentOptionForCustomer", "irctc_orders_payment_option") ?? "BOTH",
@@ -194,7 +216,30 @@ export default function RestroEditModal({
   const saving = parentSaving ?? savingInternal;
 
   function updateField(key: string, value: any) {
-    setLocal((s: any) => ({ ...s, [key]: value }));
+    setLocal((s: any) => {
+      const next = { ...s, [key]: value };
+
+      // Auto-recompute GST and total if charge or rate changed
+      if (key === "RaileatsDeliveryCharge" || key === "RaileatsDeliveryChargeGSTRate") {
+        const charge = Number(next.RaileatsDeliveryCharge) || 0;
+        const rate = Number(next.RaileatsDeliveryChargeGSTRate) || 0;
+        const gstAbs = Math.round((charge * rate) / 100 * 100) / 100; // two decimals
+        next.RaileatsDeliveryChargeGST = gstAbs;
+        next.RaileatsDeliveryChargeTotalInclGST = Math.round((charge + gstAbs) * 100) / 100;
+      }
+
+      // If someone edits GST absolute directly, recompute total
+      if (key === "RaileatsDeliveryChargeGST") {
+        const charge = Number(next.RaileatsDeliveryCharge) || 0;
+        const gstAbs = Number(next.RaileatsDeliveryChargeGST) || 0;
+        next.RaileatsDeliveryChargeTotalInclGST = Math.round((charge + gstAbs) * 100) / 100;
+        // Also try to set rate (approx)
+        const rate = charge ? Math.round((gstAbs / charge) * 10000) / 100 : 0;
+        next.RaileatsDeliveryChargeGSTRate = rate;
+      }
+
+      return next;
+    });
     setError(null);
   }
 
@@ -221,7 +266,6 @@ export default function RestroEditModal({
 
   async function handleSave() {
     setError(null);
-
     const payload: any = {
       RestroName: local.RestroName ?? "",
       StationCode: local.StationCode ?? null,
@@ -250,15 +294,13 @@ export default function RestroEditModal({
         if (parentSaving === undefined) setSavingInternal(true);
         const result = await onSave(payload);
         if (!result || !result.ok) throw new Error(result?.error ?? "Save failed");
+        if (result.row) setRestro(result.row);
         doClose();
       } else {
         setSavingInternal(true);
         const result = await defaultPatch(payload);
         if (!result.ok) throw new Error(result.error ?? "Save failed");
-        // update local with returned row
-        if (result.row) {
-          setRestro(result.row);
-        }
+        if (result.row) setRestro(result.row);
         doClose();
       }
     } catch (err: any) {
@@ -281,22 +323,13 @@ export default function RestroEditModal({
     }
   }
 
-  // header station display and main station display
   const stationDisplay = getStationDisplayFrom({ ...restro, ...local });
 
-  // make sure the close button is always clickable
-  const closeButtonStyle: React.CSSProperties = {
-    background: "transparent",
-    border: "none",
-    fontSize: 20,
-    cursor: "pointer",
-    padding: 10,
-    lineHeight: 1,
-    minWidth: 44,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-  };
+  // choose select options: prop or fetched or fallback single
+  const stationSelectOptions =
+    (stations && stations.length > 0)
+      ? stations
+      : [{ label: stationDisplay, value: local.StationCode ?? restro?.StationCode ?? "" }];
 
   return (
     <div
@@ -329,7 +362,7 @@ export default function RestroEditModal({
           boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
         }}
       >
-        {/* Header + tabs + toolbar */}
+        {/* Header */}
         <div style={{ flex: "0 0 auto", zIndex: 12 }}>
           <div
             style={{
@@ -346,15 +379,11 @@ export default function RestroEditModal({
           >
             <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.25 }}>
               <span>
-                {String(local.RestroCode ?? restro?.RestroCode ?? "")} {local.RestroName || restro?.RestroName ? " / " : ""}{" "}
-                {local.RestroName ?? restro?.RestroName ?? ""}
+                {String(local.RestroCode ?? restro?.RestroCode ?? "")}
+                {local.RestroName || restro?.RestroName ? " / " : ""} {local.RestroName ?? restro?.RestroName ?? ""}
               </span>
               <br />
-              <span style={{ fontWeight: 600, fontSize: 13, color: "#0b7285" }}>
-                {local.StationCode ?? restro?.StationCode ? `(${local.StationCode ?? restro?.StationCode}) ` : ""}
-                {local.StationName ?? restro?.StationName ?? ""}
-                {local.State ?? restro?.State ? ` - ${local.State ?? restro?.State}` : ""}
-              </span>
+              <span style={{ fontWeight: 600, fontSize: 13, color: "#0b7285" }}>{stationDisplay}</span>
             </div>
 
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -372,7 +401,15 @@ export default function RestroEditModal({
                   e.stopPropagation();
                   doClose();
                 }}
-                style={closeButtonStyle}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: 20,
+                  cursor: "pointer",
+                  padding: 8,
+                  lineHeight: 1,
+                  minWidth: 44,
+                }}
                 aria-label="Close"
                 title="Close (Esc)"
               >
@@ -400,7 +437,7 @@ export default function RestroEditModal({
             ))}
           </div>
 
-          {/* Toolbar */}
+          {/* Save toolbar */}
           <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8, background: "#fff" }}>
             {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
             <button
@@ -422,6 +459,7 @@ export default function RestroEditModal({
 
         {/* Content */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+          {/* Basic Information */}
           {activeTab === "Basic Information" && (
             <div>
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
@@ -431,7 +469,42 @@ export default function RestroEditModal({
                   <div className="readonly">{stationDisplay}</div>
                 </div>
 
-                {/* ... other fields (same as previous) ... */}
+                <div className="field">
+                  <label>Restro Code</label>
+                  <div className="readonly">{local.RestroCode ?? "—"}</div>
+                </div>
+
+                <div className="field">
+                  <label>Restro Name</label>
+                  <input value={local.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} />
+                </div>
+
+                {/* rest of Basic Information fields same as before */}
+                <div className="field">
+                  <label>Brand Name</label>
+                  <input value={local.BrandName ?? ""} onChange={(e) => updateField("BrandName", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>Raileats Status</label>
+                  <select value={local.Raileats ? 1 : 0} onChange={(e) => updateField("Raileats", Number(e.target.value) === 1)}>
+                    <option value={1}>On</option>
+                    <option value={0}>Off</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>Is IRCTC Approved</label>
+                  <select value={local.IsIrctcApproved ? "1" : "0"} onChange={(e) => updateField("IsIrctcApproved", e.target.value === "1")}>
+                    <option value="1">Yes</option>
+                    <option value="0">No</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>Restro Rating</label>
+                  <input type="number" step="0.1" value={local.RestroRating ?? ""} onChange={(e) => updateField("RestroRating", e.target.value)} />
+                </div>
 
                 <div className="field">
                   <label>Restro Display Photo (path)</label>
@@ -452,18 +525,37 @@ export default function RestroEditModal({
                   )}
                 </div>
 
-                {/* remaining fields... */}
+                {/* other fields omitted for brevity but same as before */}
               </div>
             </div>
           )}
 
+          {/* Station Settings (NEW improved layout & fields) */}
           {activeTab === "Station Settings" && (
             <div>
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Station Settings</h3>
+
               <div className="compact-grid">
                 <div className="field">
-                  <label>Station</label>
-                  <div className="readonly">{stationDisplay}</div>
+                  <label>Station (Code with Name)</label>
+                  <select
+                    value={local.StationCode ?? ""}
+                    onChange={(e) => {
+                      const selected = stations.find((s) => s.value === e.target.value);
+                      updateField("StationCode", e.target.value);
+                      if (selected) {
+                        // try to parse label (contains name/code/state)
+                        updateField("StationName", selected.label.split("(")[0].trim());
+                      }
+                    }}
+                  >
+                    <option value="">Select station</option>
+                    {stationSelectOptions.map((opt) => (
+                      <option key={opt.value || opt.label} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="field">
@@ -471,11 +563,108 @@ export default function RestroEditModal({
                   <input value={local.StationCategory ?? ""} onChange={(e) => updateField("StationCategory", e.target.value)} />
                 </div>
 
-                {/* other station fields... */}
+                <div className="field">
+                  <label>Raileats Customer Delivery Charge</label>
+                  <input
+                    type="number"
+                    value={Number(local.RaileatsDeliveryCharge ?? 0)}
+                    onChange={(e) => updateField("RaileatsDeliveryCharge", Number(e.target.value || 0))}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Weekly Off</label>
+                  <select value={local.WeeklyOff ?? "SUN"} onChange={(e) => updateField("WeeklyOff", e.target.value)}>
+                    <option value="SUN">SUN</option>
+                    <option value="MON">MON</option>
+                    <option value="TUE">TUE</option>
+                    <option value="WED">WED</option>
+                    <option value="THU">THU</option>
+                    <option value="FRI">FRI</option>
+                    <option value="SAT">SAT</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>Raileats Customer Delivery Charge GST Rate (%)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number(local.RaileatsDeliveryChargeGSTRate ?? 0)}
+                    onChange={(e) => updateField("RaileatsDeliveryChargeGSTRate", Number(e.target.value || 0))}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Open Time</label>
+                  <input type="time" value={local.OpenTime ?? ""} onChange={(e) => updateField("OpenTime", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>Closed Time</label>
+                  <input type="time" value={local.ClosedTime ?? ""} onChange={(e) => updateField("ClosedTime", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>Raileats Customer Delivery Charge GST (absolute)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number(local.RaileatsDeliveryChargeGST ?? 0)}
+                    onChange={(e) => updateField("RaileatsDeliveryChargeGST", Number(e.target.value || 0))}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Raileats Customer Delivery Charge Total Incl GST</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={Number(local.RaileatsDeliveryChargeTotalInclGST ?? 0)}
+                    onChange={(e) => updateField("RaileatsDeliveryChargeTotalInclGST", Number(e.target.value || 0))}
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Minimum Order Value</label>
+                  <input type="number" value={Number(local.MinimumOrderValue ?? 0)} onChange={(e) => updateField("MinimumOrderValue", Number(e.target.value || 0))} />
+                </div>
+
+                <div className="field">
+                  <label>Cut Off Time (mins)</label>
+                  <input type="number" value={Number(local.CutOffTime ?? 0)} onChange={(e) => updateField("CutOffTime", Number(e.target.value || 0))} />
+                </div>
+
+                <div className="field">
+                  <label>Raileats Orders Payment Option for Customer</label>
+                  <select value={local.OrdersPaymentOptionForCustomer ?? "BOTH"} onChange={(e) => updateField("OrdersPaymentOptionForCustomer", e.target.value)}>
+                    <option value="BOTH">Both</option>
+                    <option value="PREPAID">Prepaid Only</option>
+                    <option value="COD">COD Only</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>IRCTC Orders Payment Option for Customer</label>
+                  <select value={local.IRCTCOrdersPaymentOptionForCustomer ?? "BOTH"} onChange={(e) => updateField("IRCTCOrdersPaymentOptionForCustomer", e.target.value)}>
+                    <option value="BOTH">Both</option>
+                    <option value="PREPAID">Prepaid Only</option>
+                    <option value="COD">COD Only</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>Restro Type of Delivery (Vendor / Raileats)</label>
+                  <select value={local.RestroTypeOfDelivery ?? "RAILEATS"} onChange={(e) => updateField("RestroTypeOfDelivery", e.target.value)}>
+                    <option value="RAILEATS">Raileats Delivery</option>
+                    <option value="VENDOR">Vendor Self</option>
+                  </select>
+                </div>
               </div>
             </div>
           )}
 
+          {/* Placeholder content for other tabs */}
           {activeTab !== "Basic Information" && activeTab !== "Station Settings" && (
             <div>
               <h3 style={{ marginTop: 0 }}>{activeTab}</h3>
