@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import RestroEditModal from "@/components/RestroEditModal"; // adjust path if needed
+import RestroEditModal from "@/components/RestroEditModal"; // adjust if your path differs
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -163,12 +163,6 @@ export default function RestroMasterPage(): JSX.Element {
     setModalOpen(true);
   }
 
-  // optional: open modal only with code (modal will fetch if missing details)
-  function openEditModalByCode(code: string | number) {
-    setEditingRestro({ RestroCode: code });
-    setModalOpen(true);
-  }
-
   // update list row after successful save
   function updateRowInState(code: string | number, updated: any) {
     setResults((s) =>
@@ -318,23 +312,7 @@ export default function RestroMasterPage(): JSX.Element {
                         Edit
                       </button>
 
-                      {/* Keep direct route available (optional) */}
-                      <Link href={`/admin/restros/${encodeURIComponent(String(code))}/edit/basic`}>
-                        <a style={{ textDecoration: "none" }}>
-                          <button
-                            style={{
-                              background: "#efefef",
-                              color: "#111",
-                              padding: "6px 10px",
-                              borderRadius: 6,
-                              border: "1px solid #ddd",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Open Page
-                          </button>
-                        </a>
-                      </Link>
+                      {/* NOTE: removed 'Open Page' button as requested */}
                     </td>
                   </tr>
                 );
