@@ -87,7 +87,6 @@ export default function RestroEditModal({
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
 
-  // derive code from path if restro missing
   function getCodeFromPath(): string | null {
     try {
       const p = typeof window !== "undefined" ? window.location.pathname : "";
@@ -99,7 +98,6 @@ export default function RestroEditModal({
     }
   }
 
-  // fetch restro if not provided
   useEffect(() => {
     async function fetchRestro(code: string) {
       try {
@@ -125,15 +123,13 @@ export default function RestroEditModal({
     }
   }, [restro]);
 
-  // fetch stations list if not provided
   useEffect(() => {
-    if (stations && stations.length) return; // already have
+    if (stations && stations.length) return;
     async function loadStations() {
       setLoadingStations(true);
       try {
         const res = await fetch("/api/stations");
         if (!res.ok) {
-          // Endpoint might not exist, fall back silently
           console.warn("/api/stations not available:", res.status);
           setLoadingStations(false);
           return;
@@ -155,7 +151,6 @@ export default function RestroEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // robust getter for many column names
   const get = (obj: any, ...keys: string[]) => {
     for (const k of keys) {
       if (!obj) continue;
@@ -164,7 +159,6 @@ export default function RestroEditModal({
     return undefined;
   };
 
-  // When restro updates populate local
   useEffect(() => {
     if (!restro) return;
     setLocal({
@@ -173,7 +167,6 @@ export default function RestroEditModal({
       StationCode: get(restro, "StationCode", "station_code", "Station_Code", "stationCode") ?? "",
       StationName: get(restro, "StationName", "station_name", "station") ?? "",
       State: get(restro, "State", "state", "state_name", "StateName") ?? "",
-      StationCategory: get(restro, "StationCategory", "station_category", "stationType", "Station_Type", "Category", "category") ?? "",
 
       WeeklyOff: get(restro, "WeeklyOff", "weekly_off") ?? "SUN",
       OpenTime: get(restro, "OpenTime", "open_time") ?? "10:00",
@@ -219,21 +212,18 @@ export default function RestroEditModal({
     setLocal((s: any) => {
       const next = { ...s, [key]: value };
 
-      // Auto-recompute GST and total if charge or rate changed
       if (key === "RaileatsDeliveryCharge" || key === "RaileatsDeliveryChargeGSTRate") {
         const charge = Number(next.RaileatsDeliveryCharge) || 0;
         const rate = Number(next.RaileatsDeliveryChargeGSTRate) || 0;
-        const gstAbs = Math.round((charge * rate) / 100 * 100) / 100; // two decimals
+        const gstAbs = Math.round((charge * rate) / 100 * 100) / 100;
         next.RaileatsDeliveryChargeGST = gstAbs;
         next.RaileatsDeliveryChargeTotalInclGST = Math.round((charge + gstAbs) * 100) / 100;
       }
 
-      // If someone edits GST absolute directly, recompute total
       if (key === "RaileatsDeliveryChargeGST") {
         const charge = Number(next.RaileatsDeliveryCharge) || 0;
         const gstAbs = Number(next.RaileatsDeliveryChargeGST) || 0;
         next.RaileatsDeliveryChargeTotalInclGST = Math.round((charge + gstAbs) * 100) / 100;
-        // Also try to set rate (approx)
         const rate = charge ? Math.round((gstAbs / charge) * 10000) / 100 : 0;
         next.RaileatsDeliveryChargeGSTRate = rate;
       }
@@ -271,7 +261,6 @@ export default function RestroEditModal({
       StationCode: local.StationCode ?? null,
       StationName: local.StationName ?? null,
       State: local.State ?? null,
-      StationCategory: local.StationCategory ?? null,
       WeeklyOff: local.WeeklyOff ?? null,
       OpenTime: local.OpenTime ?? null,
       ClosedTime: local.ClosedTime ?? null,
@@ -325,7 +314,6 @@ export default function RestroEditModal({
 
   const stationDisplay = getStationDisplayFrom({ ...restro, ...local });
 
-  // choose select options: prop or fetched or fallback single
   const stationSelectOptions =
     (stations && stations.length > 0)
       ? stations
@@ -479,7 +467,6 @@ export default function RestroEditModal({
                   <input value={local.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} />
                 </div>
 
-                {/* rest of Basic Information fields same as before */}
                 <div className="field">
                   <label>Brand Name</label>
                   <input value={local.BrandName ?? ""} onChange={(e) => updateField("BrandName", e.target.value)} />
@@ -525,12 +512,12 @@ export default function RestroEditModal({
                   )}
                 </div>
 
-                {/* other fields omitted for brevity but same as before */}
+                {/* other Basic Information fields remain unchanged */}
               </div>
             </div>
           )}
 
-          {/* Station Settings (NEW improved layout & fields) */}
+          {/* Station Settings */}
           {activeTab === "Station Settings" && (
             <div>
               <h3 style={{ marginTop: 0, textAlign: "center" }}>Station Settings</h3>
@@ -544,7 +531,6 @@ export default function RestroEditModal({
                       const selected = stations.find((s) => s.value === e.target.value);
                       updateField("StationCode", e.target.value);
                       if (selected) {
-                        // try to parse label (contains name/code/state)
                         updateField("StationName", selected.label.split("(")[0].trim());
                       }
                     }}
@@ -556,11 +542,6 @@ export default function RestroEditModal({
                       </option>
                     ))}
                   </select>
-                </div>
-
-                <div className="field">
-                  <label>Station Category</label>
-                  <input value={local.StationCategory ?? ""} onChange={(e) => updateField("StationCategory", e.target.value)} />
                 </div>
 
                 <div className="field">
