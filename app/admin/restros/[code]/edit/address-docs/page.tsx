@@ -1,7 +1,7 @@
-// app/admin/restros/[code]/edit/address-docs/page.tsx
+// server component
 import React from "react";
 import { safeGetRestro } from "@/lib/restroService";
-import AddressDocsForm from "@/components/AddressDocsForm";
+import AddressDocsForm from "./AddressDocsForm";
 
 type Props = { params: { code: string } };
 
@@ -11,28 +11,25 @@ export default async function AddressDocsPage({ params }: Props) {
 
   if (error) {
     return (
-      <div style={{ color: "red", padding: 20 }}>
-        <strong>Error loading restro:</strong> {error}
+      <div style={{ padding: 20, color: "red" }}>
+        <strong>Error loading restro:</strong> {String(error)}
       </div>
     );
   }
 
   if (!restro) {
     return (
-      <div style={{ padding: 20, color: "#666" }}>
-        Restro not found for code: {params.code}
+      <div style={{ padding: 20, color: "#333" }}>
+        Restro not found for code {params.code}
       </div>
     );
   }
 
+  // pass restro to client form as initial props
   return (
-    <div>
-      <h3 style={{ textAlign: "center", marginTop: 0 }}>Address & Documents</h3>
-      <div style={{ maxWidth: 1200, margin: "8px auto 40px", padding: "0 6px" }}>
-        {/* AddressDocsForm is a client component */}
-        {/* Make sure components/AddressDocsForm.tsx exists */}
-        <AddressDocsForm initialData={restro} />
-      </div>
+    <div style={{ minHeight: 300 }}>
+      <h2 style={{ textAlign: "center", color: "#333", marginTop: 8 }}>Address & Documents</h2>
+      <AddressDocsForm initialData={restro} restroCode={codeNum} />
     </div>
   );
 }
