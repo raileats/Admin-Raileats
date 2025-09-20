@@ -87,6 +87,16 @@ export default function RestroEditModal({
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
 
+  // close on ESC
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" || e.key === "Esc") doClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restro, onClose]);
+
   function getCodeFromPath(): string | null {
     try {
       const p = typeof window !== "undefined" ? window.location.pathname : "";
@@ -314,10 +324,12 @@ export default function RestroEditModal({
 
   const stationDisplay = getStationDisplayFrom({ ...restro, ...local });
 
-  const stationSelectOptions =
-    (stations && stations.length > 0)
-      ? stations
-      : [{ label: stationDisplay, value: local.StationCode ?? restro?.StationCode ?? "" }];
+  const currentOpt = { label: stationDisplay, value: (local.StationCode ?? restro?.StationCode ?? "").toString() };
+  const selectOptions = (() => {
+    const opts = stations && stations.length ? [...stations] : [];
+    if (!opts.find((o) => o.value === currentOpt.value)) opts.unshift(currentOpt);
+    return opts;
+  })();
 
   return (
     <div
@@ -350,7 +362,7 @@ export default function RestroEditModal({
           boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
         }}
       >
-        {/* Header */}
+        {/* Header (sticky) */}
         <div style={{ flex: "0 0 auto", zIndex: 12 }}>
           <div
             style={{
@@ -375,28 +387,21 @@ export default function RestroEditModal({
             </div>
 
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <a
-                href={`/admin/restros/edit/${encodeURIComponent(String(local.RestroCode ?? restro?.RestroCode ?? ""))}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: "#0ea5e9", textDecoration: "underline", fontSize: 14 }}
-              >
-                Open Outlet Page
-              </a>
-
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   doClose();
                 }}
                 style={{
-                  background: "transparent",
+                  background: "#ef4444",
+                  color: "#fff",
                   border: "none",
-                  fontSize: 20,
+                  fontSize: 18,
                   cursor: "pointer",
-                  padding: 8,
+                  padding: "8px 10px",
+                  borderRadius: 6,
                   lineHeight: 1,
-                  minWidth: 44,
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
                 }}
                 aria-label="Close"
                 title="Close (Esc)"
@@ -423,25 +428,6 @@ export default function RestroEditModal({
                 {tab}
               </div>
             ))}
-          </div>
-
-          {/* Save toolbar */}
-          <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8, background: "#fff" }}>
-            {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                background: saving ? "#7fcfe9" : "#0ea5e9",
-                color: "#fff",
-                padding: "8px 12px",
-                borderRadius: 6,
-                border: "none",
-                cursor: saving ? "not-allowed" : "pointer",
-              }}
-            >
-              {saving ? "Saving..." : "Save"}
-            </button>
           </div>
         </div>
 
@@ -511,8 +497,6 @@ export default function RestroEditModal({
                     <div className="readonly">No image</div>
                   )}
                 </div>
-
-                {/* other Basic Information fields remain unchanged */}
               </div>
             </div>
           )}
@@ -524,19 +508,21 @@ export default function RestroEditModal({
 
               <div className="compact-grid">
                 <div className="field">
-                  <label>Station (Code with Name)</label>
+                  <label>Station</label>
                   <select
                     value={local.StationCode ?? ""}
                     onChange={(e) => {
-                      const selected = stations.find((s) => s.value === e.target.value);
-                      updateField("StationCode", e.target.value);
+                      const val = e.target.value;
+                      const selected = selectOptions.find((s) => s.value === val);
+                      updateField("StationCode", val);
                       if (selected) {
-                        updateField("StationName", selected.label.split("(")[0].trim());
+                        const name = selected.label.split("(")[0].trim();
+                        updateField("StationName", name);
                       }
                     }}
                   >
-                    <option value="">Select station</option>
-                    {stationSelectOptions.map((opt) => (
+                    <option value="">{loadingStations ? "Loading stations…" : "Select station"}</option>
+                    {selectOptions.map((opt) => (
                       <option key={opt.value || opt.label} value={opt.value}>
                         {opt.label}
                       </option>
@@ -645,13 +631,61 @@ export default function RestroEditModal({
             </div>
           )}
 
-          {/* Placeholder content for other tabs */}
+          {/* other tabs placeholder */}
           {activeTab !== "Basic Information" && activeTab !== "Station Settings" && (
             <div>
               <h3 style={{ marginTop: 0 }}>{activeTab}</h3>
               <p>Placeholder area for <b>{activeTab}</b> content — implement forms/fields here as needed.</p>
             </div>
           )}
+        </div>
+
+        {/* Footer with Save & Cancel - fixed at bottom of modal */}
+        <div
+          style={{
+            flex: "0 0 auto",
+            padding: 12,
+            borderTop: "1px solid #eee",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 8,
+            background: "#fff",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <button
+              onClick={() => doClose()}
+              style={{
+                background: "#fff",
+                color: "#333",
+                border: "1px solid #e3e3e3",
+                padding: "8px 12px",
+                borderRadius: 6,
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+
+          <div>
+            {error && <span style={{ color: "red", marginRight: 12 }}>{error}</span>}
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              style={{
+                background: saving ? "#7fcfe9" : "#0ea5e9",
+                color: "#fff",
+                padding: "8px 12px",
+                borderRadius: 6,
+                border: "none",
+                cursor: saving ? "not-allowed" : "pointer",
+              }}
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
         </div>
       </div>
 
