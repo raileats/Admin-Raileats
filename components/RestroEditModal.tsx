@@ -28,6 +28,7 @@ function getStationDisplayFrom(obj: any) {
   const read = (...keys: string[]) => {
     for (const k of keys) {
       if (!k) continue;
+      // support nested keys like "station.code"
       if (k.includes(".")) {
         const parts = k.split(".");
         let cur: any = obj;
@@ -98,6 +99,7 @@ export default function RestroEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restro, onClose]);
 
+  // If component didn't get `restro` prop, try to fetch using URL
   function getCodeFromPath(): string | null {
     try {
       const p = typeof window !== "undefined" ? window.location.pathname : "";
@@ -133,6 +135,7 @@ export default function RestroEditModal({
     }
   }, [restro]);
 
+  // Load stations if not provided
   useEffect(() => {
     if (stations && stations.length) return;
     async function loadStations() {
@@ -160,6 +163,7 @@ export default function RestroEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // robust getter to accept many column name variants
   const get = (obj: any, ...keys: string[]) => {
     for (const k of keys) {
       if (!obj) continue;
@@ -248,6 +252,7 @@ export default function RestroEditModal({
 
     const payload: any = {
       RestroName: local.RestroName ?? "",
+      // keep station fields so backend receives them (readonly in UI)
       StationCode: local.StationCode ?? null,
       StationName: local.StationName ?? null,
       State: local.State ?? null,
@@ -333,78 +338,64 @@ export default function RestroEditModal({
           boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
         }}
       >
-        {/* ========== FIXED header (always visible) ========== */}
-        <div
-          style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 1200,
-            background: "#fff",
-            borderBottom: "1px solid #e9e9e9",
-          }}
-        >
+        {/* FIXED HEADER */}
+        <div style={{ position: "sticky", top: 0, zIndex: 1200, background: "#fff", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px" }}>
-            <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.25 }}>
-              <div>
+            <div style={{ fontWeight: 700 }}>
+              <div style={{ fontSize: 15 }}>
                 {String(local.RestroCode ?? restro?.RestroCode ?? "")}
-                {local.RestroName || restro?.RestroName ? " / " : ""} {local.RestroName ?? restro?.RestroName ?? ""}
+                {(local.RestroName ?? restro?.RestroName) ? " / " : ""}{local.RestroName ?? restro?.RestroName ?? ""}
               </div>
               <div style={{ fontWeight: 600, fontSize: 13, color: "#0b7285", marginTop: 4 }}>{stationDisplay}</div>
             </div>
 
-            {/* ONLY red close X (no "Close" text, no open link) */}
-            <div>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              {/* Only red X, no 'Close' text and no 'Open Outlet Page' link */}
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  doClose();
-                }}
+                onClick={doClose}
                 style={{
                   background: "#ef4444",
                   color: "#fff",
                   border: "none",
                   fontSize: 18,
                   cursor: "pointer",
-                  padding: "8px 10px",
+                  padding: 8,
                   borderRadius: 6,
                 }}
-                title="Close (Esc)"
                 aria-label="Close"
+                title="Close (Esc)"
               >
                 ✕
               </button>
             </div>
           </div>
 
-          {/* Tabs row (below header) */}
-          <div style={{ background: "#fafafa", borderTop: "1px solid #fff", borderBottom: "1px solid #eee" }}>
-            <div style={{ display: "flex", gap: 6, padding: "8px 12px" }}>
-              {tabs.map((tab) => (
-                <div
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  style={{
-                    padding: "10px 14px",
-                    cursor: "pointer",
-                    borderBottom: activeTab === tab ? "3px solid #0ea5e9" : "3px solid transparent",
-                    fontWeight: activeTab === tab ? 600 : 500,
-                    color: activeTab === tab ? "#0ea5e9" : "#333",
-                  }}
-                >
-                  {tab}
-                </div>
-              ))}
-            </div>
+          {/* TABS */}
+          <div style={{ display: "flex", borderBottom: "1px solid #eee", background: "#fafafa" }}>
+            {tabs.map((tab) => (
+              <div
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  padding: "12px 16px",
+                  cursor: "pointer",
+                  borderBottom: activeTab === tab ? "3px solid #0ea5e9" : "3px solid transparent",
+                  fontWeight: activeTab === tab ? 600 : 500,
+                  color: activeTab === tab ? "#0ea5e9" : "#333",
+                }}
+              >
+                {tab}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* ========== Scrollable content area ========= */}
+        {/* CONTENT (scrollable) */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           {/* Basic Information */}
           {activeTab === "Basic Information" && (
             <div>
-              <h3 style={{ textAlign: "center", marginTop: 0 }}>Basic Information</h3>
-
+              <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
               <div className="compact-grid">
                 <div className="field">
                   <label>Station</label>
@@ -465,19 +456,60 @@ export default function RestroEditModal({
                     <div className="readonly">No image</div>
                   )}
                 </div>
+
+                <div className="field">
+                  <label>Owner Name</label>
+                  <input value={local.OwnerName ?? ""} onChange={(e) => updateField("OwnerName", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>Owner Email</label>
+                  <input value={local.OwnerEmail ?? ""} onChange={(e) => updateField("OwnerEmail", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>Owner Phone</label>
+                  <input value={local.OwnerPhone ?? ""} onChange={(e) => updateField("OwnerPhone", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>Restro Email</label>
+                  <input value={local.RestroEmail ?? ""} onChange={(e) => updateField("RestroEmail", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>Restro Phone</label>
+                  <input value={local.RestroPhone ?? ""} onChange={(e) => updateField("RestroPhone", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>FSSAI Number</label>
+                  <input value={local.FSSAINumber ?? ""} onChange={(e) => updateField("FSSAINumber", e.target.value)} />
+                </div>
+
+                <div className="field">
+                  <label>FSSAI Expiry Date</label>
+                  <input type="date" value={local.FSSAIExpiryDate ?? ""} onChange={(e) => updateField("FSSAIExpiryDate", e.target.value)} />
+                </div>
               </div>
             </div>
           )}
 
-          {/* Station Settings - show readonly Station from Basic Information */}
+          {/* Station Settings */}
           {activeTab === "Station Settings" && (
             <div>
-              <h3 style={{ textAlign: "center", marginTop: 0 }}>Station Settings</h3>
-
+              <h3 style={{ marginTop: 0, textAlign: "center" }}>Station Settings</h3>
               <div className="compact-grid">
                 <div className="field">
                   <label>Station</label>
+                  {/* readonly station (same as Basic) */}
                   <div className="readonly">{stationDisplay}</div>
+                </div>
+
+                <div className="field">
+                  <label>Station Category</label>
+                  {/* user asked to remove station category earlier; keep input but allow empty */}
+                  <input value={local.StationCategory ?? ""} onChange={(e) => updateField("StationCategory", e.target.value)} />
                 </div>
 
                 <div className="field">
@@ -500,7 +532,7 @@ export default function RestroEditModal({
 
                 <div className="field">
                   <label>Raileats Customer Delivery Charge GST Rate (%)</label>
-                  <input type="number" step="0.01" value={local.RaileatsDeliveryChargeGSTRate ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeGSTRate", Number(e.target.value || 0))} />
+                  <input type="number" value={local.RaileatsDeliveryChargeGSTRate ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeGSTRate", Number(e.target.value || 0))} />
                 </div>
 
                 <div className="field">
@@ -515,12 +547,12 @@ export default function RestroEditModal({
 
                 <div className="field">
                   <label>Raileats Customer Delivery Charge GST (absolute)</label>
-                  <input type="number" step="0.01" value={local.RaileatsDeliveryChargeGST ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeGST", Number(e.target.value || 0))} />
+                  <input type="number" value={local.RaileatsDeliveryChargeGST ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeGST", Number(e.target.value || 0))} />
                 </div>
 
                 <div className="field">
                   <label>Raileats Customer Delivery Charge Total Incl GST</label>
-                  <input type="number" step="0.01" value={local.RaileatsDeliveryChargeTotalInclGST ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeTotalInclGST", Number(e.target.value || 0))} />
+                  <input type="number" value={local.RaileatsDeliveryChargeTotalInclGST ?? 0} onChange={(e) => updateField("RaileatsDeliveryChargeTotalInclGST", Number(e.target.value || 0))} />
                 </div>
 
                 <div className="field">
@@ -562,28 +594,19 @@ export default function RestroEditModal({
             </div>
           )}
 
-          {/* placeholders for other tabs */}
+          {/* Placeholder for other tabs */}
           {activeTab !== "Basic Information" && activeTab !== "Station Settings" && (
             <div>
-              <h3 style={{ marginTop: 0 }}>{activeTab}</h3>
-              <p>Content for <b>{activeTab}</b> goes here.</p>
+              <h3 style={{ marginTop: 0, textAlign: "center" }}>{activeTab}</h3>
+              <div style={{ maxWidth: 1200, margin: "8px auto" }}>
+                <p>Placeholder area for <strong>{activeTab}</strong> content — implement specific fields here as needed.</p>
+              </div>
             </div>
           )}
         </div>
 
-        {/* ========== FOOTER fixed (every tab) ========== */}
-        <div
-          style={{
-            flex: "0 0 auto",
-            padding: 12,
-            borderTop: "1px solid #eee",
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 8,
-            background: "#fff",
-            alignItems: "center",
-          }}
-        >
+        {/* FOOTER (fixed on bottom of modal) */}
+        <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff" }}>
           <div>
             <button
               onClick={() => doClose()}
@@ -601,7 +624,7 @@ export default function RestroEditModal({
           </div>
 
           <div>
-            {error && <span style={{ color: "red", marginRight: 12 }}>{error}</span>}
+            {error && <div style={{ color: "red", marginRight: "12px", display: "inline-block" }}>{error}</div>}
             <button
               onClick={handleSave}
               disabled={saving}
