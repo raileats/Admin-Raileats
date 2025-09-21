@@ -11,7 +11,7 @@ export default function AddressDocsForm({ params }: Props) {
   const code = params?.code ?? "";
   const [loading, setLoading] = useState(false);
 
-  // address fields
+  // Address fields
   const [restroAddress, setRestroAddress] = useState("");
   const [city, setCity] = useState("");
   const [stateVal, setStateVal] = useState("");
@@ -21,8 +21,8 @@ export default function AddressDocsForm({ params }: Props) {
   const [longitude, setLongitude] = useState("");
 
   useEffect(() => {
-    // optional: client-side fetch to load existing address if you want
-    // fetch(`/api/restros/${code}`)...
+    // Optional: load existing address via client API if needed
+    // fetch(`/api/restros/${code}`).then(...)
   }, [code]);
 
   return (
@@ -69,7 +69,7 @@ export default function AddressDocsForm({ params }: Props) {
           </div>
         </div>
 
-        {/* Documents area (placeholder) */}
+        {/* Documents area */}
         <div style={{ marginTop: 18, borderTop: "1px solid #eee", paddingTop: 18 }}>
           <h4>Documents</h4>
 
@@ -96,10 +96,10 @@ export default function AddressDocsForm({ params }: Props) {
 
         {/* Actions */}
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 22 }}>
-          <button type="button" onClick={() => { /* cancel */ }} style={{ padding: "8px 14px", borderRadius: 6 }}>Cancel</button>
+          <button type="button" onClick={() => { /* cancel action */ }} style={{ padding: "8px 14px", borderRadius: 6 }}>Cancel</button>
           <button
             type="button"
-            onClick={() => alert("Save not implemented. Implement /api/restros/[code]/address-docs route to persist.")}
+            onClick={() => alert("Save not implemented yet. Implement /api/restros/[code]/address-docs route to persist.")}
             style={{ padding: "8px 14px", borderRadius: 6, background: "#06a3d9", color: "#fff", border: "none" }}
             disabled={loading}
           >
