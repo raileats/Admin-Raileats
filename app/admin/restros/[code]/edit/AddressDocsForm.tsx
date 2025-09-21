@@ -9,6 +9,7 @@ type Props = {
 
 export default function AddressDocsForm({ restroCode, initialData }: Props) {
   const [formData, setFormData] = useState(initialData || {});
+  const [saving, setSaving] = useState(false);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
@@ -21,13 +22,23 @@ export default function AddressDocsForm({ restroCode, initialData }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSaving(true);
     try {
-      // TODO: call API route to save data in Supabase
-      console.log("Saving address-docs for restro", restroCode, formData);
-      alert("Address & Documents saved successfully (demo)");
-    } catch (err) {
+      const res = await fetch(`/api/restros/${restroCode}/address-docs`, {
+        method: "POST", // 👈 server route expects POST
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Save failed");
+
+      alert("Address & Documents saved successfully!");
+    } catch (err: any) {
       console.error("Save failed", err);
-      alert("Save failed");
+      alert("Save failed: " + err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -58,18 +69,12 @@ export default function AddressDocsForm({ restroCode, initialData }: Props) {
         </div>
         <div style={{ flex: 1 }}>
           <label>State</label>
-          <select
+          <input
             name="State"
             value={formData.State || ""}
             onChange={handleChange}
             style={{ width: "100%", padding: 8 }}
-          >
-            <option value="">--Select State--</option>
-            <option value="Delhi">Delhi</option>
-            <option value="Maharashtra">Maharashtra</option>
-            <option value="Uttar Pradesh">Uttar Pradesh</option>
-            {/* बाकी states भी add कर सकते हो */}
-          </select>
+          />
         </div>
         <div style={{ flex: 1 }}>
           <label>District</label>
@@ -93,7 +98,7 @@ export default function AddressDocsForm({ restroCode, initialData }: Props) {
           />
         </div>
         <div style={{ flex: 1 }}>
-          <label>Restro Latitude</label>
+          <label>Latitude</label>
           <input
             name="Latitude"
             value={formData.Latitude || ""}
@@ -102,7 +107,7 @@ export default function AddressDocsForm({ restroCode, initialData }: Props) {
           />
         </div>
         <div style={{ flex: 1 }}>
-          <label>Restro Longitude</label>
+          <label>Longitude</label>
           <input
             name="Longitude"
             value={formData.Longitude || ""}
@@ -203,15 +208,17 @@ export default function AddressDocsForm({ restroCode, initialData }: Props) {
       <div style={{ marginTop: 20, textAlign: "center" }}>
         <button
           type="submit"
+          disabled={saving}
           style={{
             padding: "10px 20px",
             borderRadius: 6,
-            background: "#0ea5e9",
+            background: saving ? "#999" : "#0ea5e9",
             color: "#fff",
             border: "none",
+            cursor: saving ? "not-allowed" : "pointer",
           }}
         >
-          Save
+          {saving ? "Saving..." : "Save"}
         </button>
       </div>
     </form>
