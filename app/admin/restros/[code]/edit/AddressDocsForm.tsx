@@ -1,222 +1,359 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 type Props = {
+  initialData?: any; // restro row from server (RestroMaster)
   restroCode: number;
-  initialData: any;
+  onSaved?: (row: any) => void;
 };
 
-export default function AddressDocsForm({ restroCode, initialData }: Props) {
-  const [formData, setFormData] = useState(initialData || {});
+export default function AddressDocsForm({ initialData = {}, restroCode, onSaved }: Props) {
+  // Address fields
+  const [restroAddress, setRestroAddress] = useState<string>(initialData.RestroAddress ?? "");
+  const [city, setCity] = useState<string>(initialData.City ?? "");
+  const [stateVal, setStateVal] = useState<string>(initialData.State ?? "");
+  const [district, setDistrict] = useState<string>(initialData.District ?? "");
+  const [pinCode, setPinCode] = useState<string | number>(initialData.PinCode ?? "");
+  const [latitude, setLatitude] = useState<string | number>(initialData.RestroLatitude ?? "");
+  const [longitude, setLongitude] = useState<string | number>(initialData.RestroLongitude ?? "");
+
+  // Documents fields
+  const [fssaiNumber, setFssaiNumber] = useState<string>(initialData.FSSAINumber ?? "");
+  const [fssaiExpiry, setFssaiExpiry] = useState<string>(initialData.FSSAIExpiryDate ?? "");
+  const [fssaiFileName, setFssaiFileName] = useState<string>(initialData.FSSAICopyPath ?? "");
+  const [fssaiStatus, setFssaiStatus] = useState<boolean>(!!initialData.FSSAIStatus);
+
+  const [gstNumber, setGstNumber] = useState<string>(initialData.GSTNumber ?? "");
+  const [gstType, setGstType] = useState<string>(initialData.GSTType ?? "");
+  const [gstFileName, setGstFileName] = useState<string>(initialData.GSTCopyPath ?? "");
+  const [gstStatus, setGstStatus] = useState<boolean>(!!initialData.GSTStatus);
+
+  const [panNumber, setPanNumber] = useState<string>(initialData.PANNumber ?? "");
+  const [panType, setPanType] = useState<string>(initialData.PANType ?? "");
+  const [panFileName, setPanFileName] = useState<string>(initialData.PANCopyPath ?? "");
+  const [panStatus, setPanStatus] = useState<boolean>(!!initialData.PANStatus);
+
+  // UI state
   const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
-    const { name, value } = e.target;
-    setFormData((prev: any) => ({ ...prev, [name]: value }));
+  // If initialData changes, update states (useful when server re-renders)
+  useEffect(() => {
+    setRestroAddress(initialData.RestroAddress ?? "");
+    setCity(initialData.City ?? "");
+    setStateVal(initialData.State ?? "");
+    setDistrict(initialData.District ?? "");
+    setPinCode(initialData.PinCode ?? "");
+    setLatitude(initialData.RestroLatitude ?? "");
+    setLongitude(initialData.RestroLongitude ?? "");
+
+    setFssaiNumber(initialData.FSSAINumber ?? "");
+    setFssaiExpiry(initialData.FSSAIExpiryDate ?? "");
+    setFssaiFileName(initialData.FSSAICopyPath ?? "");
+    setFssaiStatus(!!initialData.FSSAIStatus);
+
+    setGstNumber(initialData.GSTNumber ?? "");
+    setGstType(initialData.GSTType ?? "");
+    setGstFileName(initialData.GSTCopyPath ?? "");
+    setGstStatus(!!initialData.GSTStatus);
+
+    setPanNumber(initialData.PANNumber ?? "");
+    setPanType(initialData.PANType ?? "");
+    setPanFileName(initialData.PANCopyPath ?? "");
+    setPanStatus(!!initialData.PANStatus);
+  }, [initialData]);
+
+  // simple client-side validation example
+  function validate(): string | null {
+    if (fssaiNumber && !/^\d{14}$/.test(String(fssaiNumber))) {
+      return "FSSAI number should be 14 digits.";
+    }
+    if (panNumber && !/^[A-Z0-9]{10}$/i.test(String(panNumber))) {
+      // allow alphanumeric 10 chars (basic)
+      return "PAN number should be 10 characters.";
+    }
+    return null;
   }
 
-  function handleToggle(name: string) {
-    setFormData((prev: any) => ({ ...prev, [name]: !prev[name] }));
+  // file inputs (we only store filename here — actual upload not implemented)
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, which: "fssai" | "gst" | "pan") {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (which === "fssai") setFssaiFileName(f.name);
+    if (which === "gst") setGstFileName(f.name);
+    if (which === "pan") setPanFileName(f.name);
+    // Note: if you want server upload -> upload to supabase/storage first then send path.
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSave(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    setError(null);
+    setMessage(null);
+
+    const v = validate();
+    if (v) {
+      setError(v);
+      return;
+    }
+
+    const payload: Record<string, any> = {
+      // address
+      RestroAddress: restroAddress || null,
+      City: city || null,
+      State: stateVal || null,
+      District: district || null,
+      PinCode: pinCode || null,
+      RestroLatitude: latitude || null,
+      RestroLongitude: longitude || null,
+      // docs
+      FSSAINumber: fssaiNumber || null,
+      FSSAIExpiryDate: fssaiExpiry || null,
+      FSSAICopyPath: fssaiFileName || null,
+      FSSAIStatus: fssaiStatus ? 1 : 0,
+      GSTNumber: gstNumber || null,
+      GSTType: gstType || null,
+      GSTCopyPath: gstFileName || null,
+      GSTStatus: gstStatus ? 1 : 0,
+      PANNumber: panNumber || null,
+      PANType: panType || null,
+      PANCopyPath: panFileName || null,
+      PANStatus: panStatus ? 1 : 0,
+    };
+
     setSaving(true);
     try {
-      const res = await fetch(`/api/restros/${restroCode}/address-docs`, {
-        method: "POST", // 👈 server route expects POST
+      const res = await fetch(`/api/restros/${encodeURIComponent(String(restroCode))}/address-docs`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Save failed");
+      if (!res.ok) {
+        throw new Error(data?.error || "Server error");
+      }
 
-      alert("Address & Documents saved successfully!");
+      setMessage("Saved successfully.");
+      if (onSaved) onSaved(data?.row ?? data);
     } catch (err: any) {
-      console.error("Save failed", err);
-      alert("Save failed: " + err.message);
+      console.error("Save error:", err);
+      setError(err?.message ?? String(err));
     } finally {
       setSaving(false);
     }
   }
 
+  // Small reusable styles (inline to match other pages)
+  const cardStyle: React.CSSProperties = {
+    background: "#eaf6ff", // light blue similar to Basic Info style
+    borderRadius: 8,
+    padding: 18,
+    marginBottom: 18,
+    border: "1px solid #dbeeff",
+  };
+
+  const labelStyle: React.CSSProperties = { display: "block", fontWeight: 600, marginBottom: 8, color: "#0b4870" };
+  const inputStyle: React.CSSProperties = { width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #d0dbe6" };
+
   return (
-    <form onSubmit={handleSubmit} style={{ padding: 16 }}>
-      <h2 style={{ marginBottom: 12 }}>Address</h2>
+    <form onSubmit={handleSave}>
+      {/* Address card */}
+      <div style={cardStyle}>
+        <h3 style={{ marginTop: 0, color: "#0b4870" }}>Address</h3>
 
-      {/* Address */}
-      <div style={{ marginBottom: 12 }}>
-        <label>Restro Address</label>
-        <input
-          name="RestroAddress"
-          value={formData.RestroAddress || ""}
-          onChange={handleChange}
-          style={{ width: "100%", padding: 8 }}
-        />
-      </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Restro Address</label>
+          <textarea
+            rows={3}
+            value={restroAddress}
+            onChange={(e) => setRestroAddress(e.target.value)}
+            style={{ ...inputStyle, resize: "vertical" }}
+            placeholder="Full address"
+          />
+        </div>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-        <div style={{ flex: 1 }}>
-          <label>City / Village</label>
-          <input
-            name="City"
-            value={formData.City || ""}
-            onChange={handleChange}
-            style={{ width: "100%", padding: 8 }}
-          />
-        </div>
-        <div style={{ flex: 1 }}>
-          <label>State</label>
-          <input
-            name="State"
-            value={formData.State || ""}
-            onChange={handleChange}
-            style={{ width: "100%", padding: 8 }}
-          />
-        </div>
-        <div style={{ flex: 1 }}>
-          <label>District</label>
-          <input
-            name="District"
-            value={formData.District || ""}
-            onChange={handleChange}
-            style={{ width: "100%", padding: 8 }}
-          />
-        </div>
-      </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, alignItems: "center" }}>
+          <div>
+            <label style={labelStyle}>City / Village</label>
+            <input value={city} onChange={(e) => setCity(e.target.value)} style={inputStyle} />
+          </div>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-        <div style={{ flex: 1 }}>
-          <label>Pin Code</label>
-          <input
-            name="PinCode"
-            value={formData.PinCode || ""}
-            onChange={handleChange}
-            style={{ width: "100%", padding: 8 }}
-          />
+          <div>
+            <label style={labelStyle}>State</label>
+            <input value={stateVal} onChange={(e) => setStateVal(e.target.value)} style={inputStyle} placeholder="State" />
+          </div>
+
+          <div>
+            <label style={labelStyle}>District</label>
+            <input value={district} onChange={(e) => setDistrict(e.target.value)} style={inputStyle} placeholder="District" />
+          </div>
         </div>
-        <div style={{ flex: 1 }}>
-          <label>Latitude</label>
-          <input
-            name="Latitude"
-            value={formData.Latitude || ""}
-            onChange={handleChange}
-            style={{ width: "100%", padding: 8 }}
-          />
-        </div>
-        <div style={{ flex: 1 }}>
-          <label>Longitude</label>
-          <input
-            name="Longitude"
-            value={formData.Longitude || ""}
-            onChange={handleChange}
-            style={{ width: "100%", padding: 8 }}
-          />
+
+        <div style={{ height: 12 }} />
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Pin Code</label>
+            <input value={String(pinCode ?? "")} onChange={(e) => setPinCode(e.target.value)} style={inputStyle} />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Latitude</label>
+            <input value={String(latitude ?? "")} onChange={(e) => setLatitude(e.target.value)} style={inputStyle} />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Longitude</label>
+            <input value={String(longitude ?? "")} onChange={(e) => setLongitude(e.target.value)} style={inputStyle} />
+          </div>
         </div>
       </div>
 
-      <h2 style={{ margin: "20px 0 12px" }}>Documents</h2>
+      {/* Documents card */}
+      <div style={cardStyle}>
+        <h3 style={{ marginTop: 0, color: "#0b4870" }}>Documents</h3>
 
-      {/* FSSAI */}
-      <div style={{ marginBottom: 12, border: "1px solid #ddd", padding: 12, borderRadius: 6 }}>
-        <h4>FSSAI</h4>
-        <input
-          name="FSSAINumber"
-          placeholder="14-digit FSSAI Number"
-          value={formData.FSSAINumber || ""}
-          onChange={handleChange}
-          style={{ width: "100%", padding: 8, marginBottom: 8 }}
-        />
-        <input
-          type="date"
-          name="FSSAIExpiry"
-          value={formData.FSSAIExpiry || ""}
-          onChange={handleChange}
-          style={{ width: "100%", padding: 8, marginBottom: 8 }}
-        />
-        <input type="file" accept=".pdf,.jpg,.jpeg,.png" />
-        <div>
-          <label>Status:</label>
-          <button type="button" onClick={() => handleToggle("FSSAIStatus")}>
-            {formData.FSSAIStatus ? "On" : "Off"}
-          </button>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 260px 220px 120px", gap: 12, alignItems: "center" }}>
+          <div>
+            <label style={labelStyle}>FSSAI Number</label>
+            <input value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={inputStyle} placeholder="14-digit FSSAI number" />
+          </div>
+
+          <div>
+            <label style={labelStyle}>FSSAI Expiry</label>
+            <input type="date" value={fssaiExpiry ?? ""} onChange={(e) => setFssaiExpiry(e.target.value)} style={inputStyle} />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Upload Copy</label>
+            <input type="file" onChange={(e) => handleFileChange(e, "fssai")} />
+            <div style={{ fontSize: 13, marginTop: 6 }}>{fssaiFileName ? `Selected: ${fssaiFileName}` : "No file chosen"}</div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Status</label>
+            <div>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <input type="checkbox" checked={fssaiStatus} onChange={(e) => setFssaiStatus(e.target.checked)} />
+                <span style={{ fontSize: 14 }}>{fssaiStatus ? "On" : "Off"}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ height: 12 }} />
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 120px", gap: 12, alignItems: "center" }}>
+          <div>
+            <label style={labelStyle}>GST Number</label>
+            <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} style={inputStyle} placeholder="GST" />
+          </div>
+
+          <div>
+            <label style={labelStyle}>GST Type</label>
+            <select value={gstType} onChange={(e) => setGstType(e.target.value)} style={inputStyle}>
+              <option value="">Select</option>
+              <option value="Regular">Regular</option>
+              <option value="Composition">Composition</option>
+              <option value="Not Applicable">Not Applicable</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Upload Copy</label>
+            <input type="file" onChange={(e) => handleFileChange(e, "gst")} />
+            <div style={{ fontSize: 13, marginTop: 6 }}>{gstFileName ? `Selected: ${gstFileName}` : "No file chosen"}</div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Status</label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <input type="checkbox" checked={gstStatus} onChange={(e) => setGstStatus(e.target.checked)} />
+              <span style={{ fontSize: 14 }}>{gstStatus ? "On" : "Off"}</span>
+            </label>
+          </div>
+        </div>
+
+        <div style={{ height: 12 }} />
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 120px", gap: 12, alignItems: "center" }}>
+          <div>
+            <label style={labelStyle}>PAN Number</label>
+            <input value={panNumber} onChange={(e) => setPanNumber(e.target.value)} style={inputStyle} placeholder="PAN" />
+          </div>
+
+          <div>
+            <label style={labelStyle}>PAN Type</label>
+            <select value={panType} onChange={(e) => setPanType(e.target.value)} style={inputStyle}>
+              <option value="">Select</option>
+              <option value="Individual">Individual</option>
+              <option value="Company">Company</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Upload Copy</label>
+            <input type="file" onChange={(e) => handleFileChange(e, "pan")} />
+            <div style={{ fontSize: 13, marginTop: 6 }}>{panFileName ? `Selected: ${panFileName}` : "No file chosen"}</div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Status</label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <input type="checkbox" checked={panStatus} onChange={(e) => setPanStatus(e.target.checked)} />
+              <span style={{ fontSize: 14 }}>{panStatus ? "On" : "Off"}</span>
+            </label>
+          </div>
         </div>
       </div>
 
-      {/* GST */}
-      <div style={{ marginBottom: 12, border: "1px solid #ddd", padding: 12, borderRadius: 6 }}>
-        <h4>GST</h4>
-        <input
-          name="GSTNumber"
-          placeholder="15-digit GST Number"
-          value={formData.GSTNumber || ""}
-          onChange={handleChange}
-          style={{ width: "100%", padding: 8, marginBottom: 8 }}
-        />
-        <select
-          name="GSTType"
-          value={formData.GSTType || ""}
-          onChange={handleChange}
-          style={{ width: "100%", padding: 8, marginBottom: 8 }}
+      {/* messages */}
+      {message && <div style={{ color: "green", marginBottom: 8 }}>{message}</div>}
+      {error && <div style={{ color: "red", marginBottom: 8 }}>{error}</div>}
+
+      {/* Buttons row (if parent already has Cancel/Save, duplicate is safe) */}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, paddingTop: 8 }}>
+        <button
+          type="button"
+          onClick={() => {
+            // reset to initial
+            setRestroAddress(initialData.RestroAddress ?? "");
+            setCity(initialData.City ?? "");
+            setStateVal(initialData.State ?? "");
+            setDistrict(initialData.District ?? "");
+            setPinCode(initialData.PinCode ?? "");
+            setLatitude(initialData.RestroLatitude ?? "");
+            setLongitude(initialData.RestroLongitude ?? "");
+
+            setFssaiNumber(initialData.FSSAINumber ?? "");
+            setFssaiExpiry(initialData.FSSAIExpiryDate ?? "");
+            setFssaiFileName(initialData.FSSAICopyPath ?? "");
+            setFssaiStatus(!!initialData.FSSAIStatus);
+
+            setGstNumber(initialData.GSTNumber ?? "");
+            setGstType(initialData.GSTType ?? "");
+            setGstFileName(initialData.GSTCopyPath ?? "");
+            setGstStatus(!!initialData.GSTStatus);
+
+            setPanNumber(initialData.PANNumber ?? "");
+            setPanType(initialData.PANType ?? "");
+            setPanFileName(initialData.PANCopyPath ?? "");
+            setPanStatus(!!initialData.PANStatus);
+
+            setMessage(null);
+            setError(null);
+          }}
+          style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}
         >
-          <option value="">--Select GST Type--</option>
-          <option value="Regular">Regular</option>
-          <option value="Composition">Composition</option>
-          <option value="NotApplicable">Not Applicable</option>
-        </select>
-        <input type="file" accept=".pdf,.jpg,.jpeg,.png" />
-        <div>
-          <label>Status:</label>
-          <button type="button" onClick={() => handleToggle("GSTStatus")}>
-            {formData.GSTStatus ? "On" : "Off"}
-          </button>
-        </div>
-      </div>
+          Reset
+        </button>
 
-      {/* PAN */}
-      <div style={{ marginBottom: 12, border: "1px solid #ddd", padding: 12, borderRadius: 6 }}>
-        <h4>PAN</h4>
-        <input
-          name="PANNumber"
-          placeholder="10-digit PAN Number"
-          value={formData.PANNumber || ""}
-          onChange={handleChange}
-          style={{ width: "100%", padding: 8, marginBottom: 8 }}
-        />
-        <select
-          name="PANType"
-          value={formData.PANType || ""}
-          onChange={handleChange}
-          style={{ width: "100%", padding: 8, marginBottom: 8 }}
-        >
-          <option value="">--Select PAN Type--</option>
-          <option value="Individual">Individual</option>
-          <option value="Company">Company</option>
-        </select>
-        <input type="file" accept=".pdf,.jpg,.jpeg,.png" />
-        <div>
-          <label>Status:</label>
-          <button type="button" onClick={() => handleToggle("PANStatus")}>
-            {formData.PANStatus ? "On" : "Off"}
-          </button>
-        </div>
-      </div>
-
-      {/* Save */}
-      <div style={{ marginTop: 20, textAlign: "center" }}>
         <button
           type="submit"
           disabled={saving}
-          style={{
-            padding: "10px 20px",
-            borderRadius: 6,
-            background: saving ? "#999" : "#0ea5e9",
-            color: "#fff",
-            border: "none",
-            cursor: saving ? "not-allowed" : "pointer",
-          }}
+          style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#0ea5e9", color: "#fff" }}
         >
           {saving ? "Saving..." : "Save"}
         </button>
