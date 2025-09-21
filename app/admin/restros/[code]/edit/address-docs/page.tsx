@@ -1,8 +1,7 @@
 // server component
 import React from "react";
 import { safeGetRestro } from "@/lib/restroService";
-import AddressDocsForm from "./AddressDocsForm";
-
+import AddressDocsForm from "../AddressDocsForm";
 type Props = { params: { code: string } };
 
 export default async function AddressDocsPage({ params }: Props) {
