@@ -3,107 +3,91 @@
 
 import React, { useEffect, useState } from "react";
 
-type Props = {
-  params?: { code?: string };
-};
+type Props = { params?: { code?: string } };
 
 export default function AddressDocsForm({ params }: Props) {
   const code = params?.code ?? "";
-  const [loading, setLoading] = useState(false);
 
-  // Address fields
-  const [restroAddress, setRestroAddress] = useState("");
+  // simple local state placeholders (you will wire to API later)
+  const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [stateVal, setStateVal] = useState("");
   const [district, setDistrict] = useState("");
-  const [pinCode, setPinCode] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
+  const [pin, setPin] = useState("");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
 
   useEffect(() => {
-    // Optional: load existing address via client API if needed
+    // Optional: fetch existing data via client API (e.g. /api/restros/[code])
     // fetch(`/api/restros/${code}`).then(...)
   }, [code]);
 
   return (
     <div style={{ padding: 12 }}>
-      <h3 style={{ textAlign: "center", marginBottom: 12 }}>Address & Documents</h3>
+      <h3 style={{ textAlign: "center" }}>Address & Documents</h3>
 
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        {/* Address grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
           <div>
-            <label style={{ display: "block", marginBottom: 6 }}>Restro Address</label>
-            <textarea value={restroAddress} onChange={(e) => setRestroAddress(e.target.value)} style={{ width: "100%", minHeight: 80, padding: 8 }} />
+            <label>Restro Address</label>
+            <textarea value={address} onChange={(e) => setAddress(e.target.value)} style={{ width: "100%", minHeight: 80 }} />
+          </div>
+          <div>
+            <label>City / Village</label>
+            <input value={city} onChange={(e) => setCity(e.target.value)} style={{ width: "100%" }} />
+          </div>
+          <div>
+            <label>State</label>
+            <input value={stateVal} onChange={(e) => setStateVal(e.target.value)} style={{ width: "100%" }} />
           </div>
 
           <div>
-            <label style={{ display: "block", marginBottom: 6 }}>City / Village</label>
-            <input value={city} onChange={(e) => setCity(e.target.value)} style={{ width: "100%", padding: 8 }} />
+            <label>District</label>
+            <input value={district} onChange={(e) => setDistrict(e.target.value)} style={{ width: "100%" }} />
           </div>
-
           <div>
-            <label style={{ display: "block", marginBottom: 6 }}>State</label>
-            <input value={stateVal} onChange={(e) => setStateVal(e.target.value)} style={{ width: "100%", padding: 8 }} />
+            <label>Pin Code</label>
+            <input value={pin} onChange={(e) => setPin(e.target.value)} style={{ width: "100%" }} />
           </div>
-
-          <div>
-            <label style={{ display: "block", marginBottom: 6 }}>District</label>
-            <input value={district} onChange={(e) => setDistrict(e.target.value)} style={{ width: "100%", padding: 8 }} />
-          </div>
-
-          <div>
-            <label style={{ display: "block", marginBottom: 6 }}>Pin Code</label>
-            <input value={pinCode} onChange={(e) => setPinCode(e.target.value)} style={{ width: "100%", padding: 8 }} />
-          </div>
-
           <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: "block", marginBottom: 6 }}>Latitude</label>
-              <input value={latitude} onChange={(e) => setLatitude(e.target.value)} style={{ width: "100%", padding: 8 }} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: "block", marginBottom: 6 }}>Longitude</label>
-              <input value={longitude} onChange={(e) => setLongitude(e.target.value)} style={{ width: "100%", padding: 8 }} />
-            </div>
+            <input placeholder="Latitude" value={lat} onChange={(e) => setLat(e.target.value)} style={{ flex: 1 }} />
+            <input placeholder="Longitude" value={lng} onChange={(e) => setLng(e.target.value)} style={{ flex: 1 }} />
           </div>
         </div>
 
-        {/* Documents area */}
-        <div style={{ marginTop: 18, borderTop: "1px solid #eee", paddingTop: 18 }}>
+        <div style={{ marginTop: 18 }}>
           <h4>Documents</h4>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 12 }}>
-            <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 6 }}>
-              <div style={{ marginBottom: 8 }}>FSSAI Number</div>
-              <input placeholder="14-digit FSSAI" style={{ width: "100%", padding: 8 }} />
-              <div style={{ marginTop: 8 }}><input type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+            <div style={{ padding: 12, border: "1px solid #eee" }}>
+              <div>FSSAI Number</div>
+              <input style={{ width: "100%" }} placeholder="14-digit FSSAI" />
+              <div style={{ marginTop: 8 }}><input type="file" accept=".pdf,.jpg,.png" /></div>
             </div>
 
-            <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 6 }}>
-              <div style={{ marginBottom: 8 }}>GST Number</div>
-              <input placeholder="GST Number" style={{ width: "100%", padding: 8 }} />
-              <div style={{ marginTop: 8 }}><input type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
+            <div style={{ padding: 12, border: "1px solid #eee" }}>
+              <div>GST Number</div>
+              <input style={{ width: "100%" }} placeholder="GST Number" />
+              <div style={{ marginTop: 8 }}><input type="file" accept=".pdf,.jpg,.png" /></div>
             </div>
 
-            <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 6 }}>
-              <div style={{ marginBottom: 8 }}>PAN Number</div>
-              <input placeholder="PAN Number" style={{ width: "100%", padding: 8 }} />
-              <div style={{ marginTop: 8 }}><input type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
+            <div style={{ padding: 12, border: "1px solid #eee" }}>
+              <div>PAN Number</div>
+              <input style={{ width: "100%" }} placeholder="PAN Number" />
+              <div style={{ marginTop: 8 }}><input type="file" accept=".pdf,.jpg,.png" /></div>
             </div>
           </div>
         </div>
 
-        {/* Actions */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 22 }}>
-          <button type="button" onClick={() => { /* cancel action */ }} style={{ padding: "8px 14px", borderRadius: 6 }}>Cancel</button>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+          <button type="button">Cancel</button>
           <button
             type="button"
-            onClick={() => alert("Save not implemented yet. Implement /api/restros/[code]/address-docs route to persist.")}
-            style={{ padding: "8px 14px", borderRadius: 6, background: "#06a3d9", color: "#fff", border: "none" }}
-            disabled={loading}
+            onClick={() => {
+              alert("Save not wired. Implement server route /api/restros/[code]/address-docs to persist.");
+            }}
+            style={{ background: "#06a3d9", color: "#fff", padding: "8px 12px", border: "none", borderRadius: 6 }}
           >
-            {loading ? "Saving..." : "Save"}
+            Save
           </button>
         </div>
       </div>
