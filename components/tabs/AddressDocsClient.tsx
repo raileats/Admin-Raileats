@@ -5,14 +5,14 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Props = {
-  initialData: any;
+  initialData?: any;
   imagePrefix?: string;
 };
 
 export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }: Props) {
   const router = useRouter();
 
-  // fields (prefill from initialData to match Basic)
+  // fields same as Basic
   const [restroAddress, setRestroAddress] = useState(initialData.RestroAddress ?? "");
   const [city, setCity] = useState(initialData.City ?? "");
   const [stateVal, setStateVal] = useState(initialData.State ?? "");
@@ -23,9 +23,9 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
   const [fssaiNumber, setFssaiNumber] = useState(initialData.FSSAINumber ?? "");
   const [fssaiExpiry, setFssaiExpiry] = useState(initialData.FSSAIExpiry ?? "");
   const [gstNumber, setGstNumber] = useState(initialData.GSTNumber ?? "");
+
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-
   const restroCode = initialData.RestroCode ?? initialData.RestroId ?? "";
 
   const handleSave = async () => {
@@ -65,7 +65,6 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
     }
   };
 
-  // Structure mirrors BasicInfoClient look: header, tab-content cards, grid, buttons bottom-right
   return (
     <div className="basic-like-wrap">
       <div className="basic-card">
@@ -81,12 +80,10 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
             <label>City / Village</label>
             <input value={city} onChange={(e) => setCity(e.target.value)} />
           </div>
-
           <div>
             <label>State</label>
             <input value={stateVal} onChange={(e) => setStateVal(e.target.value)} />
           </div>
-
           <div>
             <label>District</label>
             <input value={district} onChange={(e) => setDistrict(e.target.value)} />
@@ -98,12 +95,10 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
             <label>Pin Code</label>
             <input value={pinCode} onChange={(e) => setPinCode(e.target.value)} />
           </div>
-
           <div>
             <label>Latitude</label>
             <input value={latitude} onChange={(e) => setLatitude(e.target.value)} />
           </div>
-
           <div>
             <label>Longitude</label>
             <input value={longitude} onChange={(e) => setLongitude(e.target.value)} />
@@ -119,12 +114,10 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
             <label>FSSAI Number</label>
             <input value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} />
           </div>
-
           <div>
             <label>FSSAI Expiry</label>
             <input type="date" value={fssaiExpiry ?? ""} onChange={(e) => setFssaiExpiry(e.target.value)} />
           </div>
-
           <div>
             <label>GST Number</label>
             <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} />
