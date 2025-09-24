@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import RestroEditModal from "@/components/RestroEditModal"; // adjust if your path differs
+import { useRouter } from "next/navigation";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -17,6 +17,8 @@ type Restro = { [k: string]: any };
 type SaveResult = { ok: boolean; row?: any; error?: any };
 
 export default function RestroMasterPage(): JSX.Element {
+  const router = useRouter();
+
   // filters
   const [restroCode, setRestroCode] = useState("");
   const [restroName, setRestroName] = useState("");
@@ -31,10 +33,6 @@ export default function RestroMasterPage(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-
-  // modal state
-  const [editingRestro, setEditingRestro] = useState<Restro | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     fetchRestros();
@@ -157,13 +155,13 @@ export default function RestroMasterPage(): JSX.Element {
     }
   }
 
-  // open modal with restro object (fast)
-  function openEditModalWith(restro: Restro) {
-    setEditingRestro(restro);
-    setModalOpen(true);
+  // navigate to route-based edit page (so URL changes to /admin/restros/<code>/edit)
+  function openEditRoute(code: string | number) {
+    const c = encodeURIComponent(String(code));
+    router.push(`/admin/restros/${c}/edit`);
   }
 
-  // update list row after successful save
+  // update list row after successful save (you can use this if you re-fetch or receive updated row)
   function updateRowInState(code: string | number, updated: any) {
     setResults((s) =>
       s.map((r) => {
@@ -174,32 +172,6 @@ export default function RestroMasterPage(): JSX.Element {
         return r;
       })
     );
-  }
-
-  // modal onSave wrapper (calls API and updates list)
-  async function handleModalSave(payload: any): Promise<SaveResult> {
-    try {
-      const code = editingRestro?.RestroCode ?? editingRestro?.restro_code;
-      if (!code) throw new Error("Missing restro code for save");
-
-      const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(txt || `Save failed (${res.status})`);
-      }
-      const json = await res.json().catch(() => null);
-      const updatedRow = json?.row ?? payload ?? {};
-      // update local list so changes reflect immediately
-      updateRowInState(code, updatedRow);
-      return { ok: true, row: updatedRow };
-    } catch (err: any) {
-      console.error("modal save error:", err);
-      return { ok: false, error: err?.message ?? String(err) };
-    }
   }
 
   return (
@@ -297,9 +269,8 @@ export default function RestroMasterPage(): JSX.Element {
                     <td style={{ padding: 12 }}>{r.Raileats ? "On" : "Off"}</td>
                     <td style={{ padding: 12 }}>{r.FSSAIExpiryDate ?? "-"}</td>
                     <td style={{ padding: 12, display: "flex", gap: 8 }}>
-                      {/* Quick edit via modal (recommended) */}
                       <button
-                        onClick={() => openEditModalWith(r)}
+                        onClick={() => openEditRoute(code)}
                         style={{
                           background: "#f59e0b",
                           color: "#000",
@@ -311,8 +282,6 @@ export default function RestroMasterPage(): JSX.Element {
                       >
                         Edit
                       </button>
-
-                      {/* NOTE: removed 'Open Page' button as requested */}
                     </td>
                   </tr>
                 );
@@ -321,27 +290,6 @@ export default function RestroMasterPage(): JSX.Element {
           </tbody>
         </table>
       </div>
-
-      {/* Modal - rendered when modalOpen true */}
-      {modalOpen && editingRestro && (
-        <RestroEditModal
-          restro={editingRestro}
-          initialTab="Basic Information"
-          onClose={() => {
-            setModalOpen(false);
-            setEditingRestro(null);
-          }}
-          onSave={async (payload) => {
-            const res = await handleModalSave(payload);
-            if (res.ok) {
-              // close modal after successful save
-              setModalOpen(false);
-              setEditingRestro(null);
-            }
-            return res;
-          }}
-        />
-      )}
     </main>
   );
 }
