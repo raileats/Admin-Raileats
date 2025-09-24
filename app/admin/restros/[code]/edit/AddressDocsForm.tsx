@@ -4,33 +4,28 @@
 import React, { useState } from "react";
 
 type Props = {
-  initialData: any; // row from RestroMaster
-  restroCode: number;
+  initialData?: any;
+  restroCode?: number | string;
 };
 
-export default function AddressDocsForm({ initialData, restroCode }: Props) {
-  // fields
-  const [restroAddress, setRestroAddress] = useState(initialData?.RestroAddress ?? "");
-  const [city, setCity] = useState(initialData?.City ?? "");
-  const [stateVal, setStateVal] = useState(initialData?.State ?? "");
-  const [district, setDistrict] = useState(initialData?.District ?? "");
-  const [pinCode, setPinCode] = useState(initialData?.PinCode ?? "");
-  const [latitude, setLatitude] = useState(initialData?.Latitude ?? "");
-  const [longitude, setLongitude] = useState(initialData?.Longitude ?? "");
-  // documents
-  const [fssaiNumber, setFssaiNumber] = useState(initialData?.FSSAINumber ?? "");
-  const [fssaiExpiry, setFssaiExpiry] = useState(initialData?.FSSAIExpiry ?? "");
-  // saving state
+export default function AddressDocsForm({ initialData = {}, restroCode }: Props) {
+  const [restroAddress, setRestroAddress] = useState(initialData.RestroAddress ?? "");
+  const [city, setCity] = useState(initialData.City ?? "");
+  const [stateVal, setStateVal] = useState(initialData.State ?? "");
+  const [district, setDistrict] = useState(initialData.District ?? "");
+  const [pinCode, setPinCode] = useState(initialData.PinCode ?? "");
+  const [latitude, setLatitude] = useState(initialData.Latitude ?? "");
+  const [longitude, setLongitude] = useState(initialData.Longitude ?? "");
+  const [fssaiNumber, setFssaiNumber] = useState(initialData.FSSAINumber ?? "");
+  const [fssaiExpiry, setFssaiExpiry] = useState(initialData.FSSAIExpiry ?? "");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
 
   const handleSave = async () => {
     setSaving(true);
-    setMessage("");
+    setMsg(null);
     try {
-      // build payload - keep keys same as your backend expects
       const payload = {
-        RestroCode: restroCode,
         RestroAddress: restroAddress,
         City: city,
         State: stateVal,
@@ -42,107 +37,151 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
         FSSAIExpiry: fssaiExpiry,
       };
 
-      // call your API route (adjust path if needed)
-      const res = await fetch(`/api/restros/${restroCode}/update-address-docs`, {
-        method: "POST",
+      const code = restroCode ?? initialData?.RestroCode;
+      const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setMessage(data?.message || "Save failed");
-      } else {
-        setMessage("Saved successfully");
-      }
-    } catch (err) {
-      setMessage("Saving failed");
+      if (!res.ok) throw new Error("Save failed");
+      setMsg("Saved successfully");
+    } catch (e: any) {
+      setMsg(e?.message ?? "Save failed");
     } finally {
       setSaving(false);
     }
   };
 
-  // UI uses same grid & style patterns as BasicInfoClient so look matches
   return (
-    <div className="restro-edit">
-      <div className="actions" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 700 }}>Address</div>
-      </div>
+    <div className="rd-wrap">
+      {/* top section heading (same look as Basic) */}
+      <div className="rd-card">
+        <div className="rd-section-title">Address</div>
 
-      <div className="section" style={{ background: "#eaf6ff", padding: 14, borderRadius: 6, marginBottom: 18 }}>
-        <div className="section-heading">Address</div>
-        <div className="form-grid">
-          <div className="full">
-            <label>Restro Address</label>
-            <textarea value={restroAddress} onChange={(e) => setRestroAddress(e.target.value)} />
+        <div className="rd-field full">
+          <label className="rd-label">Restro Address</label>
+          <textarea className="rd-textarea" value={restroAddress} onChange={(e) => setRestroAddress(e.target.value)} />
+        </div>
+
+        <div className="rd-grid-3">
+          <div>
+            <label className="rd-label">City / Village</label>
+            <input className="rd-input" value={city} onChange={(e) => setCity(e.target.value)} />
           </div>
 
-          <div className="compact-grid">
-            <div>
-              <label>City / Village</label>
-              <input value={city} onChange={(e) => setCity(e.target.value)} />
-            </div>
-            <div>
-              <label>State</label>
-              <input value={stateVal} onChange={(e) => setStateVal(e.target.value)} />
-            </div>
-            <div>
-              <label>District</label>
-              <input value={district} onChange={(e) => setDistrict(e.target.value)} />
-            </div>
+          <div>
+            <label className="rd-label">State</label>
+            <input className="rd-input" value={stateVal} onChange={(e) => setStateVal(e.target.value)} />
           </div>
 
-          <div className="compact-grid">
-            <div>
-              <label>Pin Code</label>
-              <input value={pinCode} onChange={(e) => setPinCode(e.target.value)} />
-            </div>
-            <div>
-              <label>Latitude</label>
-              <input value={latitude} onChange={(e) => setLatitude(e.target.value)} />
-            </div>
-            <div>
-              <label>Longitude</label>
-              <input value={longitude} onChange={(e) => setLongitude(e.target.value)} />
-            </div>
+          <div>
+            <label className="rd-label">District</label>
+            <input className="rd-input" value={district} onChange={(e) => setDistrict(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="rd-grid-3">
+          <div>
+            <label className="rd-label">Pin Code</label>
+            <input className="rd-input" value={pinCode} onChange={(e) => setPinCode(e.target.value)} />
+          </div>
+
+          <div>
+            <label className="rd-label">Latitude</label>
+            <input className="rd-input" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
+          </div>
+
+          <div>
+            <label className="rd-label">Longitude</label>
+            <input className="rd-input" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
           </div>
         </div>
       </div>
 
-      <div className="section" style={{ background: "#eef7ff", padding: 14, borderRadius: 6 }}>
-        <div className="section-heading">Documents</div>
-        <div className="form-grid">
+      {/* documents card */}
+      <div className="rd-card" style={{ marginTop: 18 }}>
+        <div className="rd-section-title">Documents</div>
+
+        <div className="rd-grid-2">
           <div>
-            <label>FSSAI Number</label>
-            <input value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} />
+            <label className="rd-label">FSSAI Number</label>
+            <input className="rd-input" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} />
           </div>
+
           <div>
-            <label>FSSAI Expiry</label>
-            <input type="date" value={fssaiExpiry} onChange={(e) => setFssaiExpiry(e.target.value)} />
+            <label className="rd-label">FSSAI Expiry</label>
+            <input type="date" className="rd-input" value={fssaiExpiry ?? ""} onChange={(e) => setFssaiExpiry(e.target.value)} />
           </div>
         </div>
       </div>
 
-      <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end", gap: 12 }}>
-        {message && <div style={{ color: message.includes("failed") ? "crimson" : "green", alignSelf: "center" }}>{message}</div>}
-        <button onClick={handleSave} disabled={saving} className="save-btn">
+      {/* actions */}
+      <div className="rd-actions">
+        {msg && <div className={`rd-msg ${msg.includes("failed") ? "err" : "ok"}`}>{msg}</div>}
+        <div style={{ flex: 1 }} />
+        <button className="rd-btn cancel" onClick={() => window.history.back()} disabled={saving}>
+          Cancel
+        </button>
+        <button className="rd-btn save" onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : "Save"}
         </button>
       </div>
 
+      {/* styles */}
       <style jsx>{`
-        .restro-edit { padding: 8px 0; }
-        .section-heading { font-size: 18px; font-weight: 700; color: #0b5f8a; margin-bottom: 10px; }
-        .form-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
-        .compact-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: end; }
-        .full textarea { width: 100%; min-height: 82px; padding: 10px; border-radius: 6px; border: 1px solid #e6eef7; box-sizing: border-box; }
-        label { display:block; font-size: 13px; color:#333; margin-bottom:6px; }
-        input { width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #e6eef7; box-sizing: border-box; }
-        .save-btn { background: #06a6e3; color: #fff; padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; }
+        .rd-wrap { padding: 8px 0 20px 0; }
+        .rd-card {
+          background: #fff;
+          border-radius: 6px;
+          box-shadow: none;
+          border: 1px solid #eef6fb;
+          padding: 18px;
+        }
+        .rd-section-title {
+          color: #0b5f8a;
+          font-weight: 700;
+          font-size: 18px;
+          margin-bottom: 12px;
+        }
+        .rd-label { display:block; font-size:13px; color:#333; margin-bottom:6px; }
+        .rd-input {
+          width: 100%;
+          padding: 10px 12px;
+          border-radius: 6px;
+          border: 1px solid #e6eef7;
+          box-sizing: border-box;
+        }
+        .rd-textarea {
+          width: 100%;
+          min-height: 78px;
+          padding: 12px;
+          border-radius: 6px;
+          border: 1px solid #e6eef7;
+          box-sizing: border-box;
+          resize: vertical;
+        }
+        .rd-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; align-items:end; }
+        .rd-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 6px; align-items:end; }
+
+        .rd-field.full { margin-bottom: 12px; }
+
+        .rd-actions {
+          display:flex; align-items:center; gap:12px; margin-top:14px; padding: 8px 6px;
+          border-top: 1px solid #f1f5f8; background: transparent;
+        }
+        .rd-btn { padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; }
+        .rd-btn.save { background: #06a6e3; color: #fff; }
+        .rd-btn.cancel { background: #fff; color: #333; border: 1px solid #ddd; }
+
+        .rd-msg { font-size: 13px; margin-right: 8px; }
+        .rd-msg.err { color: crimson; }
+        .rd-msg.ok { color: green; }
+
         @media (max-width: 1100px) {
-          .compact-grid { grid-template-columns: repeat(2, 1fr); }
+          .rd-grid-3 { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 720px) {
-          .compact-grid { grid-template-columns: 1fr; }
+          .rd-grid-3, .rd-grid-2 { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>
