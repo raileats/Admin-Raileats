@@ -270,7 +270,7 @@ export default function RestroEditModal({
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
 // AddressDocsClient accepts initialData or restro; we pass local/restro for compatibility
-return <AddressDocsClient initialData={restro} restro={restro} />;
+return <AddressDocsClient initialData={restro} />;
       case "Contacts":
         return <ContactsTab {...common} />;
       case "Bank":
