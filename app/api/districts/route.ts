@@ -14,10 +14,10 @@ export async function GET(request: Request) {
     const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!SUPABASE_URL || !SUPABASE_KEY) {
-      return NextResponse.json({ ok: false, error: "Supabase not configured" }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "Supabase not configured (missing env)" }, { status: 500 });
     }
 
-    // Filter by StateCode
+    // Query DistrictMaster table filtering by StateCode (your column names)
     const endpoint = `${SUPABASE_URL}/rest/v1/DistrictMaster?select=DistrictCode,DistrictName,StateCode&StateCode=eq.${encodeURIComponent(
       stateId
     )}&order=DistrictName.asc`;
@@ -36,8 +36,8 @@ export async function GET(request: Request) {
 
     const rows = await res.json();
 
-    // Normalize to {id, name, state_id}
-    const districts = rows.map((r: any) => ({
+    // normalize to { id, name, state_id }
+    const districts = (Array.isArray(rows) ? rows : []).map((r: any) => ({
       id: r.DistrictCode,
       name: r.DistrictName,
       state_id: r.StateCode,
@@ -45,6 +45,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ ok: true, districts });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message ?? String(e) }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 500 });
   }
 }
