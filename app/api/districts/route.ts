@@ -5,9 +5,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const stateId = url.searchParams.get("stateId");
-    if (!stateId) {
-      return NextResponse.json({ ok: false, error: "Missing stateId" }, { status: 400 });
-    }
+    if (!stateId) return NextResponse.json({ ok: false, error: "Missing stateId" }, { status: 400 });
 
     const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -15,7 +13,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: false, error: "Supabase not configured" }, { status: 500 });
     }
 
-    // adjust table/column names to match your DB; using DistrictMaster with state_id fiel
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/DistrictMaster?select=id,name,state_id&state_id=eq.${encodeURIComponent(
         stateId
