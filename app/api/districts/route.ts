@@ -1,50 +1,47 @@
 // app/api/districts/route.ts
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  export async function GET() {
+    return NextResponse.json({ ok: false, error: "Supabase not configured (missing env)" }, { status: 500 });
+  }
+}
+
+const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false }});
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const stateId = url.searchParams.get("stateId");
+    const stateId = url.searchParams.get("stateId") || "";
 
     if (!stateId) {
-      return NextResponse.json({ ok: false, error: "Missing stateId" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "stateId required" }, { status: 400 });
     }
 
-    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const { data, error } = await supabase
+      .from("DistrictMaster")
+      .select("DistrictCode, DistrictName, StateCode")
+      .eq("StateCode", stateId)
+      .order("DistrictName", { ascending: true });
 
-    if (!SUPABASE_URL || !SUPABASE_KEY) {
-      return NextResponse.json({ ok: false, error: "Supabase not configured (missing env)" }, { status: 500 });
+    if (error) {
+      console.error("supabase districts error", error);
+      return NextResponse.json({ ok: false, error: error.message || String(error) }, { status: 500 });
     }
 
-    // Query DistrictMaster table filtering by StateCode (your column names)
-    const endpoint = `${SUPABASE_URL}/rest/v1/DistrictMaster?select=DistrictCode,DistrictName,StateCode&StateCode=eq.${encodeURIComponent(
-      stateId
-    )}&order=DistrictName.asc`;
-
-    const res = await fetch(endpoint, {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
-    });
-
-    if (!res.ok) {
-      const txt = await res.text();
-      return NextResponse.json({ ok: false, error: txt }, { status: res.status });
-    }
-
-    const rows = await res.json();
-
-    // normalize to { id, name, state_id }
-    const districts = (Array.isArray(rows) ? rows : []).map((r: any) => ({
-      id: r.DistrictCode,
+    const districts = (data || []).map((r: any) => ({
+      id: String(r.DistrictCode),
       name: r.DistrictName,
-      state_id: r.StateCode,
+      state_id: String(r.StateCode),
     }));
 
-    return NextResponse.json({ ok: true, districts });
+    return NextResponse.json({ ok: true, districts }, { status: 200 });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 500 });
+    console.error("districts route exception", e);
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
