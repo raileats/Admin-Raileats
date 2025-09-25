@@ -1,3 +1,4 @@
+// components/tabs/AddressDocsClient.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -27,8 +28,10 @@ export default function AddressDocsClient({
   const [local, setLocal] = useState<any>({
     RestroAddress: initialData?.RestroAddress ?? "",
     City: initialData?.City ?? "",
+    // Accept StateCode or State name or StateName
     StateCode: initialData?.StateCode ?? initialData?.State ?? initialData?.StateName ?? "",
-    DistrictCode: initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName ?? "",
+    // Accept DistrictCode or District or DistrictName or Districts (some exports use 'Districts')
+    DistrictCode: initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName ?? initialData?.Districts ?? "",
     PinCode: initialData?.PinCode ?? "",
     Latitude: initialData?.Latitude ?? "",
     Longitude: initialData?.Longitude ?? "",
@@ -51,7 +54,7 @@ export default function AddressDocsClient({
     fetch("/api/states")
       .then((r) => r.json())
       .then((j) => {
-        // <-- DEBUG: full states response
+        // DEBUG: full states response (open browser console to inspect)
         console.log("DEBUG /api/states response ->", j);
 
         if (j?.ok && Array.isArray(j.states)) setStateList(j.states);
@@ -69,8 +72,9 @@ export default function AddressDocsClient({
       ...p,
       RestroAddress: initialData?.RestroAddress ?? p.RestroAddress,
       City: initialData?.City ?? p.City,
-      StateCode: initialData?.StateCode ?? initialData?.State ?? p.StateCode,
-      DistrictCode: initialData?.DistrictCode ?? initialData?.District ?? p.DistrictCode,
+      StateCode: initialData?.StateCode ?? initialData?.State ?? initialData?.StateName ?? p.StateCode,
+      DistrictCode:
+        initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName ?? initialData?.Districts ?? p.DistrictCode,
       PinCode: initialData?.PinCode ?? p.PinCode,
       Latitude: initialData?.Latitude ?? p.Latitude,
       Longitude: initialData?.Longitude ?? p.Longitude,
@@ -101,7 +105,9 @@ export default function AddressDocsClient({
           setStateCodeById(exact.id);
           return;
         }
-        const fuzzy = stateList.find((s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase()));
+        const fuzzy = stateList.find(
+          (s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase())
+        );
         if (fuzzy) {
           setStateCodeById(fuzzy.id);
           return;
@@ -146,84 +152,36 @@ export default function AddressDocsClient({
       }
     }
 
-    // --- REPLACED: robust debug-friendly district fetch block ---
+    // fetch districts from api
     setLoadingDistricts(true);
     setDistrictList([]);
+    fetch(`/api/districts?stateId=${encodeURIComponent(stateCode)}`)
+      .then((r) => r.json())
+      .then((j) => {
+        // DEBUG: full districts response (open browser console to inspect)
+        console.log("DEBUG /api/districts response for stateId=", stateCode, "->", j);
 
-    // helper to fetch and return parsed result or text/error
-    const tryFetchJson = async (url: string) => {
-      try {
-        const resp = await fetch(url, { cache: "no-store" });
-        console.log("[DEBUG] fetch", url, "status", resp.status, resp.statusText);
-        const text = await resp.text();
-        try {
-          const parsed = JSON.parse(text);
-          console.log("[DEBUG] parsed JSON from", url, parsed);
-          return { ok: true, json: parsed, status: resp.status };
-        } catch (e) {
-          console.log("[DEBUG] non-json response from", url, "text:", text.slice(0, 1000));
-          return { ok: false, text, status: resp.status };
-        }
-      } catch (err: any) {
-        console.warn("[DEBUG] fetch error for", url, err && err.message ? err.message : err);
-        return { ok: false, error: err };
-      }
-    };
-
-    (async () => {
-      const triedUrls = [
-        `/api/districts?stateId=${encodeURIComponent(stateCode)}`,
-        `/api/districts?stateCode=${encodeURIComponent(stateCode)}`, // fallback param name
-      ];
-
-      let result: any = null;
-      for (let i = 0; i < triedUrls.length; i++) {
-        result = await tryFetchJson(triedUrls[i]);
-        if (result && result.ok && result.json) break;
-        if (result && result.text) break;
-      }
-
-      // retry once if nothing usable returned
-      if ((!result || (!result.ok && !result.json)) && triedUrls.length > 0) {
-        console.log("[DEBUG] initial district fetch attempts failed, retrying once...");
-        await new Promise((r) => setTimeout(r, 700));
-        result = await tryFetchJson(triedUrls[0]);
-      }
-
-      if (!result) {
-        console.error("[DEBUG] fetch /api/districts: no result");
-        setLoadingDistricts(false);
-        return;
-      }
-
-      if (result.ok && result.json) {
-        const j = result.json;
-        // handle known shapes
         if (j?.ok && Array.isArray(j.districts)) {
           setDistrictList(j.districts);
           tryPreselectDistrict(j.districts);
         } else if (Array.isArray(j)) {
-          setDistrictList(j);
-          tryPreselectDistrict(j);
-        } else if (Array.isArray(j?.data)) {
-          setDistrictList(j.data);
-          tryPreselectDistrict(j.data);
+          setDistrictList(j as DistrictItem[]);
+          tryPreselectDistrict(j as DistrictItem[]);
         } else {
-          console.warn("[DEBUG] unexpected json shape from /api/districts:", j);
+          console.warn("Unexpected /api/districts response", j);
         }
-      } else {
-        console.warn("[DEBUG] /api/districts fetch returned non-json or error:", result);
-      }
-
-      setLoadingDistricts(false);
-    })();
+      })
+      .catch((e) => console.warn("fetch /api/districts failed", e))
+      .finally(() => setLoadingDistricts(false));
 
     // tryPreselectDistrict definition
     function tryPreselectDistrict(list: DistrictItem[]) {
       // if already set by user, do not overwrite
       if (local.DistrictCode) return;
 
-      const possible = initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName;
+      // accept initialData.DistrictCode / District / DistrictName / Districts
+      const possible =
+        initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName ?? initialData?.Districts ?? undefined;
       if (!possible) return;
 
       const targetRaw = String(possible).trim();
@@ -238,9 +196,7 @@ export default function AddressDocsClient({
 
       // exact name (case-insensitive)
       const foundByName = list.find(
-        (d) =>
-          String(d.name).trim().toLowerCase() === targetLower ||
-          String((d as any).DistrictName ?? "").trim().toLowerCase() === targetLower
+        (d) => String(d.name).trim().toLowerCase() === targetLower || String((d as any).DistrictName ?? "").trim().toLowerCase() === targetLower
       );
       if (foundByName) {
         setLocal((s: any) => ({ ...s, DistrictCode: String(foundByName.id) }));
@@ -383,12 +339,7 @@ export default function AddressDocsClient({
         <div className="field">
           <label>Display Preview</label>
           {local.RestroDisplayPhoto ? (
-            <img
-              src={imgSrc(local.RestroDisplayPhoto)}
-              alt="display"
-              className="preview"
-              onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
-            />
+            <img src={imgSrc(local.RestroDisplayPhoto)} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
           ) : (
             <div className="readonly">No image</div>
           )}
