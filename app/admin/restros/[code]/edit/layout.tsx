@@ -9,7 +9,6 @@ export default async function RestroEditLayout({ params, children }: Props) {
   const codeNum = Number(params.code);
   const { restro, error } = await safeGetRestro(codeNum);
 
-  // Friendly header text
   const headerCode = restro?.RestroCode ?? params.code;
   const headerName = restro?.RestroName ?? restro?.name ?? "";
   const stationText = restro?.StationName
@@ -32,7 +31,6 @@ export default async function RestroEditLayout({ params, children }: Props) {
           zIndex: 60,
         }}
       >
-        {/* Left: Restro info */}
         <div>
           <div style={{ fontWeight: 700, fontSize: 16 }}>
             {headerCode}
@@ -45,7 +43,6 @@ export default async function RestroEditLayout({ params, children }: Props) {
           )}
         </div>
 
-        {/* Right: single red X close button */}
         <Link href="/admin/restros" style={{ textDecoration: "none" }}>
           <button
             aria-label="Close"
@@ -75,11 +72,10 @@ export default async function RestroEditLayout({ params, children }: Props) {
           borderBottom: "1px solid #f1f1f1",
           background: "#fafafa",
           position: "sticky",
-          top: 76, // leaves space for header height; adjust if header height changes
+          top: 76,
           zIndex: 50,
         }}
       >
-        {/* tabs nav */}
         <nav className="tabs-nav" style={{ borderBottom: "1px solid #eee", marginBottom: 10 }}>
           <Link href="./basic">Basic Information</Link>
           <Link href="./station-settings">Station Settings</Link>
@@ -89,11 +85,10 @@ export default async function RestroEditLayout({ params, children }: Props) {
           <Link href="./future-closed">Future Closed</Link>
           <Link href="./menu">Menu</Link>
         </nav>
-      </div> {/* <-- !! closed the tabs wrapper div here */}
+      </div>
 
-      {/* Main content area */}
-      <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-        {/* Show server error if any */}
+      {/* Main content area — padding removed so tab components control spacing */}
+      <div style={{ flex: 1, overflow: "auto", padding: 0 }}>
         {error && (
           <div style={{ color: "red", marginBottom: 12 }}>
             <strong>Error:</strong> {error}
@@ -103,7 +98,6 @@ export default async function RestroEditLayout({ params, children }: Props) {
           </div>
         )}
 
-        {/* Not found */}
         {!error && !restro && (
           <div style={{ color: "#333", padding: 12 }}>
             <div style={{ color: "red", marginBottom: 8 }}>Error: Not found</div>
@@ -111,7 +105,6 @@ export default async function RestroEditLayout({ params, children }: Props) {
           </div>
         )}
 
-        {/* Children (tab pages) */}
         {children}
       </div>
     </div>
