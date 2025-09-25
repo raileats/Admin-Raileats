@@ -6,9 +6,10 @@ import { useRouter } from "next/navigation";
 
 type Props = {
   initialData?: any;
+  imagePrefix?: string; // <-- added this
 };
 
-export default function AddressDocsClient({ initialData = {} }: Props) {
+export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }: Props) {
   const router = useRouter();
 
   const [local, setLocal] = useState<any>({
@@ -40,6 +41,9 @@ export default function AddressDocsClient({ initialData = {} }: Props) {
       GSTType: initialData?.GSTType ?? "",
     });
   }, [initialData]);
+
+  // If you plan to show images later, you can build URLs like:
+  // const logoUrl = imagePrefix ? `${imagePrefix}/path/to/logo.jpg` : "/fallback.jpg";
 
   function update(key: string, value: any) {
     setLocal((s: any) => ({ ...s, [key]: value }));
