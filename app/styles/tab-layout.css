@@ -1,0 +1,95 @@
+/* app/styles/tab-layout.css */
+
+/* Root variables for easy tuning */
+:root{
+  --tab-padding-vertical: 18px;
+  --tab-padding-horizontal: 40px;
+  --content-max-width: 1100px;
+  --section-title-font-size: 15px;
+  --section-title-font-weight: 600;
+  --section-title-color: #222;
+  --label-font-size: 13px;
+  --label-font-weight: 600;
+  --label-color: #444;
+  --input-font-size: 13px;
+  --input-border: 1px solid #e3e3e3;
+  --input-radius: 6px;
+  --grid-gap-row: 12px;
+  --grid-gap-col: 18px;
+}
+
+/* Outer wrapper used by all admin tab pages */
+.raileats-tab-layout {
+  padding: var(--tab-padding-vertical) var(--tab-padding-horizontal);
+  box-sizing: border-box;
+}
+
+/* Center content to same container width used across app */
+.raileats-tab-layout .raileats-tab-body {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding-top: 12px;
+}
+
+/* Section / small centered heading like Basic Info */
+.raileats-tab-layout .raileats-section-header {
+  text-align: center;
+  margin-bottom: 6px;
+}
+.raileats-tab-layout .raileats-section-header .raileats-section-title {
+  margin: 0;
+  font-size: var(--section-title-font-size);
+  font-weight: var(--section-title-font-weight);
+  color: var(--section-title-color);
+  letter-spacing: 0.2px;
+}
+
+/* Reusable grid for form fields */
+.raileats-compact-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--grid-gap-row) var(--grid-gap-col);
+}
+
+/* full row */
+.raileats-compact-grid .field.full-col {
+  grid-column: 1 / -1;
+}
+
+/* label and inputs */
+.raileats-compact-grid .field label {
+  display: block;
+  font-size: var(--label-font-size);
+  color: var(--label-color);
+  margin-bottom: 6px;
+  font-weight: var(--label-font-weight);
+}
+
+.raileats-compact-grid .field input,
+.raileats-compact-grid .field textarea,
+.raileats-compact-grid .field select {
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--input-radius);
+  border: var(--input-border);
+  font-size: var(--input-font-size);
+  background: #fff;
+  box-sizing: border-box;
+}
+
+/* textarea sizing */
+.raileats-compact-grid .field textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+/* responsive breakpoints - same as other tabs */
+@media (max-width: 1100px) {
+  .raileats-compact-grid { grid-template-columns: repeat(2, 1fr); }
+  .raileats-tab-layout { padding-left: 20px; padding-right: 20px; }
+}
+
+@media (max-width: 720px) {
+  .raileats-compact-grid { grid-template-columns: 1fr; }
+  .raileats-tab-layout { padding-left: 14px; padding-right: 14px; }
+}
