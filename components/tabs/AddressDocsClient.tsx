@@ -4,24 +4,29 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type StateItem = { id: number; code?: string; name: string; is_active?: boolean };
-type DistrictItem = { id: number; name: string; state_id?: number };
+type StateItem = { id: string | number; name: string };
+type DistrictItem = { id: string | number; name: string; state_id?: string | number };
 
 type Props = {
   initialData?: any;
   imagePrefix?: string;
-  states?: StateItem[];
-  initialDistricts?: DistrictItem[]; // optional districts list if page provided initial data
+  states?: StateItem[]; // optional server-supplied
+  initialDistricts?: DistrictItem[]; // optional server-supplied if StateCode present
 };
 
-export default function AddressDocsClient({ initialData = {}, imagePrefix = "", states = [], initialDistricts = [] }: Props) {
+export default function AddressDocsClient({
+  initialData = {},
+  imagePrefix = "",
+  states = [],
+  initialDistricts = [],
+}: Props) {
   const router = useRouter();
 
   const [local, setLocal] = useState<any>({
     RestroAddress: initialData?.RestroAddress ?? "",
     City: initialData?.City ?? "",
-    StateId: initialData?.StateId ?? null,
-    DistrictId: initialData?.DistrictId ?? null,
+    StateCode: initialData?.StateCode ?? (initialData?.StateId ?? "") ?? "", // try multiple possible fields
+    DistrictCode: initialData?.DistrictCode ?? (initialData?.DistrictId ?? "") ?? "",
     PinCode: initialData?.PinCode ?? "",
     Latitude: initialData?.Latitude ?? "",
     Longitude: initialData?.Longitude ?? "",
@@ -31,19 +36,80 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
     GSTType: initialData?.GSTType ?? "",
   });
 
-  const [districts, setDistricts] = useState<DistrictItem[]>(initialDistricts ?? []);
+  const [stateList, setStateList] = useState<StateItem[]>(Array.isArray(states) ? states : []);
+  const [districts, setDistricts] = useState<DistrictItem[]>(Array.isArray(initialDistricts) ? initialDistricts : []);
+  const [loadingStates, setLoadingStates] = useState(false);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // normalize initialData if it changes
   useEffect(() => {
-    // if initialData has StateId but no initialDistricts, fetch them
-    if (local.StateId && (!initialDistricts || initialDistricts.length === 0)) {
-      fetchDistricts(local.StateId);
+    setLocal((p: any) => ({
+      ...p,
+      RestroAddress: initialData?.RestroAddress ?? p.RestroAddress,
+      City: initialData?.City ?? p.City,
+      StateCode: initialData?.StateCode ?? initialData?.StateId ?? p.StateCode ?? "",
+      DistrictCode: initialData?.DistrictCode ?? initialData?.DistrictId ?? p.DistrictCode ?? "",
+      PinCode: initialData?.PinCode ?? p.PinCode,
+      Latitude: initialData?.Latitude ?? p.Latitude,
+      Longitude: initialData?.Longitude ?? p.Longitude,
+      FSSAINumber: initialData?.FSSAINumber ?? p.FSSAINumber,
+      FSSAIExpiry: initialData?.FSSAIExpiry ?? p.FSSAIExpiry,
+      GSTNumber: initialData?.GSTNumber ?? p.GSTNumber,
+      GSTType: initialData?.GSTType ?? p.GSTType,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData]);
+
+  // load states if server didn't provide
+  useEffect(() => {
+    if ((!states || states.length === 0) && !loadingStates) {
+      (async () => {
+        try {
+          setLoadingStates(true);
+          const res = await fetch("/api/states");
+          const json = await res.json().catch(() => null);
+          if (res.ok && json?.ok && Array.isArray(json.states)) {
+            setStateList(json.states);
+          } else {
+            setStateList([]);
+            console.warn("Failed to load /api/states", json);
+          }
+        } catch (e) {
+          console.error("states fetch error", e);
+          setStateList([]);
+        } finally {
+          setLoadingStates(false);
+        }
+      })();
+    } else {
+      setStateList(states ?? []);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [local.StateId]);
+  }, [states]);
+
+  // when StateCode changes, fetch districts (unless initialDistricts provided)
+  useEffect(() => {
+    if (!local.StateCode) {
+      setDistricts([]);
+      return;
+    }
+
+    // if initialDistricts given and they belong to this state, keep them;
+    // otherwise fetch fresh.
+    if (initialDistricts && initialDistricts.length > 0) {
+      const belongs = initialDistricts.some((d) => String(d.state_id) === String(local.StateCode));
+      if (belongs) {
+        setDistricts(initialDistricts);
+        return;
+      }
+    }
+
+    fetchDistricts(local.StateCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [local.StateCode]);
 
   function update(key: string, value: any) {
     setLocal((s: any) => ({ ...s, [key]: value }));
@@ -51,22 +117,23 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
     setErr(null);
   }
 
-  async function fetchDistricts(stateId: number | string) {
-    if (!stateId) {
+  async function fetchDistricts(stateCode: string | number) {
+    if (!stateCode) {
       setDistricts([]);
       return;
     }
     try {
       setLoadingDistricts(true);
-      const res = await fetch(`/api/districts?stateId=${stateId}`);
+      const res = await fetch(`/api/districts?stateId=${encodeURIComponent(String(stateCode))}`);
       const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
+      if (res.ok && json?.ok && Array.isArray(json.districts)) {
+        setDistricts(json.districts);
+      } else {
         setDistricts([]);
-        return;
+        console.warn("Failed to load /api/districts", json);
       }
-      setDistricts(Array.isArray(json.districts) ? json.districts : []);
     } catch (e) {
-      console.error("district fetch error", e);
+      console.error("districts fetch error", e);
       setDistricts([]);
     } finally {
       setLoadingDistricts(false);
@@ -82,8 +149,9 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
       const payload: Record<string, any> = {
         RestroAddress: local.RestroAddress ?? null,
         City: local.City ?? null,
-        StateId: local.StateId ?? null,
-        DistrictId: local.DistrictId ?? null,
+        // send StateCode/DistrictCode as that is your table's keys
+        StateCode: local.StateCode ?? null,
+        DistrictCode: local.DistrictCode ?? null,
         PinCode: local.PinCode ?? null,
         Latitude: local.Latitude ?? null,
         Longitude: local.Longitude ?? null,
@@ -132,19 +200,16 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
         <div className="field">
           <label>State</label>
           <select
-            value={local.StateId ?? ""}
+            value={local.StateCode ?? ""}
             onChange={(e) => {
               const v = e.target.value;
-              const sid = v ? Number(v) : null;
-              update("StateId", sid);
-              // when state changes, clear district selection
-              update("DistrictId", null);
-              // fetch districts will be triggered by useEffect
+              update("StateCode", v ?? "");
+              update("DistrictCode", ""); // clear district on state change
             }}
           >
-            <option value="">Select State</option>
-            {states.map((s) => (
-              <option key={s.id} value={s.id}>
+            <option value="">{loadingStates ? "Loading states..." : "Select State"}</option>
+            {stateList.map((s) => (
+              <option key={String(s.id)} value={String(s.id)}>
                 {s.name}
               </option>
             ))}
@@ -154,13 +219,13 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
         <div className="field">
           <label>District</label>
           <select
-            value={local.DistrictId ?? ""}
-            onChange={(e) => update("DistrictId", e.target.value ? Number(e.target.value) : null)}
-            disabled={!local.StateId || loadingDistricts}
+            value={local.DistrictCode ?? ""}
+            onChange={(e) => update("DistrictCode", e.target.value ?? "")}
+            disabled={!local.StateCode || loadingDistricts}
           >
-            <option value="">{local.StateId ? (loadingDistricts ? "Loading..." : "Select District") : "Select State first"}</option>
+            <option value="">{!local.StateCode ? "Select State first" : loadingDistricts ? "Loading..." : "Select District"}</option>
             {districts.map((d) => (
-              <option key={d.id} value={d.id}>
+              <option key={String(d.id)} value={String(d.id)}>
                 {d.name}
               </option>
             ))}
