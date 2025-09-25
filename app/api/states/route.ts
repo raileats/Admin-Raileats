@@ -13,18 +13,13 @@ export async function GET() {
   try {
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-    // Fetch from StateMaster table — columns: StateCode, StateName
-    const { data, error } = await sb
-      .from("StateMaster")
-      .select("StateCode,StateName")
-      .order("StateName", { ascending: true });
+    const { data, error } = await sb.from("StateMaster").select("StateCode,StateName").order("StateName", { ascending: true });
 
     if (error) {
       console.error("supabase state fetch error:", error);
       return NextResponse.json({ ok: false, error: error.message ?? "supabase error" }, { status: 500 });
     }
 
-    // normalize to id/name pairs
     const states = (data ?? []).map((r: any) => ({
       id: String(r.StateCode ?? r.statecode ?? r.id ?? ""),
       name: r.StateName ?? r.statename ?? r.name ?? "",
