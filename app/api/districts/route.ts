@@ -71,4 +71,17 @@ export async function GET(req: Request) {
 
       const districts = (data ?? []).map((r: any) => ({
         id: String(r.DistrictCode ?? r.districtcode ?? r.id ?? ""),
-        name: r
+        name: r.DistrictName ?? r.districtname ?? r.name ?? "",
+        state_id: String(r.StateCode ?? r.statecode ?? ""),
+      }));
+
+      return NextResponse.json({ ok: true, districts });
+    }
+
+    // no params => return empty list
+    return NextResponse.json({ ok: true, districts: [] });
+  } catch (e: any) {
+    console.error("districts handler error:", e);
+    return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 500 });
+  }
+}
