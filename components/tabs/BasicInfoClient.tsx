@@ -240,6 +240,7 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
             <option value={0}>No</option>
           </select>
         </div>
+      </div> {/* ← ADDED CLOSE HERE (compact-grid) */}
 
       <div className="actions">
         <button className="btn-cancel" onClick={() => router.push("/admin/restros")} disabled={saving}>Cancel</button>
