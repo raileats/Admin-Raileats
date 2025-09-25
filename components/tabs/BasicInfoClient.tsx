@@ -29,8 +29,6 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
     RestroRating: initialData?.RestroRating ?? "",
     IsPureVeg: initialData?.IsPureVeg ?? 0,
     RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? "",
-    FSSAINumber: initialData?.FSSAINumber ?? "",
-    FSSAIExpiryDate: initialData?.FSSAIExpiryDate ?? "",
     State: initialData?.State ?? "",
   });
 
@@ -53,8 +51,6 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
       RestroRating: initialData?.RestroRating ?? p.RestroRating,
       IsPureVeg: initialData?.IsPureVeg ?? p.IsPureVeg,
       RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? p.RestroDisplayPhoto,
-      FSSAINumber: initialData?.FSSAINumber ?? p.FSSAINumber,
-      FSSAIExpiryDate: initialData?.FSSAIExpiryDate ?? p.FSSAIExpiryDate,
       State: initialData?.State ?? p.State ?? "",
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,8 +89,6 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
         RestroRating: local.RestroRating === "" ? null : Number(local.RestroRating),
         IsPureVeg: local.IsPureVeg ? 1 : 0,
         RestroDisplayPhoto: local.RestroDisplayPhoto,
-        FSSAINumber: local.FSSAINumber,
-        FSSAIExpiryDate: local.FSSAIExpiryDate,
         State: local.State ?? null,
       };
 
@@ -246,17 +240,6 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
             <option value={0}>No</option>
           </select>
         </div>
-
-        <div className="field">
-          <label>FSSAI Number</label>
-          <input value={local.FSSAINumber ?? ""} onChange={(e) => update("FSSAINumber", e.target.value)} />
-        </div>
-
-        <div className="field">
-          <label>FSSAI Expiry Date</label>
-          <input type="date" value={local.FSSAIExpiryDate ?? ""} onChange={(e) => update("FSSAIExpiryDate", e.target.value)} />
-        </div>
-      </div>
 
       <div className="actions">
         <button className="btn-cancel" onClick={() => router.push("/admin/restros")} disabled={saving}>Cancel</button>
