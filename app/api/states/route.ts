@@ -7,10 +7,10 @@ export async function GET() {
     const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!SUPABASE_URL || !SUPABASE_KEY) {
-      return NextResponse.json({ ok: false, error: "Supabase not configured" }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "Supabase not configured (missing env)" }, { status: 500 });
     }
 
-    // Query StateMaster table directly
+    // Query StateMaster table (using your exact column names StateCode, StateName)
     const url = `${SUPABASE_URL}/rest/v1/StateMaster?select=StateCode,StateName&order=StateName.asc`;
 
     const res = await fetch(url, {
@@ -27,14 +27,14 @@ export async function GET() {
 
     const rows = await res.json();
 
-    // Normalize to {id, name}
-    const states = rows.map((r: any) => ({
+    // normalize to { id, name }
+    const states = (Array.isArray(rows) ? rows : []).map((r: any) => ({
       id: r.StateCode,
       name: r.StateName,
     }));
 
     return NextResponse.json({ ok: true, states });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message ?? String(e) }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 500 });
   }
 }
