@@ -2,6 +2,7 @@
 import React from "react";
 import Link from "next/link";
 import { safeGetRestro } from "@/lib/restroService";
+import { createClient } from "@supabase/supabase-js";
 
 type Props = { params: { code: string }; children: React.ReactNode };
 
@@ -9,11 +10,62 @@ export default async function RestroEditLayout({ params, children }: Props) {
   const codeNum = Number(params.code);
   const { restro, error } = await safeGetRestro(codeNum);
 
+  // --- fetch states (server-side) ---
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
+
+  let states: Array<{ id: string; name: string }> = [];
+  let initialDistricts: Array<{ id: string; name: string; state_id?: string }> = [];
+
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+
+      const { data: stateData, error: stateErr } = await sb.from("StateMaster").select("StateCode,StateName").order("StateName", { ascending: true });
+      if (!stateErr && Array.isArray(stateData)) {
+        states = stateData.map((r: any) => ({ id: String(r.StateCode), name: r.StateName }));
+      } else {
+        console.error("Error fetching StateMaster:", stateErr);
+      }
+
+      // if restro has a StateCode, fetch districts for that state (so initialDistricts available immediately)
+      const restroStateCode = restro?.StateCode ?? restro?.State ?? "";
+      if (restroStateCode) {
+        const { data: distData, error: distErr } = await sb
+          .from("DistrictMaster")
+          .select("DistrictCode,DistrictName,StateCode")
+          .eq("StateCode", restroStateCode)
+          .order("DistrictName", { ascending: true });
+
+        if (!distErr && Array.isArray(distData)) {
+          initialDistricts = distData.map((d: any) => ({ id: String(d.DistrictCode), name: d.DistrictName, state_id: String(d.StateCode) }));
+        } else {
+          console.error("Error fetching DistrictMaster for state", restroStateCode, distErr);
+        }
+      }
+    } catch (e) {
+      console.error("Supabase fetch error in layout:", e);
+    }
+  } else {
+    console.warn("Supabase env not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)");
+  }
+
+  // Header text
   const headerCode = restro?.RestroCode ?? params.code;
   const headerName = restro?.RestroName ?? restro?.name ?? "";
   const stationText = restro?.StationName
     ? `${restro.StationName} (${restro.StationCode ?? ""})${restro.State ? ` - ${restro.State}` : ""}`
     : "";
+
+  // If children is a single React element, clone it and inject props:
+  const childrenWithProps = React.isValidElement(children)
+    ? React.cloneElement(children, {
+        // pass restro and lists so client can use them immediately
+        initialData: restro ?? null,
+        states,
+        initialDistricts,
+      })
+    : children;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
@@ -37,9 +89,7 @@ export default async function RestroEditLayout({ params, children }: Props) {
             {headerName ? ` / ${headerName}` : ""}
           </div>
           {stationText && (
-            <div style={{ fontSize: 13, color: "#0b7285", marginTop: 4, fontWeight: 500 }}>
-              {stationText}
-            </div>
+            <div style={{ fontSize: 13, color: "#0b7285", marginTop: 4, fontWeight: 500 }}>{stationText}</div>
           )}
         </div>
 
@@ -107,7 +157,7 @@ export default async function RestroEditLayout({ params, children }: Props) {
 
         {/* NORMALIZER: wrapper that enforces consistent padding and widths */}
         <div className="raileats-tab-container" style={{ padding: 18 }}>
-          {children}
+          {childrenWithProps}
         </div>
       </div>
     </div>
