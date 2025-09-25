@@ -8,9 +8,9 @@ type DistrictItem = { id: string; name: string; state_id?: string };
 
 type Props = {
   initialData?: any;
-  imagePrefix?: string; // <-- now accepted
-  states?: StateItem[]; // passed from server layout
-  initialDistricts?: DistrictItem[]; // optional preloaded districts for restro's state
+  imagePrefix?: string;
+  states?: StateItem[]; // server can pass preloaded states
+  initialDistricts?: DistrictItem[]; // server can pass preloaded districts for restro's state
 };
 
 export default function AddressDocsClient({ initialData = {}, imagePrefix = "", states = [], initialDistricts = [] }: Props) {
@@ -23,78 +23,63 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
   const [local, setLocal] = useState<any>({
     RestroAddress: initialData?.RestroAddress ?? "",
     City: initialData?.City ?? "",
-    StateCode: initialData?.StateCode ?? initialData?.State ?? "", // try both code and name
+    StateCode: initialData?.StateCode ?? initialData?.State ?? "", // prefer StateCode if present
     DistrictCode: initialData?.DistrictCode ?? initialData?.District ?? "",
     PinCode: initialData?.PinCode ?? "",
     Latitude: initialData?.Latitude ?? "",
     Longitude: initialData?.Longitude ?? "",
-    FSSAINumber: initialData?.FSSAINumber ?? "",
+    FSSAINumber: initialData?.FSSAINumber ?? initialData?.FSSAI ?? "",
     FSSAIExpiry: initialData?.FSSAIExpiry ?? "",
     GSTNumber: initialData?.GSTNumber ?? "",
     GSTType: initialData?.GSTType ?? "",
     RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? "",
   });
 
+  // load states if not provided by server
   useEffect(() => {
-    // When server passed states prop, use it (avoid fetching)
     if (Array.isArray(states) && states.length > 0) {
       setStateList(states.slice());
       setLoadingStates(false);
-    } else {
-      // fetch states from /api/states
-      setLoadingStates(true);
-      fetch("/api/states")
-        .then((r) => r.json())
-        .then((j) => {
-          if (j?.ok && Array.isArray(j.states)) {
-            setStateList(j.states);
-          } else if (Array.isArray(j)) {
-            // in case endpoint returns array directly
-            setStateList(j as StateItem[]);
-          } else {
-            console.warn("Unexpected /api/states response", j);
-          }
-        })
-        .catch((e) => console.warn("fetch /api/states failed", e))
-        .finally(() => setLoadingStates(false));
+      return;
     }
+    setLoadingStates(true);
+    fetch("/api/states")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.ok && Array.isArray(j.states)) setStateList(j.states);
+        else if (Array.isArray(j)) setStateList(j as StateItem[]);
+        else console.warn("Unexpected /api/states response:", j);
+      })
+      .catch((e) => console.warn("fetch /api/states failed", e))
+      .finally(() => setLoadingStates(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // sync initial StateCode if present but stateList was not available at mount
-  useEffect(() => {
-    if (!local.StateCode && initialData) {
-      const possibleStateCode = initialData?.StateCode ?? initialData?.State ?? initialData?.StateName;
-      if (possibleStateCode) {
-        setLocal((s: any) => ({ ...s, StateCode: possibleStateCode }));
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData]);
-
-  // When stateList arrives, try to normalize local.StateCode by matching code or name
+  // normalize StateCode when stateList arrives (match by code or by name)
   useEffect(() => {
     if (!stateList || stateList.length === 0) return;
 
     const cur = local.StateCode;
+    // if not set, try to pick from initialData State/StateName
     if (!cur) {
-      // try to match using initialData StateName if any
-      const nameFromInitial = initialData?.StateName ?? initialData?.State;
+      const nameFromInitial = initialData?.State ?? initialData?.StateName;
       if (nameFromInitial) {
         const target = String(nameFromInitial).trim().toLowerCase();
         const found = stateList.find((s) => String(s.name).trim().toLowerCase() === target);
         if (found) {
           setLocal((p: any) => ({ ...p, StateCode: found.id }));
-        } else {
-          // fuzzy partial match fallback
-          const fuzzy = stateList.find((s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase()));
-          if (fuzzy) setLocal((p: any) => ({ ...p, StateCode: fuzzy.id }));
+          return;
+        }
+        const fuzzy = stateList.find((s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase()));
+        if (fuzzy) {
+          setLocal((p: any) => ({ ...p, StateCode: fuzzy.id }));
+          return;
         }
       }
       return;
     }
 
-    // If cur exists but is a name (not matching any id), try to find id by name
+    // if cur exists but doesn't match an id, try to find id by name
     const byId = stateList.find((s) => String(s.id) === String(cur));
     if (!byId) {
       const target = String(cur).trim().toLowerCase();
@@ -106,13 +91,12 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
       const fuzzy = stateList.find((s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase()));
       if (fuzzy) {
         setLocal((p: any) => ({ ...p, StateCode: fuzzy.id }));
-        return;
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stateList]);
 
-  // When StateCode changes -> load districts for that state and try to preselect District
+  // when StateCode changes, load districts and attempt preselect
   useEffect(() => {
     const stateCode = local.StateCode;
     if (!stateCode) {
@@ -120,18 +104,16 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
       return;
     }
 
-    // If server passed initialDistricts and they match this state, use them
-    if (initialDistricts && initialDistricts.length > 0 && initialDistricts[0].state_id) {
-      const matchInit = initialDistricts.filter((d) => String(d.state_id) === String(stateCode));
-      if (matchInit.length > 0) {
-        setDistrictList(matchInit.slice());
-        // try to preselect district by code/name
-        tryPreselectDistrict(matchInit);
-        return;
-      }
+    // if initialDistricts provided and they match this state -> use them
+    if (initialDistricts && initialDistricts.length > 0 && initialDistricts.some((d) => String(d.state_id) === String(stateCode))) {
+      const matched = initialDistricts.filter((d) => String(d.state_id) === String(stateCode));
+      setDistrictList(matched.slice());
+      // try preselect district
+      tryPreselectDistrict(matched);
+      return;
     }
 
-    // else fetch from API
+    // fetch districts for this state
     setLoadingDistricts(true);
     setDistrictList([]);
     fetch(`/api/districts?stateId=${encodeURIComponent(stateCode)}`)
@@ -151,21 +133,19 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
       .finally(() => setLoadingDistricts(false));
 
     function tryPreselectDistrict(list: DistrictItem[]) {
-      // if already have a DistrictCode, don't overwrite
-      if (local.DistrictCode) return;
+      if (local.DistrictCode) return; // don't override if already set
+      const possible = initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName;
+      if (!possible) return;
 
-      const possibleDistrictCode = initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName;
-      if (!possibleDistrictCode) return;
-
-      // try code match first
-      const foundById = list.find((d) => String(d.id) === String(possibleDistrictCode) || String((d as any).DistrictCode) === String(possibleDistrictCode));
+      // match by id/code first
+      const foundById = list.find((d) => String(d.id) === String(possible) || String((d as any).DistrictCode) === String(possible));
       if (foundById) {
         setLocal((s: any) => ({ ...s, DistrictCode: String(foundById.id) }));
         return;
       }
 
-      // try name match
-      const target = String(possibleDistrictCode).trim().toLowerCase();
+      // match by name
+      const target = String(possible).trim().toLowerCase();
       const foundByName = list.find((d) => String(d.name).trim().toLowerCase() === target || String((d as any).DistrictName ?? "").trim().toLowerCase() === target);
       if (foundByName) {
         setLocal((s: any) => ({ ...s, DistrictCode: String(foundByName.id) }));
@@ -176,11 +156,10 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
       const fuzzy = list.find((d) => String(d.name).toLowerCase().includes(target) || target.includes(String(d.name).toLowerCase()));
       if (fuzzy) setLocal((s: any) => ({ ...s, DistrictCode: String(fuzzy.id) }));
     }
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local.StateCode]);
 
-  // Keep local in sync when initialData updates (e.g. when navigating)
+  // keep local synced when initialData changes (navigate to other restro)
   useEffect(() => {
     setLocal((p: any) => ({
       ...p,
@@ -227,43 +206,60 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
 
         <div className="field">
           <label>State</label>
-
-          <div>
-            <select
-              value={local.StateCode ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                update("StateCode", v);
-                // clear district when state changes
-                setLocal((s: any) => ({ ...s, DistrictCode: "" }));
-              }}
-            >
-              <option value="">{loadingStates ? "Loading states..." : "Select State"}</option>
-              {stateList.map((st) => (
-                <option key={st.id} value={st.id}>
-                  {st.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={local.StateCode ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              setLocal((s: any) => ({ ...s, StateCode: v, DistrictCode: "" })); // clear district when state changes
+            }}
+            onFocus={() => {
+              if (!stateList || stateList.length === 0) {
+                setLoadingStates(true);
+                fetch("/api/states")
+                  .then((r) => r.json())
+                  .then((j) => {
+                    if (j?.ok && Array.isArray(j.states)) setStateList(j.states);
+                    else if (Array.isArray(j)) setStateList(j as StateItem[]);
+                  })
+                  .finally(() => setLoadingStates(false));
+              }
+            }}
+          >
+            <option value="">{loadingStates ? "Loading states..." : "Select State"}</option>
+            {stateList.map((st) => (
+              <option key={st.id} value={st.id}>
+                {st.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="field">
           <label>District</label>
-          <div>
-            <select
-              value={local.DistrictCode ?? ""}
-              onChange={(e) => update("DistrictCode", e.target.value)}
-              disabled={!local.StateCode || loadingDistricts || districtList.length === 0}
-            >
-              {!local.StateCode ? <option value="">Select State first</option> : loadingDistricts ? <option value="">Loading districts...</option> : <option value="">{districtList.length ? "Select District" : "No districts"}</option>}
-              {districtList.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={local.DistrictCode ?? ""}
+            onChange={(e) => update("DistrictCode", e.target.value)}
+            disabled={!local.StateCode || loadingDistricts || districtList.length === 0}
+            onFocus={() => {
+              if ((!districtList || districtList.length === 0) && local.StateCode) {
+                setLoadingDistricts(true);
+                fetch(`/api/districts?stateId=${encodeURIComponent(local.StateCode)}`)
+                  .then((r) => r.json())
+                  .then((j) => {
+                    if (j?.ok && Array.isArray(j.districts)) setDistrictList(j.districts);
+                    else if (Array.isArray(j)) setDistrictList(j as DistrictItem[]);
+                  })
+                  .finally(() => setLoadingDistricts(false));
+              }
+            }}
+          >
+            {!local.StateCode ? <option value="">Select State first</option> : loadingDistricts ? <option value="">Loading districts...</option> : <option value="">{districtList.length ? "Select District" : "No districts"}</option>}
+            {districtList.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="field">
