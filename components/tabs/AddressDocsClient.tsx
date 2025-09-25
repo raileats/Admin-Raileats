@@ -8,11 +8,12 @@ type DistrictItem = { id: string; name: string; state_id?: string };
 
 type Props = {
   initialData?: any;
+  imagePrefix?: string; // <-- now accepted
   states?: StateItem[]; // passed from server layout
   initialDistricts?: DistrictItem[]; // optional preloaded districts for restro's state
 };
 
-export default function AddressDocsClient({ initialData = {}, states = [], initialDistricts = [] }: Props) {
+export default function AddressDocsClient({ initialData = {}, imagePrefix = "", states = [], initialDistricts = [] }: Props) {
   const [stateList, setStateList] = useState<StateItem[]>(states || []);
   const [districtList, setDistrictList] = useState<DistrictItem[]>(initialDistricts || []);
 
@@ -31,6 +32,7 @@ export default function AddressDocsClient({ initialData = {}, states = [], initi
     FSSAIExpiry: initialData?.FSSAIExpiry ?? "",
     GSTNumber: initialData?.GSTNumber ?? "",
     GSTType: initialData?.GSTType ?? "",
+    RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? "",
   });
 
   useEffect(() => {
@@ -156,7 +158,7 @@ export default function AddressDocsClient({ initialData = {}, states = [], initi
       if (!possibleDistrictCode) return;
 
       // try code match first
-      const foundById = list.find((d) => String(d.id) === String(possibleDistrictCode) || String(d.DistrictCode) === String(possibleDistrictCode));
+      const foundById = list.find((d) => String(d.id) === String(possibleDistrictCode) || String((d as any).DistrictCode) === String(possibleDistrictCode));
       if (foundById) {
         setLocal((s: any) => ({ ...s, DistrictCode: String(foundById.id) }));
         return;
@@ -193,6 +195,7 @@ export default function AddressDocsClient({ initialData = {}, states = [], initi
       FSSAIExpiry: initialData?.FSSAIExpiry ?? p.FSSAIExpiry,
       GSTNumber: initialData?.GSTNumber ?? p.GSTNumber,
       GSTType: initialData?.GSTType ?? p.GSTType,
+      RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? p.RestroDisplayPhoto ?? "",
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData]);
@@ -200,6 +203,12 @@ export default function AddressDocsClient({ initialData = {}, states = [], initi
   function update(key: string, value: any) {
     setLocal((s: any) => ({ ...s, [key]: value }));
   }
+
+  const imgSrc = (p: string) => {
+    if (!p) return "";
+    if (p.startsWith("http://") || p.startsWith("https://")) return p;
+    return (imagePrefix ?? "") + p;
+  };
 
   return (
     <div style={{ padding: 18 }}>
@@ -295,6 +304,11 @@ export default function AddressDocsClient({ initialData = {}, states = [], initi
           <label>GST Type</label>
           <input value={local.GSTType ?? ""} onChange={(e) => update("GSTType", e.target.value)} />
         </div>
+
+        <div className="field">
+          <label>Display Preview</label>
+          {local.RestroDisplayPhoto ? <img src={imgSrc(local.RestroDisplayPhoto)} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} /> : <div className="readonly">No image</div>}
+        </div>
       </div>
 
       <style jsx>{`
@@ -329,6 +343,19 @@ export default function AddressDocsClient({ initialData = {}, states = [], initi
         textarea {
           min-height: 80px;
           resize: vertical;
+        }
+        .preview {
+          height: 80px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #eee;
+        }
+        .readonly {
+          padding: 8px 10px;
+          border-radius: 6px;
+          background: #fafafa;
+          border: 1px solid #f0f0f0;
+          font-size: 13px;
         }
         @media (max-width: 1100px) {
           .compact-grid {
