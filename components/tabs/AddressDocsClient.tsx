@@ -4,16 +4,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-/**
- * Replacement AddressDocsClient component with section header / margins
- * adjusted to match the look-and-feel of "Basic Information" and
- * "Station Settings" tabs.
- *
- * Drop this file in place of your current components/tabs/AddressDocsClient.tsx
- * and it should make the heading, font sizing and left/right margins
- * consistent with the other tabs.
- */
-
 type Props = {
   initialData?: any;
   imagePrefix?: string;
@@ -56,18 +46,13 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
     setLocal((s: any) => ({ ...s, [key]: value }));
   }
 
-  // If you need to show images later, build URL like:
-  // const someUrl = imagePrefix ? `${imagePrefix}/${imagePath}` : imagePath;
-
   return (
-    <div className="admin-form-wrapper">
-      {/* Section header - matches size/weight used in other tabs */}
-      <div className="section-header">
-        <h4 className="section-title">Address &amp; Documents</h4>
+    <div className="raileats-tab-wrapper">
+      <div className="tab-header">
+        <h3 className="tab-section-title">Address &amp; Documents</h3>
       </div>
 
-      {/* Body that keeps the same left/right margins as other tabs */}
-      <div className="section-body">
+      <div className="tab-body">
         <div className="compact-grid">
           <div className="field full-col">
             <label>Restro Address</label>
@@ -131,31 +116,45 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
       </div>
 
       <style jsx>{`
-        /* wrapper padding tuned to match other tab content (left/right margins)
-           and to keep the section body aligned with Basic Information / Station Settings */
-        .admin-form-wrapper {
-          padding: 18px 28px; /* tweak if your other components use slightly different values */
+        /* VARIABLES - tweak these to perfectly match Basic Information / Station Settings */
+        :root {
+          --tab-padding-vertical: 18px;
+          --tab-padding-horizontal: 40px;
+          --content-max-width: 1100px;
+          --title-font-size: 15px;     /* try 15 or 16 to match other tabs */
+          --title-font-weight: 600;
+          --title-margin-bottom: 6px;
+          --title-color: #222;
+          --label-font-size: 13px;
+          --label-color: #444;
+          --input-font-size: 13px;
         }
 
-        .section-header {
-          padding-top: 4px;
-          padding-bottom: 6px;
-          border-bottom: none; /* keep minimal - other tabs show simple centered title */
+        /* outer wrapper uses same left/right padding used by other tabs */
+        .raileats-tab-wrapper {
+          padding: var(--tab-padding-vertical) var(--tab-padding-horizontal);
         }
 
-        .section-title {
-          margin: 0;
-          font-size: 15px; /* smaller than big h3, matches "Basic Information" look */
-          font-weight: 600;
-          color: #222;
+        /* header: centered small title (matches other tab styling) */
+        .tab-header {
           text-align: center;
-          letter-spacing: 0.1px;
+          margin-bottom: 2px;
         }
 
-        .section-body {
-          max-width: 1100px; /* same container width used by other tabs */
-          margin: 0 auto; /* keeps left/right consistent */
-          padding-top: 18px;
+        .tab-section-title {
+          margin: 0;
+          padding: 0;
+          font-size: var(--title-font-size);
+          font-weight: var(--title-font-weight);
+          color: var(--title-color);
+          letter-spacing: 0.2px;
+        }
+
+        /* body container centered like Basic Information / Station Settings */
+        .tab-body {
+          max-width: var(--content-max-width);
+          margin: 0 auto;
+          padding-top: 12px;
         }
 
         .compact-grid {
@@ -170,8 +169,8 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
 
         .field label {
           display: block;
-          font-size: 13px;
-          color: #444;
+          font-size: var(--label-font-size);
+          color: var(--label-color);
           margin-bottom: 6px;
           font-weight: 600;
         }
@@ -182,7 +181,7 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
           padding: 8px;
           border-radius: 6px;
           border: 1px solid #e3e3e3;
-          font-size: 13px;
+          font-size: var(--input-font-size);
           background: #fff;
           box-sizing: border-box;
         }
@@ -196,8 +195,7 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
           .compact-grid {
             grid-template-columns: repeat(2, 1fr);
           }
-
-          .admin-form-wrapper {
+          .raileats-tab-wrapper {
             padding-left: 20px;
             padding-right: 20px;
           }
@@ -207,8 +205,7 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
           .compact-grid {
             grid-template-columns: 1fr;
           }
-
-          .admin-form-wrapper {
+          .raileats-tab-wrapper {
             padding-left: 14px;
             padding-right: 14px;
           }
