@@ -10,8 +10,8 @@ type DistrictItem = { id: string | number; name: string; state_id?: string | num
 type Props = {
   initialData?: any;
   imagePrefix?: string;
-  states?: StateItem[]; // optional server-supplied
-  initialDistricts?: DistrictItem[]; // optional server-supplied
+  states?: StateItem[]; // optional server-supplied states list
+  initialDistricts?: DistrictItem[]; // optional server-supplied districts
 };
 
 export default function AddressDocsClient({
@@ -21,11 +21,9 @@ export default function AddressDocsClient({
   initialDistricts = [],
 }: Props) {
   const router = useRouter();
-
   const mountedRef = useRef(true);
-  const statesFetchedRef = useRef(false); // to avoid re-fetching repeatedly
-  const districtFetchController = useRef<AbortController | null>(null);
 
+  // local form state (use StateCode/DistrictCode as the selected ids)
   const [local, setLocal] = useState<any>({
     RestroAddress: initialData?.RestroAddress ?? "",
     City: initialData?.City ?? "",
@@ -40,26 +38,28 @@ export default function AddressDocsClient({
     GSTType: initialData?.GSTType ?? "",
   });
 
+  // lists + loading / error flags
   const [stateList, setStateList] = useState<StateItem[]>(Array.isArray(states) ? states : []);
   const [districts, setDistricts] = useState<DistrictItem[]>(Array.isArray(initialDistricts) ? initialDistricts : []);
   const [loadingStates, setLoadingStates] = useState(false);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+
+  // keep reference whether we've fetched states once to avoid repeated re-fetches
+  const statesFetchedRef = useRef(false);
+  const districtAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      // cleanup any inflight district fetch
-      if (districtFetchController.current) {
-        districtFetchController.current.abort();
-      }
+      if (districtAbortRef.current) districtAbortRef.current.abort();
     };
   }, []);
 
-  // keep local in sync if initialData changes (but do not clobber stateList)
+  // sync initialData -> local if initialData changes
   useEffect(() => {
     setLocal((p: any) => ({
       ...p,
@@ -78,15 +78,13 @@ export default function AddressDocsClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData]);
 
-  // Load states once: prefer server-provided `states` prop, otherwise fetch
+  // load states once (prefer server-provided `states` prop)
   useEffect(() => {
     if (Array.isArray(states) && states.length > 0) {
       setStateList(states);
       statesFetchedRef.current = true;
       return;
     }
-
-    // if already fetched, don't re-fetch repeatedly
     if (statesFetchedRef.current) return;
 
     (async () => {
@@ -100,9 +98,8 @@ export default function AddressDocsClient({
           statesFetchedRef.current = true;
           setErr(null);
         } else {
-          // don't clobber stateList if it had values; show error instead
-          setErr(json?.error ?? `Failed to load states (${res.status})`);
-          console.warn("states load error", json);
+          setErr(json?.error ?? `Failed to load states (${res?.status})`);
+          console.warn("states error", json);
         }
       } catch (e: any) {
         setErr("Failed to load states: " + String(e?.message ?? e));
@@ -114,57 +111,48 @@ export default function AddressDocsClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When StateCode changes -> load districts (with cancellation)
+  // When StateCode changes -> load districts for that state
   useEffect(() => {
-    const stateCode = local.StateCode;
-    // clear districts immediately when StateCode cleared
-    if (!stateCode) {
-      // abort any inflight
-      if (districtFetchController.current) {
-        districtFetchController.current.abort();
-        districtFetchController.current = null;
+    const currentState = local.StateCode;
+    if (!currentState) {
+      // clear districts and district selection
+      if (districtAbortRef.current) {
+        districtAbortRef.current.abort();
+        districtAbortRef.current = null;
       }
       setDistricts([]);
-      setLocal((s:any) => ({ ...s, DistrictCode: "" }));
+      setLocal((s:any)=> ({...s, DistrictCode: ""}));
       return;
     }
 
-    // if initialDistricts provided and belong to this state, use them
-    if (Array.isArray(initialDistricts) && initialDistricts.length > 0) {
-      const belongs = initialDistricts.some((d) => String(d.state_id) === String(stateCode));
-      if (belongs) {
-        setDistricts(initialDistricts.filter((d) => String(d.state_id) === String(stateCode)));
-        return;
-      }
+    // abort prior
+    if (districtAbortRef.current) {
+      districtAbortRef.current.abort();
+      districtAbortRef.current = null;
     }
-
-    // fetch districts
     const controller = new AbortController();
-    districtFetchController.current = controller;
+    districtAbortRef.current = controller;
 
     (async () => {
       try {
         setLoadingDistricts(true);
-        const res = await fetch(`/api/districts?stateId=${encodeURIComponent(String(stateCode))}`, {
-          signal: controller.signal,
-        });
+        const res = await fetch(`/api/districts?stateId=${encodeURIComponent(String(currentState))}`, { signal: controller.signal });
         const json = await res.json().catch(() => null);
         if (res.ok && json?.ok && Array.isArray(json.districts)) {
           if (!mountedRef.current) return;
           setDistricts(json.districts);
+          // if initial local.DistrictCode exists, keep it (so preselect stays)
           setErr(null);
         } else {
           setDistricts([]);
-          setErr(json?.error ?? `Failed to load districts (${res.status})`);
-          console.warn("districts load error", json);
+          setErr(json?.error ?? `Failed to load districts (${res?.status})`);
+          console.warn("districts error", json);
         }
-      } catch (e: any) {
-        if (e.name === "AbortError") {
-          // aborted - ignore
-        } else {
-          console.error("district fetch error", e);
+      } catch (e:any) {
+        if (e.name !== "AbortError") {
           setErr("Failed to load districts: " + String(e?.message ?? e));
           setDistricts([]);
+          console.error(e);
         }
       } finally {
         if (mountedRef.current) setLoadingDistricts(false);
@@ -172,14 +160,25 @@ export default function AddressDocsClient({
     })();
 
     return () => {
-      // abort on cleanup
-      if (districtFetchController.current) {
-        districtFetchController.current.abort();
-        districtFetchController.current = null;
+      if (districtAbortRef.current) {
+        districtAbortRef.current.abort();
+        districtAbortRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local.StateCode]);
+
+  // Safety: if stateList arrives later but local.StateCode already set, ensure districts are fetched
+  useEffect(() => {
+    if (!local.StateCode) return;
+    // if we already have districts for this state, do nothing
+    if (districts.length > 0 && String(districts[0].state_id) === String(local.StateCode)) return;
+
+    // trigger districts fetch (will be handled by the previous useEffect because it watches local.StateCode)
+    // so just re-set local.StateCode to itself to ensure effect runs only if needed
+    setLocal((s:any)=> ({...s}));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stateList]);
 
   function update(key: string, value: any) {
     setLocal((s: any) => ({ ...s, [key]: value }));
@@ -212,19 +211,15 @@ export default function AddressDocsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error ?? `Save failed (${res.status})`);
-      }
-
+      const json = await res.json().catch(()=>null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? `Save failed (${res?.status})`);
       setMsg("Saved successfully");
       router.refresh();
-    } catch (e: any) {
-      console.error("Save error:", e);
+    } catch (e:any) {
       setErr(e?.message ?? "Save failed");
+      console.error("Save error", e);
     } finally {
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
     }
   }
 
@@ -245,24 +240,22 @@ export default function AddressDocsClient({
 
         <div className="field">
           <label>State</label>
-          <div>
-            {err && <div style={{ color: "red", marginBottom: 6 }}>{err}</div>}
-            <select
-              value={local.StateCode ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                update("StateCode", v ?? "");
-                update("DistrictCode", "");
-              }}
-            >
-              <option value="">{loadingStates ? "Loading states..." : "Select State"}</option>
-              {stateList.map((s) => (
-                <option key={String(s.id)} value={String(s.id)}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={local.StateCode ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              update("StateCode", v ?? "");
+              // clear district selection whenever state changes
+              update("DistrictCode", "");
+            }}
+          >
+            <option value="">{loadingStates ? "Loading states..." : "Select State"}</option>
+            {stateList.map((s) => (
+              <option key={String(s.id)} value={String(s.id)}>
+                {s.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="field">
