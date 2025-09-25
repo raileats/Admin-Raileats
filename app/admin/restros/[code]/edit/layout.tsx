@@ -87,7 +87,7 @@ export default async function RestroEditLayout({ params, children }: Props) {
         </nav>
       </div>
 
-      {/* Main content area — padding removed so tab components control spacing */}
+      {/* Main content area */}
       <div style={{ flex: 1, overflow: "auto", padding: 0 }}>
         {error && (
           <div style={{ color: "red", marginBottom: 12 }}>
@@ -105,7 +105,58 @@ export default async function RestroEditLayout({ params, children }: Props) {
           </div>
         )}
 
-        {children}
+        {/* NORMALIZER: wrapper that enforces consistent padding and widths
+            It also removes conflicting top-level padding from child tab components
+            by applying a direct-child rule (.raileats-tab-container > *). */}
+        <div className="raileats-tab-container" style={{ padding: 18 }}>
+          {/* children (tab pages) */}
+          {children}
+        </div>
+
+        {/* Layout-level styles to normalize children (inline to keep one-file patch) */}
+        <style jsx>{`
+          .raileats-tab-container {
+            box-sizing: border-box;
+          }
+
+          /* If child components already have outer padding, remove duplicates
+             by forcing the first direct child to have zero outer padding so
+             grid centering is consistent. This normalizes BasicInfoClient,
+             StationSettingsClient, AddressDocsClient etc. */
+          .raileats-tab-container > * {
+            /* If a tab component uses an inline wrapper with padding, this
+               removes that padding so the layout's padding is the single source */
+            padding: 0 !important;
+            margin: 0 !important;
+            box-sizing: border-box !important;
+          }
+
+          /* Ensure form grid inside children centers to same max-width used by BasicInfo */
+          .raileats-tab-container .compact-grid {
+            max-width: 1100px;
+            margin: 0 auto;
+            box-sizing: border-box;
+          }
+
+          /* Ensure headings inside tabs render same size and centered */
+          .raileats-tab-container h3,
+          .raileats-tab-container h4 {
+            text-align: center;
+            margin-bottom: 18px;
+            font-size: 20px;
+            font-weight: 600;
+            color: #222;
+          }
+
+          /* Ensure actions area centers in same width */
+          .raileats-tab-container .actions {
+            max-width: 1100px;
+            margin: 18px auto 0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+          }
+        `}</style>
       </div>
     </div>
   );
