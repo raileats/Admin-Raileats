@@ -80,16 +80,16 @@ export default async function RestroEditLayout({ params, children }: Props) {
         }}
       >
         {/* tabs nav */}
-<nav className="tabs-nav" style={{ borderBottom: "1px solid #eee", marginBottom: 10 }}>
-  <Link href="./basic">Basic Information</Link>
-  <Link href="./station-settings">Station Settings</Link>
-  <Link href="./address-docs">Address & Documents</Link>
-  <Link href="./contacts">Contacts</Link>
-  <Link href="./bank">Bank</Link>
-  <Link href="./future-closed">Future Closed</Link>
-  <Link href="./menu">Menu</Link>
-</nav>
-
+        <nav className="tabs-nav" style={{ borderBottom: "1px solid #eee", marginBottom: 10 }}>
+          <Link href="./basic">Basic Information</Link>
+          <Link href="./station-settings">Station Settings</Link>
+          <Link href="./address-docs">Address & Documents</Link>
+          <Link href="./contacts">Contacts</Link>
+          <Link href="./bank">Bank</Link>
+          <Link href="./future-closed">Future Closed</Link>
+          <Link href="./menu">Menu</Link>
+        </nav>
+      </div> {/* <-- !! closed the tabs wrapper div here */}
 
       {/* Main content area */}
       <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
