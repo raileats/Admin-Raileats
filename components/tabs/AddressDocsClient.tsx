@@ -1,161 +1,238 @@
 // components/tabs/AddressDocsClient.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Props = {
   initialData?: any;
   imagePrefix?: string;
-  restro?: any;
 };
 
-export default function AddressDocsClient({ initialData = {}, restro = null, imagePrefix = "" }: Props) {
-  const init = initialData ?? restro ?? {};
+export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }: Props) {
+  const router = useRouter();
 
-  const [restroAddress, setRestroAddress] = useState(init.RestroAddress ?? "");
-  const [city, setCity] = useState(init.City ?? "");
-  const [stateVal, setStateVal] = useState(init.State ?? "");
-  const [district, setDistrict] = useState(init.District ?? "");
-  const [pinCode, setPinCode] = useState(init.PinCode ?? "");
-  const [latitude, setLatitude] = useState(init.Latitude ?? "");
-  const [longitude, setLongitude] = useState(init.Longitude ?? "");
-  const [fssaiNumber, setFssaiNumber] = useState(init.FSSAINumber ?? "");
-  const [fssaiExpiry, setFssaiExpiry] = useState(init.FSSAIExpiry ?? "");
-  const [gstNumber, setGstNumber] = useState(init.GSTNumber ?? "");
+  const [local, setLocal] = useState<any>({
+    RestroAddress: initialData?.RestroAddress ?? "",
+    City: initialData?.City ?? "",
+    State: initialData?.State ?? "",
+    District: initialData?.District ?? "",
+    PinCode: initialData?.PinCode ?? "",
+    Latitude: initialData?.Latitude ?? "",
+    Longitude: initialData?.Longitude ?? "",
+    FSSAINumber: initialData?.FSSAINumber ?? "",
+    FSSAIExpiry: initialData?.FSSAIExpiry ?? "",
+    GSTNumber: initialData?.GSTNumber ?? "",
+    GSTType: initialData?.GSTType ?? "",
+  });
 
-  // keep local copy in case initialData changes
   useEffect(() => {
-    setRestroAddress(init.RestroAddress ?? "");
-    setCity(init.City ?? "");
-    setStateVal(init.State ?? "");
-    setDistrict(init.District ?? "");
-    setPinCode(init.PinCode ?? "");
-    setLatitude(init.Latitude ?? "");
-    setLongitude(init.Longitude ?? "");
-    setFssaiNumber(init.FSSAINumber ?? "");
-    setFssaiExpiry(init.FSSAIExpiry ?? "");
-    setGstNumber(init.GSTNumber ?? "");
+    setLocal((p: any) => ({
+      ...p,
+      RestroAddress: initialData?.RestroAddress ?? p.RestroAddress,
+      City: initialData?.City ?? p.City,
+      State: initialData?.State ?? p.State,
+      District: initialData?.District ?? p.District,
+      PinCode: initialData?.PinCode ?? p.PinCode,
+      Latitude: initialData?.Latitude ?? p.Latitude,
+      Longitude: initialData?.Longitude ?? p.Longitude,
+      FSSAINumber: initialData?.FSSAINumber ?? p.FSSAINumber,
+      FSSAIExpiry: initialData?.FSSAIExpiry ?? p.FSSAIExpiry,
+      GSTNumber: initialData?.GSTNumber ?? p.GSTNumber,
+      GSTType: initialData?.GSTType ?? p.GSTType,
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData, restro]);
+  }, [initialData]);
 
-  // NOTE: We intentionally do NOT render internal Save/Cancel here.
-  // Modal's outer fixed Save/Cancel should handle submit via /api/restros/<code>.
-  // If you want this component to perform its own save, add a handler and the modal should not duplicate.
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  function update(key: string, value: any) {
+    setLocal((s: any) => ({ ...s, [key]: value }));
+    setMsg(null);
+    setErr(null);
+  }
+
+  async function save() {
+    setSaving(true);
+    setMsg(null);
+    setErr(null);
+
+    try {
+      const id = encodeURIComponent(String(initialData?.RestroCode ?? initialData?.restro_code ?? initialData?.RestroId ?? ""));
+      if (!id) throw new Error("Missing Restro code for save");
+
+      const payload: Record<string, any> = {
+        RestroAddress: local.RestroAddress || null,
+        City: local.City || null,
+        State: local.State || null,
+        District: local.District || null,
+        PinCode: local.PinCode || null,
+        Latitude: local.Latitude || null,
+        Longitude: local.Longitude || null,
+        FSSAINumber: local.FSSAINumber || null,
+        FSSAIExpiry: local.FSSAIExpiry || null,
+        GSTNumber: local.GSTNumber || null,
+        GSTType: local.GSTType || null,
+      };
+
+      const res = await fetch(`/api/restros/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? `Save failed (${res.status})`);
+      }
+
+      setMsg("Saved successfully");
+      // refresh page / data
+      router.refresh();
+    } catch (e: any) {
+      console.error("Save error:", e);
+      setErr(e?.message ?? "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div style={{ padding: 18 }}>
-      {/* wrapper to match BasicInfoClient centering & max-width */}
-      <div className="content-wrap">
-        <div className="card">
-          <div className="heading">Address</div>
+      <h3 style={{ textAlign: "center", marginBottom: 18, fontSize: 20 }}>Address & Documents</h3>
 
-          <div className="field full">
-            <label>Restro Address</label>
-            <textarea value={restroAddress} onChange={(e) => setRestroAddress(e.target.value)} />
-          </div>
-
-          <div className="compact-grid">
-            <div className="field">
-              <label>City / Village</label>
-              <input value={city} onChange={(e) => setCity(e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label>State</label>
-              <input value={stateVal} onChange={(e) => setStateVal(e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label>District</label>
-              <input value={district} onChange={(e) => setDistrict(e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label>Pin Code</label>
-              <input value={pinCode} onChange={(e) => setPinCode(e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label>Latitude</label>
-              <input value={latitude} onChange={(e) => setLatitude(e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label>Longitude</label>
-              <input value={longitude} onChange={(e) => setLongitude(e.target.value)} />
-            </div>
-          </div>
+      <div className="compact-grid">
+        <div className="field full-col">
+          <label>Restro Address</label>
+          <textarea value={local.RestroAddress ?? ""} onChange={(e) => update("RestroAddress", e.target.value)} />
         </div>
 
-        <div className="card" style={{ marginTop: 18 }}>
-          <div className="heading">Documents</div>
+        <div className="field">
+          <label>City / Village</label>
+          <input value={local.City ?? ""} onChange={(e) => update("City", e.target.value)} />
+        </div>
 
-          <div className="compact-grid">
-            <div className="field">
-              <label>FSSAI Number</label>
-              <input value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} />
-            </div>
+        <div className="field">
+          <label>State</label>
+          <input value={local.State ?? ""} onChange={(e) => update("State", e.target.value)} />
+        </div>
 
-            <div className="field">
-              <label>FSSAI Expiry</label>
-              <input type="date" value={fssaiExpiry ?? ""} onChange={(e) => setFssaiExpiry(e.target.value)} />
-            </div>
+        <div className="field">
+          <label>District</label>
+          <input value={local.District ?? ""} onChange={(e) => update("District", e.target.value)} />
+        </div>
 
-            <div className="field">
-              <label>GST Number</label>
-              <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} />
-            </div>
-          </div>
+        <div className="field">
+          <label>Pin Code</label>
+          <input value={local.PinCode ?? ""} onChange={(e) => update("PinCode", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Latitude</label>
+          <input value={local.Latitude ?? ""} onChange={(e) => update("Latitude", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Longitude</label>
+          <input value={local.Longitude ?? ""} onChange={(e) => update("Longitude", e.target.value)} />
         </div>
       </div>
 
+      <div style={{ height: 18 }} />
+
+      <div className="compact-grid">
+        <div className="field">
+          <label>FSSAI Number</label>
+          <input value={local.FSSAINumber ?? ""} onChange={(e) => update("FSSAINumber", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>FSSAI Expiry</label>
+          <input type="date" value={local.FSSAIExpiry ?? ""} onChange={(e) => update("FSSAIExpiry", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>GST Number</label>
+          <input value={local.GSTNumber ?? ""} onChange={(e) => update("GSTNumber", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>GST Type</label>
+          <input value={local.GSTType ?? ""} onChange={(e) => update("GSTType", e.target.value)} />
+        </div>
+      </div>
+
+      <div className="actions">
+        <button className="btn-cancel" onClick={() => router.push("/admin/restros")} disabled={saving}>Cancel</button>
+        <button className="btn-save" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+      </div>
+
+      {msg && <div style={{ color: "green", marginTop: 10 }}>{msg}</div>}
+      {err && <div style={{ color: "red", marginTop: 10 }}>{err}</div>}
+
       <style jsx>{`
-        .content-wrap {
-          max-width: 1100px; /* same as Basic */
-          margin: 0 auto;
-        }
-        .card {
-          background: #fff;
-          border-radius: 6px;
-          border: 1px solid #eef6fb;
-          padding: 18px;
-        }
-        .heading {
-          font-weight: 700;
-          color: #0b5f8a;
-          font-size: 18px;
-          margin-bottom: 12px;
-        }
-        label {
-          display: block;
-          font-size: 13px;
-          color: #333;
-          margin-bottom: 6px;
-        }
-        textarea {
-          width: 100%;
-          min-height: 86px;
-          padding: 10px 12px;
-          border-radius: 6px;
-          border: 1px solid #e6eef7;
-          box-sizing: border-box;
-        }
-        input {
-          width: 100%;
-          padding: 10px 12px;
-          border-radius: 6px;
-          border: 1px solid #e6eef7;
-          box-sizing: border-box;
-        }
         .compact-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 12px;
-          margin-top: 8px;
+          gap: 12px 18px;
+          max-width: 1100px;
+          margin: 0 auto;
         }
-        .field.full { margin-bottom: 12px; }
-        @media (max-width: 1100px) { .compact-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 720px) { .compact-grid { grid-template-columns: 1fr; } }
+        .field.full-col {
+          grid-column: 1 / -1;
+        }
+        .field label {
+          display: block;
+          font-size: 13px;
+          color: #444;
+          margin-bottom: 6px;
+          font-weight: 600;
+        }
+        .field input, .field select, textarea {
+          width: 100%;
+          padding: 8px;
+          border-radius: 6px;
+          border: 1px solid #e3e3e3;
+          font-size: 13px;
+          background: #fff;
+          box-sizing: border-box;
+        }
+        textarea {
+          min-height: 80px;
+          resize: vertical;
+        }
+        .actions {
+          max-width: 1100px;
+          margin: 18px auto 0;
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+        }
+        .btn-cancel {
+          padding: 8px 12px;
+          border-radius: 6px;
+          border: 1px solid #ddd;
+          background: #fff;
+          cursor: pointer;
+        }
+        .btn-save {
+          padding: 8px 12px;
+          border-radius: 6px;
+          border: none;
+          background: #0ea5e9;
+          color: #fff;
+          cursor: pointer;
+        }
+        @media (max-width: 1100px) {
+          .compact-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 720px) {
+          .compact-grid { grid-template-columns: 1fr; }
+          .actions { padding: 0 12px; }
+        }
       `}</style>
     </div>
   );
