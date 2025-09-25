@@ -6,12 +6,15 @@ import { useRouter } from "next/navigation";
 
 type Props = {
   initialData?: any;
+  restro?: any; // <-- add this
   imagePrefix?: string;
 };
 
-export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }: Props) {
-  const router = useRouter();
-  const restroCode = initialData.RestroCode ?? initialData.RestroId ?? "";
+export default function AddressDocsClient({ initialData = {}, restro = null, imagePrefix = "" }: Props) {
+  const init = initialData ?? restro ?? {};
+  ...
+}
+
 
   const [restroAddress, setRestroAddress] = useState(initialData.RestroAddress ?? "");
   const [city, setCity] = useState(initialData.City ?? "");
