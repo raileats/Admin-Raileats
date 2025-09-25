@@ -2,16 +2,75 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
 
 function pickField(obj: any, candidates: string[]) {
+  if (!obj || typeof obj !== "object") return null;
+  const keys = Object.keys(obj);
   for (const c of candidates) {
-    if (Object.prototype.hasOwnProperty.call(obj, c)) return c;
-    const found = Object.keys(obj).find((k) => k.toLowerCase() === c.toLowerCase());
+    // exact match (case-sensitive)
+    if (keys.includes(c)) return c;
+  }
+  // case-insensitive match
+  for (const c of candidates) {
+    const found = keys.find((k) => k.toLowerCase() === c.toLowerCase());
     if (found) return found;
   }
+  // try plural/singular heuristics
+  for (const k of keys) {
+    const kl = k.toLowerCase();
+    for (const c of candidates) {
+      const cl = c.toLowerCase();
+      if (kl === cl || kl.includes(cl) || cl.includes(kl)) return k;
+    }
+  }
   return null;
+}
+
+async function tryFetchTable(sb: any, table: string, stateId: string | null) {
+  // Build a base query selecting all columns so we can detect columns
+  let q = sb.from(table).select("*").limit(1000).order("id", { ascending: true });
+
+  // If stateId provided, attempt common column filters (safe: we'll ignore errors and fallback)
+  if (stateId) {
+    // We'll attempt eq on common state columns by testing which exists.
+    const candidates = ["StateCode", "statecode", "state_code", "State", "state", "state_id"];
+    // Try to call select for each candidate to see if column exists (small read)
+    for (const cand of candidates) {
+      try {
+        const probe = await sb.from(table).select(cand).limit(1);
+        if (!probe.error && Array.isArray(probe.data)) {
+          // use that column in the actual query
+          try {
+            const q2 = sb.from(table).select("*").eq(cand, stateId).order("id", { ascending: true }).limit(1000);
+            const res = await q2;
+            return res;
+          } catch (e) {
+            // ignore, continue to next candidate
+          }
+        }
+      } catch (e) {
+        // ignore probe error
+      }
+    }
+    // fallback: try or() on multiple possible columns (if Supabase supports OR on these columns)
+    try {
+      const orExpr = candidates.map((c) => `${c}.eq.${stateId}`).join(",");
+      const res = await sb.from(table).select("*").or(orExpr).order("id", { ascending: true }).limit(1000);
+      return res;
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // if no state filter or fallback
+  try {
+    const res = await q;
+    return res;
+  } catch (e) {
+    return { data: null, error: e as any };
+  }
 }
 
 export async function GET(req: Request) {
@@ -21,71 +80,64 @@ export async function GET(req: Request) {
 
   try {
     const url = new URL(req.url);
-    const stateId = url.searchParams.get("stateId") ?? "";
+    const stateId = url.searchParams.get("stateId") ?? null;
 
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-    // fetch a sample set without filter first (to inspect columns)
-    const sampleRes = await sb.from("DistrictMaster").select("*").limit(1);
-    const sampleRow = Array.isArray(sampleRes.data) && sampleRes.data.length > 0 ? sampleRes.data[0] : null;
+    // Try multiple reasonable table names (most likely one will exist)
+    const tableCandidates = ["DistrictMaster", "Districts", "districtmaster", "districts"];
+    let rows: any[] | null = null;
+    let lastErr: any = null;
 
-    // pick likely column names (we will still try a safe query)
-    const codeField = sampleRow ? pickField(sampleRow, ["DistrictCode", "districtcode", "district_id", "id", "Districts", "District"]) : null;
-    const nameField = sampleRow ? pickField(sampleRow, ["DistrictName", "districtname", "name", "Districts", "district"]) : null;
-    const stateField = sampleRow ? pickField(sampleRow, ["StateCode", "statecode", "state_code", "State", "state", "StateName"]) : null;
-
-    // build a filter clause in a robust way
-    let q;
-    let usedFilter = null;
-    if (stateId) {
-      // try simple eq on common StateCode columns in order
-      const possibleStateCols = ["StateCode", "statecode", "state_code", "State", "state", "StateName", "state_name"];
-      let foundCol: string | null = null;
-      for (const col of possibleStateCols) {
-        // check if column exists by doing a meta-request (select that column limit 1)
-        const test = await sb.from("DistrictMaster").select(col).limit(1);
-        if (!test.error) {
-          foundCol = col;
+    for (const t of tableCandidates) {
+      try {
+        const res = await tryFetchTable(sb, t, stateId);
+        if (res && !res.error && Array.isArray(res.data)) {
+          rows = res.data;
           break;
+        } else {
+          lastErr = res?.error ?? lastErr;
         }
+      } catch (e) {
+        lastErr = e;
       }
-
-      if (foundCol) {
-        usedFilter = `${foundCol} = ${stateId}`;
-        q = sb.from("DistrictMaster").select("*").eq(foundCol, stateId).order(nameField ?? "DistrictName", { ascending: true }).limit(1000);
-      } else {
-        // fallback: try or() on several column names (supabase or syntax)
-        const orExpr = `StateCode.eq.${stateId},state_code.eq.${stateId},State.eq.${stateId},state.eq.${stateId}`;
-        usedFilter = `or(${orExpr})`;
-        q = sb.from("DistrictMaster").select("*").or(orExpr).order(nameField ?? "DistrictName", { ascending: true }).limit(1000);
-      }
-    } else {
-      q = sb.from("DistrictMaster").select("*").order(nameField ?? "DistrictName", { ascending: true }).limit(1000);
     }
 
-    const { data, error } = await q;
-    if (error) {
-      console.error("supabase district fetch error:", error);
-      return NextResponse.json({ ok: false, error: error.message ?? "supabase error", debug: { sampleRow, codeField, nameField, stateField, usedFilter } }, { status: 500 });
+    if (!rows) {
+      // nothing found; return empty array (but inform)
+      console.warn("No rows fetched for Districts. Last error:", lastErr);
+      return NextResponse.json({ ok: true, districts: [] });
     }
 
-    const rows = data ?? [];
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return NextResponse.json({ ok: true, districts: [] });
+    }
 
-    // normalize fields based on detection
-    const mapped = (rows as any[]).map((r) => {
-      const id = String(r[codeField ?? "DistrictCode"] ?? r.id ?? r.District ?? r.Districts ?? "");
-      const name = String(r[nameField ?? "DistrictName"] ?? r.name ?? r.District ?? r.Districts ?? "");
-      const state_id = String(r[stateField ?? "StateCode"] ?? r.State ?? r.state ?? r.StateName ?? "");
-      return { id, name, state_id, _raw: r };
+    // Detect fields from sample row
+    const sample = rows[0];
+
+    // Possible names for code, name, state columns (in decreasing priority)
+    const codeCandidates = ["DistrictCode", "districtcode", "district_id", "id", "District", "Districts", "district"];
+    const nameCandidates = ["DistrictName", "districtname", "name", "district", "Districts", "District"];
+    const stateCandidates = ["StateCode", "statecode", "state_code", "State", "state", "state_id"];
+
+    const codeField = pickField(sample, codeCandidates) ?? "id";
+    const nameField = pickField(sample, nameCandidates) ?? "name";
+    const stateField = pickField(sample, stateCandidates) ?? null;
+
+    const districts = (rows as any[]).map((r) => {
+      const idVal = r[codeField] ?? r.id ?? r.DistrictCode ?? r.districtcode ?? "";
+      const nameVal = r[nameField] ?? r.name ?? r.DistrictName ?? r.districtname ?? "";
+      const stateVal = stateField ? r[stateField] ?? r.StateCode ?? r.statecode ?? "" : "";
+
+      return {
+        id: idVal !== null && idVal !== undefined ? String(idVal) : "",
+        name: nameVal !== null && nameVal !== undefined ? String(nameVal) : "",
+        state_id: stateVal !== null && stateVal !== undefined ? String(stateVal) : "",
+      };
     });
 
-    return NextResponse.json({
-      ok: true,
-      detected: { codeField, nameField, stateField, usedFilter },
-      sampleRow,
-      count: mapped.length,
-      districts: mapped,
-    });
+    return NextResponse.json({ ok: true, districts });
   } catch (e: any) {
     console.error("districts handler error:", e);
     return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 500 });
