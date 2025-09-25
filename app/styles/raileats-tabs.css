@@ -1,41 +1,73 @@
-/* app/styles/raileats-tabs.css
-   Global normalization for admin restro tabs so every tab renders consistently.
-   This file must be imported from a top-level client layout (e.g. app/layout.tsx). */
-
-.raileats-tab-container {
-  box-sizing: border-box;
+/* STRONG OVERRIDE - paste whole file contents (replaces previous) */
+html body .raileats-tab-container,
+:root .raileats-tab-container {
+  box-sizing: border-box !important;
 }
 
-/* Remove duplicate outer padding/margins from direct child tab components
-   so layout is the single source of truth for spacing. */
-.raileats-tab-container > * {
+/* remove child padding/margin */
+html body .raileats-tab-container > * {
   padding: 0 !important;
   margin: 0 !important;
   box-sizing: border-box !important;
 }
 
-/* Ensure the form grid inside children centers to the same max-width used by BasicInfo */
-.raileats-tab-container .compact-grid {
-  max-width: 1100px;
-  margin: 0 auto;
-  box-sizing: border-box;
+/* force grid centering and width */
+html body .raileats-tab-container .compact-grid,
+html body .raileats-tab-container .raileats-compact-grid {
+  max-width: 1100px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  box-sizing: border-box !important;
 }
 
-/* Ensure headings inside tabs render same size and centered */
-.raileats-tab-container h3,
-.raileats-tab-container h4 {
-  text-align: center;
-  margin-bottom: 18px;
-  font-size: 20px;
-  font-weight: 600;
-  color: #222;
+/* force heading shape */
+html body .raileats-tab-container h3,
+html body .raileats-tab-container h4,
+html body .raileats-tab-container .section-title {
+  text-align: center !important;
+  margin-bottom: 18px !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: #222 !important;
 }
 
-/* Ensure actions area centers in same width */
-.raileats-tab-container .actions {
-  max-width: 1100px;
-  margin: 18px auto 0;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+/* force actions block */
+html body .raileats-tab-container .actions {
+  max-width: 1100px !important;
+  margin: 18px auto 0 !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+}
+
+/* input/label normalization */
+html body .raileats-tab-container .field label {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #444 !important;
+  margin-bottom: 6px !important;
+}
+html body .raileats-tab-container .field input,
+html body .raileats-tab-container .field textarea,
+html body .raileats-tab-container .field select {
+  font-size: 13px !important;
+  padding: 8px !important;
+  border-radius: 6px !important;
+  border: 1px solid #e3e3e3 !important;
+}
+
+/* responsive rules forced */
+@media (max-width: 1100px) {
+  html body .raileats-tab-container .compact-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+}
+@media (max-width: 720px) {
+  html body .raileats-tab-container .compact-grid {
+    grid-template-columns: 1fr !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
 }
