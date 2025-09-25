@@ -57,15 +57,15 @@ export default async function RestroEditLayout({ params, children }: Props) {
     ? `${restro.StationName} (${restro.StationCode ?? ""})${restro.State ? ` - ${restro.State}` : ""}`
     : "";
 
-  // If children is a single React element, clone it and inject props:
-  const childrenWithProps = React.isValidElement(children)
-    ? React.cloneElement(children, {
-        // pass restro and lists so client can use them immediately
-        initialData: restro ?? null,
-        states,
-        initialDistricts,
-      })
-    : children;
+  // Clone child and inject props — use 'as any' to satisfy TypeScript for now
+  let childrenWithProps: React.ReactNode = children;
+  if (React.isValidElement(children)) {
+    childrenWithProps = React.cloneElement(children as React.ReactElement<any>, {
+      initialData: restro ?? null,
+      states,
+      initialDistricts,
+    } as any);
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
