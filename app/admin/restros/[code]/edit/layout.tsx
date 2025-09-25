@@ -10,7 +10,7 @@ export default async function RestroEditLayout({ params, children }: Props) {
   const codeNum = Number(params.code);
   const { restro, error } = await safeGetRestro(codeNum);
 
-  // --- fetch states (server-side) ---
+  // --- fetch states (server-side) and initialDistricts for restro state ---
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
 
@@ -24,23 +24,38 @@ export default async function RestroEditLayout({ params, children }: Props) {
       const { data: stateData, error: stateErr } = await sb.from("StateMaster").select("StateCode,StateName").order("StateName", { ascending: true });
       if (!stateErr && Array.isArray(stateData)) {
         states = stateData.map((r: any) => ({ id: String(r.StateCode), name: r.StateName }));
-      } else {
+      } else if (stateErr) {
         console.error("Error fetching StateMaster:", stateErr);
       }
 
-      // if restro has a StateCode, fetch districts for that state (so initialDistricts available immediately)
-      const restroStateCode = restro?.StateCode ?? restro?.State ?? "";
-      if (restroStateCode) {
+      // determine restro state code (prefer StateCode, else try State text)
+      const restroState = restro?.StateCode ?? restro?.State ?? "";
+
+      if (restroState) {
+        // try by StateCode first
         const { data: distData, error: distErr } = await sb
           .from("DistrictMaster")
           .select("DistrictCode,DistrictName,StateCode")
-          .eq("StateCode", restroStateCode)
+          .eq("StateCode", restroState)
           .order("DistrictName", { ascending: true });
 
-        if (!distErr && Array.isArray(distData)) {
+        if (!distErr && Array.isArray(distData) && distData.length > 0) {
           initialDistricts = distData.map((d: any) => ({ id: String(d.DistrictCode), name: d.DistrictName, state_id: String(d.StateCode) }));
         } else {
-          console.error("Error fetching DistrictMaster for state", restroStateCode, distErr);
+          // fallback: maybe restro.State contains name -> lookup state by name then get districts
+          const name = String(restro?.State ?? "").trim();
+          if (name) {
+            const { data: possibleStates } = await sb.from("StateMaster").select("StateCode").ilike("StateName", `%${name}%`);
+            if (Array.isArray(possibleStates) && possibleStates.length > 0) {
+              const codes = possibleStates.map((s: any) => s.StateCode);
+              const { data: dist2 } = await sb
+                .from("DistrictMaster")
+                .select("DistrictCode,DistrictName,StateCode")
+                .in("StateCode", codes)
+                .order("DistrictName", { ascending: true });
+              if (Array.isArray(dist2)) initialDistricts = dist2.map((d: any) => ({ id: String(d.DistrictCode), name: d.DistrictName, state_id: String(d.StateCode) }));
+            }
+          }
         }
       }
     } catch (e) {
@@ -57,7 +72,7 @@ export default async function RestroEditLayout({ params, children }: Props) {
     ? `${restro.StationName} (${restro.StationCode ?? ""})${restro.State ? ` - ${restro.State}` : ""}`
     : "";
 
-  // Clone child and inject props — use 'as any' to satisfy TypeScript for now
+  // inject props into child component (Address & Documents page expects initialData, states, initialDistricts)
   let childrenWithProps: React.ReactNode = children;
   if (React.isValidElement(children)) {
     childrenWithProps = React.cloneElement(children as React.ReactElement<any>, {
@@ -155,7 +170,6 @@ export default async function RestroEditLayout({ params, children }: Props) {
           </div>
         )}
 
-        {/* NORMALIZER: wrapper that enforces consistent padding and widths */}
         <div className="raileats-tab-container" style={{ padding: 18 }}>
           {childrenWithProps}
         </div>
