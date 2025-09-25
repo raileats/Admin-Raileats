@@ -1,3 +1,4 @@
+// components/tabs/AddressDocsClient.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -51,6 +52,9 @@ export default function AddressDocsClient({
     fetch("/api/states")
       .then((r) => r.json())
       .then((j) => {
+        // <-- DEBUG: full states response
+        console.log("DEBUG /api/states response ->", j);
+
         if (j?.ok && Array.isArray(j.states)) setStateList(j.states);
         else if (Array.isArray(j)) setStateList(j as StateItem[]);
         else console.warn("Unexpected /api/states response", j);
@@ -149,6 +153,9 @@ export default function AddressDocsClient({
     fetch(`/api/districts?stateId=${encodeURIComponent(stateCode)}`)
       .then((r) => r.json())
       .then((j) => {
+        // <-- DEBUG: full districts response
+        console.log("DEBUG /api/districts response for stateId=", stateCode, "->", j);
+
         if (j?.ok && Array.isArray(j.districts)) {
           setDistrictList(j.districts);
           tryPreselectDistrict(j.districts);
