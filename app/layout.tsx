@@ -1,6 +1,12 @@
-// app/layout.tsx (top of file)
+// app/layout.tsx
 import "./styles/raileats-tabs.css";
-dren: React.ReactNode }) {
+
+export const metadata = {
+  title: "Raileats Admin",
+  description: "Admin",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>{children}</body>
