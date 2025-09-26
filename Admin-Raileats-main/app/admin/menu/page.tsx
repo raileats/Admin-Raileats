@@ -1,1 +1,0 @@
-export default function Menu() { return <h1>Menu Management</h1>; }

@@ -1,1 +1,0 @@
-export default function Orders() { return <h1>Orders Management</h1>; }
