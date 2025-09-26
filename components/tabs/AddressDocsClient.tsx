@@ -9,8 +9,8 @@ type DistrictItem = { id: string; name: string; state_id?: string };
 type Props = {
   initialData?: any;
   imagePrefix?: string;
-  states?: StateItem[]; // server-provided
-  initialDistricts?: DistrictItem[]; // server-provided for restro's state
+  states?: StateItem[];
+  initialDistricts?: DistrictItem[];
 };
 
 export default function AddressDocsClient({
@@ -20,20 +20,15 @@ export default function AddressDocsClient({
   initialDistricts = [],
 }: Props) {
   const [stateList, setStateList] = useState<StateItem[]>(states || []);
-  const [districtList, setDistrictList] = useState<DistrictItem[]>(
-    initialDistricts || []
-  );
+  const [districtList, setDistrictList] = useState<DistrictItem[]>(initialDistricts || []);
 
-  const [loadingStates, setLoadingStates] = useState<boolean>(
-    !states || states.length === 0
-  );
+  const [loadingStates, setLoadingStates] = useState<boolean>(!states || states.length === 0);
   const [loadingDistricts, setLoadingDistricts] = useState<boolean>(false);
 
   const [local, setLocal] = useState<any>({
     RestroAddress: initialData?.RestroAddress ?? "",
     City: initialData?.City ?? "",
-    StateCode:
-      initialData?.StateCode ?? initialData?.State ?? initialData?.StateName ?? "",
+    StateCode: initialData?.StateCode ?? initialData?.State ?? initialData?.StateName ?? "",
     DistrictCode:
       initialData?.DistrictCode ??
       initialData?.District ??
@@ -50,9 +45,10 @@ export default function AddressDocsClient({
     RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? "",
   });
 
-  // refs to avoid duplicate fetches / overlapping
+  // refs for guarding duplicate/overlapping fetches
   const lastFetchedStateRef = useRef<string | null>(null);
   const ongoingFetchRef = useRef<AbortController | null>(null);
+  const failedStatesRef = useRef<Set<string>>(new Set()); // cache failed stateIds so we don't retry repeatedly
 
   // Load states if server didn't pass them
   useEffect(() => {
@@ -61,22 +57,20 @@ export default function AddressDocsClient({
       setLoadingStates(false);
       return;
     }
-
     setLoadingStates(true);
     fetch("/api/states")
       .then((r) => r.json())
       .then((j) => {
-        console.log("DEBUG /api/states response ->", j);
+        console.log("DEBUG /api/states ->", j);
         if (j?.ok && Array.isArray(j.states)) setStateList(j.states);
         else if (Array.isArray(j)) setStateList(j as StateItem[]);
         else console.warn("Unexpected /api/states response", j);
       })
       .catch((e) => console.warn("fetch /api/states failed", e))
       .finally(() => setLoadingStates(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [states]);
 
-  // When initialData arrives/changes, set local base values
+  // sync when initialData changes
   useEffect(() => {
     setLocal((p: any) => ({
       ...p,
@@ -98,10 +92,9 @@ export default function AddressDocsClient({
       GSTType: initialData?.GSTType ?? p.GSTType,
       RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? p.RestroDisplayPhoto ?? "",
     }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData]);
 
-  // When stateList arrives, normalize local.StateCode (try code then name -> set to id)
+  // normalize StateCode when stateList arrives (tries to match by name if code not present)
   useEffect(() => {
     if (!stateList || stateList.length === 0) return;
 
@@ -119,7 +112,11 @@ export default function AddressDocsClient({
           setStateCodeById(exact.id);
           return;
         }
-        const fuzzy = stateList.find((s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase()));
+        const fuzzy = stateList.find(
+          (s) =>
+            String(s.name).toLowerCase().includes(target) ||
+            target.includes(String(s.name).toLowerCase())
+        );
         if (fuzzy) {
           setStateCodeById(fuzzy.id);
           return;
@@ -136,7 +133,11 @@ export default function AddressDocsClient({
         setStateCodeById(foundByName.id);
         return;
       }
-      const fuzzy = stateList.find((s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase()));
+      const fuzzy = stateList.find(
+        (s) =>
+          String(s.name).toLowerCase().includes(target) ||
+          target.includes(String(s.name).toLowerCase())
+      );
       if (fuzzy) {
         setStateCodeById(fuzzy.id);
         return;
@@ -145,7 +146,7 @@ export default function AddressDocsClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stateList]);
 
-  // When StateCode changes -> load districts for that state and preselect district
+  // When StateCode changes -> load districts (with robust guards)
   useEffect(() => {
     const stateCode = local.StateCode;
     if (!stateCode) {
@@ -154,7 +155,7 @@ export default function AddressDocsClient({
       return;
     }
 
-    // If server passed initialDistricts and they match this state, use them
+    // If we were given initialDistricts from server and they match, use them
     if (Array.isArray(initialDistricts) && initialDistricts.length > 0 && initialDistricts[0].state_id) {
       const matchInit = initialDistricts.filter((d) => String(d.state_id) === String(stateCode));
       if (matchInit.length > 0) {
@@ -165,13 +166,20 @@ export default function AddressDocsClient({
       }
     }
 
-    // avoid duplicate fetch for same state
-    if (String(lastFetchedStateRef.current) === String(stateCode)) {
-      // already fetched this state's districts
+    // If this state previously failed network fetch, avoid retrying repeatedly
+    if (failedStatesRef.current.has(String(stateCode))) {
+      console.warn("Skipping districts fetch for state (previously failed):", stateCode);
+      setDistrictList([]);
+      setLoadingDistricts(false);
       return;
     }
 
-    // abort previous fetch if any
+    // avoid duplicate fetch if already fetched for same state
+    if (String(lastFetchedStateRef.current) === String(stateCode)) {
+      return;
+    }
+
+    // abort any ongoing fetch
     if (ongoingFetchRef.current) {
       ongoingFetchRef.current.abort();
       ongoingFetchRef.current = null;
@@ -187,37 +195,43 @@ export default function AddressDocsClient({
     (async () => {
       try {
         const url = `/api/districts?stateId=${encodeURIComponent(stateCode)}`;
-        const resp = await fetch(url, { signal: ac.signal });
-        // Try to parse JSON even if non-2xx (helps debug)
-        const j = await resp.json().catch((e) => {
-          console.warn("Failed to parse /api/districts JSON", e);
+        const resp = await fetch(url, { signal: ac.signal, cache: "no-store" });
+
+        // parse JSON safely
+        const body = await resp.json().catch((e) => {
+          console.warn("Failed to parse JSON from /api/districts", e);
           return null;
         });
-        console.log("DEBUG /api/districts response for stateId=", stateCode, "->", { status: resp.status, ok: resp.ok, body: j });
+
+        console.log("DEBUG /api/districts", { url, status: resp.status, ok: resp.ok, body });
 
         if (ac.signal.aborted) {
-          console.log("Fetch aborted for stateId=", stateCode);
+          console.log("district fetch aborted for", stateCode);
           return;
         }
 
-        if (resp.ok && j?.ok && Array.isArray(j.districts)) {
-          setDistrictList(j.districts);
-          tryPreselectDistrict(j.districts);
-        } else if (Array.isArray(j)) {
-          setDistrictList(j as DistrictItem[]);
-          tryPreselectDistrict(j as DistrictItem[]);
+        if (resp.ok && body?.ok && Array.isArray(body.districts)) {
+          setDistrictList(body.districts);
+          tryPreselectDistrict(body.districts);
+        } else if (Array.isArray(body)) {
+          // some older endpoints returned array directly
+          setDistrictList(body as DistrictItem[]);
+          tryPreselectDistrict(body as DistrictItem[]);
         } else {
-          // if server returned non-ok or unexpected shape, fall back to empty list
-          console.warn("Unexpected /api/districts response", j);
+          // mark this state as failed so we won't hammer it repeatedly
+          console.warn("Unexpected /api/districts response shape or non-ok status", { status: resp.status, body });
+          failedStatesRef.current.add(String(stateCode));
           setDistrictList([]);
         }
-      } catch (e: any) {
-        if (e?.name === "AbortError") {
-          console.log("district fetch aborted");
+      } catch (err: any) {
+        if (err.name === "AbortError") {
+          console.log("district fetch aborted by new request");
         } else {
-          console.warn("fetch /api/districts failed", e);
+          console.warn("fetch /api/districts failed:", err);
+          // if network error, avoid continuous retry - add to failed set
+          failedStatesRef.current.add(String(stateCode));
+          setDistrictList([]);
         }
-        setDistrictList([]);
       } finally {
         setLoadingDistricts(false);
         ongoingFetchRef.current = null;
@@ -225,11 +239,9 @@ export default function AddressDocsClient({
     })();
 
     function tryPreselectDistrict(list: DistrictItem[]) {
-      // If local.DistrictCode already looks like a valid id that's present, keep it.
-      const curDistrict = local.DistrictCode;
-      if (curDistrict) {
-        const existsId = list.find((d) => String(d.id) === String(curDistrict));
-        if (existsId) return; // valid id already
+      if (local.DistrictCode) {
+        const exists = list.find((d) => String(d.id) === String(local.DistrictCode));
+        if (exists) return;
       }
 
       const possible =
@@ -274,14 +286,13 @@ export default function AddressDocsClient({
       }
     }
 
-    // cleanup on unmount or state change
+    // cleanup
     return () => {
       if (ongoingFetchRef.current) {
         ongoingFetchRef.current.abort();
         ongoingFetchRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local.StateCode, initialDistricts, initialData]);
 
   function update(key: string, value: any) {
@@ -297,6 +308,7 @@ export default function AddressDocsClient({
   return (
     <div style={{ padding: 18 }}>
       <h3 style={{ textAlign: "center", marginBottom: 18, fontSize: 20 }}>Address & Documents</h3>
+
       <div className="compact-grid">
         <div className="field full-col">
           <label>Restro Address</label>
