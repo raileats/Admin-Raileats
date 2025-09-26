@@ -1,3 +1,4 @@
+// components/tabs/AddressDocsClient.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -31,10 +32,8 @@ export default function AddressDocsClient({
   const [local, setLocal] = useState<any>({
     RestroAddress: initialData?.RestroAddress ?? "",
     City: initialData?.City ?? "",
-    // StateCode may be code or name — we normalize later
     StateCode:
       initialData?.StateCode ?? initialData?.State ?? initialData?.StateName ?? "",
-    // DistrictCode may be code or name or the RestroMaster column "Districts"
     DistrictCode:
       initialData?.DistrictCode ??
       initialData?.District ??
@@ -111,18 +110,12 @@ export default function AddressDocsClient({
       const nameFromInitial = initialData?.StateName ?? initialData?.State;
       if (nameFromInitial) {
         const target = String(nameFromInitial).trim().toLowerCase();
-        const exact = stateList.find(
-          (s) => String(s.name).trim().toLowerCase() === target
-        );
+        const exact = stateList.find((s) => String(s.name).trim().toLowerCase() === target);
         if (exact) {
           setStateCodeById(exact.id);
           return;
         }
-        const fuzzy = stateList.find(
-          (s) =>
-            String(s.name).toLowerCase().includes(target) ||
-            target.includes(String(s.name).toLowerCase())
-        );
+        const fuzzy = stateList.find((s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase()));
         if (fuzzy) {
           setStateCodeById(fuzzy.id);
           return;
@@ -135,18 +128,12 @@ export default function AddressDocsClient({
     const byId = stateList.find((s) => String(s.id) === String(cur));
     if (!byId) {
       const target = String(cur).trim().toLowerCase();
-      const foundByName = stateList.find(
-        (s) => String(s.name).trim().toLowerCase() === target
-      );
+      const foundByName = stateList.find((s) => String(s.name).trim().toLowerCase() === target);
       if (foundByName) {
         setStateCodeById(foundByName.id);
         return;
       }
-      const fuzzy = stateList.find(
-        (s) =>
-          String(s.name).toLowerCase().includes(target) ||
-          target.includes(String(s.name).toLowerCase())
-      );
+      const fuzzy = stateList.find((s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase()));
       if (fuzzy) {
         setStateCodeById(fuzzy.id);
         return;
@@ -164,14 +151,8 @@ export default function AddressDocsClient({
     }
 
     // If server passed initialDistricts and they match this state, use them
-    if (
-      Array.isArray(initialDistricts) &&
-      initialDistricts.length > 0 &&
-      initialDistricts[0].state_id
-    ) {
-      const matchInit = initialDistricts.filter(
-        (d) => String(d.state_id) === String(stateCode)
-      );
+    if (Array.isArray(initialDistricts) && initialDistricts.length > 0 && initialDistricts[0].state_id) {
+      const matchInit = initialDistricts.filter((d) => String(d.state_id) === String(stateCode));
       if (matchInit.length > 0) {
         setDistrictList(matchInit.slice());
         tryPreselectDistrict(matchInit);
@@ -185,9 +166,7 @@ export default function AddressDocsClient({
     fetch(`/api/districts?stateId=${encodeURIComponent(stateCode)}`)
       .then((r) => r.json())
       .then((j) => {
-        // debug line so you can inspect the full JSON in browser console
         console.log("DEBUG /api/districts response for stateId=", stateCode, "->", j);
-
         if (j?.ok && Array.isArray(j.districts)) {
           setDistrictList(j.districts);
           tryPreselectDistrict(j.districts);
@@ -201,12 +180,19 @@ export default function AddressDocsClient({
       .catch((e) => console.warn("fetch /api/districts failed", e))
       .finally(() => setLoadingDistricts(false));
 
-    // tryPreselectDistrict definition
     function tryPreselectDistrict(list: DistrictItem[]) {
-      // if already set by user, do not overwrite
-      if (local.DistrictCode) return;
+      // If local.DistrictCode already looks like a valid id that's present, keep it.
+      // Otherwise try to match by code or name (including initialData.Districts which is a name).
+      const curDistrict = local.DistrictCode;
+      if (curDistrict) {
+        const existsId = list.find((d) => String(d.id) === String(curDistrict));
+        if (existsId) {
+          // already a valid id -> nothing to do
+          return;
+        }
+        // if it's not a valid id, fall through and try matching name/fuzzy below
+      }
 
-      // Accept multiple possible initial fields: DistrictCode, District, DistrictName, Districts (RestroMaster)
       const possible =
         initialData?.DistrictCode ??
         initialData?.District ??
@@ -219,31 +205,21 @@ export default function AddressDocsClient({
       const targetLower = targetRaw.toLowerCase();
 
       // exact id/code
-      const foundById = list.find(
-        (d) => String(d.id) === targetRaw || String((d as any).DistrictCode) === targetRaw
-      );
+      const foundById = list.find((d) => String(d.id) === targetRaw || String((d as any).DistrictCode) === targetRaw);
       if (foundById) {
         setLocal((s: any) => ({ ...s, DistrictCode: String(foundById.id) }));
         return;
       }
 
       // exact name (case-insensitive)
-      const foundByName = list.find(
-        (d) =>
-          String(d.name).trim().toLowerCase() === targetLower ||
-          String((d as any).DistrictName ?? "").trim().toLowerCase() === targetLower
-      );
+      const foundByName = list.find((d) => String(d.name).trim().toLowerCase() === targetLower || String((d as any).DistrictName ?? "").trim().toLowerCase() === targetLower);
       if (foundByName) {
         setLocal((s: any) => ({ ...s, DistrictCode: String(foundByName.id) }));
         return;
       }
 
       // fuzzy
-      const fuzzy = list.find(
-        (d) =>
-          String(d.name).toLowerCase().includes(targetLower) ||
-          targetLower.includes(String(d.name).toLowerCase())
-      );
+      const fuzzy = list.find((d) => String(d.name).toLowerCase().includes(targetLower) || targetLower.includes(String(d.name).toLowerCase()));
       if (fuzzy) {
         setLocal((s: any) => ({ ...s, DistrictCode: String(fuzzy.id) }));
         return;
@@ -278,17 +254,12 @@ export default function AddressDocsClient({
 
   return (
     <div style={{ padding: 18 }}>
-      <h3 style={{ textAlign: "center", marginBottom: 18, fontSize: 20 }}>
-        Address & Documents
-      </h3>
+      <h3 style={{ textAlign: "center", marginBottom: 18, fontSize: 20 }}>Address & Documents</h3>
 
       <div className="compact-grid">
         <div className="field full-col">
           <label>Restro Address</label>
-          <textarea
-            value={local.RestroAddress ?? ""}
-            onChange={(e) => update("RestroAddress", e.target.value)}
-          />
+          <textarea value={local.RestroAddress ?? ""} onChange={(e) => update("RestroAddress", e.target.value)} />
         </div>
 
         <div className="field">
@@ -303,7 +274,6 @@ export default function AddressDocsClient({
               value={local.StateCode ?? ""}
               onChange={(e) => {
                 const v = e.target.value;
-                // set state and clear district so district-effect runs cleanly
                 setLocal((s: any) => ({ ...s, StateCode: v, DistrictCode: "" }));
               }}
             >
@@ -383,12 +353,7 @@ export default function AddressDocsClient({
         <div className="field">
           <label>Display Preview</label>
           {local.RestroDisplayPhoto ? (
-            <img
-              src={imgSrc(local.RestroDisplayPhoto)}
-              alt="display"
-              className="preview"
-              onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
-            />
+            <img src={imgSrc(local.RestroDisplayPhoto)} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
           ) : (
             <div className="readonly">No image</div>
           )}
