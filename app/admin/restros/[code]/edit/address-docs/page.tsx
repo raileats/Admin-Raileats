@@ -11,86 +11,52 @@ const SUPA_SERVICE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE!;
 
 if (!SUPA_URL || !SUPA_SERVICE_KEY) {
-  throw new Error("Missing Supabase env vars (SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY).");
+  throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables. Set them in Vercel.");
 }
 
 const supaServer = createClient(SUPA_URL, SUPA_SERVICE_KEY, { auth: { persistSession: false } });
-
-// candidate table names to try
-const DISTRICT_TABLES = [
-  "District_Masters",
-  "district_masters",
-  "DistrictMaster",
-  "district_master",
-  "DistrictsMaster",
-  "districts_master",
-  "District_Master",
-  "districts",
-];
-
-async function detectDistrictTable() {
-  for (const t of DISTRICT_TABLES) {
-    try {
-      const { error } = await supaServer.from(t).select("1").limit(1);
-      if (!error) {
-        console.error("[DBG] page.tsx using table:", t);
-        return t;
-      }
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
 
 export default async function AddressDocsPage({ params }: Props) {
   const codeNum = Number(params.code);
   const { restro } = await safeGetRestro(codeNum);
 
-  // detect which table exists
-  const table = await detectDistrictTable();
-
-  // --- Fetch distinct states ---
+  // fetch states from DistrictMaster
   let states: { id: string; name: string }[] = [];
   try {
-    if (table) {
-      const { data } = await supaServer
-        .from(table)
-        .select('"State Name"')
-        .neq('"State Name"', null)
-        .order('"State Name"', { ascending: true })
-        .limit(2000);
+    const { data: srows } = await supaServer
+      .from("DistrictMaster")
+      .select('"StateName"')
+      .neq('"StateName"', null)
+      .order('"StateName"', { ascending: true });
 
-      const unique = Array.from(
-        new Set((data || []).map((r: any) => (r["State Name"] ? String(r["State Name"]).trim() : "")))
-      ).filter(Boolean);
-
-      states = unique.map((s) => ({ id: s, name: s }));
-    }
+    const unique = Array.from(new Set((srows || []).map((r: any) => (r["StateName"] ? String(r["StateName"]).trim() : "")))).filter(Boolean);
+    states = unique.map((n) => ({ id: n, name: n }));
   } catch (e) {
-    console.error("Failed to load states:", e);
+    console.error("Failed to load states from DistrictMaster:", e);
+    states = [];
   }
 
-  // --- Fetch initial districts for restro's state ---
+  // fetch initial districts for restro's state (if any)
   let initialDistricts: any[] = [];
   try {
     const restroState =
-      (restro?.["State Name"] ?? restro?.State ?? restro?.StateName ?? restro?.StateCode ?? "") || "";
+      (restro?.StateName ?? restro?.State ?? restro?.StateCode ?? restro?.["State Name"] ?? "") || "";
 
-    if (table && restroState) {
-      const { data } = await supaServer
-        .from(table)
-        .select('"District Code","District Name","State Code","State Name"')
-        .ilike('"State Name"', String(restroState));
+    if (restroState) {
+      const { data: drows } = await supaServer
+        .from("DistrictMaster")
+        .select('"DistrictCode","DistrictName","StateCode","StateName"')
+        .ilike('"StateName"', String(restroState));
 
-      initialDistricts = (data || []).map((r: any) => ({
-        id: String(r["District Code"] ?? r.DistrictCode ?? r.id ?? r["District Name"] ?? ""),
-        name: String(r["District Name"] ?? r.DistrictName ?? r.name ?? ""),
-        state_id: String(r["State Code"] ?? r.StateCode ?? r["State Name"] ?? restroState),
+      initialDistricts = (drows || []).map((r: any) => ({
+        id: String(r["DistrictCode"] ?? r.DistrictCode ?? r.id ?? r["DistrictName"] ?? ""),
+        name: String(r["DistrictName"] ?? r.DistrictName ?? r.name ?? ""),
+        state_id: String(r["StateCode"] ?? r.StateCode ?? r["StateName"] ?? restroState),
       }));
     }
   } catch (e) {
-    console.error("Failed to load initial districts:", e);
+    console.error("Failed to load initial districts from DistrictMaster:", e);
+    initialDistricts = [];
   }
 
   return (
