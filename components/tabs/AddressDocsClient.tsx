@@ -194,7 +194,13 @@ export default function AddressDocsClient({
 
     (async () => {
       try {
-        const url = `/api/districts?stateId=${encodeURIComponent(stateCode)}`;
+        // find stateName from stateList matching this stateCode (if available)
+        const matchedState = stateList.find((s) => String(s.id) === String(stateCode));
+        const stateNameForApi = matchedState ? matchedState.name : "";
+
+        // send both stateId and state (name) to API to increase chances of server-side match
+        const url = `/api/districts?stateId=${encodeURIComponent(stateCode)}${stateNameForApi ? `&state=${encodeURIComponent(stateNameForApi)}` : ""}`;
+
         const resp = await fetch(url, { signal: ac.signal, cache: "no-store" });
 
         // parse JSON safely
@@ -210,16 +216,31 @@ export default function AddressDocsClient({
           return;
         }
 
+        // handle various shapes (our API returns {ok:true,districts:[]})
+        let list: any[] = [];
         if (resp.ok && body?.ok && Array.isArray(body.districts)) {
-          setDistrictList(body.districts);
-          tryPreselectDistrict(body.districts);
+          list = body.districts;
         } else if (Array.isArray(body)) {
-          // some older endpoints returned array directly
-          setDistrictList(body as DistrictItem[]);
-          tryPreselectDistrict(body as DistrictItem[]);
+          list = body as any[];
+        } else if (body && Array.isArray(body?.result)) {
+          list = body.result;
+        } else if (body && Array.isArray(body?.districts)) {
+          list = body.districts;
+        } else {
+          console.warn("Unexpected /api/districts response shape or non-ok status", { status: resp.status, body });
+        }
+
+        if (list && list.length > 0) {
+          // normalize each item to have {id,name,state_id}
+          const normalized = list.map((r: any) => ({
+            id: String(r?.id ?? r?.DistrictCode ?? r?.districtcode ?? r?.DistrictCode ?? r?.DistrictId ?? ""),
+            name: String(r?.name ?? r?.DistrictName ?? r?.districtname ?? r?.District ?? r?.district ?? ""),
+            state_id: String(r?.state_id ?? r?.StateCode ?? r?.statecode ?? r?.StateName ?? r?.statename ?? ""),
+          }));
+          setDistrictList(normalized);
+          tryPreselectDistrict(normalized);
         } else {
           // mark this state as failed so we won't hammer it repeatedly
-          console.warn("Unexpected /api/districts response shape or non-ok status", { status: resp.status, body });
           failedStatesRef.current.add(String(stateCode));
           setDistrictList([]);
         }
@@ -239,34 +260,40 @@ export default function AddressDocsClient({
     })();
 
     function tryPreselectDistrict(list: DistrictItem[]) {
+      // 1) if local.DistrictCode already matches an id in list, keep it
       if (local.DistrictCode) {
-        const exists = list.find((d) => String(d.id) === String(local.DistrictCode));
-        if (exists) return;
+        const existsById = list.find((d) => String(d.id) === String(local.DistrictCode));
+        if (existsById) return;
       }
 
+      // 2) find possible values from initialData (try multiple keys)
       const possible =
         initialData?.DistrictCode ??
         initialData?.District ??
         initialData?.DistrictName ??
         initialData?.Districts ??
+        local.DistrictCode ??
         null;
       if (!possible) return;
 
       const targetRaw = String(possible).trim();
       const targetLower = targetRaw.toLowerCase();
 
-      const foundById = list.find((d) => String(d.id) === targetRaw || String((d as any).DistrictCode) === targetRaw);
-      if (foundById) {
-        setLocal((s: any) => ({ ...s, DistrictCode: String(foundById.id) }));
+      // 3) If possible looks like an id (numeric or exact match), try id match first
+      const byId = list.find((d) => String(d.id) === targetRaw || String((d as any).DistrictCode) === targetRaw);
+      if (byId) {
+        setLocal((s: any) => ({ ...s, DistrictCode: String(byId.id) }));
         return;
       }
 
+      // 4) Exact name match (case-insensitive)
       const foundByName = list.find((d) => String(d.name).trim().toLowerCase() === targetLower || String((d as any).DistrictName ?? "").trim().toLowerCase() === targetLower);
       if (foundByName) {
         setLocal((s: any) => ({ ...s, DistrictCode: String(foundByName.id) }));
         return;
       }
 
+      // 5) Fuzzy contains / tokens
       const fuzzy = list.find((d) => String(d.name).toLowerCase().includes(targetLower) || targetLower.includes(String(d.name).toLowerCase()));
       if (fuzzy) {
         setLocal((s: any) => ({ ...s, DistrictCode: String(fuzzy.id) }));
@@ -284,6 +311,16 @@ export default function AddressDocsClient({
           return;
         }
       }
+
+      // 6) If the initial value was a name but didn't match, try matching by partial tokens in DistrictName property as well
+      const altMatch = list.find((d) => {
+        const alt = String((d as any).DistrictName ?? "").toLowerCase();
+        return alt && targetLower.includes(alt) || alt.includes(targetLower);
+      });
+      if (altMatch) {
+        setLocal((s: any) => ({ ...s, DistrictCode: String(altMatch.id) }));
+        return;
+      }
     }
 
     // cleanup
@@ -293,7 +330,7 @@ export default function AddressDocsClient({
         ongoingFetchRef.current = null;
       }
     };
-  }, [local.StateCode, initialDistricts, initialData]);
+  }, [local.StateCode, initialDistricts, initialData, stateList]);
 
   function update(key: string, value: any) {
     setLocal((s: any) => ({ ...s, [key]: value }));
