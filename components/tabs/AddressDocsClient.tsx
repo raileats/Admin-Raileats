@@ -194,13 +194,12 @@ export default function AddressDocsClient({
 
     (async () => {
       try {
-        // find stateName from stateList matching this stateCode (if available)
+        // Prefer sending state name (server expects `state=`). If we have a matched state object, use its name.
         const matchedState = stateList.find((s) => String(s.id) === String(stateCode));
-        const stateNameForApi = matchedState ? matchedState.name : "";
+        const stateNameForApi = matchedState ? matchedState.name : stateCode;
 
-        // send both stateId and state (name) to API to increase chances of server-side match
-       const url = `/api/districts?state=${encodeURIComponent(stateNameForApi || stateCode)}`;
-
+        // 🔑 Use `state=` query param because your API returns districts when using state name.
+        const url = `/api/districts?state=${encodeURIComponent(stateNameForApi)}`;
         const resp = await fetch(url, { signal: ac.signal, cache: "no-store" });
 
         // parse JSON safely
@@ -450,7 +449,7 @@ export default function AddressDocsClient({
         </div>
       </div>
 
-      {/* ---------- DEBUG PANEL (temporary) ---------- */}
+      {/* DEBUG PANEL */}
       <div style={{ marginTop: 12, background: "#fff8e6", padding: 12, borderRadius: 6 }}>
         <strong>DEBUG</strong>
         <div>
@@ -467,7 +466,6 @@ export default function AddressDocsClient({
           </pre>
         </div>
       </div>
-      {/* --------------------------------------------- */}
 
       <style jsx>{`
         .compact-grid {
