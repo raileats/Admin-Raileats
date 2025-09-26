@@ -315,7 +315,7 @@ export default function AddressDocsClient({
       // 6) If the initial value was a name but didn't match, try matching by partial tokens in DistrictName property as well
       const altMatch = list.find((d) => {
         const alt = String((d as any).DistrictName ?? "").toLowerCase();
-        return alt && targetLower.includes(alt) || alt.includes(targetLower);
+        return (alt && (targetLower.includes(alt) || alt.includes(targetLower)));
       });
       if (altMatch) {
         setLocal((s: any) => ({ ...s, DistrictCode: String(altMatch.id) }));
@@ -449,6 +449,25 @@ export default function AddressDocsClient({
           )}
         </div>
       </div>
+
+      {/* ---------- DEBUG PANEL (temporary) ---------- */}
+      <div style={{ marginTop: 12, background: "#fff8e6", padding: 12, borderRadius: 6 }}>
+        <strong>DEBUG</strong>
+        <div>
+          <strong>local.StateCode:</strong> {String(local.StateCode ?? "")}
+        </div>
+        <div>
+          <strong>resolved state name (from stateList):</strong>{" "}
+          {stateList.find((s) => String(s.id) === String(local.StateCode))?.name ?? "(none)"}
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <strong>districtList (count):</strong> {districtList.length}
+          <pre style={{ whiteSpace: "pre-wrap", maxHeight: 240, overflow: "auto", background: "#fff", padding: 8 }}>
+            {JSON.stringify(districtList.slice(0, 40), null, 2)}
+          </pre>
+        </div>
+      </div>
+      {/* --------------------------------------------- */}
 
       <style jsx>{`
         .compact-grid {
