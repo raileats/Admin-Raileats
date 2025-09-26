@@ -199,7 +199,7 @@ export default function AddressDocsClient({
         const stateNameForApi = matchedState ? matchedState.name : "";
 
         // send both stateId and state (name) to API to increase chances of server-side match
-        const url = `/api/districts?stateId=${encodeURIComponent(stateCode)}${stateNameForApi ? `&state=${encodeURIComponent(stateNameForApi)}` : ""}`;
+       const url = `/api/districts?state=${encodeURIComponent(stateNameForApi || stateCode)}`;
 
         const resp = await fetch(url, { signal: ac.signal, cache: "no-store" });
 
