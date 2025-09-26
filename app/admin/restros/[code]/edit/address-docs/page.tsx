@@ -1,4 +1,4 @@
-// app/admin/restros/[code]/edit/address-docs/page.tsx
+// app/admin/restros/[code]/edit/address-docs/page.tsx  (DEBUG VERSION)
 import React from "react";
 import AddressDocsClient from "@/components/tabs/AddressDocsClient";
 import { safeGetRestro } from "@/lib/restroService";
@@ -6,7 +6,6 @@ import { createClient } from "@supabase/supabase-js";
 
 type Props = { params: { code: string } };
 
-// Server-side Supabase client using service role key (must be set in Vercel env)
 const SUPA_URL = process.env.SUPABASE_URL!;
 const SUPA_SERVICE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE!;
@@ -27,6 +26,7 @@ export default async function AddressDocsPage({ params }: Props) {
 
   // --- Fetch distinct states from DistrictsMaster server-side ---
   let states: { id: string; name: string }[] = [];
+  let statesRowsRaw: any[] = [];
   try {
     const { data: statesRows } = await supaServer
       .from("DistrictsMaster")
@@ -34,22 +34,43 @@ export default async function AddressDocsPage({ params }: Props) {
       .neq('"State Name"', null)
       .order('"State Name"', { ascending: true });
 
+    statesRowsRaw = statesRows || [];
     const unique = Array.from(
-      new Set(
-        (statesRows || []).map((r: any) =>
-          r["State Name"] ? String(r["State Name"]).trim() : ""
-        )
-      )
+      new Set(statesRowsRaw.map((r: any) => (r["State Name"] ? String(r["State Name"]).trim() : "")))
     ).filter(Boolean);
 
     states = unique.map((name) => ({ id: name, name }));
+    console.error("[DBG] loaded statesRows count:", statesRowsRaw.length, "unique states:", states.length);
+    if (statesRowsRaw.length > 0) console.error("[DBG] sample statesRows[0]:", statesRowsRaw[0]);
   } catch (e) {
     console.error("Failed to load states from DistrictsMaster:", e);
     states = [];
   }
 
+  // fallback: try server-side internal API if states empty (helps detect table name mismatch)
+  if (!states.length) {
+    try {
+      const base = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "";
+      if (base) {
+        const statesRes = await fetch(`${base}/api/states`, { cache: "no-store" });
+        const sj = await statesRes.json().catch(() => null);
+        if (Array.isArray(sj?.states) && sj.states.length) {
+          states = sj.states;
+          console.error("[DBG] fallback /api/states returned", sj.states.length);
+        } else {
+          console.error("[DBG] fallback /api/states returned empty or invalid shape", sj);
+        }
+      } else {
+        console.error("[DBG] no base url for fallback /api/states");
+      }
+    } catch (e) {
+      console.error("[DBG] fallback /api/states error:", e);
+    }
+  }
+
   // --- Fetch initial districts for the restro's state (if available) ---
   let initialDistricts: any[] = [];
+  let drowsRaw: any[] = [];
   try {
     const restroState =
       (restro?.["State Name"] ??
@@ -58,13 +79,16 @@ export default async function AddressDocsPage({ params }: Props) {
         restro?.StateCode ??
         "") || "";
 
+    console.error("[DBG] restroState derived as:", restroState, "restro row sample:", restro && { RestroCode: restro.RestroCode, State: restro.State, StateName: restro.StateName, Districts: restro.Districts });
+
     if (restroState) {
       const { data: drows } = await supaServer
         .from("DistrictsMaster")
         .select('"District Code","District Name","State Code","State Name"')
         .ilike('"State Name"', String(restroState));
 
-      initialDistricts = (drows || []).map((r: any) => ({
+      drowsRaw = drows || [];
+      initialDistricts = drowsRaw.map((r: any) => ({
         id: String(
           r["District Code"] ??
             r["DistrictCode"] ??
@@ -81,6 +105,11 @@ export default async function AddressDocsPage({ params }: Props) {
             restroState
         ),
       }));
+
+      console.error("[DBG] loaded initialDistricts count:", initialDistricts.length);
+      if (drowsRaw.length > 0) console.error("[DBG] sample drowsRaw[0]:", drowsRaw[0]);
+    } else {
+      console.error("[DBG] restroState empty — cannot load initialDistricts");
     }
   } catch (e) {
     console.error("Failed to load initial districts:", e);
