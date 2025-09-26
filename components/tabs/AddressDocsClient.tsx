@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from "react";
 
 type StateItem = { id: string; name: string };
-type DistrictItem = { id: string; name: string; state_id?: string };
+type DistrictItem = { id: string; name: string; state_id?: string; [k: string]: any };
 
 type Props = {
   initialData?: any;
@@ -12,6 +12,19 @@ type Props = {
   states?: StateItem[]; // server-provided
   initialDistricts?: DistrictItem[]; // server-provided for restro's state
 };
+
+function normalizeText(s: any) {
+  if (s === null || s === undefined) return "";
+  // remove diacritics, lower-case, remove common punctuation/words
+  return String(s)
+    .normalize?.("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/[\.\'\"]/g, "")
+    .replace(/\b(district|dist|districts)\b/gi, "")
+    .replace(/[^a-z0-9\s\-]/gi, "")
+    .trim()
+    .toLowerCase();
+}
 
 export default function AddressDocsClient({
   initialData = {},
@@ -28,9 +41,7 @@ export default function AddressDocsClient({
   const [local, setLocal] = useState<any>({
     RestroAddress: initialData?.RestroAddress ?? "",
     City: initialData?.City ?? "",
-    // Accept StateCode or State name or StateName
     StateCode: initialData?.StateCode ?? initialData?.State ?? initialData?.StateName ?? "",
-    // Accept DistrictCode or District or DistrictName or Districts (some exports use 'Districts')
     DistrictCode: initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName ?? initialData?.Districts ?? "",
     PinCode: initialData?.PinCode ?? "",
     Latitude: initialData?.Latitude ?? "",
@@ -42,39 +53,35 @@ export default function AddressDocsClient({
     RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? "",
   });
 
-  // Load states if server didn't pass them
+  // --- load states if not passed by server ---
   useEffect(() => {
     if (Array.isArray(states) && states.length > 0) {
       setStateList(states.slice());
       setLoadingStates(false);
       return;
     }
-
     setLoadingStates(true);
     fetch("/api/states")
       .then((r) => r.json())
       .then((j) => {
-        // DEBUG: full states response (open browser console to inspect)
-        console.log("DEBUG /api/states response ->", j);
-
+        console.log("DEBUG /api/states ->", j);
         if (j?.ok && Array.isArray(j.states)) setStateList(j.states);
         else if (Array.isArray(j)) setStateList(j as StateItem[]);
-        else console.warn("Unexpected /api/states response", j);
+        else console.warn("/api/states unexpected", j);
       })
       .catch((e) => console.warn("fetch /api/states failed", e))
       .finally(() => setLoadingStates(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When initialData arrives/changes, set local base values (keeps District/State codes present)
+  // sync initialData into local (on navigation)
   useEffect(() => {
     setLocal((p: any) => ({
       ...p,
       RestroAddress: initialData?.RestroAddress ?? p.RestroAddress,
       City: initialData?.City ?? p.City,
-      StateCode: initialData?.StateCode ?? initialData?.State ?? initialData?.StateName ?? p.StateCode,
-      DistrictCode:
-        initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName ?? initialData?.Districts ?? p.DistrictCode,
+      StateCode: initialData?.StateCode ?? initialData?.State ?? p.StateCode,
+      DistrictCode: initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName ?? p.DistrictCode,
       PinCode: initialData?.PinCode ?? p.PinCode,
       Latitude: initialData?.Latitude ?? p.Latitude,
       Longitude: initialData?.Longitude ?? p.Longitude,
@@ -87,54 +94,38 @@ export default function AddressDocsClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData]);
 
-  // When stateList arrives, normalize local.StateCode (try code then name -> set to id)
+  // normalize state when stateList loads
   useEffect(() => {
     if (!stateList || stateList.length === 0) return;
-
     const cur = local.StateCode;
-    const setStateCodeById = (idVal: string) => {
-      setLocal((s: any) => ({ ...s, StateCode: idVal, DistrictCode: "" })); // clear district when state set
-    };
+    const setStateCode = (idVal: string) => setLocal((s: any) => ({ ...s, StateCode: idVal, DistrictCode: "" }));
 
     if (!cur) {
-      const nameFromInitial = initialData?.StateName ?? initialData?.State;
-      if (nameFromInitial) {
-        const target = String(nameFromInitial).trim().toLowerCase();
-        const exact = stateList.find((s) => String(s.name).trim().toLowerCase() === target);
-        if (exact) {
-          setStateCodeById(exact.id);
-          return;
-        }
-        const fuzzy = stateList.find(
-          (s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase())
-        );
-        if (fuzzy) {
-          setStateCodeById(fuzzy.id);
+      const look = initialData?.StateName ?? initialData?.State;
+      if (look) {
+        const t = normalizeText(look);
+        const found = stateList.find((s) => normalizeText(s.name) === t || normalizeText(s.id) === t);
+        if (found) {
+          setStateCode(found.id);
           return;
         }
       }
       return;
     }
 
-    // cur exists; if it doesn't match any id, try matching by name
+    // if cur doesn't match any id, try match by name
     const byId = stateList.find((s) => String(s.id) === String(cur));
     if (!byId) {
-      const target = String(cur).trim().toLowerCase();
-      const foundByName = stateList.find((s) => String(s.name).trim().toLowerCase() === target);
-      if (foundByName) {
-        setStateCodeById(foundByName.id);
-        return;
-      }
-      const fuzzy = stateList.find((s) => String(s.name).toLowerCase().includes(target) || target.includes(String(s.name).toLowerCase()));
-      if (fuzzy) {
-        setStateCodeById(fuzzy.id);
-        return;
+      const t = normalizeText(cur);
+      const found = stateList.find((s) => normalizeText(s.name) === t || normalizeText(s.id) === t);
+      if (found) {
+        setStateCode(found.id);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stateList]);
 
-  // When StateCode changes -> load districts for that state and preselect district
+  // fetch districts when state changes
   useEffect(() => {
     const stateCode = local.StateCode;
     if (!stateCode) {
@@ -142,90 +133,86 @@ export default function AddressDocsClient({
       return;
     }
 
-    // If server passed initialDistricts and they match this state, use them
+    // If server supplied initialDistricts and they match, use them
     if (Array.isArray(initialDistricts) && initialDistricts.length > 0 && initialDistricts[0].state_id) {
-      const matchInit = initialDistricts.filter((d) => String(d.state_id) === String(stateCode));
-      if (matchInit.length > 0) {
-        setDistrictList(matchInit.slice());
-        tryPreselectDistrict(matchInit);
+      const match = initialDistricts.filter((d) => String(d.state_id) === String(stateCode));
+      if (match.length > 0) {
+        setDistrictList(match.slice());
         return;
       }
     }
 
-    // fetch districts from api
     setLoadingDistricts(true);
     setDistrictList([]);
     fetch(`/api/districts?stateId=${encodeURIComponent(stateCode)}`)
       .then((r) => r.json())
       .then((j) => {
-        // DEBUG: full districts response (open browser console to inspect)
-        console.log("DEBUG /api/districts response for stateId=", stateCode, "->", j);
-
-        if (j?.ok && Array.isArray(j.districts)) {
-          setDistrictList(j.districts);
-          tryPreselectDistrict(j.districts);
-        } else if (Array.isArray(j)) {
-          setDistrictList(j as DistrictItem[]);
-          tryPreselectDistrict(j as DistrictItem[]);
-        } else {
-          console.warn("Unexpected /api/districts response", j);
+        console.log("DEBUG /api/districts for", stateCode, "->", j);
+        if (j?.ok && Array.isArray(j.districts)) setDistrictList(j.districts);
+        else if (Array.isArray(j)) setDistrictList(j as DistrictItem[]);
+        else {
+          console.warn("/api/districts unexpected", j);
+          setDistrictList([]);
         }
       })
-      .catch((e) => console.warn("fetch /api/districts failed", e))
+      .catch((e) => {
+        console.warn("fetch /api/districts failed", e);
+        setDistrictList([]);
+      })
       .finally(() => setLoadingDistricts(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [local.StateCode, initialDistricts]);
 
-    // tryPreselectDistrict definition
-    function tryPreselectDistrict(list: DistrictItem[]) {
-      // if already set by user, do not overwrite
-      if (local.DistrictCode) return;
+  // when districtList changes, try to preselect district aggressively (if not set)
+  useEffect(() => {
+    if (!districtList || districtList.length === 0) return;
+    if (local.DistrictCode) return; // user already has a value
 
-      // accept initialData.DistrictCode / District / DistrictName / Districts
-      const possible =
-        initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName ?? initialData?.Districts ?? undefined;
-      if (!possible) return;
+    // possible values to match from restro row
+    const possible = initialData?.DistrictCode ?? initialData?.District ?? initialData?.DistrictName ?? initialData?.Districts ?? "";
+    if (!possible) return;
 
-      const targetRaw = String(possible).trim();
-      const targetLower = targetRaw.toLowerCase();
+    const targetRaw = String(possible).trim();
+    const targetNorm = normalizeText(targetRaw);
 
-      // exact id/code
-      const foundById = list.find((d) => String(d.id) === targetRaw || String((d as any).DistrictCode) === targetRaw);
-      if (foundById) {
-        setLocal((s: any) => ({ ...s, DistrictCode: String(foundById.id) }));
+    // 1: try direct id/code match
+    let found = districtList.find((d) => String(d.id) === targetRaw || String((d as any).DistrictCode) === targetRaw);
+    if (found) {
+      setLocal((s: any) => ({ ...s, DistrictCode: String(found.id) }));
+      return;
+    }
+
+    // 2: try exact normalized name
+    found = districtList.find((d) => normalizeText(d.name) === targetNorm || normalizeText((d as any).DistrictName ?? "") === targetNorm);
+    if (found) {
+      setLocal((s: any) => ({ ...s, DistrictCode: String(found.id) }));
+      return;
+    }
+
+    // 3: fuzzy contains
+    found = districtList.find((d) => normalizeText(d.name).includes(targetNorm) || targetNorm.includes(normalizeText(d.name)));
+    if (found) {
+      setLocal((s: any) => ({ ...s, DistrictCode: String(found.id) }));
+      return;
+    }
+
+    // 4: token intersection (handle partial tokens)
+    const tokens = targetNorm.split(/[\s\-_.,]+/).filter(Boolean);
+    if (tokens.length > 0) {
+      const tokenMatch = districtList.find((d) => {
+        const nm = normalizeText(d.name);
+        return tokens.every((t) => nm.includes(t));
+      });
+      if (tokenMatch) {
+        setLocal((s: any) => ({ ...s, DistrictCode: String(tokenMatch.id) }));
         return;
-      }
-
-      // exact name (case-insensitive)
-      const foundByName = list.find(
-        (d) => String(d.name).trim().toLowerCase() === targetLower || String((d as any).DistrictName ?? "").trim().toLowerCase() === targetLower
-      );
-      if (foundByName) {
-        setLocal((s: any) => ({ ...s, DistrictCode: String(foundByName.id) }));
-        return;
-      }
-
-      // fuzzy
-      const fuzzy = list.find((d) => String(d.name).toLowerCase().includes(targetLower) || targetLower.includes(String(d.name).toLowerCase()));
-      if (fuzzy) {
-        setLocal((s: any) => ({ ...s, DistrictCode: String(fuzzy.id) }));
-        return;
-      }
-
-      // token match
-      const tokens = targetLower.split(/[\s\-_.,]+/).filter(Boolean);
-      if (tokens.length > 0) {
-        const tokenMatch = list.find((d) => {
-          const nm = String(d.name).toLowerCase();
-          return tokens.every((t) => nm.includes(t));
-        });
-        if (tokenMatch) {
-          setLocal((s: any) => ({ ...s, DistrictCode: String(tokenMatch.id) }));
-          return;
-        }
       }
     }
 
+    // nothing matched — leave empty
+    // console.log("No district auto-match for", possible, "in list", districtList);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [local.StateCode, initialDistricts, initialData]);
+  }, [districtList, initialData]);
 
   function update(key: string, value: any) {
     setLocal((s: any) => ({ ...s, [key]: value }));
@@ -259,7 +246,6 @@ export default function AddressDocsClient({
               value={local.StateCode ?? ""}
               onChange={(e) => {
                 const v = e.target.value;
-                // set state and clear district so district-effect runs cleanly
                 setLocal((s: any) => ({ ...s, StateCode: v, DistrictCode: "" }));
               }}
             >
