@@ -1,4 +1,4 @@
-// app/admin/restros/[code]/edit/address-docs/page.tsx  (DEBUG VERSION)
+// app/admin/restros/[code]/edit/address-docs/page.tsx
 import React from "react";
 import AddressDocsClient from "@/components/tabs/AddressDocsClient";
 import { safeGetRestro } from "@/lib/restroService";
@@ -24,12 +24,13 @@ export default async function AddressDocsPage({ params }: Props) {
   const codeNum = Number(params.code);
   const { restro } = await safeGetRestro(codeNum);
 
-  // --- Fetch distinct states from DistrictsMaster server-side ---
+  // --- Fetch distinct states from District_Masters server-side ---
   let states: { id: string; name: string }[] = [];
   let statesRowsRaw: any[] = [];
   try {
+    // NOTE: using table name `District_Masters` (as you confirmed)
     const { data: statesRows } = await supaServer
-      .from("DistrictsMaster")
+      .from("District_Masters")
       .select('"State Name"')
       .neq('"State Name"', null)
       .order('"State Name"', { ascending: true });
@@ -43,11 +44,11 @@ export default async function AddressDocsPage({ params }: Props) {
     console.error("[DBG] loaded statesRows count:", statesRowsRaw.length, "unique states:", states.length);
     if (statesRowsRaw.length > 0) console.error("[DBG] sample statesRows[0]:", statesRowsRaw[0]);
   } catch (e) {
-    console.error("Failed to load states from DistrictsMaster:", e);
+    console.error("Failed to load states from District_Masters:", e);
     states = [];
   }
 
-  // fallback: try server-side internal API if states empty (helps detect table name mismatch)
+  // fallback: try server-side internal API if states empty (helps detect other mismatches)
   if (!states.length) {
     try {
       const base = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "";
@@ -79,11 +80,16 @@ export default async function AddressDocsPage({ params }: Props) {
         restro?.StateCode ??
         "") || "";
 
-    console.error("[DBG] restroState derived as:", restroState, "restro row sample:", restro && { RestroCode: restro.RestroCode, State: restro.State, StateName: restro.StateName, Districts: restro.Districts });
+    console.error(
+      "[DBG] restroState derived as:",
+      restroState,
+      "restro row sample:",
+      restro && { RestroCode: restro.RestroCode, State: restro.State, StateName: restro.StateName, Districts: restro.Districts }
+    );
 
     if (restroState) {
       const { data: drows } = await supaServer
-        .from("DistrictsMaster")
+        .from("District_Masters")
         .select('"District Code","District Name","State Code","State Name"')
         .ilike('"State Name"', String(restroState));
 
