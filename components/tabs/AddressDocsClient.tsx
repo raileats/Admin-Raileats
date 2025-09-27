@@ -9,68 +9,84 @@ type Props = {
 };
 
 export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }: Props) {
-  const [local, setLocal] = useState<any>({
-    RestroAddress: initialData?.RestroAddress ?? "",
-    City: initialData?.City ?? "",
-    // prefer canonical fields, fallback to common variants (including accidental "Sate")
-    StateDisplay:
-      initialData?.State ??
-      initialData?.StateName ??
-      initialData?.state ??
-      initialData?.Sate ??
-      initialData?.StateCode ??
-      "",
-    DistrictDisplay:
-      initialData?.Districts ??
-      initialData?.DistrictName ??
-      initialData?.District ??
-      initialData?.district ??
-      initialData?.DistrictCode ??
-      "",
-    PinCode: initialData?.PinCode ?? "",
+  // tolerant getters for state/district fields from RestroMaster row
+  const getStateValue = (row: any) => {
+    // try common variants (Sate typo, State, StateName, "State Name")
+    return (
+      row?.State ??
+      row?.StateName ??
+      row?.State_Code ??
+      row?.StateCode ??
+      row?.Sate ?? // accidental typo you mentioned
+      row?.["State Name"] ??
+      row?.["State"] ??
+      ""
+    );
+  };
+
+  const getDistrictValue = (row: any) => {
+    // try many variants: Districts, District, DistrictName, "Districts", "District Name"
+    const d =
+      row?.Districts ??
+      row?.District ??
+      row?.DistrictName ??
+      row?.DistrictsName ??
+      row?.["Districts"] ??
+      row?.["District Name"] ??
+      row?.["District"] ??
+      "";
+    // if Districts is an array stored as JSON string, try parse
+    if (typeof d === "string") {
+      try {
+        const parsed = JSON.parse(d);
+        if (Array.isArray(parsed)) {
+          // map to comma separated names if needed
+          return parsed.map((x) => (typeof x === "object" ? x.name ?? x : x)).join(", ");
+        }
+      } catch (e) {
+        // not JSON -> keep string
+      }
+    }
+    if (Array.isArray(d)) {
+      return d.map((x) => (typeof x === "object" ? x.name ?? x : x)).join(", ");
+    }
+    return d ?? "";
+  };
+
+  const [local, setLocal] = useState({
+    RestroAddress: initialData?.RestroAddress ?? initialData?.Address ?? "",
+    City: initialData?.City ?? initialData?.CityName ?? "",
+    PinCode: initialData?.PinCode ?? initialData?.Pincode ?? "",
     Latitude: initialData?.Latitude ?? "",
     Longitude: initialData?.Longitude ?? "",
-    FSSAINumber: initialData?.FSSAINumber ?? "",
-    FSSAIExpiry: initialData?.FSSAIExpiry ?? "",
-    GSTNumber: initialData?.GSTNumber ?? "",
+    FSSAINumber: initialData?.FSSAINumber ?? initialData?.FSSAI ?? "",
+    FSSAIExpiry: initialData?.FSSAIExpiry ?? initialData?.FSSAIExpiry ?? "",
+    GSTNumber: initialData?.GSTNumber ?? initialData?.GSTno ?? "",
     GSTType: initialData?.GSTType ?? "",
     RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? "",
+    StateValue: getStateValue(initialData),
+    DistrictValue: getDistrictValue(initialData),
   });
 
-  // keep in sync if initialData updates (navigation/server changes)
+  // keep local in sync if initialData changes (server-side)
   useEffect(() => {
-    setLocal((p: any) => ({
-      ...p,
-      RestroAddress: initialData?.RestroAddress ?? p.RestroAddress,
-      City: initialData?.City ?? p.City,
-      StateDisplay:
-        initialData?.State ??
-        initialData?.StateName ??
-        initialData?.state ??
-        initialData?.Sate ??
-        initialData?.StateCode ??
-        p.StateDisplay,
-      DistrictDisplay:
-        initialData?.Districts ??
-        initialData?.DistrictName ??
-        initialData?.District ??
-        initialData?.district ??
-        initialData?.DistrictCode ??
-        p.DistrictDisplay,
-      PinCode: initialData?.PinCode ?? p.PinCode,
-      Latitude: initialData?.Latitude ?? p.Latitude,
-      Longitude: initialData?.Longitude ?? p.Longitude,
-      FSSAINumber: initialData?.FSSAINumber ?? p.FSSAINumber,
-      FSSAIExpiry: initialData?.FSSAIExpiry ?? p.FSSAIExpiry,
-      GSTNumber: initialData?.GSTNumber ?? p.GSTNumber,
-      GSTType: initialData?.GSTType ?? p.GSTType,
-      RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? p.RestroDisplayPhoto ?? "",
+    setLocal((prev) => ({
+      ...prev,
+      RestroAddress: initialData?.RestroAddress ?? initialData?.Address ?? prev.RestroAddress,
+      City: initialData?.City ?? initialData?.CityName ?? prev.City,
+      PinCode: initialData?.PinCode ?? initialData?.Pincode ?? prev.PinCode,
+      Latitude: initialData?.Latitude ?? prev.Latitude,
+      Longitude: initialData?.Longitude ?? prev.Longitude,
+      FSSAINumber: initialData?.FSSAINumber ?? initialData?.FSSAI ?? prev.FSSAINumber,
+      FSSAIExpiry: initialData?.FSSAIExpiry ?? prev.FSSAIExpiry,
+      GSTNumber: initialData?.GSTNumber ?? initialData?.GSTno ?? prev.GSTNumber,
+      GSTType: initialData?.GSTType ?? prev.GSTType,
+      RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? prev.RestroDisplayPhoto,
+      StateValue: getStateValue(initialData),
+      DistrictValue: getDistrictValue(initialData),
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData]);
-
-  function update(key: string, value: any) {
-    setLocal((s: any) => ({ ...s, [key]: value }));
-  }
 
   const imgSrc = (p: string) => {
     if (!p) return "";
@@ -85,37 +101,43 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
       <div className="compact-grid">
         <div className="field full-col">
           <label>Restro Address</label>
-          <textarea value={local.RestroAddress ?? ""} onChange={(e) => update("RestroAddress", e.target.value)} />
+          <textarea value={local.RestroAddress ?? ""} readOnly />
         </div>
 
         <div className="field">
           <label>City / Village</label>
-          <input value={local.City ?? ""} onChange={(e) => update("City", e.target.value)} />
+          <input value={local.City ?? ""} readOnly />
         </div>
 
         <div className="field">
           <label>State</label>
-          <input readOnly value={local.StateDisplay ?? ""} className="readonly" />
+          <div>
+            {/* Non-editable display */}
+            <input value={local.StateValue ?? ""} readOnly />
+          </div>
         </div>
 
         <div className="field">
           <label>District</label>
-          <input readOnly value={local.DistrictDisplay ?? ""} className="readonly" />
+          <div>
+            {/* Non-editable display */}
+            <input value={local.DistrictValue ?? ""} readOnly />
+          </div>
         </div>
 
         <div className="field">
           <label>Pin Code</label>
-          <input value={local.PinCode ?? ""} onChange={(e) => update("PinCode", e.target.value)} />
+          <input value={local.PinCode ?? ""} readOnly />
         </div>
 
         <div className="field">
           <label>Latitude</label>
-          <input value={local.Latitude ?? ""} onChange={(e) => update("Latitude", e.target.value)} />
+          <input value={local.Latitude ?? ""} readOnly />
         </div>
 
         <div className="field">
           <label>Longitude</label>
-          <input value={local.Longitude ?? ""} onChange={(e) => update("Longitude", e.target.value)} />
+          <input value={local.Longitude ?? ""} readOnly />
         </div>
       </div>
 
@@ -124,22 +146,22 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
       <div className="compact-grid">
         <div className="field">
           <label>FSSAI Number</label>
-          <input value={local.FSSAINumber ?? ""} onChange={(e) => update("FSSAINumber", e.target.value)} />
+          <input value={local.FSSAINumber ?? ""} readOnly />
         </div>
 
         <div className="field">
           <label>FSSAI Expiry</label>
-          <input type="date" value={local.FSSAIExpiry ?? ""} onChange={(e) => update("FSSAIExpiry", e.target.value)} />
+          <input type="date" value={local.FSSAIExpiry ?? ""} readOnly />
         </div>
 
         <div className="field">
           <label>GST Number</label>
-          <input value={local.GSTNumber ?? ""} onChange={(e) => update("GSTNumber", e.target.value)} />
+          <input value={local.GSTNumber ?? ""} readOnly />
         </div>
 
         <div className="field">
           <label>GST Type</label>
-          <input value={local.GSTType ?? ""} onChange={(e) => update("GSTType", e.target.value)} />
+          <input value={local.GSTType ?? ""} readOnly />
         </div>
 
         <div className="field">
@@ -177,12 +199,8 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
           border-radius: 6px;
           border: 1px solid #e3e3e3;
           font-size: 13px;
-          background: #fff;
+          background: #f9f9f9;
           box-sizing: border-box;
-        }
-        .field input[readonly] {
-          background: #f7f7f7;
-          color: #333;
         }
         textarea {
           min-height: 80px;
