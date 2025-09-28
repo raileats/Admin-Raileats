@@ -3,157 +3,116 @@
 
 import React, { useEffect, useState } from "react";
 
+type StateItem = { id: string; name: string };
+type DistrictItem = { id: string; name: string; state_id?: string };
+
 type Props = {
   initialData?: any;
   imagePrefix?: string;
+  states?: StateItem[];
+  initialDistricts?: DistrictItem[];
 };
 
-function tryParseJSON(value: any) {
-  if (typeof value !== "string") return value;
-  try {
-    const p = JSON.parse(value);
-    return p;
-  } catch {
-    return value;
+export default function AddressDocsClient({
+  initialData = {},
+  imagePrefix = "",
+  states = [],
+  initialDistricts = [],
+}: Props) {
+  // Local editable fields (most are still editable)
+  const [local, setLocal] = useState<any>({
+    RestroAddress: initialData?.RestroAddress ?? "",
+    City: initialData?.City ?? "",
+    // we keep StateCode/DistrictCode for saving logic if needed elsewhere,
+    // but State and District will be displayed read-only from initialData
+    StateCode: initialData?.StateCode ?? initialData?.State ?? initialData?.StateName ?? "",
+    DistrictCode:
+      initialData?.DistrictCode ??
+      initialData?.District ??
+      initialData?.DistrictName ??
+      initialData?.Districts ??
+      "",
+    PinCode: initialData?.PinCode ?? "",
+    Latitude: initialData?.Latitude ?? "",
+    Longitude: initialData?.Longitude ?? "",
+    FSSAINumber: initialData?.FSSAINumber ?? "",
+    FSSAIExpiry: initialData?.FSSAIExpiry ?? "",
+    GSTNumber: initialData?.GSTNumber ?? "",
+    GSTType: initialData?.GSTType ?? "",
+    RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? "",
+  });
+
+  useEffect(() => {
+    // Sync when initialData changes (safe merge)
+    setLocal((p: any) => ({
+      ...p,
+      RestroAddress: initialData?.RestroAddress ?? p.RestroAddress,
+      City: initialData?.City ?? p.City,
+      StateCode: initialData?.StateCode ?? initialData?.State ?? initialData?.StateName ?? p.StateCode,
+      DistrictCode:
+        initialData?.DistrictCode ??
+        initialData?.District ??
+        initialData?.DistrictName ??
+        initialData?.Districts ??
+        p.DistrictCode,
+      PinCode: initialData?.PinCode ?? p.PinCode,
+      Latitude: initialData?.Latitude ?? p.Latitude,
+      Longitude: initialData?.Longitude ?? p.Longitude,
+      FSSAINumber: initialData?.FSSAINumber ?? p.FSSAINumber,
+      FSSAIExpiry: initialData?.FSSAIExpiry ?? p.FSSAIExpiry,
+      GSTNumber: initialData?.GSTNumber ?? p.GSTNumber,
+      GSTType: initialData?.GSTType ?? p.GSTType,
+      RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? p.RestroDisplayPhoto ?? "",
+    }));
+  }, [initialData]);
+
+  function update(key: string, value: any) {
+    setLocal((s: any) => ({ ...s, [key]: value }));
   }
-}
 
-export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }: Props) {
-  const [dump, setDump] = useState<any>(null);
-
-  // tolerant extractor: returns first non-empty string found among many candidate keys
-  const extractState = (row: any) => {
-    if (!row) return "";
+  // Helper: tolerant extractor for state & district display names
+  function extractStateName(src: any): string {
+    // try many possible keys (including typo 'Sate')
     const candidates = [
       "State",
       "StateName",
       "state",
       "stateName",
-      "State_Code",
-      "StateCode",
-      "statecode",
-      "Sate", // your typo
+      "state_name",
       "State Name",
-      "state name",
-      "SATE",
-      "STATE",
-      "state_code",
-      "state_code",
-      // possible nested
+      "Sate", // the typo you mentioned
+      "SateName",
     ];
-
     for (const k of candidates) {
-      if (k in row) {
-        const v = row[k];
-        if (v !== null && v !== undefined && String(v).trim() !== "") return String(v);
-      }
+      if (typeof src?.[k] === "string" && src[k].trim()) return src[k].trim();
     }
-
-    // Try scanning all keys for something that looks like a state name (alphabetic, length 3+)
-    for (const k of Object.keys(row)) {
-      const v = row[k];
-      if (typeof v === "string" && /^[A-Za-z\s\-&,.'()]{3,}$/.test(v) && v.length < 80) {
-        // heuristics: skip very long text (address)
-        const low = String(v).toLowerCase();
-        // avoid address-like strings that contain digits or many commas
-        if (/\d/.test(low)) continue;
-        if ((low.match(/,/g) || []).length > 2) continue;
-        return v;
-      }
-    }
-
+    // sometimes StateCode contains readable name
+    if (src?.StateCode && typeof src.StateCode === "string" && src.StateCode.trim()) return src.StateCode.trim();
     return "";
-  };
+  }
 
-  const extractDistrict = (row: any) => {
-    if (!row) return "";
+  function extractDistrictName(src: any): string {
     const candidates = [
       "Districts",
       "District",
       "DistrictName",
-      "district",
       "districts",
-      "DistrictsName",
-      "Districts Name",
-      "District Name",
+      "district",
+      "districtName",
       "district_name",
-      "districts_name",
-      "Districts",
+      "Districts Name",
+      "DistrictsName",
     ];
-
     for (const k of candidates) {
-      if (k in row) {
-        const raw = row[k];
-        if (raw === null || raw === undefined) continue;
-        // try parse if JSON string stored
-        const parsed = tryParseJSON(raw);
-        if (Array.isArray(parsed)) {
-          return parsed.map((x) => (typeof x === "object" ? x.name ?? JSON.stringify(x) : String(x))).join(", ");
-        }
-        if (typeof parsed === "object") {
-          // object -> try common fields
-          if ("name" in parsed) return String(parsed.name);
-          return JSON.stringify(parsed);
-        }
-        if (String(parsed).trim() !== "") return String(parsed);
-      }
+      if (typeof src?.[k] === "string" && src[k].trim()) return src[k].trim();
     }
-
-    // fallback: look for keys that contain 'district' substring
-    for (const k of Object.keys(row)) {
-      if (k.toLowerCase().includes("district")) {
-        const raw = row[k];
-        const parsed = tryParseJSON(raw);
-        if (Array.isArray(parsed)) {
-          return parsed.map((x) => (typeof x === "object" ? x.name ?? JSON.stringify(x) : String(x))).join(", ");
-        }
-        if (parsed && String(parsed).trim() !== "") return String(parsed);
-      }
-    }
-
+    // fallback to DistrictCode if it's human-readable
+    if (src?.DistrictCode && typeof src.DistrictCode === "string" && src.DistrictCode.trim()) return src.DistrictCode.trim();
     return "";
-  };
+  }
 
-  // Normalize: some APIs return 'data' or 'row' wrapper
-  const findPossibleRow = (data: any) => {
-    if (!data) return {};
-    // if it's an array with single element, prefer first element
-    if (Array.isArray(data) && data.length === 1 && typeof data[0] === "object") return data[0];
-    // some results wrap in { data: {...} } or { row: {...} }
-    const wrapperKeys = ["data", "row", "restro", "result"];
-    for (const k of wrapperKeys) {
-      if (data && typeof data === "object" && k in data && data[k]) {
-        if (Array.isArray(data[k]) && data[k].length === 1 && typeof data[k][0] === "object") return data[k][0];
-        if (typeof data[k] === "object") return data[k];
-      }
-    }
-    // if it's already an object (likely the row)
-    if (typeof data === "object") return data;
-    return {};
-  };
-
-  // derived values
-  const row = findPossibleRow(initialData);
-  const stateVal = extractState(row);
-  const districtVal = extractDistrict(row);
-
-  useEffect(() => {
-    // create a debug dump for you to inspect
-    const fullDump = {
-      initialData,
-      possibleRow: row,
-      allKeys: Object.keys(initialData || {}).slice(0, 200),
-      stateCandidates: {
-        extracted: stateVal,
-        scannedKeys: Object.keys(row).map((k) => ({ key: k, val: row[k] })).slice(0, 200),
-      },
-      districtCandidates: {
-        extracted: districtVal,
-      },
-    };
-    setDump(fullDump);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData]);
+  const displayedState = extractStateName(initialData) || extractStateName(local) || "";
+  const displayedDistrict = extractDistrictName(initialData) || extractDistrictName(local) || "";
 
   const imgSrc = (p: string) => {
     if (!p) return "";
@@ -168,37 +127,53 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
       <div className="compact-grid">
         <div className="field full-col">
           <label>Restro Address</label>
-          <textarea value={String(row?.RestroAddress ?? row?.Address ?? row?.AddressLine ?? "")} readOnly />
+          <textarea value={local.RestroAddress ?? ""} onChange={(e) => update("RestroAddress", e.target.value)} />
         </div>
 
         <div className="field">
           <label>City / Village</label>
-          <input value={String(row?.City ?? row?.CityName ?? "")} readOnly />
+          <input value={local.City ?? ""} onChange={(e) => update("City", e.target.value)} />
         </div>
 
+        {/* ---------- READ-ONLY State (from RestroMaster) ---------- */}
         <div className="field">
           <label>State</label>
-          <input value={stateVal} readOnly />
+          <div>
+            <input
+              readOnly
+              value={displayedState || ""}
+              placeholder="(State from RestroMaster)"
+              onChange={() => {}}
+            />
+          </div>
         </div>
 
+        {/* ---------- READ-ONLY District (from RestroMaster) ---------- */}
         <div className="field">
           <label>District</label>
-          <input value={districtVal} readOnly />
+          <div>
+            <input
+              readOnly
+              value={displayedDistrict || ""}
+              placeholder="(District from RestroMaster)"
+              onChange={() => {}}
+            />
+          </div>
         </div>
 
         <div className="field">
           <label>Pin Code</label>
-          <input value={String(row?.PinCode ?? row?.Pincode ?? "")} readOnly />
+          <input value={local.PinCode ?? ""} onChange={(e) => update("PinCode", e.target.value)} />
         </div>
 
         <div className="field">
           <label>Latitude</label>
-          <input value={String(row?.Latitude ?? "")} readOnly />
+          <input value={local.Latitude ?? ""} onChange={(e) => update("Latitude", e.target.value)} />
         </div>
 
         <div className="field">
           <label>Longitude</label>
-          <input value={String(row?.Longitude ?? "")} readOnly />
+          <input value={local.Longitude ?? ""} onChange={(e) => update("Longitude", e.target.value)} />
         </div>
       </div>
 
@@ -207,58 +182,31 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
       <div className="compact-grid">
         <div className="field">
           <label>FSSAI Number</label>
-          <input value={String(row?.FSSAINumber ?? row?.FSSAI ?? "")} readOnly />
+          <input value={local.FSSAINumber ?? ""} onChange={(e) => update("FSSAINumber", e.target.value)} />
         </div>
 
         <div className="field">
           <label>FSSAI Expiry</label>
-          <input type="date" value={String(row?.FSSAIExpiry ?? "")} readOnly />
+          <input type="date" value={local.FSSAIExpiry ?? ""} onChange={(e) => update("FSSAIExpiry", e.target.value)} />
         </div>
 
         <div className="field">
           <label>GST Number</label>
-          <input value={String(row?.GSTNumber ?? row?.GSTno ?? "")} readOnly />
+          <input value={local.GSTNumber ?? ""} onChange={(e) => update("GSTNumber", e.target.value)} />
         </div>
 
         <div className="field">
           <label>GST Type</label>
-          <input value={String(row?.GSTType ?? "")} readOnly />
+          <input value={local.GSTType ?? ""} onChange={(e) => update("GSTType", e.target.value)} />
         </div>
 
         <div className="field">
           <label>Display Preview</label>
-          {row?.RestroDisplayPhoto || row?.photo ? (
-            <img src={imgSrc(String(row?.RestroDisplayPhoto ?? row?.photo ?? ""))} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+          {local.RestroDisplayPhoto ? (
+            <img src={imgSrc(local.RestroDisplayPhoto)} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
           ) : (
             <div className="readonly">No image</div>
           )}
-        </div>
-      </div>
-
-      {/* DEBUG PANEL - show full dump to help identify keys */}
-      <div style={{ marginTop: 18, background: "#fff8e6", padding: 12, borderRadius: 6 }}>
-        <strong>DEBUG: initialData shape & candidates</strong>
-        <div style={{ marginTop: 8 }}>
-          <strong>Extracted State:</strong> {stateVal || "(empty)"}
-        </div>
-        <div>
-          <strong>Extracted District:</strong> {districtVal || "(empty)"}
-        </div>
-        <div style={{ marginTop: 10 }}>
-          <strong>Top-level keys in initialData:</strong>
-          <pre style={{ whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto", background: "#fff", padding: 8 }}>{JSON.stringify(Object.keys(initialData || {}).slice(0, 200), null, 2)}</pre>
-        </div>
-
-        <div style={{ marginTop: 10 }}>
-          <strong>Possible row (object chosen for scanning):</strong>
-          <pre style={{ whiteSpace: "pre-wrap", maxHeight: 300, overflow: "auto", background: "#fff", padding: 8 }}>{JSON.stringify(row, null, 2)}</pre>
-        </div>
-
-        <div style={{ marginTop: 10 }}>
-          <strong>Scanned keys & values (sample):</strong>
-          <pre style={{ whiteSpace: "pre-wrap", maxHeight: 300, overflow: "auto", background: "#fff", padding: 8 }}>
-            {JSON.stringify(Object.keys(row || {}).map((k) => ({ key: k, value: row[k] })).slice(0, 200), null, 2)}
-          </pre>
         </div>
       </div>
 
@@ -287,7 +235,7 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
           border-radius: 6px;
           border: 1px solid #e3e3e3;
           font-size: 13px;
-          background: #f9f9f9;
+          background: #fff;
           box-sizing: border-box;
         }
         textarea {
