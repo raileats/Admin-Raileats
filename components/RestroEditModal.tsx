@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 // Import your tab components (must already exist in components/restro-edit/)
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
-import AddressDocumentsTab from "./restro-edit/AddressDocumentsTab";
+import AddressDocsClient from "@/components/tabs/AddressDocsClient";
 import ContactsTab from "./restro-edit/ContactsTab";
 import BankTab from "./restro-edit/BankTab";
 import FutureClosedTab from "./restro-edit/FutureClosedTab";
@@ -269,7 +269,8 @@ export default function RestroEditModal({
       case "Station Settings":
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        return <AddressDocumentsTab {...common} />;
+// AddressDocsClient accepts initialData or restro; we pass local/restro for compatibility
+return <AddressDocsClient initialData={restro} />;
       case "Contacts":
         return <ContactsTab {...common} />;
       case "Bank":
