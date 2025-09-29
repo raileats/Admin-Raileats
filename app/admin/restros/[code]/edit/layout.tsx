@@ -79,28 +79,17 @@ export default async function RestroEditLayout({ params, children }: Props) {
           zIndex: 50,
         }}
       >
-        <Link href={`/admin/restros/${params.code}/edit/basic`} style={{ padding: 8 }}>
-          Basic Information
-        </Link>
-        <Link href={`/admin/restros/${params.code}/edit/station-settings`} style={{ padding: 8 }}>
-          Station Settings
-        </Link>
-        <Link href={`/admin/restros/${params.code}/edit/address-docs`} style={{ padding: 8 }}>
-          Address & Documents
-        </Link>
-        <Link href={`/admin/restros/${params.code}/edit/contacts`} style={{ padding: 8 }}>
-          Contacts
-        </Link>
-        <Link href={`/admin/restros/${params.code}/edit/bank`} style={{ padding: 8 }}>
-          Bank
-        </Link>
-        <Link href={`/admin/restros/${params.code}/edit/future-closed`} style={{ padding: 8 }}>
-          Future Closed
-        </Link>
-        <Link href={`/admin/restros/${params.code}/edit/menu`} style={{ padding: 8 }}>
-          Menu
-        </Link>
-      </div>
+        {/* tabs nav */}
+<nav className="tabs-nav" style={{ borderBottom: "1px solid #eee", marginBottom: 10 }}>
+  <Link href="./basic">Basic Information</Link>
+  <Link href="./station-settings">Station Settings</Link>
+  <Link href="./address-docs">Address & Documents</Link>
+  <Link href="./contacts">Contacts</Link>
+  <Link href="./bank">Bank</Link>
+  <Link href="./future-closed">Future Closed</Link>
+  <Link href="./menu">Menu</Link>
+</nav>
+
 
       {/* Main content area */}
       <div style={{ flex: 1, overflow: "auto", padding: 20 }}>

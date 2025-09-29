@@ -1,39 +1,27 @@
 // app/admin/restros/[code]/edit/address-docs/page.tsx
 import React from "react";
-import { safeGetRestro } from "@/lib/restroService";
-import AddressDocsForm from "../AddressDocsForm";
+import AddressDocsClient from "@/components/tabs/AddressDocsClient";
+import { getRestroById, Restro } from "@/lib/restroService";
 
 type Props = { params: { code: string } };
 
 export default async function AddressDocsPage({ params }: Props) {
-  const codeNum = Number(params.code);
-  const { restro, error } = await safeGetRestro(codeNum);
+  const code = Number(params.code);
+  if (Number.isNaN(code)) {
+    return <div style={{ padding: 20 }}>Invalid code</div>;
+  }
 
-  return (
-    <div style={{ minHeight: 300, padding: 10 }}>
-      <h2 style={{ textAlign: "center", color: "#333", marginTop: 8 }}>Address & Documents</h2>
+  let restro: Restro | null = null;
+  try {
+    restro = await getRestroById(code);
+  } catch (err: any) {
+    console.error("AddressDocsPage getRestroById error:", err);
+    return <div style={{ padding: 20 }}>Error loading restro: {String(err?.message ?? err)}</div>;
+  }
 
-      {error && (
-        <div style={{ color: "red", padding: 12 }}>
-          <strong>Error loading restro:</strong> {error}
-        </div>
-      )}
+  if (!restro) {
+    return <div style={{ padding: 20 }}>Restro not found</div>;
+  }
 
-      {!error && !restro && (
-        <div style={{ color: "#333", padding: 12 }}>
-          <div style={{ color: "red", marginBottom: 8 }}>Error: Not found</div>
-          <div>Restro not found</div>
-        </div>
-      )}
-
-      {!error && restro && (
-        <div>
-          {/* pass restro as initialData to the client form */}
-          {/* AddressDocsForm is a client component so we import the file above */}
-          {/* eslint-disable-next-line react/jsx-props-no-spreading */}
-          <AddressDocsForm initialData={restro} restroCode={codeNum} />
-        </div>
-      )}
-    </div>
-  );
+  return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
 }
