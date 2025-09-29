@@ -110,21 +110,36 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          <div>
-            <div style={labelStyle}>City / Village</div>
-            <input value={city} onChange={(e) => setCity(e.target.value)} style={inputStyle} />
-          </div>
+  <div>
+    <div style={labelStyle}>City / Village</div>
+    <input
+      value={city}
+      onChange={(e) => setCity(e.target.value)}
+      style={inputStyle}
+    />
+  </div>
 
-          <div>
-            <div style={labelStyle}>State</div>
-            <input value={stateName} onChange={(e) => setStateName(e.target.value)} style={inputStyle} />
-          </div>
+  <div>
+    <div style={labelStyle}>State</div>
+    {/* Readonly state */}
+    <input
+      value={stateName}
+      readOnly
+      style={{ ...inputStyle, background: "#f5f7fa", cursor: "not-allowed" }}
+    />
+  </div>
 
-          <div>
-            <div style={labelStyle}>District</div>
-            <input value={district} onChange={(e) => setDistrict(e.target.value)} style={inputStyle} />
-          </div>
-        </div>
+  <div>
+    <div style={labelStyle}>District</div>
+    {/* Readonly district */}
+    <input
+      value={district}
+      readOnly
+      style={{ ...inputStyle, background: "#f5f7fa", cursor: "not-allowed" }}
+    />
+  </div>
+</div>
+
 
         <div style={{ height: 12 }} />
 
