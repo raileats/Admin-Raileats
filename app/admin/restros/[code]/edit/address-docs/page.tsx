@@ -1,7 +1,7 @@
 // app/admin/restros/[code]/edit/address-docs/page.tsx
 import React from "react";
 import { safeGetRestro } from "@/lib/restroService";
-import AddressDocsForm from "./AddressDocsForm";
+import AddressDocsForm from "../AddressDocsForm";
 
 type Props = { params: { code: string } };
 
