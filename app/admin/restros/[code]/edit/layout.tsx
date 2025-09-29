@@ -13,7 +13,9 @@ export default async function RestroEditLayout({ params, children }: Props) {
   const headerCode = restro?.RestroCode ?? params.code;
   const headerName = restro?.RestroName ?? restro?.name ?? "";
   const stationText = restro?.StationName
-    ? `${restro.StationName} (${restro.StationCode ?? ""})${restro.State ? ` - ${restro.State}` : ""}`
+    ? `${restro.StationName} (${restro.StationCode ?? ""})${
+        restro.State ? ` - ${restro.State}` : ""
+      }`
     : "";
 
   return (
@@ -39,7 +41,14 @@ export default async function RestroEditLayout({ params, children }: Props) {
             {headerName ? ` / ${headerName}` : ""}
           </div>
           {stationText && (
-            <div style={{ fontSize: 13, color: "#0b7285", marginTop: 4, fontWeight: 500 }}>
+            <div
+              style={{
+                fontSize: 13,
+                color: "#0b7285",
+                marginTop: 4,
+                fontWeight: 500,
+              }}
+            >
               {stationText}
             </div>
           )}
@@ -75,21 +84,24 @@ export default async function RestroEditLayout({ params, children }: Props) {
           borderBottom: "1px solid #f1f1f1",
           background: "#fafafa",
           position: "sticky",
-          top: 76, // leaves space for header height; adjust if header height changes
+          top: 76, // leaves space for header height
           zIndex: 50,
         }}
       >
         {/* tabs nav */}
-<nav className="tabs-nav" style={{ borderBottom: "1px solid #eee", marginBottom: 10 }}>
-  <Link href="./basic">Basic Information</Link>
-  <Link href="./station-settings">Station Settings</Link>
-  <Link href="./address-docs">Address & Documents</Link>
-  <Link href="./contacts">Contacts</Link>
-  <Link href="./bank">Bank</Link>
-  <Link href="./future-closed">Future Closed</Link>
-  <Link href="./menu">Menu</Link>
-</nav>
-
+        <nav
+          className="tabs-nav"
+          style={{ borderBottom: "1px solid #eee", marginBottom: 10 }}
+        >
+          <Link href="./basic">Basic Information</Link>{" | "}
+          <Link href="./station-settings">Station Settings</Link>{" | "}
+          <Link href="./address-docs">Address & Documents</Link>{" | "}
+          <Link href="./contacts">Contacts</Link>{" | "}
+          <Link href="./bank">Bank</Link>{" | "}
+          <Link href="./future-closed">Future Closed</Link>{" | "}
+          <Link href="./menu">Menu</Link>
+        </nav>
+      </div> {/* ✅ अब ये div properly बंद है */}
 
       {/* Main content area */}
       <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
