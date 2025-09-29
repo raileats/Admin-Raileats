@@ -1,31 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-
-type FssaiEntry = {
-  id: string; // local id (uuid-ish)
-  FSSAINumber: string;
-  FSSAIExpiryDate: string | null; // yyyy-mm-dd
-  FSSAICopyUpload?: string | null;
-  FSSAIStatus: 0 | 1; // 1 active, 0 inactive
-};
-
-type GstEntry = {
-  id: string;
-  GSTNumber: string;
-  GSTType?: string;
-  GSTCopyUpload?: string | null;
-  GSTStatus: 0 | 1;
-};
-
-type PanEntry = {
-  id: string;
-  PANNumber: string;
-  PANType?: string;
-  UploadPanCopy?: string | null;
-  PANStatus: 0 | 1;
-};
-
+import React, { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabaseBrowser"; // path we created
 type Props = {
   initialData: any; // row from RestroMaster
   restroCode: number;
@@ -33,254 +9,194 @@ type Props = {
 
 const BOX_BG = "#eaf6ff";
 
-function uid() {
-  return Math.random().toString(36).slice(2, 9);
-}
-
-function isoDateFromInput(d?: string | null) {
-  if (!d) return null;
-  // assume already yyyy-mm-dd
-  return d;
-}
-
 export default function AddressDocsForm({ initialData, restroCode }: Props) {
   // address fields
   const [restroAddress, setRestroAddress] = useState(initialData?.RestroAddress ?? "");
   const [city, setCity] = useState(initialData?.City ?? "");
-  const [stateName] = useState(initialData?.State ?? ""); // readonly
-  const [district] = useState(initialData?.District ?? ""); // readonly
+  const [stateName, setStateName] = useState(initialData?.State ?? "");
+  const [district, setDistrict] = useState(initialData?.District ?? "");
   const [pinCode, setPinCode] = useState(initialData?.PinCode ?? "");
   const [latitude, setLatitude] = useState(initialData?.RestroLatitude ?? "");
   const [longitude, setLongitude] = useState(initialData?.RestroLongitude ?? "");
 
-  // existing single fields (kept for backward compatibility)
-  const [fssaiNumber, setFssaiNumber] = useState(""); // kept for quick-add (not used in saved body)
-  const [fssaiExpiry, setFssaiExpiry] = useState("");
+  // documents single/master (these will be rendered from history tables)
+  const [fssaiList, setFssaiList] = useState<any[]>([]);
+  const [gstList, setGstList] = useState<any[]>([]);
+  const [panList, setPanList] = useState<any[]>([]);
 
   // UI states
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // Prepare initial lists from initialData if available
-  const initialFssaiList: FssaiEntry[] = useMemo(() => {
-    // If initialData has single columns, convert to list.
-    // Also support if backend already returned historical array in initialData.FSSAIs
-    if (Array.isArray(initialData?.FSSAIs)) {
-      return initialData.FSSAIs.map((x: any) => ({
-        id: uid(),
-        FSSAINumber: x.FSSAINumber ?? "",
-        FSSAIExpiryDate: x.FSSAIExpiryDate ?? null,
-        FSSAICopyUpload: x.FSSAICopyUpload ?? null,
-        FSSAIStatus: x.FSSAIStatus ?? 0,
-      }));
+  // modal states
+  const [showFssaiModal, setShowFssaiModal] = useState(false);
+  const [showGstModal, setShowGstModal] = useState(false);
+
+  // fssai modal form
+  const [fssaiNumber, setFssaiNumber] = useState("");
+  const [fssaiExpiry, setFssaiExpiry] = useState("");
+  const [fssaiFile, setFssaiFile] = useState<File | null>(null);
+
+  // gst modal form
+  const [gstNumber, setGstNumber] = useState("");
+  const [gstType, setGstType] = useState("");
+  const [gstFile, setGstFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    fetchHistories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restroCode]);
+
+  async function fetchHistories() {
+    try {
+      const { data: fdata } = await supabase
+        .from("restro_fssai")
+        .select("*")
+        .eq("restro_code", restroCode)
+        .order("created_at", { ascending: false });
+      const { data: gdata } = await supabase
+        .from("restro_gst")
+        .select("*")
+        .eq("restro_code", restroCode)
+        .order("created_at", { ascending: false });
+      const { data: pdata } = await supabase
+        .from("restro_pan")
+        .select("*")
+        .eq("restro_code", restroCode)
+        .order("created_at", { ascending: false });
+      setFssaiList(fdata ?? []);
+      setGstList(gdata ?? []);
+      setPanList(pdata ?? []);
+    } catch (err) {
+      console.error(err);
     }
-    // fallback: single entry
-    if (initialData?.FSSAINumber) {
-      return [
-        {
-          id: uid(),
-          FSSAINumber: initialData.FSSAINumber,
-          FSSAIExpiryDate: initialData.FSSAIExpiryDate ?? null,
-          FSSAICopyUpload: initialData.FSSAICopyUpload ?? null,
-          FSSAIStatus: initialData.FSSAIStatus ?? 1,
-        },
-      ];
-    }
-    return [];
-  }, [initialData]);
+  }
 
-  const initialGstList: GstEntry[] = useMemo(() => {
-    if (Array.isArray(initialData?.GSTs)) {
-      return initialData.GSTs.map((x: any) => ({
-        id: uid(),
-        GSTNumber: x.GSTNumber ?? "",
-        GSTType: x.GSTType ?? "",
-        GSTCopyUpload: x.GSTCopyUpload ?? null,
-        GSTStatus: x.GSTStatus ?? 0,
-      }));
-    }
-    if (initialData?.GSTNumber) {
-      return [
-        {
-          id: uid(),
-          GSTNumber: initialData.GSTNumber,
-          GSTType: initialData.GSTType ?? "",
-          GSTCopyUpload: initialData.GSTCopyUpload ?? null,
-          GSTStatus: initialData.GSTStatus ?? 1,
-        },
-      ];
-    }
-    return [];
-  }, [initialData]);
+  // helper: format date
+  function formatDate(d?: string | null) {
+    if (!d) return "";
+    const dt = new Date(d);
+    return dt.toLocaleDateString();
+  }
 
-  const initialPanList: PanEntry[] = useMemo(() => {
-    if (Array.isArray(initialData?.PANs)) {
-      return initialData.PANs.map((x: any) => ({
-        id: uid(),
-        PANNumber: x.PANNumber ?? "",
-        PANType: x.PANType ?? "",
-        UploadPanCopy: x.UploadPanCopy ?? null,
-        PANStatus: x.PANStatus ?? 0,
-      }));
-    }
-    if (initialData?.PANNumber) {
-      return [
-        {
-          id: uid(),
-          PANNumber: initialData.PANNumber,
-          PANType: initialData.PANType ?? "",
-          UploadPanCopy: initialData.UploadPanCopy ?? null,
-          PANStatus: initialData.PANStatus ?? 1,
-        },
-      ];
-    }
-    return [];
-  }, [initialData]);
-
-  const [fssaiList, setFssaiList] = useState<FssaiEntry[]>(initialFssaiList);
-  const [gstList, setGstList] = useState<GstEntry[]>(initialGstList);
-  const [panList, setPanList] = useState<PanEntry[]>(initialPanList);
-
-  // Add-new modals (simple local state for forms)
-  const [showAddFssai, setShowAddFssai] = useState(false);
-  const [newFssaiNumber, setNewFssaiNumber] = useState("");
-  const [newFssaiExpiry, setNewFssaiExpiry] = useState(""); // yyyy-mm-dd
-
-  const [showAddGst, setShowAddGst] = useState(false);
-  const [newGstNumber, setNewGstNumber] = useState("");
-  const [newGstType, setNewGstType] = useState("");
-
-  const [showAddPan, setShowAddPan] = useState(false);
-  const [newPanNumber, setNewPanNumber] = useState("");
-  const [newPanType, setNewPanType] = useState("");
-
-  // min date for expiry = today + 1 month
+  // min expiry date = today + 1 month (for input date min attr)
   const minExpiry = useMemo(() => {
     const d = new Date();
     d.setMonth(d.getMonth() + 1);
-    const yyyy = d.getFullYear();
-    const mm = ("0" + (d.getMonth() + 1)).slice(-2);
-    const dd = ("0" + d.getDate()).slice(-2);
-    return `${yyyy}-${mm}-${dd}`;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   }, []);
 
-  // handlers to add new entries (they will mark older active->inactive)
-  function handleAddFssaiSubmit() {
-    if (!newFssaiNumber?.trim()) {
-      setMessage("FSSAI number required.");
-      return;
+  async function uploadFileToStorage(file: File | null, folder: string) {
+    if (!file) return null;
+    const path = `${folder}/${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
+    const bucket = "restro-docs";
+    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
+    if (upErr) {
+      console.error("Upload error", upErr);
+      throw upErr;
     }
-    if (!newFssaiExpiry) {
-      setMessage("Expiry date required.");
-      return;
-    }
-    // validate min date
-    if (newFssaiExpiry < minExpiry) {
-      setMessage("Expiry date must be at least 1 month from today.");
-      return;
-    }
-    // mark older active -> inactive
-    const updated = fssaiList.map((e) => ({ ...e, FSSAIStatus: 0 }));
-    const entry: FssaiEntry = {
-      id: uid(),
-      FSSAINumber: newFssaiNumber.trim(),
-      FSSAIExpiryDate: isoDateFromInput(newFssaiExpiry),
-      FSSAICopyUpload: null,
-      FSSAIStatus: 1,
-    };
-    setFssaiList([...updated, entry]);
-    setNewFssaiNumber("");
-    setNewFssaiExpiry("");
-    setShowAddFssai(false);
-    setMessage(null);
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+    return urlData.publicUrl;
   }
 
-  function handleAddGstSubmit() {
-    if (!newGstNumber?.trim()) {
-      setMessage("GST number required.");
-      return;
+  // FSSAI submit (calls RPC)
+  async function submitNewFssai() {
+    try {
+      // client validation: expiry must be >= minExpiry
+      if (!fssaiNumber) {
+        setMessage("FSSAI number required");
+        return;
+      }
+      if (fssaiExpiry && fssaiExpiry < minExpiry) {
+        setMessage("FSSAI expiry must be at least 1 month from today");
+        return;
+      }
+      setMessage(null);
+      const copyUrl = fssaiFile ? await uploadFileToStorage(fssaiFile, `restro_${restroCode}/fssai`) : null;
+
+      const { data, error } = await supabase.rpc("add_fssai_atomic", {
+        p_restro_code: restroCode,
+        p_fssai_number: fssaiNumber,
+        p_fssai_expiry: fssaiExpiry || null,
+        p_fssai_copy_url: copyUrl || null,
+        p_created_by: "web", // optionally send user email
+      });
+
+      if (error) {
+        console.error("RPC error", error);
+        setMessage("Failed to save FSSAI: " + (error.message ?? error));
+      } else {
+        // rpc returns the newly inserted row — but Supabase RPC returns array
+        setFssaiList((prev) => {
+          const newRow = Array.isArray(data) && data.length ? data[0] : data;
+          return [newRow, ...prev.map(r => ({ ...r, active: false }))];
+        });
+        setShowFssaiModal(false);
+        setFssaiNumber("");
+        setFssaiExpiry("");
+        setFssaiFile(null);
+        setMessage("FSSAI saved");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setMessage("Network/upload error");
     }
-    const updated = gstList.map((e) => ({ ...e, GSTStatus: 0 }));
-    const entry: GstEntry = {
-      id: uid(),
-      GSTNumber: newGstNumber.trim(),
-      GSTType: newGstType,
-      GSTCopyUpload: null,
-      GSTStatus: 1,
-    };
-    setGstList([...updated, entry]);
-    setNewGstNumber("");
-    setNewGstType("");
-    setShowAddGst(false);
-    setMessage(null);
   }
 
-  function handleAddPanSubmit() {
-    if (!newPanNumber?.trim()) {
-      setMessage("PAN number required.");
-      return;
+  // GST submit
+  async function submitNewGst() {
+    try {
+      if (!gstNumber) {
+        setMessage("GST number required");
+        return;
+      }
+      setMessage(null);
+      const copyUrl = gstFile ? await uploadFileToStorage(gstFile, `restro_${restroCode}/gst`) : null;
+      const { data, error } = await supabase.rpc("add_gst_atomic", {
+        p_restro_code: restroCode,
+        p_gst_number: gstNumber,
+        p_gst_type: gstType || null,
+        p_gst_copy_url: copyUrl || null,
+        p_created_by: "web",
+      });
+      if (error) {
+        console.error("RPC error", error);
+        setMessage("Failed to save GST: " + (error.message ?? error));
+      } else {
+        setGstList((prev) => {
+          const newRow = Array.isArray(data) && data.length ? data[0] : data;
+          return [newRow, ...prev.map(r => ({ ...r, active: false }))];
+        });
+        setShowGstModal(false);
+        setGstNumber("");
+        setGstType("");
+        setGstFile(null);
+        setMessage("GST saved");
+      }
+    } catch (err) {
+      console.error(err);
+      setMessage("Network/upload error");
     }
-    const updated = panList.map((e) => ({ ...e, PANStatus: 0 }));
-    const entry: PanEntry = {
-      id: uid(),
-      PANNumber: newPanNumber.trim(),
-      PANType: newPanType,
-      UploadPanCopy: null,
-      PANStatus: 1,
-    };
-    setPanList([...updated, entry]);
-    setNewPanNumber("");
-    setNewPanType("");
-    setShowAddPan(false);
-    setMessage(null);
   }
 
-  // remove / deactivate helpers (not required but useful)
-  function deactivateFssai(id: string) {
-    setFssaiList((s) => s.map((x) => (x.id === id ? { ...x, FSSAIStatus: 0 } : x)));
-  }
-  function deactivateGst(id: string) {
-    setGstList((s) => s.map((x) => (x.id === id ? { ...x, GSTStatus: 0 } : x)));
-  }
-  function deactivatePan(id: string) {
-    setPanList((s) => s.map((x) => (x.id === id ? { ...x, PANStatus: 0 } : x)));
-  }
-
-  // Save to server - this posts address plus all lists
+  // Save address (existing endpoint, unchanged)
   async function handleSave() {
     setSaving(true);
     setMessage(null);
+    const body: Record<string, any> = {
+      RestroAddress: restroAddress,
+      City: city,
+      State: stateName,
+      District: district,
+      PinCode: pinCode,
+      RestroLatitude: latitude,
+      RestroLongitude: longitude,
+    };
 
     try {
-      const body: Record<string, any> = {
-        RestroAddress: restroAddress,
-        City: city,
-        State: stateName,
-        District: district,
-        PinCode: pinCode,
-        RestroLatitude: latitude,
-        RestroLongitude: longitude,
-        // documents as arrays
-        FSSAIs: fssaiList.map((f) => ({
-          FSSAINumber: f.FSSAINumber,
-          FSSAIExpiryDate: f.FSSAIExpiryDate,
-          FSSAICopyUpload: f.FSSAICopyUpload,
-          FSSAIStatus: f.FSSAIStatus,
-        })),
-        GSTs: gstList.map((g) => ({
-          GSTNumber: g.GSTNumber,
-          GSTType: g.GSTType,
-          GSTCopyUpload: g.GSTCopyUpload,
-          GSTStatus: g.GSTStatus,
-        })),
-        PANs: panList.map((p) => ({
-          PANNumber: p.PANNumber,
-          PANType: p.PANType,
-          UploadPanCopy: p.UploadPanCopy,
-          PANStatus: p.PANStatus,
-        })),
-      };
-
       const res = await fetch(`/api/restros/${restroCode}/address-docs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -288,11 +204,12 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
       });
       const data = await res.json();
       if (!res.ok) {
+        console.error("Save error", data);
         setMessage(`Save failed: ${data?.error ?? "unknown"}`);
       } else {
         setMessage("Saved successfully.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setMessage("Save failed (network).");
     } finally {
@@ -300,10 +217,9 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
     }
   }
 
-  // styles
+  // UI helpers
   const containerStyle: React.CSSProperties = { padding: 18 };
   const sectionStyle: React.CSSProperties = { background: BOX_BG, padding: 18, borderRadius: 6, marginBottom: 18 };
-  const sectionTitle: React.CSSProperties = { fontSize: 20, fontWeight: 700, marginBottom: 12, color: "#0b5f8a" };
   const labelStyle: React.CSSProperties = { fontSize: 13, color: "#333", marginBottom: 6 };
   const inputStyle: React.CSSProperties = { width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #e6eef7", boxSizing: "border-box" };
 
@@ -316,9 +232,9 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
         </div>
       </div>
 
-      {/* ADDRESS */}
+      {/* ADDRESS SECTION */}
       <div style={sectionStyle}>
-        <div style={sectionTitle}>Address</div>
+        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 12, color: "#0b5f8a" }}>Address</div>
 
         <div style={{ marginBottom: 12 }}>
           <div style={labelStyle}>Restro Address</div>
@@ -333,12 +249,14 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
 
           <div>
             <div style={labelStyle}>State</div>
-            <input value={stateName} readOnly style={{ ...inputStyle, background: "#f5f7fa", cursor: "not-allowed" }} />
+            {/* state non-editable */}
+            <input value={stateName} readOnly style={{ ...inputStyle, background: "#fafafa", color: "#333" }} />
           </div>
 
           <div>
             <div style={labelStyle}>District</div>
-            <input value={district} readOnly style={{ ...inputStyle, background: "#f5f7fa", cursor: "not-allowed" }} />
+            {/* district non-editable */}
+            <input value={district} readOnly style={{ ...inputStyle, background: "#fafafa", color: "#333" }} />
           </div>
         </div>
 
@@ -362,152 +280,143 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
         </div>
       </div>
 
-      {/* DOCUMENTS - FSSAI */}
+      {/* DOCUMENTS SECTION: FSSAI + GST + PAN */}
       <div style={sectionStyle}>
-        <div style={sectionTitle}>Documents</div>
+        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 12, color: "#0b5f8a" }}>Documents</div>
 
-        <div style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 600 }}>FSSAI</div>
-          <button onClick={() => setShowAddFssai(true)} style={{ background: "#0ea5e9", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 6, cursor: "pointer" }}>
+        {/* FSSAI area */}
+        <div style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontWeight: 700 }}>FSSAI</div>
+          <button onClick={() => setShowFssaiModal(true)} style={{ background: "#0ea5e9", color: "#fff", padding: "6px 10px", borderRadius: 6, border: "none" }}>
             + Add new FSSAI
           </button>
         </div>
 
-        {/* list FSSAI */}
         <div style={{ marginBottom: 12 }}>
           {fssaiList.length === 0 && <div style={{ color: "#666" }}>No FSSAI entries</div>}
-          {fssaiList.map((f) => (
-            <div key={f.id} style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8 }}>
-              <div style={{ flex: 1 }}>{f.FSSAINumber}</div>
-              <div style={{ width: 180 }}>{f.FSSAIExpiryDate ?? "-"}</div>
-              <div style={{ width: 110, textAlign: "center" }}>
-                {f.FSSAIStatus ? <span style={{ color: "green", fontWeight: 700 }}>Active</span> : <span style={{ color: "crimson", fontWeight: 700 }}>Inactive</span>}
+          {fssaiList.map((r) => (
+            <div key={r.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f1f1f1" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>{r.fssai_number}</div>
+                <div style={{ color: "#666", fontSize: 13 }}>{r.fssai_expiry ? formatDate(r.fssai_expiry) : ""}</div>
+              </div>
+              <div style={{ width: 120, textAlign: "right" }}>
+                <span style={{ padding: "6px 10px", borderRadius: 6, color: "#fff", background: r.active ? "#16a34a" : "#ef4444", fontWeight: 700 }}>
+                  {r.active ? "Active" : "Inactive"}
+                </span>
               </div>
             </div>
           ))}
         </div>
 
-        {/* GST section */}
-        <div style={{ marginTop: 8, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 600 }}>GST</div>
-          <button onClick={() => setShowAddGst(true)} style={{ background: "#0ea5e9", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 6, cursor: "pointer" }}>
-            + Add new GST Detail
-          </button>
-        </div>
-
-        <div style={{ marginBottom: 12 }}>
-          {gstList.length === 0 && <div style={{ color: "#666" }}>No GST entries</div>}
-          {gstList.map((g) => (
-            <div key={g.id} style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8 }}>
-              <div style={{ flex: 1 }}>{g.GSTNumber}</div>
-              <div style={{ width: 180 }}>{g.GSTType ?? "-"}</div>
-              <div style={{ width: 110, textAlign: "center" }}>{g.GSTStatus ? <span style={{ color: "green", fontWeight: 700 }}>Active</span> : <span style={{ color: "crimson", fontWeight: 700 }}>Inactive</span>}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* PAN section */}
-        <div style={{ marginTop: 8, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 600 }}>PAN</div>
-          <button onClick={() => setShowAddPan(true)} style={{ background: "#0ea5e9", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 6, cursor: "pointer" }}>
-            + Add new PAN
+        {/* GST area */}
+        <div style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontWeight: 700 }}>GST</div>
+          <button onClick={() => setShowGstModal(true)} style={{ background: "#0ea5e9", color: "#fff", padding: "6px 10px", borderRadius: 6, border: "none" }}>
+            + Add new GST
           </button>
         </div>
 
         <div>
-          {panList.length === 0 && <div style={{ color: "#666" }}>No PAN entries</div>}
-          {panList.map((p) => (
-            <div key={p.id} style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8 }}>
-              <div style={{ flex: 1 }}>{p.PANNumber}</div>
-              <div style={{ width: 180 }}>{p.PANType ?? "-"}</div>
-              <div style={{ width: 110, textAlign: "center" }}>{p.PANStatus ? <span style={{ color: "green", fontWeight: 700 }}>Active</span> : <span style={{ color: "crimson", fontWeight: 700 }}>Inactive</span>}</div>
+          {gstList.length === 0 && <div style={{ color: "#666" }}>No GST entries</div>}
+          {gstList.map((r) => (
+            <div key={r.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f1f1f1" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>{r.gst_number}</div>
+                <div style={{ color: "#666", fontSize: 13 }}>{r.gst_type ?? ""}</div>
+              </div>
+              <div style={{ width: 120, textAlign: "right" }}>
+                <span style={{ padding: "6px 10px", borderRadius: 6, color: "#fff", background: r.active ? "#16a34a" : "#ef4444", fontWeight: 700 }}>
+                  {r.active ? "Active" : "Inactive"}
+                </span>
+              </div>
             </div>
           ))}
         </div>
 
-        <div style={{ marginTop: 8, fontSize: 13, color: "#666" }}>
-          Note: File upload is disabled in this UI example. Status changes are local and will be sent to the server when you press Save.
+        {/* PAN view (read only) */}
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>PAN</div>
+          {panList.length === 0 && <div style={{ color: "#666" }}>No PAN entries</div>}
+          {panList.map((r) => (
+            <div key={r.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f1f1f1" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>{r.pan_number}</div>
+                <div style={{ color: "#666", fontSize: 13 }}>{r.pan_type ?? ""}</div>
+              </div>
+              <div style={{ width: 120, textAlign: "right" }}>
+                <span style={{ padding: "6px 10px", borderRadius: 6, color: "#fff", background: r.active ? "#16a34a" : "#ef4444", fontWeight: 700 }}>
+                  {r.active ? "Active" : "Inactive"}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
+
       </div>
 
-      {/* bottom actions */}
+      {/* bottom actions (Cancel left, Save right) */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button onClick={() => { window.history.back(); }} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>
-          Cancel
-        </button>
+        <button onClick={() => window.history.back()} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>Cancel</button>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {message && <div style={{ color: message.includes("failed") ? "crimson" : "green" }}>{message}</div>}
-          <button onClick={handleSave} disabled={saving} style={{ background: "#06a6e3", color: "#fff", padding: "10px 16px", borderRadius: 8, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>
-            {saving ? "Saving..." : "Save"}
-          </button>
+          <button onClick={handleSave} disabled={saving} style={{ background: "#06a6e3", color: "#fff", padding: "10px 16px", borderRadius: 8, border: "none" }}>{saving ? "Saving..." : "Save"}</button>
         </div>
       </div>
 
-      {/* ---- modal-like overlays (simple) ---- */}
-      {showAddFssai && (
-        <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }}>
-          <div style={{ width: 560, background: "#fff", borderRadius: 8, padding: 18 }}>
-            <h3 style={{ marginTop: 0 }}>Add new FSSAI</h3>
+      {/* FSSAI Modal (simple) */}
+      {showFssaiModal && (
+        <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 2000 }}>
+          <div style={{ width: 680, background: "#fff", borderRadius: 8, padding: 18 }}>
+            <h3>New FSSAI</h3>
             <div style={{ marginBottom: 8 }}>
               <div style={labelStyle}>FSSAI Number</div>
-              <input value={newFssaiNumber} onChange={(e) => setNewFssaiNumber(e.target.value)} style={inputStyle} />
+              <input value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={inputStyle} />
             </div>
-
             <div style={{ marginBottom: 8 }}>
-              <div style={labelStyle}>FSSAI Expiry (choose)</div>
-              <input type="date" min={minExpiry} value={newFssaiExpiry} onChange={(e) => setNewFssaiExpiry(e.target.value)} style={inputStyle} />
+              <div style={labelStyle}>FSSAI Expiry</div>
+              <input type="date" value={fssaiExpiry} min={minExpiry} onChange={(e) => setFssaiExpiry(e.target.value)} style={inputStyle} />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <div style={labelStyle}>Upload Copy (optional)</div>
+              <input type="file" onChange={(e) => setFssaiFile(e.target.files?.[0] ?? null)} />
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={() => { setShowAddFssai(false); setMessage(null); }} style={{ padding: "8px 12px", borderRadius: 6 }}>Cancel</button>
-              <button onClick={handleAddFssaiSubmit} style={{ background: "#06a6e3", color: "#fff", padding: "8px 12px", borderRadius: 6 }}>Submit</button>
+              <button onClick={() => setShowFssaiModal(false)} style={{ padding: "8px 12px" }}>Cancel</button>
+              <button onClick={submitNewFssai} style={{ padding: "8px 12px", background: "#06a6e3", color: "#fff" }}>Submit</button>
             </div>
           </div>
         </div>
       )}
 
-      {showAddGst && (
-        <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }}>
-          <div style={{ width: 560, background: "#fff", borderRadius: 8, padding: 18 }}>
-            <h3 style={{ marginTop: 0 }}>Add new GST</h3>
+      {/* GST Modal */}
+      {showGstModal && (
+        <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 2000 }}>
+          <div style={{ width: 640, background: "#fff", borderRadius: 8, padding: 18 }}>
+            <h3>New GST</h3>
             <div style={{ marginBottom: 8 }}>
               <div style={labelStyle}>GST Number</div>
-              <input value={newGstNumber} onChange={(e) => setNewGstNumber(e.target.value)} style={inputStyle} />
+              <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} style={inputStyle} />
             </div>
             <div style={{ marginBottom: 8 }}>
               <div style={labelStyle}>GST Type</div>
-              <input value={newGstType} onChange={(e) => setNewGstType(e.target.value)} style={inputStyle} />
+              <input value={gstType} onChange={(e) => setGstType(e.target.value)} style={inputStyle} />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <div style={labelStyle}>Upload Copy (optional)</div>
+              <input type="file" onChange={(e) => setGstFile(e.target.files?.[0] ?? null)} />
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={() => setShowAddGst(false)} style={{ padding: "8px 12px", borderRadius: 6 }}>Cancel</button>
-              <button onClick={handleAddGstSubmit} style={{ background: "#06a6e3", color: "#fff", padding: "8px 12px", borderRadius: 6 }}>Submit</button>
+              <button onClick={() => setShowGstModal(false)} style={{ padding: "8px 12px" }}>Cancel</button>
+              <button onClick={submitNewGst} style={{ padding: "8px 12px", background: "#06a6e3", color: "#fff" }}>Submit</button>
             </div>
           </div>
         </div>
       )}
 
-      {showAddPan && (
-        <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)" }}>
-          <div style={{ width: 560, background: "#fff", borderRadius: 8, padding: 18 }}>
-            <h3 style={{ marginTop: 0 }}>Add new PAN</h3>
-            <div style={{ marginBottom: 8 }}>
-              <div style={labelStyle}>PAN Number</div>
-              <input value={newPanNumber} onChange={(e) => setNewPanNumber(e.target.value)} style={inputStyle} />
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <div style={labelStyle}>PAN Type</div>
-              <input value={newPanType} onChange={(e) => setNewPanType(e.target.value)} style={inputStyle} />
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={() => setShowAddPan(false)} style={{ padding: "8px 12px", borderRadius: 6 }}>Cancel</button>
-              <button onClick={handleAddPanSubmit} style={{ background: "#06a6e3", color: "#fff", padding: "8px 12px", borderRadius: 6 }}>Submit</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
