@@ -1,16 +1,16 @@
+// path: app/admin/restros/[code]/edit/AddressDocsForm.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseBrowser"; // path we created
+import { supabase } from "@/lib/supabaseBrowser";
 type Props = {
-  initialData: any; // row from RestroMaster
+  initialData: any;
   restroCode: number;
 };
 
 const BOX_BG = "#eaf6ff";
 
 export default function AddressDocsForm({ initialData, restroCode }: Props) {
-  // address fields
   const [restroAddress, setRestroAddress] = useState(initialData?.RestroAddress ?? "");
   const [city, setCity] = useState(initialData?.City ?? "");
   const [stateName, setStateName] = useState(initialData?.State ?? "");
@@ -19,25 +19,20 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
   const [latitude, setLatitude] = useState(initialData?.RestroLatitude ?? "");
   const [longitude, setLongitude] = useState(initialData?.RestroLongitude ?? "");
 
-  // documents single/master (these will be rendered from history tables)
   const [fssaiList, setFssaiList] = useState<any[]>([]);
   const [gstList, setGstList] = useState<any[]>([]);
   const [panList, setPanList] = useState<any[]>([]);
 
-  // UI states
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // modal states
   const [showFssaiModal, setShowFssaiModal] = useState(false);
   const [showGstModal, setShowGstModal] = useState(false);
 
-  // fssai modal form
   const [fssaiNumber, setFssaiNumber] = useState("");
   const [fssaiExpiry, setFssaiExpiry] = useState("");
   const [fssaiFile, setFssaiFile] = useState<File | null>(null);
 
-  // gst modal form
   const [gstNumber, setGstNumber] = useState("");
   const [gstType, setGstType] = useState("");
   const [gstFile, setGstFile] = useState<File | null>(null);
@@ -72,14 +67,12 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
     }
   }
 
-  // helper: format date
   function formatDate(d?: string | null) {
     if (!d) return "";
     const dt = new Date(d);
     return dt.toLocaleDateString();
   }
 
-  // min expiry date = today + 1 month (for input date min attr)
   const minExpiry = useMemo(() => {
     const d = new Date();
     d.setMonth(d.getMonth() + 1);
@@ -94,26 +87,15 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
     const path = `${folder}/${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
     const bucket = "restro-docs";
     const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
-    if (upErr) {
-      console.error("Upload error", upErr);
-      throw upErr;
-    }
+    if (upErr) { console.error("Upload error", upErr); throw upErr; }
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
     return urlData.publicUrl;
   }
 
-  // FSSAI submit (calls RPC)
   async function submitNewFssai() {
     try {
-      // client validation: expiry must be >= minExpiry
-      if (!fssaiNumber) {
-        setMessage("FSSAI number required");
-        return;
-      }
-      if (fssaiExpiry && fssaiExpiry < minExpiry) {
-        setMessage("FSSAI expiry must be at least 1 month from today");
-        return;
-      }
+      if (!fssaiNumber) { setMessage("FSSAI number required"); return; }
+      if (fssaiExpiry && fssaiExpiry < minExpiry) { setMessage("FSSAI expiry must be at least 1 month from today"); return; }
       setMessage(null);
       const copyUrl = fssaiFile ? await uploadFileToStorage(fssaiFile, `restro_${restroCode}/fssai`) : null;
 
@@ -122,37 +104,24 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
         p_fssai_number: fssaiNumber,
         p_fssai_expiry: fssaiExpiry || null,
         p_fssai_copy_url: copyUrl || null,
-        p_created_by: "web", // optionally send user email
+        p_created_by: "web",
       });
 
-      if (error) {
-        console.error("RPC error", error);
-        setMessage("Failed to save FSSAI: " + (error.message ?? error));
-      } else {
-        // rpc returns the newly inserted row — but Supabase RPC returns array
+      if (error) { console.error("RPC error", error); setMessage("Failed to save FSSAI: " + (error.message ?? error)); }
+      else {
         setFssaiList((prev) => {
           const newRow = Array.isArray(data) && data.length ? data[0] : data;
           return [newRow, ...prev.map(r => ({ ...r, active: false }))];
         });
         setShowFssaiModal(false);
-        setFssaiNumber("");
-        setFssaiExpiry("");
-        setFssaiFile(null);
-        setMessage("FSSAI saved");
+        setFssaiNumber(""); setFssaiExpiry(""); setFssaiFile(null); setMessage("FSSAI saved");
       }
-    } catch (err: any) {
-      console.error(err);
-      setMessage("Network/upload error");
-    }
+    } catch (err: any) { console.error(err); setMessage("Network/upload error"); }
   }
 
-  // GST submit
   async function submitNewGst() {
     try {
-      if (!gstNumber) {
-        setMessage("GST number required");
-        return;
-      }
+      if (!gstNumber) { setMessage("GST number required"); return; }
       setMessage(null);
       const copyUrl = gstFile ? await uploadFileToStorage(gstFile, `restro_${restroCode}/gst`) : null;
       const { data, error } = await supabase.rpc("add_gst_atomic", {
@@ -162,31 +131,21 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
         p_gst_copy_url: copyUrl || null,
         p_created_by: "web",
       });
-      if (error) {
-        console.error("RPC error", error);
-        setMessage("Failed to save GST: " + (error.message ?? error));
-      } else {
+      if (error) { console.error("RPC error", error); setMessage("Failed to save GST: " + (error.message ?? error)); }
+      else {
         setGstList((prev) => {
           const newRow = Array.isArray(data) && data.length ? data[0] : data;
           return [newRow, ...prev.map(r => ({ ...r, active: false }))];
         });
-        setShowGstModal(false);
-        setGstNumber("");
-        setGstType("");
-        setGstFile(null);
-        setMessage("GST saved");
+        setShowGstModal(false); setGstNumber(""); setGstType(""); setGstFile(null); setMessage("GST saved");
       }
-    } catch (err) {
-      console.error(err);
-      setMessage("Network/upload error");
-    }
+    } catch (err) { console.error(err); setMessage("Network/upload error"); }
   }
 
-  // Save address (existing endpoint, unchanged)
   async function handleSave() {
     setSaving(true);
     setMessage(null);
-    const body: Record<string, any> = {
+    const body: any = {
       RestroAddress: restroAddress,
       City: city,
       State: stateName,
@@ -195,7 +154,6 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
       RestroLatitude: latitude,
       RestroLongitude: longitude,
     };
-
     try {
       const res = await fetch(`/api/restros/${restroCode}/address-docs`, {
         method: "POST",
@@ -203,21 +161,12 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) {
-        console.error("Save error", data);
-        setMessage(`Save failed: ${data?.error ?? "unknown"}`);
-      } else {
-        setMessage("Saved successfully.");
-      }
-    } catch (err: any) {
-      console.error(err);
-      setMessage("Save failed (network).");
-    } finally {
-      setSaving(false);
-    }
+      if (!res.ok) { console.error("Save error", data); setMessage(`Save failed: ${data?.error ?? "unknown"}`); }
+      else setMessage("Saved successfully.");
+    } catch (err: any) { console.error(err); setMessage("Save failed (network)."); }
+    finally { setSaving(false); }
   }
 
-  // UI helpers
   const containerStyle: React.CSSProperties = { padding: 18 };
   const sectionStyle: React.CSSProperties = { background: BOX_BG, padding: 18, borderRadius: 6, marginBottom: 18 };
   const labelStyle: React.CSSProperties = { fontSize: 13, color: "#333", marginBottom: 6 };
@@ -280,7 +229,7 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
         </div>
       </div>
 
-      {/* DOCUMENTS SECTION: FSSAI + GST + PAN */}
+      {/* DOCUMENTS SECTION */}
       <div style={sectionStyle}>
         <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 12, color: "#0b5f8a" }}>Documents</div>
 
@@ -355,7 +304,7 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
 
       </div>
 
-      {/* bottom actions (Cancel left, Save right) */}
+      {/* bottom actions */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button onClick={() => window.history.back()} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>Cancel</button>
 
@@ -365,7 +314,7 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
         </div>
       </div>
 
-      {/* FSSAI Modal (simple) */}
+      {/* FSSAI Modal */}
       {showFssaiModal && (
         <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 2000 }}>
           <div style={{ width: 680, background: "#fff", borderRadius: 8, padding: 18 }}>
