@@ -37,6 +37,9 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
   const [gstType, setGstType] = useState("");
   const [gstFile, setGstFile] = useState<File | null>(null);
 
+  const [submittingFssai, setSubmittingFssai] = useState(false);
+  const [submittingGst, setSubmittingGst] = useState(false);
+
   useEffect(() => {
     fetchHistories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -44,26 +47,33 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
 
   async function fetchHistories() {
     try {
-      const { data: fdata } = await supabase
+      const { data: fdata, error: ferr } = await supabase
         .from("restro_fssai")
         .select("*")
         .eq("restro_code", restroCode)
         .order("created_at", { ascending: false });
-      const { data: gdata } = await supabase
+      if (ferr) console.warn("FSSAI fetch error", ferr);
+
+      const { data: gdata, error: gerr } = await supabase
         .from("restro_gst")
         .select("*")
         .eq("restro_code", restroCode)
         .order("created_at", { ascending: false });
-      const { data: pdata } = await supabase
+      if (gerr) console.warn("GST fetch error", gerr);
+
+      const { data: pdata, error: perr } = await supabase
         .from("restro_pan")
         .select("*")
         .eq("restro_code", restroCode)
         .order("created_at", { ascending: false });
+      if (perr) console.warn("PAN fetch error", perr);
+
       setFssaiList(fdata ?? []);
       setGstList(gdata ?? []);
       setPanList(pdata ?? []);
     } catch (err) {
-      console.error(err);
+      console.error("fetchHistories error", err);
+      setMessage("Failed to load document histories.");
     }
   }
 
@@ -87,59 +97,106 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
     const path = `${folder}/${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
     const bucket = "restro-docs";
     const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: false });
-    if (upErr) { console.error("Upload error", upErr); throw upErr; }
+    if (upErr) {
+      console.error("Upload error", upErr);
+      throw upErr;
+    }
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
     return urlData.publicUrl;
   }
 
+  // --- NEW: use server route instead of direct RPC here ---
+  async function callDocsApi(type: "fssai" | "gst" | "pan", payload: any) {
+    try {
+      const res = await fetch(`/api/restros/${restroCode}/docs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, payload }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        console.error("docs API error", data);
+        throw new Error(data?.error ?? "docs API failed");
+      }
+      return data.data ?? data; // server returns { ok:true, data: ... }
+    } catch (err) {
+      console.error("callDocsApi error", err);
+      throw err;
+    }
+  }
+
   async function submitNewFssai() {
     try {
-      if (!fssaiNumber) { setMessage("FSSAI number required"); return; }
-      if (fssaiExpiry && fssaiExpiry < minExpiry) { setMessage("FSSAI expiry must be at least 1 month from today"); return; }
+      if (!fssaiNumber) {
+        setMessage("FSSAI number required");
+        return;
+      }
+      if (fssaiExpiry && fssaiExpiry < minExpiry) {
+        setMessage("FSSAI expiry must be at least 1 month from today");
+        return;
+      }
       setMessage(null);
+      setSubmittingFssai(true);
+
       const copyUrl = fssaiFile ? await uploadFileToStorage(fssaiFile, `restro_${restroCode}/fssai`) : null;
 
-      const { data, error } = await supabase.rpc("add_fssai_atomic", {
-        p_restro_code: restroCode,
-        p_fssai_number: fssaiNumber,
-        p_fssai_expiry: fssaiExpiry || null,
-        p_fssai_copy_url: copyUrl || null,
-        p_created_by: "web",
+      // call server route (which calls RPC add_fssai_atomic)
+      const apiRes = await callDocsApi("fssai", {
+        fssai_number: fssaiNumber,
+        fssai_expiry: fssaiExpiry || null,
+        fssai_copy_url: copyUrl || null,
+        created_by: "web",
       });
 
-      if (error) { console.error("RPC error", error); setMessage("Failed to save FSSAI: " + (error.message ?? error)); }
-      else {
-        setFssaiList((prev) => {
-          const newRow = Array.isArray(data) && data.length ? data[0] : data;
-          return [newRow, ...prev.map(r => ({ ...r, active: false }))];
-        });
-        setShowFssaiModal(false);
-        setFssaiNumber(""); setFssaiExpiry(""); setFssaiFile(null); setMessage("FSSAI saved");
-      }
-    } catch (err: any) { console.error(err); setMessage("Network/upload error"); }
+      // apiRes may be array or object depending on RPC; safest is to reload list from DB:
+      await fetchHistories();
+
+      // reset modal
+      setShowFssaiModal(false);
+      setFssaiNumber("");
+      setFssaiExpiry("");
+      setFssaiFile(null);
+      setMessage("FSSAI saved");
+    } catch (err: any) {
+      console.error(err);
+      setMessage("Failed to save FSSAI: " + (err?.message ?? "network"));
+    } finally {
+      setSubmittingFssai(false);
+    }
   }
 
   async function submitNewGst() {
     try {
-      if (!gstNumber) { setMessage("GST number required"); return; }
-      setMessage(null);
-      const copyUrl = gstFile ? await uploadFileToStorage(gstFile, `restro_${restroCode}/gst`) : null;
-      const { data, error } = await supabase.rpc("add_gst_atomic", {
-        p_restro_code: restroCode,
-        p_gst_number: gstNumber,
-        p_gst_type: gstType || null,
-        p_gst_copy_url: copyUrl || null,
-        p_created_by: "web",
-      });
-      if (error) { console.error("RPC error", error); setMessage("Failed to save GST: " + (error.message ?? error)); }
-      else {
-        setGstList((prev) => {
-          const newRow = Array.isArray(data) && data.length ? data[0] : data;
-          return [newRow, ...prev.map(r => ({ ...r, active: false }))];
-        });
-        setShowGstModal(false); setGstNumber(""); setGstType(""); setGstFile(null); setMessage("GST saved");
+      if (!gstNumber) {
+        setMessage("GST number required");
+        return;
       }
-    } catch (err) { console.error(err); setMessage("Network/upload error"); }
+      setMessage(null);
+      setSubmittingGst(true);
+
+      const copyUrl = gstFile ? await uploadFileToStorage(gstFile, `restro_${restroCode}/gst`) : null;
+
+      const apiRes = await callDocsApi("gst", {
+        gst_number: gstNumber,
+        gst_type: gstType || null,
+        gst_copy_url: copyUrl || null,
+        created_by: "web",
+      });
+
+      // refresh from DB
+      await fetchHistories();
+
+      setShowGstModal(false);
+      setGstNumber("");
+      setGstType("");
+      setGstFile(null);
+      setMessage("GST saved");
+    } catch (err: any) {
+      console.error(err);
+      setMessage("Failed to save GST: " + (err?.message ?? "network"));
+    } finally {
+      setSubmittingGst(false);
+    }
   }
 
   async function handleSave() {
@@ -161,10 +218,18 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) { console.error("Save error", data); setMessage(`Save failed: ${data?.error ?? "unknown"}`); }
-      else setMessage("Saved successfully.");
-    } catch (err: any) { console.error(err); setMessage("Save failed (network)."); }
-    finally { setSaving(false); }
+      if (!res.ok) {
+        console.error("Save error", data);
+        setMessage(`Save failed: ${data?.error ?? "unknown"}`);
+      } else {
+        setMessage("Saved successfully.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setMessage("Save failed (network).");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const containerStyle: React.CSSProperties = { padding: 18 };
@@ -333,8 +398,8 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={() => setShowFssaiModal(false)} style={{ padding: "8px 12px" }}>Cancel</button>
-              <button onClick={submitNewFssai} style={{ padding: "8px 12px", background: "#06a6e3", color: "#fff" }}>Submit</button>
+              <button onClick={() => { setShowFssaiModal(false); setMessage(null); }} style={{ padding: "8px 12px" }}>Cancel</button>
+              <button onClick={submitNewFssai} disabled={submittingFssai} style={{ padding: "8px 12px", background: "#06a6e3", color: "#fff" }}>{submittingFssai ? "Submitting..." : "Submit"}</button>
             </div>
           </div>
         </div>
@@ -359,8 +424,8 @@ export default function AddressDocsForm({ initialData, restroCode }: Props) {
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={() => setShowGstModal(false)} style={{ padding: "8px 12px" }}>Cancel</button>
-              <button onClick={submitNewGst} style={{ padding: "8px 12px", background: "#06a6e3", color: "#fff" }}>Submit</button>
+              <button onClick={() => { setShowGstModal(false); setMessage(null); }} style={{ padding: "8px 12px" }}>Cancel</button>
+              <button onClick={submitNewGst} disabled={submittingGst} style={{ padding: "8px 12px", background: "#06a6e3", color: "#fff" }}>{submittingGst ? "Submitting..." : "Submit"}</button>
             </div>
           </div>
         </div>
