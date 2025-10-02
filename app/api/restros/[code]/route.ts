@@ -1,12 +1,19 @@
+// path: app/api/restros/[code]/route.ts
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
+/**
+ * Helper: normalizes empty string -> null, trims strings
+ */
 function normalizeIncoming(value: any) {
   if (value === "" || value === null || value === undefined) return null;
   if (typeof value === "string") return value.trim();
   return value;
 }
 
+/**
+ * Safe getter that accepts multiple candidate keys and returns the first non-null value.
+ */
 function getMaybe(obj: any, ...keys: string[]) {
   if (!obj) return undefined;
   for (const k of keys) {
@@ -15,7 +22,7 @@ function getMaybe(obj: any, ...keys: string[]) {
       let cur: any = obj;
       let ok = true;
       for (const p of parts) {
-        if (cur && cur[p] !== undefined && cur[p] !== null) {
+        if (cur && Object.prototype.hasOwnProperty.call(cur, p) && cur[p] !== undefined && cur[p] !== null) {
           cur = cur[p];
         } else {
           ok = false;
@@ -24,149 +31,140 @@ function getMaybe(obj: any, ...keys: string[]) {
       }
       if (ok) return cur;
     } else {
-      if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+      if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined && obj[k] !== null) return obj[k];
+      const v = (obj as any)[k];
+      if (v !== undefined && v !== null) return v;
     }
   }
   return undefined;
 }
 
-// ---------------- GET ----------------
 export async function GET(_req: Request, { params }: { params: { code: string } }) {
   try {
     const codeParam = params?.code ?? "";
-    if (!codeParam) {
-      return NextResponse.json({ ok: false, error: "Missing code param" }, { status: 400 });
-    }
+    if (!codeParam) return NextResponse.json({ ok: false, error: "Missing code param" }, { status: 400 });
+
+    const tryColumns = [
+      { col: "RestroCode", val: codeParam },
+      { col: "restro_code", val: codeParam },
+      { col: "RestroId", val: codeParam },
+      { col: "restro_id", val: codeParam },
+      { col: "code", val: codeParam },
+    ];
 
     let row: any = null;
-    const tryColumns = ["RestroCode", "restro_code", "RestroId", "restro_id", "code"];
-
-    for (const col of tryColumns) {
+    for (const t of tryColumns) {
       const { data, error } = await supabaseServer
         .from("RestroMaster")
         .select("*")
-        .eq(col, codeParam)
+        .eq(t.col, t.val)
         .limit(1)
         .maybeSingle();
-      if (!error && data) {
-        row = data;
-        break;
-      }
+      if (error) console.warn("Supabase lookup warning for", t.col, error.message ?? error);
+      if (data) { row = data; break; }
     }
 
     if (!row) {
-      return NextResponse.json({ ok: false, error: "Restro not found" }, { status: 404 });
+      const { data, error } = await supabaseServer
+        .from("RestroMaster")
+        .select("*")
+        .or(`RestroCode.eq.${codeParam},restro_code.eq.${codeParam}`)
+        .limit(1)
+        .maybeSingle();
+      if (!error && data) row = data;
     }
 
-    // enrich with Station details
-    const stationCode = getMaybe(row, "StationCode", "station_code", "stationCode") ?? null;
-    if (stationCode) {
-      const { data: s, error: sErr } = await supabaseServer
-        .from("Stations")
-        .select("StationId,StationName,StationCode,State,station_category,station_type,StateName")
-        .eq("StationCode", stationCode)
-        .maybeSingle();
+    if (!row) return NextResponse.json({ ok: false, error: "Restro not found" }, { status: 404 });
 
-      if (!sErr && s) {
-        row = {
-          ...row,
-          StationName: row.StationName ?? s.StationName,
-          StationCode: row.StationCode ?? s.StationCode,
-          State: row.State ?? s.State ?? s.StateName,
-          StationCategory: row.StationCategory ?? s.station_category ?? s.station_type,
-        };
+    const stationCode = getMaybe(row, "StationCode", "station_code", "stationCode", "station?.code") ?? null;
+    if (stationCode) {
+      try {
+        const sres = await supabaseServer
+          .from("Stations")
+          .select("StationId,StationName,StationCode,State,station_category,station_type,StateName")
+          .eq("StationCode", stationCode)
+          .limit(1)
+          .maybeSingle();
+        if (!sres.error && sres.data) {
+          const s: any = sres.data;
+          const mergedStationName =
+            getMaybe(row, "StationName", "station_name") ?? getMaybe(s, "StationName", "station_name", "name");
+          const mergedStationCode =
+            getMaybe(row, "StationCode", "station_code") ?? getMaybe(s, "StationCode", "station_code", "code");
+          const mergedState =
+            getMaybe(row, "State", "state", "StateName") ?? getMaybe(s, "State", "state", "StateName");
+          const mergedCategory =
+            getMaybe(row, "StationCategory", "station_category") ?? getMaybe(s, "station_category", "station_type", "category");
+
+          row = {
+            ...row,
+            StationName: mergedStationName ?? null,
+            StationCode: mergedStationCode ?? null,
+            State: mergedState ?? null,
+            StationCategory: mergedCategory ?? null,
+          };
+        }
+      } catch (err) {
+        console.warn("Error fetching station record:", err);
       }
     }
 
     return NextResponse.json({ ok: true, row });
   } catch (err: any) {
     console.error("GET /api/restros/[code] error:", err);
-    return NextResponse.json({ ok: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err?.message ?? String(err) }, { status: 500 });
   }
 }
 
-// ---------------- PATCH ----------------
 export async function PATCH(req: Request, { params }: { params: { code: string } }) {
   try {
     const codeParam = params?.code ?? "";
-    if (!codeParam) {
-      return NextResponse.json({ ok: false, error: "Missing code param" }, { status: 400 });
-    }
+    if (!codeParam) return NextResponse.json({ ok: false, error: "Missing code param" }, { status: 400 });
 
     const body = await req.json().catch(() => ({}));
-
-    // whitelist fields (without FSSAI/GST/PAN now!)
     const allowedKeys = new Set([
-      "RestroName",
-      "RestroEmail",
-      "RestroPhone",
-      "OwnerName",
-      "OwnerEmail",
-      "OwnerPhone",
-      "BrandName",
-      "RestroDisplayPhoto",
-      "RestroRating",
-      "StationCode",
-      "StationName",
-      "State",
-      "StationCategory",
-      "RestroAddress",
-      "City",
-      "District",
-      "PinCode",
-      "RestroLatitude",
-      "RestroLongitude",
-      "WeeklyOff",
-      "OpenTime",
-      "ClosedTime",
-      "MinimumOrderValue",
-      "CutOffTime",
-      "RaileatsDeliveryCharge",
-      "RaileatsDeliveryChargeGSTRate",
-      "RaileatsDeliveryChargeGST",
-      "RaileatsDeliveryChargeTotalInclGST",
-      "OrdersPaymentOptionForCustomer",
-      "IRCTCOrdersPaymentOptionForCustomer",
-      "RestroTypeOfDelivery",
-      "IRCTC",
-      "Raileats",
-      "IsIrctcApproved",
+      "RestroName","RestroEmail","RestroPhone","OwnerName","OwnerEmail","OwnerPhone",
+      "BrandName","RestroDisplayPhoto","RestroRating","FSSAINumber","FSSAIExpiryDate",
+      "StationCode","StationName","State","StationCategory","WeeklyOff","OpenTime","ClosedTime",
+      "MinimumOrderValue","CutOffTime","RaileatsDeliveryCharge","RaileatsDeliveryChargeGSTRate",
+      "RaileatsDeliveryChargeGST","RaileatsDeliveryChargeTotalInclGST","OrdersPaymentOptionForCustomer",
+      "IRCTCOrdersPaymentOptionForCustomer","RestroTypeOfDelivery","IRCTC","Raileats","IsIrctcApproved",
+      // plus any extra keys you want to allow
     ]);
 
     const updates: Record<string, any> = {};
-    for (const k of Object.keys(body)) {
-      if (allowedKeys.has(k)) {
-        updates[k] = normalizeIncoming(body[k]);
-      }
+    for (const k of Object.keys(body || {})) {
+      if (allowedKeys.has(k)) updates[k] = normalizeIncoming((body as any)[k]);
     }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ ok: false, error: "No valid fields to update" }, { status: 400 });
     }
 
-    let updatedRow: any = null;
-    const identifiers = ["RestroCode", "restro_code", "RestroId", "restro_id", "code"];
+    const identifiers = [
+      { col: "RestroCode", val: codeParam },
+      { col: "restro_code", val: codeParam },
+      { col: "RestroId", val: codeParam },
+      { col: "restro_id", val: codeParam },
+      { col: "code", val: codeParam },
+    ];
 
-    for (const col of identifiers) {
-      const { data, error } = await supabaseServer
-        .from("RestroMaster")
-        .update(updates)
-        .eq(col, codeParam)
-        .select()
-        .maybeSingle();
-      if (!error && data) {
-        updatedRow = data;
-        break;
-      }
+    let updateRes: any = null;
+    for (const id of identifiers) {
+      const attempt = await supabaseServer.from("RestroMaster").update(updates).eq(id.col, id.val).select().maybeSingle();
+      if (!attempt.error && attempt.data) { updateRes = attempt; break; }
     }
 
-    if (!updatedRow) {
-      return NextResponse.json({ ok: false, error: "Update failed or restro not found" }, { status: 404 });
+    if (!updateRes) {
+      const attempt = await supabaseServer.from("RestroMaster").update(updates).eq("RestroCode", codeParam).select().maybeSingle();
+      if (!attempt.error && attempt.data) updateRes = attempt;
     }
 
-    return NextResponse.json({ ok: true, row: updatedRow });
+    if (!updateRes) return NextResponse.json({ ok: false, error: "Update failed or restro not found" }, { status: 404 });
+
+    return NextResponse.json({ ok: true, row: updateRes.data ?? null });
   } catch (err: any) {
     console.error("PATCH /api/restros/[code] error:", err);
-    return NextResponse.json({ ok: false, error: err.message ?? "Server error" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err?.message ?? String(err) }, { status: 500 });
   }
 }
