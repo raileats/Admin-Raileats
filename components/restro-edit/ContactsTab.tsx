@@ -1,59 +1,91 @@
+// components/restro-edit/ContactsTab.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import ContactsClient from "@/components/tabs/ContactsClient";
 
-export default function ContactsTab({ restroCode }: { restroCode: string }) {
+type Props = {
+  local?: any;
+  updateField?: (k: string, v: any) => void;
+  stationDisplay?: string;
+  stations?: { label: string; value: string }[];
+  loadingStations?: boolean;
+  restroCode?: string; // important
+};
+
+export default function ContactsTab({ restroCode, local, updateField }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [emails, setEmails] = useState<any[]>([]);
   const [whatsapps, setWhatsapps] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Supabase data fetch
   useEffect(() => {
-    if (!restroCode) return;
+    if (!restroCode || String(restroCode).trim() === "") {
+      setError("Missing restroCode");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    async function fetchContacts() {
-      try {
-        const res = await fetch(`/api/restros/${restroCode}/contacts`);
-        if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
-        const data = await res.json();
-        setEmails(data.emails || []);
-        setWhatsapps(data.whatsapps || []);
-      } catch (err: any) {
-        console.error("Failed to load contacts:", err);
-        setError(err.message || "Unable to load contacts");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchContacts();
+    fetch(`/api/restros/${encodeURIComponent(String(restroCode))}/contacts`, { method: "GET" })
+      .then(async (res) => {
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(txt || `Fetch failed (${res.status})`);
+        }
+        return res.json();
+      })
+      .then((json) => {
+        if (json?.ok === false && json?.error) {
+          throw new Error(json.error);
+        }
+        setEmails(Array.isArray(json.emails) ? json.emails : []);
+        setWhatsapps(Array.isArray(json.whatsapps) ? json.whatsapps : []);
+      })
+      .catch((err) => {
+        console.error("Contacts fetch error:", err);
+        setError(`Failed to load contacts — ${err?.message ?? String(err)}`);
+        setEmails([]);
+        setWhatsapps([]);
+      })
+      .finally(() => setLoading(false));
   }, [restroCode]);
 
-  if (loading) return <div className="p-4">Loading contacts...</div>;
-  if (error)
-    return (
-      <div className="p-4 text-red-600">
-        Failed to load contacts — {error}
-      </div>
-    );
-
   return (
-    <div className="p-4">
-      <h3 className="text-lg font-semibold mb-2">Contacts</h3>
-      <p className="text-gray-600 mb-4">
-        Manage contact persons, email addresses, and WhatsApp numbers for this
-        restaurant.
-      </p>
+    <div>
+      <h3 style={{ marginTop: 0 }}>Contacts</h3>
 
-      <ContactsClient
-        restroCode={restroCode}
-        initialEmails={emails}
-        initialWhatsapps={whatsapps}
-      />
+      {loading && <div>Loading contacts…</div>}
+
+      {!loading && error && <div style={{ color: "red" }}>{error}</div>}
+
+      {!loading && !error && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <h4>Emails</h4>
+            {emails.length === 0 && <div style={{ color: "#666" }}>No emails configured</div>}
+            {emails.map((e: any) => (
+              <div key={e.id ?? `${e.RestroCode}-email-${Math.random()}`} style={{ padding: 8, borderBottom: "1px solid #f0f0f0" }}>
+                <div style={{ fontWeight: 600 }}>{e.Name ?? "—"}</div>
+                <div><a href={`mailto:${e.Email}`}>{e.Email}</a></div>
+                <div style={{ color: "#666", fontSize: 12 }}>{e.Active ? "Active" : "Inactive"}</div>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <h4>WhatsApp / Mobile</h4>
+            {whatsapps.length === 0 && <div style={{ color: "#666" }}>No WhatsApp numbers configured</div>}
+            {whatsapps.map((w: any) => (
+              <div key={w.id ?? `${w.RestroCode}-wa-${Math.random()}`} style={{ padding: 8, borderBottom: "1px solid #f0f0f0" }}>
+                <div style={{ fontWeight: 600 }}>{w.Name ?? "—"}</div>
+                <div>{w.Mobile}</div>
+                <div style={{ color: "#666", fontSize: 12 }}>{w.Active ? "Active" : "Inactive"}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
