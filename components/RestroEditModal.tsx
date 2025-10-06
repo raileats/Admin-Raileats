@@ -260,18 +260,30 @@ export default function RestroEditModal({
 
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
+  // compute robust restroCode once and add to common so spread includes it
+  const computedRestroCode = String(
+    restro?.RestroCode ??
+      restro?.code ??
+      restro?.id ??
+      local?.RestroCode ??
+      local?.VendorCode ??
+      local?.id ??
+      ""
+  );
+
   // Map tab name -> component render (only renders the external tab components)
   const renderTab = () => {
-    const common = { local, updateField, stationDisplay, stations, loadingStations };
+    const common = { local, updateField, stationDisplay, stations, loadingStations, restroCode: computedRestroCode };
     switch (activeTab) {
       case "Basic Information":
         return <BasicInformationTab {...common} />;
       case "Station Settings":
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
-// AddressDocsClient accepts initialData or restro; we pass local/restro for compatibility
-return <AddressDocsClient initialData={restro} />;
+        // AddressDocsClient accepts initialData or restro; we pass local/restro for compatibility
+        return <AddressDocsClient initialData={restro} />;
       case "Contacts":
+        // now spreading common includes restroCode
         return <ContactsTab {...common} />;
       case "Bank":
         return <BankTab {...common} />;
