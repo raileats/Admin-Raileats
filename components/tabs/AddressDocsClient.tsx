@@ -1,4 +1,3 @@
-// components/tabs/AddressDocsClient.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -6,10 +5,11 @@ import { useRouter } from "next/navigation";
 
 type Props = {
   initialData?: any;
-  imagePrefix?: string; // <-- added this
+  imagePrefix?: string; // optional prefix for image URLs
+  restroCode?: string; // ✅ <-- added this line to fix type error
 };
 
-export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }: Props) {
+export default function AddressDocsClient({ initialData = {}, imagePrefix = "", restroCode = "" }: Props) {
   const router = useRouter();
 
   const [local, setLocal] = useState<any>({
@@ -42,9 +42,7 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
     });
   }, [initialData]);
 
-  // If you plan to show images later, you can build URLs like:
-  // const logoUrl = imagePrefix ? `${imagePrefix}/path/to/logo.jpg` : "/fallback.jpg";
-
+  // Local field update
   function update(key: string, value: any) {
     setLocal((s: any) => ({ ...s, [key]: value }));
   }
@@ -52,6 +50,12 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
   return (
     <div style={{ padding: 18 }}>
       <h3 style={{ textAlign: "center", marginBottom: 18, fontSize: 20 }}>Address & Documents</h3>
+
+      {restroCode && (
+        <div style={{ textAlign: "center", marginBottom: 10, color: "#0ea5e9" }}>
+          <strong>Outlet Code:</strong> {restroCode}
+        </div>
+      )}
 
       <div className="compact-grid">
         <div className="field full-col">
@@ -132,7 +136,8 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
           margin-bottom: 6px;
           font-weight: 600;
         }
-        .field input, textarea {
+        .field input,
+        textarea {
           width: 100%;
           padding: 8px;
           border-radius: 6px;
@@ -146,10 +151,14 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "" }
           resize: vertical;
         }
         @media (max-width: 1100px) {
-          .compact-grid { grid-template-columns: repeat(2, 1fr); }
+          .compact-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
         }
         @media (max-width: 720px) {
-          .compact-grid { grid-template-columns: 1fr; }
+          .compact-grid {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
     </div>
