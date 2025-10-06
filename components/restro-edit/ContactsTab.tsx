@@ -7,6 +7,12 @@ type Props = {
   local?: any;
   updateField?: (k: string, v: any) => void;
   restroCode?: string;
+  // optional helpers passed from RestroEditModal
+  InputWithIcon?: any;
+  validators?: {
+    validateEmailString?: (s: string) => boolean;
+    validatePhoneString?: (s: string) => boolean;
+  };
 };
 
 // small toggle switch for ON/OFF
@@ -43,13 +49,15 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   );
 }
 
-export default function ContactsTab({ local = {}, updateField = () => {}, restroCode = "" }: Props) {
-  const [emails, setEmails] = useState<
-    { name: string; receiving: string; status: boolean }[]
-  >([]);
-  const [whatsapps, setWhatsapps] = useState<
-    { name: string; number: string; status: boolean }[]
-  >([]);
+export default function ContactsTab({
+  local = {},
+  updateField = () => {},
+  restroCode = "",
+  InputWithIcon,
+  validators,
+}: Props) {
+  const [emails, setEmails] = useState<{ name: string; receiving: string; status: boolean }[]>([]);
+  const [whatsapps, setWhatsapps] = useState<{ name: string; number: string; status: boolean }[]>([]);
 
   function deriveFromLocal(l: any) {
     const e: any[] = [];
@@ -126,36 +134,106 @@ export default function ContactsTab({ local = {}, updateField = () => {}, restro
 
     // propagate each field to parent
     Object.entries(payload).forEach(([k, v]) => updateField(k, v));
-  }, [emails, whatsapps, updateField]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emails, whatsapps]);
+
+  // helpers to render an input row either with InputWithIcon (if provided) or fallback to plain input
+  function EmailRow({ row, idx }: { row: { name: string; receiving: string; status: boolean }; idx: number }) {
+    const i = idx;
+    if (InputWithIcon) {
+      return (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px", gap: 12, marginBottom: 8 }}>
+          <InputWithIcon
+            name={`EmailAddressName${i + 1}`}
+            label={`Name ${i + 1}`}
+            value={row.name}
+            onChange={(v: any) => updateEmailRow(i, "name", v)}
+            type="name"
+            placeholder={`Name ${i + 1}`}
+          />
+          <InputWithIcon
+            name={`EmailsforOrdersReceiving${i + 1}`}
+            label={`Email ${i + 1}`}
+            value={row.receiving}
+            onChange={(v: any) => updateEmailRow(i, "receiving", v)}
+            type="email"
+            placeholder={`email${i + 1}@example.com`}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Toggle value={!!row.status} onChange={(v) => updateEmailRow(i, "status", v)} />
+            <span style={{ fontSize: 12 }}>{row.status ? "ON" : "OFF"}</span>
+          </div>
+        </div>
+      );
+    }
+
+    // fallback
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px", gap: 12, marginBottom: 8 }}>
+        <input placeholder={`Name ${i + 1}`} value={row.name} onChange={(e) => updateEmailRow(i, "name", e.target.value)} />
+        <input placeholder={`Email ${i + 1}`} value={row.receiving} onChange={(e) => updateEmailRow(i, "receiving", e.target.value)} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Toggle value={!!row.status} onChange={(v) => updateEmailRow(i, "status", v)} />
+          <span style={{ fontSize: 12 }}>{row.status ? "ON" : "OFF"}</span>
+        </div>
+      </div>
+    );
+  }
+
+  function WhatsappRow({ row, idx }: { row: { name: string; number: string; status: boolean }; idx: number }) {
+    const i = idx;
+    if (InputWithIcon) {
+      return (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px", gap: 12, marginBottom: 8 }}>
+          <InputWithIcon
+            name={`WhatsappMobileNumberName${i + 1}`}
+            label={`Name ${i + 1}`}
+            value={row.name}
+            onChange={(v: any) => updateWhatsappRow(i, "name", v)}
+            type="name"
+            placeholder={`Name ${i + 1}`}
+          />
+          <InputWithIcon
+            name={`WhatsappMobileNumberforOrderDetails${i + 1}`}
+            label={`Mobile ${i + 1}`}
+            value={row.number}
+            onChange={(v: any) => updateWhatsappRow(i, "number", v)}
+            type="whatsapp"
+            placeholder={`10-digit mobile number`}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Toggle value={!!row.status} onChange={(v) => updateWhatsappRow(i, "status", v)} />
+            <span style={{ fontSize: 12 }}>{row.status ? "ON" : "OFF"}</span>
+          </div>
+        </div>
+      );
+    }
+
+    // fallback
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px", gap: 12, marginBottom: 8 }}>
+        <input placeholder={`Name ${i + 1}`} value={row.name} onChange={(e) => updateWhatsappRow(i, "name", e.target.value)} />
+        <input placeholder={`Mobile ${i + 1}`} value={row.number} onChange={(e) => updateWhatsappRow(i, "number", e.target.value)} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <Toggle value={!!row.status} onChange={(v) => updateWhatsappRow(i, "status", v)} />
+          <span style={{ fontSize: 12 }}>{row.status ? "ON" : "OFF"}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 18 }}>
       <h3 style={{ marginTop: 0 }}>Contacts</h3>
       <p style={{ color: "#666", marginBottom: 8 }}>
-        Manage Email and WhatsApp contacts for order updates.  
-        Toggle <strong>ON</strong> to enable order notifications.
+        Manage Email and WhatsApp contacts for order updates. Toggle <strong>ON</strong> to enable order notifications.
       </p>
 
       <div style={{ maxWidth: 1100 }}>
         {/* Emails Section */}
         <div style={{ marginBottom: 8, fontWeight: 600 }}>Emails</div>
         {emails.map((r, i) => (
-          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px", gap: 12, marginBottom: 8 }}>
-            <input
-              placeholder={`Name ${i + 1}`}
-              value={r.name}
-              onChange={(e) => updateEmailRow(i, "name", e.target.value)}
-            />
-            <input
-              placeholder={`Email ${i + 1}`}
-              value={r.receiving}
-              onChange={(e) => updateEmailRow(i, "receiving", e.target.value)}
-            />
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Toggle value={!!r.status} onChange={(v) => updateEmailRow(i, "status", v)} />
-              <span style={{ fontSize: 12 }}>{r.status ? "ON" : "OFF"}</span>
-            </div>
-          </div>
+          <EmailRow key={i} row={r} idx={i} />
         ))}
 
         <div style={{ height: 12 }} />
@@ -163,22 +241,7 @@ export default function ContactsTab({ local = {}, updateField = () => {}, restro
         {/* WhatsApp Section */}
         <div style={{ marginBottom: 8, fontWeight: 600 }}>WhatsApp numbers</div>
         {whatsapps.map((r, i) => (
-          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px", gap: 12, marginBottom: 8 }}>
-            <input
-              placeholder={`Name ${i + 1}`}
-              value={r.name}
-              onChange={(e) => updateWhatsappRow(i, "name", e.target.value)}
-            />
-            <input
-              placeholder={`Mobile ${i + 1}`}
-              value={r.number}
-              onChange={(e) => updateWhatsappRow(i, "number", e.target.value)}
-            />
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Toggle value={!!r.status} onChange={(v) => updateWhatsappRow(i, "status", v)} />
-              <span style={{ fontSize: 12 }}>{r.status ? "ON" : "OFF"}</span>
-            </div>
-          </div>
+          <WhatsappRow key={i} row={r} idx={i} />
         ))}
       </div>
 
