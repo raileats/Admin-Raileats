@@ -121,9 +121,6 @@ function validatePhoneString(s: string) {
 }
 
 /* ---------- New: reusable InputWithIcon component to be used in tabs ---------- */
-/* Usage: child tab imports/receives InputWithIcon via common props and uses:
-   <InputWithIcon name="OwnerPhone" value={local.OwnerPhone} onChange={(v)=>updateField('OwnerPhone',v)} type="phone" label="Owner Phone" />
-*/
 function InputWithIcon({
   name,
   label,
@@ -166,10 +163,18 @@ function InputWithIcon({
           placeholder={placeholder}
           value={v}
           onChange={(e) => {
-            onChange(e.target.value);
+            let raw = e.target.value ?? "";
+            // For phone/whatsapp: keep digits only and limit to 10 chars
+            if (type === "phone" || type === "whatsapp") {
+              raw = String(raw).replace(/\D/g, "").slice(0, 10);
+            }
+            onChange(raw);
           }}
           onBlur={() => setTouched(true)}
           onFocus={() => setTouched(true)}
+          inputMode={type === "phone" || type === "whatsapp" ? "numeric" : undefined}
+          pattern={type === "phone" || type === "whatsapp" ? "\\d*" : undefined}
+          maxLength={type === "phone" || type === "whatsapp" ? 10 : undefined}
           style={{
             flex: 1,
             padding: "8px 10px",
@@ -183,8 +188,8 @@ function InputWithIcon({
       {showError && (
         <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
           {type === "email" && "Please enter a valid email (example: name@example.com)."}
-          {type === "phone" && "Enter a 10-digit numeric mobile number (no spaces). For multiple, separate with commas."}
-          {type === "whatsapp" && "Enter a 10-digit numeric WhatsApp number (no spaces). For multiple, separate with commas."}
+          {type === "phone" && "Enter a 10-digit numeric mobile number (no spaces)."}
+          {type === "whatsapp" && "Enter a 10-digit numeric WhatsApp number (no spaces)."}
           {type === "name" && "Please enter a name."}
         </div>
       )}
@@ -377,33 +382,54 @@ export default function RestroEditModal({
   function collectValidationErrors(obj: any) {
     const errs: string[] = [];
 
-    // Heuristic: check keys that look like emails or contain "Email"
     for (const key of Object.keys(obj)) {
       const low = key.toLowerCase();
       const val = obj[key];
 
-      if (!val || (typeof val === "string" && val.trim() === "")) continue;
+      // skip undefined/null entirely
+      if (val === undefined || val === null) continue;
 
-      // email-like keys
+      // If it's an empty string, treat as "not provided" and skip
+      if (typeof val === "string" && val.trim() === "") continue;
+
+      // 1) Skip fields that are names
+      if (low.includes("name")) {
+        continue;
+      }
+
+      // 2) Skip status/enabled toggles — they are not email/text fields
+      if (low.includes("status") || low.includes("enabled") || low.endsWith("_status") || low.endsWith("_enabled")) {
+        continue;
+      }
+
+      // 3) Email-like keys (but we already skipped name and status)
       if (low.includes("email") || low.includes("emailsfor") || low.includes("emailaddress")) {
         if (typeof val !== "string") {
           errs.push(`${key}: expected text (email), got ${typeof val}`);
-        } else if (!validateEmailString(String(val))) {
-          errs.push(`${key}: invalid email(s) => "${String(val)}"`);
+          continue;
         }
+        const s = val.trim();
+        if (s === "") continue; // allow blank
+        if (!validateEmailString(s)) {
+          errs.push(`${key}: invalid email(s) => "${s}"`);
+        }
+        continue;
       }
 
-      // whatsapp / mobile-like keys
+      // 4) Phone/whatsapp/mobile-like keys
       if (low.includes("whatsapp") || low.includes("mobile") || low.includes("phone") || low.includes("contact")) {
-        // skip labels like "WhatsappMobileNumberName1" (these might be names), but check values that look numeric or likely numbers:
-        // If value contains digits or '+' treat as phone field
-        const text = String(val).trim();
-        if (/\d/.test(text)) {
-          if (!validatePhoneString(text)) {
-            errs.push(`${key}: invalid phone number(s) => "${text}". Expect 10-digit numeric numbers, comma-separated if multiple.`);
+        const s = String(val).trim();
+        if (s === "") continue;
+        // Only run phone validation if it contains digits
+        if (/\d/.test(s)) {
+          if (!validatePhoneString(s)) {
+            errs.push(`${key}: invalid phone number(s) => "${s}". Expect 10-digit numeric numbers, comma-separated if multiple.`);
           }
         }
+        continue;
       }
+
+      // else: no special validation for other keys
     }
 
     return errs;
@@ -432,18 +458,42 @@ export default function RestroEditModal({
 
     setSavingInternal(true);
     try {
-      // Build payload: include only fields that exist in local or known contact keys
-      const payload: any = { ...local };
+      // Build payload: whitelist only the fields we expect to exist in RestroMaster (avoid sending unknown keys)
+      const allowedKeys = [
+        // basic contact fields (emails 1..3)
+        "EmailAddressName1","EmailsforOrdersReceiving1","EmailsforOrdersReceiving1Enabled",
+        "EmailAddressName2","EmailsforOrdersReceiving2","EmailsforOrdersReceiving2Enabled",
+        "EmailAddressName3","EmailsforOrdersReceiving3","EmailsforOrdersReceiving3Enabled",
 
-      // Ensure we do not accidentally send nested objects; flatten simple values only
-      for (const k of Object.keys(payload)) {
-        if (typeof payload[k] === "object" && payload[k] !== null) {
-          // skip complex nested objects (you can adjust to include specific keys)
-          delete payload[k];
+        // whatsapp 1..3
+        "WhatsappMobileNumberName1","WhatsappMobileNumberforOrderDetails1","WhatsappMobileNumberStatus1",
+        "WhatsappMobileNumberName2","WhatsappMobileNumberforOrderDetails2","WhatsappMobileNumberStatus2",
+        "WhatsappMobileNumberName3","WhatsappMobileNumberforOrderDetails3","WhatsappMobileNumberStatus3",
+
+        // common fields you likely want to allow too (add more as needed)
+        "OwnerName","OwnerPhone","RestroEmail","RestroPhone","BrandName"
+      ];
+
+      const payload: any = {};
+      for (const k of allowedKeys) {
+        const v = local && local[k];
+        if (v === undefined || v === null) continue;
+
+        // For strings: only include if non-empty after trim (so blank inputs won't overwrite DB)
+        if (typeof v === "string") {
+          if (v.trim() === "") continue;
+          payload[k] = v.trim();
+        } else {
+          // booleans/numbers
+          payload[k] = v;
         }
       }
 
-      // Update RestroMaster table by RestroCode
+      // if you want to fallback to defaultPatch (server endpoint) instead of direct supabase client, you can:
+      // const patchResult = await defaultPatch(payload);
+      // if (!patchResult.ok) throw new Error(patchResult.error || "Patch failed");
+
+      // Update RestroMaster table by RestroCode using supabase client
       const { error: supError } = await supabase.from("RestroMaster").update(payload).eq("RestroCode", restroCode);
 
       if (supError) throw supError;
