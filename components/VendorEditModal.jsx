@@ -1,158 +1,159 @@
-// components/RestroEditModal.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import KeyValueGrid from "@/components/ui/KeyValueGrid";
+import ContactsClient from "@/components/tabs/ContactsClient"; // ensure path exists
 
-// Tabs (adjust paths if your files live elsewhere)
-import AddressDocsClient from "@/components/restro-edit/AddressDocsClient";
-import ContactsTab from "@/components/restro-edit/ContactsTab";
-import BankTab from "@/components/restro-edit/BankTab";
-import FutureClosedTab from "@/components/restro-edit/FutureClosedTab";
-import MenuTab from "@/components/restro-edit/MenuTab";
+export default function VendorEditModal({ vendor, onClose, onSave, saving: parentSaving }) {
+  const tabs = ["Basic Information", "Contacts", "Bank", "Other"];
+  const [activeTab, setActiveTab] = useState(tabs[0]);
+  const [savingInternal, setSavingInternal] = useState(false);
+  const [error, setError] = useState(null);
 
-// If any of the above imports are missing in your repo, update the import path accordingly.
-
-type Props = {
-  restro?: any; // server-provided restro object
-  vendor?: any; // alternate data source (some flows use 'vendor')
-  onClose?: () => void;
-  onSave?: (payload: any) => Promise<any> | any;
-  show?: boolean;
-};
-
-export default function RestroEditModal({ restro, vendor, onClose, onSave, show = true }: Props) {
-  const tabs = [
-    "Basic Information",
-    "Address & Documents",
-    "Contacts",
-    "Bank",
-    "Future Closed",
-    "Menu",
-  ];
-  const [activeTab, setActiveTab] = useState<string>(tabs[0]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // local editable copy (used by KeyValueGrid and other tabs)
-  const [local, setLocal] = useState<any>({});
+  const [local, setLocal] = useState({});
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [initialEmails, setInitialEmails] = useState([]);
+  const [initialWhatsapps, setInitialWhatsapps] = useState([]);
 
   useEffect(() => {
-    // seed local from server-provided restro or vendor prop
-    const base = restro ?? vendor ?? {};
-    setLocal((prev: any) => ({
-      ...prev,
-      RestroCode: base?.RestroCode ?? base?.VendorCode ?? base?.code ?? base?.id ?? prev?.RestroCode,
-      RestroName: base?.RestroName ?? base?.VendorName ?? base?.name ?? prev?.RestroName,
-      StationName: base?.StationName ?? prev?.StationName,
-      StationCode: base?.StationCode ?? prev?.StationCode,
-      State: base?.State ?? prev?.State,
-      ...base,
-    }));
-  }, [restro, vendor]);
+    setLocal({
+      VendorCode: vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? "",
+      VendorName: vendor?.VendorName ?? vendor?.name ?? "",
+      ContactName: vendor?.ContactName ?? "",
+      ContactEmail: vendor?.ContactEmail ?? "",
+      ContactPhone: vendor?.ContactPhone ?? "",
+      BankAccount: vendor?.BankAccount ?? "",
+      IFSC: vendor?.IFSC ?? "",
+      VendorLogo: vendor?.VendorLogo ?? "",
+      Active: vendor?.Active === 1 || vendor?.Active === "1" || vendor?.Active === true,
+      ...vendor,
+    });
+  }, [vendor]);
 
-  // Determine a robust restroCode (string) to send to ContactsTab and API calls
-  const restroCode: string = useMemo(() => {
-    const candidates = [
-      restro?.RestroCode,
-      restro?.code,
-      restro?.id,
-      vendor?.VendorCode,
-      vendor?.id,
-      local?.RestroCode,
-      local?.VendorCode,
-      local?.id,
-    ];
-    const pick = candidates.find((v) => typeof v !== "undefined" && v !== null && String(v) !== "");
-    return String(pick ?? "");
-  }, [restro, vendor, local]);
-
+  // DEBUG: runtime mount log
   useEffect(() => {
-    console.log("DEBUG: RestroEditModal mounted", { restroCode, restro, vendor, local });
-  }, [restroCode]);
+    console.log("DEBUG: VendorEditModal mounted, vendor:", vendor, "local:", local);
+  }, [vendor, local?.VendorCode]);
 
-  function updateField(key: string, value: any) {
-    setLocal((s: any) => ({ ...s, [key]: value }));
+  // fetch contacts when we have a restro code available
+  useEffect(() => {
+    const code = local?.VendorCode ?? local?.id ?? local?.code;
+    if (!code) {
+      setInitialEmails([]);
+      setInitialWhatsapps([]);
+      return;
+    }
+
+    let cancelled = false;
+    setContactsLoading(true);
+    setError(null);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}/contacts`);
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(txt || `Fetch failed (${res.status})`);
+        }
+        const json = await res.json();
+        if (!cancelled) {
+          setInitialEmails(Array.isArray(json.emails) ? json.emails : []);
+          setInitialWhatsapps(Array.isArray(json.whatsapps) ? json.whatsapps : []);
+        }
+      } catch (err) {
+        console.error("Fetch contacts error:", err);
+        if (!cancelled) setError("Failed to load contacts");
+      } finally {
+        if (!cancelled) setContactsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [local?.VendorCode, local?.id, local?.code]);
+
+  const saving = parentSaving ?? savingInternal;
+
+  function updateField(key, value) {
+    setLocal((s) => ({ ...s, [key]: value }));
   }
 
-  async function handleSaveBasic() {
+  async function defaultPatch(payload) {
+    try {
+      const code = vendor?.VendorCode ?? vendor?.id ?? vendor?.code;
+      if (!code) throw new Error("Missing VendorCode for update");
+      const res = await fetch(`/api/vendors/${encodeURIComponent(String(code))}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(txt || `Update failed (${res.status})`);
+      }
+      const json = await res.json().catch(() => null);
+      const updated = json?.row ?? json ?? null;
+      return { ok: true, row: updated };
+    } catch (err) {
+      return { ok: false, error: err?.message ?? String(err) };
+    }
+  }
+
+  async function handleSave() {
     setError(null);
-    setSaving(true);
+    const payload = {
+      VendorName: local.VendorName ?? "",
+      ContactName: local.ContactName ?? "",
+      ContactEmail: local.ContactEmail ?? "",
+      ContactPhone: local.ContactPhone ?? "",
+      BankAccount: local.BankAccount ?? "",
+      IFSC: local.IFSC ?? "",
+      VendorLogo: local.VendorLogo ?? "",
+      Active: local.Active ? 1 : 0,
+    };
+
     try {
       if (onSave) {
-        const result = await onSave(local);
-        if (!result || !result.ok) {
-          throw new Error(result?.error ?? "Save failed");
-        }
+        if (parentSaving === undefined) setSavingInternal(true);
+        const result = await onSave(payload);
+        if (!result || !result.ok) throw new Error(result?.error ?? "Save failed");
+        onClose();
       } else {
-        // default: try PATCH to API endpoint if exists
-        try {
-          const code = restroCode;
-          if (!code) throw new Error("Missing restro code");
-          const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(local),
-          });
-          if (!res.ok) throw new Error(`Save failed (${res.status})`);
-        } catch (err: any) {
-          throw err;
-        }
+        setSavingInternal(true);
+        const result = await defaultPatch(payload);
+        if (!result.ok) throw new Error(result.error ?? "Save failed");
+        onClose();
       }
-      // close modal on success
-      if (onClose) onClose();
-    } catch (err: any) {
-      console.error("Save basic error:", err);
+    } catch (err) {
+      console.error("Save error:", err);
       setError(err?.message ?? String(err));
     } finally {
-      setSaving(false);
+      if (parentSaving === undefined) setSavingInternal(false);
     }
   }
 
-  // common props passed to tab components
-  const common = {
-    local,
-    updateField,
+  const imgSrc = (p) => {
+    if (!p) return "";
+    if (p.startsWith("http://") || p.startsWith("https://")) return p;
+    return `${process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}${p}`;
   };
 
-  // Render the selected tab
-  function renderTab() {
-    switch (activeTab) {
-      case "Basic Information":
-        return (
-          <div>
-            <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
-            <KeyValueGrid
-              rows={[
-                { keyLabel: "Restro Code", value: <div className="readonly-value">{local?.RestroCode ?? "—"}</div> },
-                { keyLabel: "Restro Name", value: <input className="kv-input" value={local?.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} /> },
-                { keyLabel: "Station", value: <input className="kv-input" value={local?.StationName ?? ""} onChange={(e) => updateField("StationName", e.target.value)} /> },
-                { keyLabel: "State", value: <input className="kv-input" value={local?.State ?? ""} onChange={(e) => updateField("State", e.target.value)} /> },
-                // add more fields as required
-              ]}
-              labelWidth={200}
-              maxWidth={900}
-            />
-          </div>
-        );
-      case "Address & Documents":
-        // AddressDocsClient expected to handle initialData or local
-        return <AddressDocsClient initialData={restro ?? local} />;
-      case "Contacts":
-        // IMPORTANT: pass restroCode (string). ContactsTab file we created expects props { restroCode }
-        return <ContactsTab restroCode={restroCode} {...common} />;
-      case "Bank":
-        return <BankTab {...common} />;
-      case "Future Closed":
-        return <FutureClosedTab {...common} />;
-      case "Menu":
-        return <MenuTab {...common} />;
-      default:
-        return <div>Unknown tab</div>;
-    }
-  }
+  const rows = [
+    { keyLabel: "Vendor Code", value: <div className="readonly-value">{local.VendorCode ?? "—"}</div> },
+    { keyLabel: "Vendor Name", value: <input className="kv-input" value={local.VendorName ?? ""} onChange={(e) => updateField("VendorName", e.target.value)} /> },
+    { keyLabel: "Contact Name", value: <input className="kv-input" value={local.ContactName ?? ""} onChange={(e) => updateField("ContactName", e.target.value)} /> },
+    { keyLabel: "Contact Email", value: <input className="kv-input" value={local.ContactEmail ?? ""} onChange={(e) => updateField("ContactEmail", e.target.value)} /> },
+    { keyLabel: "Contact Phone", value: <input className="kv-input" value={local.ContactPhone ?? ""} onChange={(e) => updateField("ContactPhone", e.target.value)} /> },
+    { keyLabel: "Vendor Logo (path)", value: <input className="kv-input" value={local.VendorLogo ?? ""} onChange={(e) => updateField("VendorLogo", e.target.value)} /> },
+    { keyLabel: "Logo Preview", value: local.VendorLogo ? <img className="preview-img" src={imgSrc(local.VendorLogo)} alt="logo" onError={(e) => ((e.target).style.display = "none")} /> : <div className="readonly-value">No image</div> },
+    { keyLabel: "Bank Account", value: <input className="kv-input" value={local.BankAccount ?? ""} onChange={(e) => updateField("BankAccount", e.target.value)} /> },
+    { keyLabel: "IFSC", value: <input className="kv-input" value={local.IFSC ?? ""} onChange={(e) => updateField("IFSC", e.target.value)} /> },
+    { keyLabel: "Active", value: <label className="inline-label"><input type="checkbox" checked={!!local.Active} onChange={(e) => updateField("Active", e.target.checked)} /> <span>{local.Active ? "Yes" : "No"}</span></label> },
+  ];
 
-  if (!show) return null;
+  // Determine restroCode to pass to ContactsClient when Contacts tab is active
+  const restroCodeForContacts = String(local?.VendorCode ?? local?.id ?? local?.code ?? vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? "");
 
   return (
     <div
@@ -185,13 +186,13 @@ export default function RestroEditModal({ restro, vendor, onClose, onSave, show 
       >
         {/* header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
-          <div style={{ fontWeight: 600 }}>{local?.RestroCode ?? local?.VendorCode ?? "—"} / {local?.RestroName ?? "—"}</div>
+          <div style={{ fontWeight: 600 }}>{String(local.VendorCode ?? "")} / {local.VendorName}</div>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <button onClick={() => onClose && onClose()} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">✕</button>
+            <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">✕</button>
           </div>
         </div>
 
-        {/* tabs bar */}
+        {/* tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid #eee", background: "#fafafa" }}>
           {tabs.map((t) => (
             <div
@@ -213,13 +214,46 @@ export default function RestroEditModal({ restro, vendor, onClose, onSave, show 
         {/* toolbar */}
         <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-          <button onClick={() => onClose && onClose()} disabled={saving} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}>Cancel</button>
-          <button onClick={handleSaveBasic} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>{saving ? "Saving..." : "Save"}</button>
+          <button onClick={() => { onClose(); }} disabled={saving} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>{saving ? "Saving..." : "Save"}</button>
         </div>
 
         {/* content */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {renderTab()}
+          {activeTab === "Basic Information" && (
+            <div>
+              <h3 style={{ marginTop: 0, textAlign: "center" }}>Vendor - Basic Information</h3>
+              <KeyValueGrid rows={rows} labelWidth={200} maxWidth={900} />
+            </div>
+          )}
+
+          {activeTab === "Contacts" && (
+            <div>
+              <h3 style={{ marginTop: 0 }}>Contacts</h3>
+              <p style={{ color: "#666", marginBottom: 8 }}>
+                Manage emails and WhatsApp numbers here. Use the Save button inside the Contacts panel to save contacts, or use the modal Save to persist vendor basic info.
+              </p>
+
+              {/* Render our ContactsClient component (client-side) */}
+              {contactsLoading ? (
+                <div>Loading contacts…</div>
+              ) : (
+                <ContactsClient
+                  restroCode={restroCodeForContacts}
+                  initialEmails={initialEmails}
+                  initialWhatsapps={initialWhatsapps}
+                />
+              )}
+
+            </div>
+          )}
+
+          {activeTab !== "Basic Information" && activeTab !== "Contacts" && (
+            <div>
+              <h3 style={{ marginTop: 0 }}>{activeTab}</h3>
+              <p style={{ color: "#555" }}>Content for <b>{activeTab}</b> — implement fields as needed.</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -240,6 +274,18 @@ export default function RestroEditModal({ restro, vendor, onClose, onSave, show 
           background: #fafafa;
           color: #222;
           font-size: 13px;
+        }
+        .inline-label {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+        }
+        .preview-img {
+          height: 96px;
+          object-fit: cover;
+          border-radius: 6px;
+          border: 1px solid #eee;
         }
       `}</style>
     </div>
