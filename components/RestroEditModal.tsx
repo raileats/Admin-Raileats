@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabaseBrowser"; // keep your existing client
+import { supabase } from "@/lib/supabaseBrowser"; // <-- adjust if your export is different
 
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
@@ -32,45 +32,6 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ---------- small inline SVG icons for tabs (unchanged) ---------- */
-const Icon = {
-  basic: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M12 2L3 6v6c0 5 3.8 9.2 9 10 5.2-.8 9-5 9-10V6l-9-4z" />
-    </svg>
-  ),
-  settings: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-1.9-3.3-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.4 3.1a7.6 7.6 0 0 0-1.7 1l-2.5-1L2 11.4l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 1.9 3.3 2.5-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.4-3.1a7.6 7.6 0 0 0 1.7-1l2.5 1 1.9-3.3L19.4 15z" />
-    </svg>
-  ),
-  docs: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    </svg>
-  ),
-  contacts: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 4.9V22h16v-3.1c0-2.7-3.6-4.9-8-4.9z" />
-    </svg>
-  ),
-  bank: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M12 2L1 6l11 4 11-4-11-4zm0 7v13" />
-    </svg>
-  ),
-  calendar: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M7 10h5v5H7zM3 4h18v18H3z" />
-    </svg>
-  ),
-  menu: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" />
-    </svg>
-  ),
-};
-
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
     if (!obj) continue;
@@ -92,15 +53,13 @@ function buildStationDisplay(obj: any) {
   return left || "—";
 }
 
-/* ---------- validators (UPDATED) ---------- */
-// email: require @ and basic tld part
+/* ---------- validators ---------- */
+// simple email regex (basic)
 const emailRegex = /^\S+@\S+\.\S+$/;
-// phone: exactly 10 digits (numeric) — this enforces the user's requested rule
 const tenDigitRegex = /^\d{10}$/;
 
 function validateEmailString(s: string) {
   if (!s) return false;
-  // allow comma-separated multiple emails
   const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
   if (!parts.length) return false;
   for (const p of parts) {
@@ -111,7 +70,6 @@ function validateEmailString(s: string) {
 
 function validatePhoneString(s: string) {
   if (!s) return false;
-  // allow comma-separated multiple numbers; each must be exactly 10 numeric digits
   const parts = s.split(",").map((p) => p.replace(/\s+/g, "").trim()).filter(Boolean);
   if (!parts.length) return false;
   for (const p of parts) {
@@ -120,7 +78,7 @@ function validatePhoneString(s: string) {
   return true;
 }
 
-/* ---------- New: reusable InputWithIcon component to be used in tabs ---------- */
+/* ---------- InputWithIcon (reusable) ---------- */
 function InputWithIcon({
   name,
   label,
@@ -137,10 +95,8 @@ function InputWithIcon({
   placeholder?: string;
 }) {
   const [touched, setTouched] = useState(false);
-
   const v = typeof value === "string" ? value : value ?? "";
 
-  // compute validity based on type
   let valid = true;
   if (type === "email") valid = validateEmailString(String(v));
   else if (type === "phone" || type === "whatsapp") valid = validatePhoneString(String(v));
@@ -148,8 +104,6 @@ function InputWithIcon({
   else valid = true;
 
   const showError = touched && !valid;
-
-  // small icons as emoji — can be replaced by SVG if you prefer
   const icon = type === "phone" ? "📞" : type === "whatsapp" ? "🟢" : type === "email" ? "✉️" : "👤";
 
   return (
@@ -164,7 +118,6 @@ function InputWithIcon({
           value={v}
           onChange={(e) => {
             let raw = e.target.value ?? "";
-            // For phone/whatsapp: keep digits only and limit to 10 chars
             if (type === "phone" || type === "whatsapp") {
               raw = String(raw).replace(/\D/g, "").slice(0, 10);
             }
@@ -197,7 +150,7 @@ function InputWithIcon({
   );
 }
 
-/* ---------- rest of RestroEditModal (mostly unchanged) ---------- */
+/* ---------- RestroEditModal component ---------- */
 
 export default function RestroEditModal({
   restro: restroProp,
@@ -226,7 +179,6 @@ export default function RestroEditModal({
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
 
-  // ESC to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape" || e.key === "Esc") doClose();
@@ -236,7 +188,6 @@ export default function RestroEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restro]);
 
-  // If no restro prop, try to fetch by parsing URL /restros/:code/edit
   useEffect(() => {
     async function fetchRestro(code: string) {
       try {
@@ -265,7 +216,6 @@ export default function RestroEditModal({
     }
   }, [restro]);
 
-  // Load stations if no options provided
   useEffect(() => {
     if (stations && stations.length) return;
     (async () => {
@@ -291,7 +241,6 @@ export default function RestroEditModal({
     })();
   }, []);
 
-  // Populate local state from restro
   useEffect(() => {
     if (!restro) return;
     setLocal({
@@ -318,13 +267,23 @@ export default function RestroEditModal({
       BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
       RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
       RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
-      // copy any contacts-like fields (common names)
-      EmailAddressName1: restro?.EmailAddressName1 ?? restro?.EmailsforOrdersReceiving1 ?? restro?.EmailsforOrdersStatus1 ?? restro?.EmailAddressName1,
+      // emails (only 2)
+      EmailAddressName1: restro?.EmailAddressName1 ?? "",
       EmailsforOrdersReceiving1: restro?.EmailsforOrdersReceiving1 ?? "",
-      EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? 0,
+      EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? restro?.EmailsforOrdersStatus1 ?? "",
+      EmailAddressName2: restro?.EmailAddressName2 ?? "",
+      EmailsforOrdersReceiving2: restro?.EmailsforOrdersReceiving2 ?? "",
+      EmailsforOrdersStatus2: restro?.EmailsforOrdersStatus2 ?? restro?.EmailsforOrdersStatus2 ?? "",
+      // whatsapp (3)
       WhatsappMobileNumberName1: restro?.WhatsappMobileNumberName1 ?? "",
       WhatsappMobileNumberforOrderDetails1: restro?.WhatsappMobileNumberforOrderDetails1 ?? "",
-      WhatsappMobileNumberStatus1: restro?.WhatsappMobileNumberStatus1 ?? 0,
+      WhatsappMobileNumberStatus1: restro?.WhatsappMobileNumberStatus1 ?? restro?.WhatsappMobileNumberStatus1 ?? "",
+      WhatsappMobileNumberName2: restro?.WhatsappMobileNumberName2 ?? "",
+      WhatsappMobileNumberforOrderDetails2: restro?.WhatsappMobileNumberforOrderDetails2 ?? "",
+      WhatsappMobileNumberStatus2: restro?.WhatsappMobileNumberStatus2 ?? restro?.WhatsappMobileNumberStatus2 ?? "",
+      WhatsappMobileNumberName3: restro?.WhatsappMobileNumberName3 ?? "",
+      WhatsappMobileNumberforOrderDetails3: restro?.WhatsappMobileNumberforOrderDetails3 ?? "",
+      WhatsappMobileNumberStatus3: restro?.WhatsappMobileNumberStatus3 ?? restro?.WhatsappMobileNumberStatus3 ?? "",
       ...restro,
     });
   }, [restro]);
@@ -372,13 +331,12 @@ export default function RestroEditModal({
 
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
-  // calculate a canonical restroCode to pass down
   const restroCode =
     (local && (local.RestroCode ?? local.restro_code ?? local.id ?? local.code)) ||
     (restro && (restro.RestroCode ?? restro.restro_code ?? restro.RestroId ?? restro.restro_id ?? restro.code)) ||
     "";
 
-  // ---------- validation routine (uses updated validators above) ----------
+  /* ---------- validation routine ---------- */
   function collectValidationErrors(obj: any) {
     const errs: string[] = [];
 
@@ -386,68 +344,57 @@ export default function RestroEditModal({
       const low = key.toLowerCase();
       const val = obj[key];
 
-      // skip undefined/null entirely
       if (val === undefined || val === null) continue;
-
-      // If it's an empty string, treat as "not provided" and skip
       if (typeof val === "string" && val.trim() === "") continue;
 
-      // 1) Skip fields that are names
-      if (low.includes("name")) {
-        continue;
-      }
+      // skip name fields
+      if (low.includes("name")) continue;
 
-      // 2) Skip status/enabled toggles — they are not email/text fields
-      if (low.includes("status") || low.includes("enabled") || low.endsWith("_status") || low.endsWith("_enabled")) {
-        continue;
-      }
+      // skip status/enabled fields
+      if (low.includes("status") || low.includes("enabled") || low.endsWith("_status") || low.endsWith("_enabled")) continue;
 
-      // 3) Email-like keys (but we already skipped name and status)
+      // email-like keys
       if (low.includes("email") || low.includes("emailsfor") || low.includes("emailaddress")) {
         if (typeof val !== "string") {
           errs.push(`${key}: expected text (email), got ${typeof val}`);
           continue;
         }
         const s = val.trim();
-        if (s === "") continue; // allow blank
+        if (s === "") continue;
         if (!validateEmailString(s)) {
           errs.push(`${key}: invalid email(s) => "${s}"`);
         }
         continue;
       }
 
-      // 4) Phone/whatsapp/mobile-like keys
+      // phone/whatsapp keys
       if (low.includes("whatsapp") || low.includes("mobile") || low.includes("phone") || low.includes("contact")) {
         const s = String(val).trim();
         if (s === "") continue;
-        // Only run phone validation if it contains digits
         if (/\d/.test(s)) {
           if (!validatePhoneString(s)) {
-            errs.push(`${key}: invalid phone number(s) => "${s}". Expect 10-digit numeric numbers, comma-separated if multiple.`);
+            errs.push(`${key}: invalid phone number(s) => "${s}". Expect 10-digit numeric numbers.`);
           }
         }
         continue;
       }
 
-      // else: no special validation for other keys
+      // else: no special validation
     }
 
     return errs;
   }
 
-  // direct supabase client (browser) — used for direct update to RestroMaster
-  const supabase = supabaseBrowser;
+  // Use imported supabase client
+  // const supabase = supabase; // not needed, we imported above
 
-  // Save handler (validates then updates Supabase RestroMaster)
   async function handleSave() {
     setNotification(null);
     setError(null);
 
-    // run validation
     const validationErrors = collectValidationErrors(local);
     if (validationErrors.length) {
       setNotification({ type: "error", text: `Validation failed:\n• ${validationErrors.join("\n• ")}` });
-      // keep the error open longer
       return;
     }
 
@@ -458,19 +405,18 @@ export default function RestroEditModal({
 
     setSavingInternal(true);
     try {
-      // Build payload: whitelist only the fields we expect to exist in RestroMaster (avoid sending unknown keys)
+      // Allowed keys: Emails 1..2 and WhatsApp 1..3 plus some common fields
       const allowedKeys = [
-        // basic contact fields (emails 1..3)
-        "EmailAddressName1","EmailsforOrdersReceiving1","EmailsforOrdersReceiving1Enabled",
-        "EmailAddressName2","EmailsforOrdersReceiving2","EmailsforOrdersReceiving2Enabled",
-        "EmailAddressName3","EmailsforOrdersReceiving3","EmailsforOrdersReceiving3Enabled",
+        // emails (2)
+        "EmailAddressName1", "EmailsforOrdersReceiving1", "EmailsforOrdersStatus1",
+        "EmailAddressName2", "EmailsforOrdersReceiving2", "EmailsforOrdersStatus2",
 
-        // whatsapp 1..3
-        "WhatsappMobileNumberName1","WhatsappMobileNumberforOrderDetails1","WhatsappMobileNumberStatus1",
-        "WhatsappMobileNumberName2","WhatsappMobileNumberforOrderDetails2","WhatsappMobileNumberStatus2",
-        "WhatsappMobileNumberName3","WhatsappMobileNumberforOrderDetails3","WhatsappMobileNumberStatus3",
+        // whatsapp (3)
+        "WhatsappMobileNumberName1", "WhatsappMobileNumberforOrderDetails1", "WhatsappMobileNumberStatus1",
+        "WhatsappMobileNumberName2", "WhatsappMobileNumberforOrderDetails2", "WhatsappMobileNumberStatus2",
+        "WhatsappMobileNumberName3", "WhatsappMobileNumberforOrderDetails3", "WhatsappMobileNumberStatus3",
 
-        // common fields you likely want to allow too (add more as needed)
+        // common
         "OwnerName","OwnerPhone","RestroEmail","RestroPhone","BrandName"
       ];
 
@@ -478,29 +424,24 @@ export default function RestroEditModal({
       for (const k of allowedKeys) {
         const v = local && local[k];
         if (v === undefined || v === null) continue;
-
-        // For strings: only include if non-empty after trim (so blank inputs won't overwrite DB)
         if (typeof v === "string") {
           if (v.trim() === "") continue;
           payload[k] = v.trim();
         } else {
-          // booleans/numbers
           payload[k] = v;
         }
       }
 
-      // if you want to fallback to defaultPatch (server endpoint) instead of direct supabase client, you can:
-      // const patchResult = await defaultPatch(payload);
-      // if (!patchResult.ok) throw new Error(patchResult.error || "Patch failed");
+      // debug: uncomment to inspect payload before sending
+      // console.log("PATCH payload:", payload);
 
-      // Update RestroMaster table by RestroCode using supabase client
+      // If you prefer server-side patch route, use defaultPatch(payload) instead.
       const { error: supError } = await supabase.from("RestroMaster").update(payload).eq("RestroCode", restroCode);
 
       if (supError) throw supError;
 
       setNotification({ type: "success", text: "Changes saved successfully ✅" });
 
-      // refresh same page / data
       setTimeout(() => {
         if ((router as any).refresh) router.refresh();
         else window.location.reload();
@@ -510,15 +451,11 @@ export default function RestroEditModal({
       setNotification({ type: "error", text: `Save failed: ${err?.message ?? String(err)}` });
     } finally {
       setSavingInternal(false);
-      // auto clear after a few seconds
       setTimeout(() => setNotification(null), 6000);
     }
   }
 
-  // Map tab name -> component render (only renders the external tab components)
   const renderTab = () => {
-    // include restroCode in common so child tabs that require it receive it
-    // IMPORTANT: pass down validators & InputWithIcon so tabs can render inline errors & icons
     const common = {
       local,
       updateField,
@@ -526,7 +463,6 @@ export default function RestroEditModal({
       stations,
       loadingStations,
       restroCode,
-      // new: pass helper component & validators
       InputWithIcon,
       validators: {
         validateEmailString,
@@ -540,7 +476,6 @@ export default function RestroEditModal({
       case "Station Settings":
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        // AddressDocsClient: we pass initialData only (keeps compatibility)
         return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
       case "Contacts":
         return <ContactsTab {...common} />;
@@ -555,23 +490,22 @@ export default function RestroEditModal({
     }
   };
 
-  // small helper that picks icon for tab
   function tabIcon(t: string | undefined | null) {
     switch (t) {
       case "Basic Information":
-        return Icon.basic;
+        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M12 2L3 6v6c0 5 3.8 9.2 9 10 5.2-.8 9-5 9-10V6l-9-4z" /></svg>;
       case "Station Settings":
-        return Icon.settings;
+        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-1.9-3.3-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.4 3.1a7.6 7.6 0 0 0-1.7 1l-2.5-1L2 11.4l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 1.9 3.3 2.5-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.4-3.1a7.6 7.6 0 0 0 1.7-1l2.5 1 1.9-3.3L19.4 15z" /></svg>;
       case "Address & Documents":
-        return Icon.docs;
+        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /></svg>;
       case "Contacts":
-        return Icon.contacts;
+        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 4.9V22h16v-3.1c0-2.7-3.6-4.9-8-4.9z" /></svg>;
       case "Bank":
-        return Icon.bank;
+        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M12 2L1 6l11 4 11-4-11-4zm0 7v13" /></svg>;
       case "Future Closed":
-        return Icon.calendar;
+        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M7 10h5v5H7zM3 4h18v18H3z" /></svg>;
       case "Menu":
-        return Icon.menu;
+        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" /></svg>;
       default:
         return null;
     }
