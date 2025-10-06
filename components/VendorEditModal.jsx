@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import KeyValueGrid from "@/components/ui/KeyValueGrid";
-import ContactsClient from "@/components/tabs/ContactsClient"; // ensure path exists
+import ContactsClient from "@/components/tabs/ContactsClient"; // ensure this path exists
 
 export default function VendorEditModal({ vendor, onClose, onSave, saving: parentSaving }) {
   const tabs = ["Basic Information", "Contacts", "Bank", "Other"];
@@ -18,7 +18,7 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
   useEffect(() => {
     setLocal({
       VendorCode: vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? "",
-      VendorName: vendor?.VendorName ?? vendor?.VendorName ?? "",
+      VendorName: vendor?.VendorName ?? vendor?.name ?? "",
       ContactName: vendor?.ContactName ?? "",
       ContactEmail: vendor?.ContactEmail ?? "",
       ContactPhone: vendor?.ContactPhone ?? "",
@@ -30,29 +30,47 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
     });
   }, [vendor]);
 
-  // fetch contacts for this vendor/restro when modal opens and when vendor changes
+  // DEBUG: runtime mount log
+  useEffect(() => {
+    console.log("DEBUG: VendorEditModal mounted, vendor:", vendor, "local:", local);
+  }, [vendor, local?.VendorCode]);
+
+  // fetch contacts when we have a restro code available
   useEffect(() => {
     const code = local?.VendorCode ?? local?.id ?? local?.code;
-    if (!code) return;
+    if (!code) {
+      setInitialEmails([]);
+      setInitialWhatsapps([]);
+      return;
+    }
+
+    let cancelled = false;
     setContactsLoading(true);
-    fetch(`/api/restros/${encodeURIComponent(String(code))}/contacts`, { method: "GET" })
-      .then(async (res) => {
+    setError(null);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}/contacts`);
         if (!res.ok) {
           const txt = await res.text().catch(() => "");
           throw new Error(txt || `Fetch failed (${res.status})`);
         }
-        return res.json();
-      })
-      .then((json) => {
-        // Expecting { emails: [...], whatsapps: [...] }
-        setInitialEmails(Array.isArray(json.emails) ? json.emails : []);
-        setInitialWhatsapps(Array.isArray(json.whatsapps) ? json.whatsapps : []);
-      })
-      .catch((err) => {
+        const json = await res.json();
+        if (!cancelled) {
+          setInitialEmails(Array.isArray(json.emails) ? json.emails : []);
+          setInitialWhatsapps(Array.isArray(json.whatsapps) ? json.whatsapps : []);
+        }
+      } catch (err) {
         console.error("Fetch contacts error:", err);
-        setError("Failed to load contacts");
-      })
-      .finally(() => setContactsLoading(false));
+        if (!cancelled) setError("Failed to load contacts");
+      } finally {
+        if (!cancelled) setContactsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [local?.VendorCode, local?.id, local?.code]);
 
   const saving = parentSaving ?? savingInternal;
@@ -133,6 +151,9 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
     { keyLabel: "IFSC", value: <input className="kv-input" value={local.IFSC ?? ""} onChange={(e) => updateField("IFSC", e.target.value)} /> },
     { keyLabel: "Active", value: <label className="inline-label"><input type="checkbox" checked={!!local.Active} onChange={(e) => updateField("Active", e.target.checked)} /> <span>{local.Active ? "Yes" : "No"}</span></label> },
   ];
+
+  // Determine restroCode to pass to ContactsClient when Contacts tab is active
+  const restroCodeForContacts = String(local?.VendorCode ?? local?.id ?? local?.code ?? vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? "");
 
   return (
     <div
@@ -218,11 +239,12 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
                 <div>Loading contacts…</div>
               ) : (
                 <ContactsClient
-                  restroCode={local?.VendorCode ?? local?.id ?? ""}
+                  restroCode={restroCodeForContacts}
                   initialEmails={initialEmails}
                   initialWhatsapps={initialWhatsapps}
                 />
               )}
+
             </div>
           )}
 
