@@ -1,4 +1,3 @@
-// app/api/restros/[code]/contacts/route.ts
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -9,25 +8,51 @@ export async function GET(request: Request, { params }: { params: { code: string
       return NextResponse.json({ error: "Missing restro code" }, { status: 400 });
     }
 
-    // Fetch emails
-    const { data: emailsData, error: emailsErr } = await supabaseServer
-      .from("restro_email")
-      .select("id, Name, Email, Active, RestroCode")
-      .eq("RestroCode", code);
+    // Try multiple possible table names for emails
+    const emailTables = ["restro_email", "restro_emails", "restrocontactemail"];
+    let emailsData: any[] | null = null;
+    let emailsErr: any = null;
 
-    if (emailsErr) {
-      console.error("supabase restro_email error:", emailsErr);
+    for (const tbl of emailTables) {
+      const { data, error } = await supabaseServer
+        .from(tbl)
+        .select("id, Name, Email, Active, RestroCode")
+        .eq("RestroCode", code);
+
+      if (!error) {
+        emailsData = data;
+        break;
+      } else {
+        emailsErr = error;
+      }
+    }
+
+    if (emailsData === null) {
+      console.error("All email table attempts failed:", emailsErr);
       return NextResponse.json({ error: "Failed to query emails" }, { status: 500 });
     }
 
-    // Fetch whatsapps
-    const { data: whatsData, error: whatsErr } = await supabaseServer
-      .from("restro_whatsapp")
-      .select("id, Name, Mobile, Active, RestroCode")
-      .eq("RestroCode", code);
+    // Try multiple possible table names for whatsapps
+    const whatsappTables = ["restro_whatsapp", "restro_whatsapps", "restrocontactwhatsapp"];
+    let whatsData: any[] | null = null;
+    let whatsErr: any = null;
 
-    if (whatsErr) {
-      console.error("supabase restro_whatsapp error:", whatsErr);
+    for (const tbl of whatsappTables) {
+      const { data, error } = await supabaseServer
+        .from(tbl)
+        .select("id, Name, Mobile, Active, RestroCode")
+        .eq("RestroCode", code);
+
+      if (!error) {
+        whatsData = data;
+        break;
+      } else {
+        whatsErr = error;
+      }
+    }
+
+    if (whatsData === null) {
+      console.error("All whatsapp table attempts failed:", whatsErr);
       return NextResponse.json({ error: "Failed to query whatsapps" }, { status: 500 });
     }
 
