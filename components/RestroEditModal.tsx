@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseBrowser"; // <-- adjust if your export is different
+import { supabase } from "@/lib/supabaseBrowser"; // adjust if your export name is different
 
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
@@ -54,7 +54,6 @@ function buildStationDisplay(obj: any) {
 }
 
 /* ---------- validators ---------- */
-// simple email regex (basic)
 const emailRegex = /^\S+@\S+\.\S+$/;
 const tenDigitRegex = /^\d{10}$/;
 
@@ -267,7 +266,7 @@ export default function RestroEditModal({
       BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
       RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
       RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
-      // emails (only 2)
+      // emails (2)
       EmailAddressName1: restro?.EmailAddressName1 ?? "",
       EmailsforOrdersReceiving1: restro?.EmailsforOrdersReceiving1 ?? "",
       EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? restro?.EmailsforOrdersStatus1 ?? "",
@@ -385,9 +384,7 @@ export default function RestroEditModal({
     return errs;
   }
 
-  // Use imported supabase client
-  // const supabase = supabase; // not needed, we imported above
-
+  // DIAGNOSTIC handleSave — logs payload and supabase response
   async function handleSave() {
     setNotification(null);
     setError(null);
@@ -405,7 +402,6 @@ export default function RestroEditModal({
 
     setSavingInternal(true);
     try {
-      // Allowed keys: Emails 1..2 and WhatsApp 1..3 plus some common fields
       const allowedKeys = [
         // emails (2)
         "EmailAddressName1", "EmailsforOrdersReceiving1", "EmailsforOrdersStatus1",
@@ -432,22 +428,41 @@ export default function RestroEditModal({
         }
       }
 
-      // debug: uncomment to inspect payload before sending
-      // console.log("PATCH payload:", payload);
+      console.log("DEBUG: restroCode:", restroCode);
+      console.log("DEBUG: update payload:", payload);
 
-      // If you prefer server-side patch route, use defaultPatch(payload) instead.
-      const { error: supError } = await supabase.from("RestroMaster").update(payload).eq("RestroCode", restroCode);
+      // send update and ask for updated rows back
+      const res = await supabase
+        .from("RestroMaster")
+        .update(payload)
+        .eq("RestroCode", restroCode)
+        .select();
 
-      if (supError) throw supError;
+      console.log("DEBUG: supabase response:", res);
 
-      setNotification({ type: "success", text: "Changes saved successfully ✅" });
+      const data = (res as any).data ?? (res as any).rows ?? null;
+      const error = (res as any).error ?? null;
+
+      if (error) {
+        console.error("Supabase returned error:", error);
+        setNotification({ type: "error", text: `Save failed: ${error.message ?? JSON.stringify(error)}` });
+        throw error;
+      }
+
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        console.warn("No rows updated. Possible reasons: RestroCode did not match, payload empty, or RLS blocked update.");
+        setNotification({ type: "success", text: "Save completed (no changes applied)." });
+      } else {
+        console.log("Updated rows:", data);
+        setNotification({ type: "success", text: "Changes saved successfully ✅" });
+      }
 
       setTimeout(() => {
         if ((router as any).refresh) router.refresh();
         else window.location.reload();
       }, 700);
     } catch (err: any) {
-      console.error("Save error:", err);
+      console.error("Save error (caught):", err);
       setNotification({ type: "error", text: `Save failed: ${err?.message ?? String(err)}` });
     } finally {
       setSavingInternal(false);
@@ -493,19 +508,47 @@ export default function RestroEditModal({
   function tabIcon(t: string | undefined | null) {
     switch (t) {
       case "Basic Information":
-        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M12 2L3 6v6c0 5 3.8 9.2 9 10 5.2-.8 9-5 9-10V6l-9-4z" /></svg>;
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+            <path fill="currentColor" d="M12 2L3 6v6c0 5 3.8 9.2 9 10 5.2-.8 9-5 9-10V6l-9-4z" />
+          </svg>
+        );
       case "Station Settings":
-        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-1.9-3.3-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.4 3.1a7.6 7.6 0 0 0-1.7 1l-2.5-1L2 11.4l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 1.9 3.3 2.5-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.4-3.1a7.6 7.6 0 0 0 1.7-1l2.5 1 1.9-3.3L19.4 15z" /></svg>;
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+            <path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-1.9-3.3-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.4 3.1a7.6 7.6 0 0 0-1.7 1l-2.5-1L2 11.4l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 1.9 3.3 2.5-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.4-3.1a7.6 7.6 0 0 0 1.7-1l2.5 1 1.9-3.3L19.4 15z" />
+          </svg>
+        );
       case "Address & Documents":
-        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /></svg>;
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+            <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          </svg>
+        );
       case "Contacts":
-        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 4.9V22h16v-3.1c0-2.7-3.6-4.9-8-4.9z" /></svg>;
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+            <path fill="currentColor" d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 4.9V22h16v-3.1c0-2.7-3.6-4.9-8-4.9z" />
+          </svg>
+        );
       case "Bank":
-        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M12 2L1 6l11 4 11-4-11-4zm0 7v13" /></svg>;
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+            <path fill="currentColor" d="M12 2L1 6l11 4 11-4-11-4zm0 7v13" />
+          </svg>
+        );
       case "Future Closed":
-        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M7 10h5v5H7zM3 4h18v18H3z" /></svg>;
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+            <path fill="currentColor" d="M7 10h5v5H7zM3 4h18v18H3z" />
+          </svg>
+        );
       case "Menu":
-        return <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}><path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" /></svg>;
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+            <path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" />
+          </svg>
+        );
       default:
         return null;
     }
