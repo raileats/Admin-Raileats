@@ -19,13 +19,14 @@ export default function ContactsClient({
   initialEmails = [],
   initialWhatsapps = [],
 }: ContactsClientProps) {
-  // Diagnostic log to inspect incoming props
   useEffect(() => {
-    console.log("ContactsClient initial:", { restroCode, initialEmails, initialWhatsapps });
+    console.log("ContactsClient initial:", {
+      restroCode,
+      initialEmails,
+      initialWhatsapps,
+    });
   }, [restroCode, initialEmails, initialWhatsapps]);
 
-  // If server did not return any rows, show an example/sample row so UI looks like screenshot.
-  // But keep actual state separate so Save will write actual user entries.
   const [emails, setEmails] = useState<ContactRow[]>(
     initialEmails.length ? initialEmails : []
   );
@@ -35,10 +36,8 @@ export default function ContactsClient({
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // If there is absolutely no data and it's first render, create sample rows for visual parity.
   useEffect(() => {
     if (!initialEmails.length && !initialWhatsapps.length) {
-      // only add sample rows for display, not saved automatically
       setEmails([
         { id: "sample-email-1", name: "Akhil", value: "abc@gmail.com", active: true },
         { id: "sample-email-2", name: "Ram", value: "abc@gmail.com", active: true },
@@ -49,15 +48,19 @@ export default function ContactsClient({
         { id: "sample-wa-3", name: "Suresh", value: "9876543210", active: true },
       ]);
     }
-    // NOTE: if there is real data, we keep it as-is.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialEmails, initialWhatsapps]);
 
   const addEmail = () =>
-    setEmails((s) => [...s, { id: crypto.randomUUID(), name: "", value: "", active: true }]);
+    setEmails((s) => [
+      ...s,
+      { id: crypto.randomUUID(), name: "", value: "", active: true },
+    ]);
 
   const addWhatsapp = () =>
-    setWhatsapps((s) => [...s, { id: crypto.randomUUID(), name: "", value: "", active: true }]);
+    setWhatsapps((s) => [
+      ...s,
+      { id: crypto.randomUUID(), name: "", value: "", active: true },
+    ]);
 
   const updateRow = (
     list: ContactRow[],
@@ -69,7 +72,11 @@ export default function ContactsClient({
     setList(list.map((r) => (r.id === id ? { ...r, [field]: val } : r)));
   };
 
-  const removeRow = (list: ContactRow[], setList: (v: ContactRow[]) => void, id: string) => {
+  const removeRow = (
+    list: ContactRow[],
+    setList: (v: ContactRow[]) => void,
+    id: string
+  ) => {
     setList(list.filter((r) => r.id !== id));
   };
 
@@ -77,18 +84,28 @@ export default function ContactsClient({
     setSaving(true);
     setMsg(null);
     try {
-      // filter out sample rows that we added for display (IDs starting with "sample-")
-      const realEmails = emails.filter((e) => !e.id?.toString().startsWith("sample-"));
-      const realWhats = whatsapps.filter((w) => !w.id?.toString().startsWith("sample-"));
+      const realEmails = emails.filter(
+        (e) => !e.id?.toString().startsWith("sample-")
+      );
+      const realWhats = whatsapps.filter(
+        (w) => !w.id?.toString().startsWith("sample-")
+      );
 
       const payload = {
-        emails: realEmails.map((r) => ({ name: r.name ?? "", value: r.value ?? "", active: !!r.active })),
-        whatsapps: realWhats.map((r) => ({ name: r.name ?? "", value: r.value ?? "", active: !!r.active })),
+        emails: realEmails.map((r) => ({
+          name: r.name ?? "",
+          value: r.value ?? "",
+          active: !!r.active,
+        })),
+        whatsapps: realWhats.map((r) => ({
+          name: r.name ?? "",
+          value: r.value ?? "",
+          active: !!r.active,
+        })),
       };
 
-      // If there's nothing real to save, don't call the API — show message instead
       if (payload.emails.length === 0 && payload.whatsapps.length === 0) {
-        setMsg("No real contact entries to save (sample rows ignored). Add contacts then Save.");
+        setMsg("No real contact entries to save (sample rows ignored).");
         setSaving(false);
         setTimeout(() => setMsg(null), 3500);
         return;
@@ -106,7 +123,6 @@ export default function ContactsClient({
         setMsg(json?.error ?? "Failed to save contacts");
       } else {
         setMsg("Contacts saved successfully");
-        // update local state ids if server returns inserted rows (optional)
       }
     } catch (err) {
       console.error("Save contacts unexpected:", err);
@@ -133,7 +149,9 @@ export default function ContactsClient({
     <div className="grid grid-cols-12 gap-3 items-center mb-3 border-b pb-3">
       <div className="col-span-2">
         <label className="block text-xs font-medium text-gray-600 mb-1">
-          {type === "email" ? `Email Address Name ${idx + 1}` : `Whatsapp Mobile Name ${idx + 1}`}
+          {type === "email"
+            ? `Email Address Name ${idx + 1}`
+            : `Whatsapp Mobile Name ${idx + 1}`}
         </label>
         <input
           className="w-full border rounded px-2 py-1 text-sm"
@@ -144,7 +162,9 @@ export default function ContactsClient({
 
       <div className="col-span-4">
         <label className="block text-xs font-medium text-gray-600 mb-1">
-          {type === "email" ? `Email Address ${idx + 1}` : `Whatsapp Mobile Number ${idx + 1}`}
+          {type === "email"
+            ? `Email Address ${idx + 1}`
+            : `Whatsapp Mobile Number ${idx + 1}`}
         </label>
         <input
           className="w-full border rounded px-2 py-1 text-sm"
