@@ -1,189 +1,222 @@
+// components/restro-edit/ContactsTab.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
 
 type Props = {
-  local?: any;
+  local?: any; // local object passed from parent
   updateField?: (k: string, v: any) => void;
   stationDisplay?: string;
   stations?: { label: string; value: string }[];
   loadingStations?: boolean;
-  restroCode?: string;
+  restroCode?: string; // canonical restroCode passed by parent
 };
 
-export default function ContactsTab({ restroCode = "", local = {}, updateField }: Props) {
+export default function ContactsTab({ local = {}, updateField = () => {}, restroCode = "" }: Props) {
+  // Map the RestroMaster style columns into arrays we will edit
+  const [emails, setEmails] = useState<
+    { name: string; receiving: string; status: string }[]
+  >([]);
+  const [whatsapps, setWhatsapps] = useState<
+    { name: string; number: string; status: string }[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [emails, setEmails] = useState<string[]>([]);
-  const [whatsapps, setWhatsapps] = useState<string[]>([]);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
+
+  // Helper: derive arrays from the provided local/restro object (works for both local and restro)
+  function deriveFromLocal(l: any) {
+    const e: any[] = [];
+    for (let i = 1; i <= 3; i++) {
+      const nameKey = `EmailAddressName${i}`;
+      const recvKey = `EmailsforOrdersReceiving${i}`;
+      const statusKey = `EmailsforOrdersStatus${i}`;
+      if (l[nameKey] || l[recvKey] || l[statusKey]) {
+        e.push({
+          name: l[nameKey] ?? "",
+          receiving: l[recvKey] ?? "",
+          status: l[statusKey] ?? "",
+        });
+      }
+    }
+    // ensure at least 2 rows (so UI isn't empty)
+    while (e.length < 2) e.push({ name: "", receiving: "", status: "" });
+
+    const w: any[] = [];
+    for (let i = 1; i <= 5; i++) {
+      const nameKey = `WhatsappMobileNumberName${i}`;
+      const numKey = `WhatsappMobileNumberforOrderDetails${i}`;
+      const statusKey = `WhatsappMobileNumberStatus${i}`;
+      if (l[nameKey] || l[numKey] || l[statusKey]) {
+        w.push({
+          name: l[nameKey] ?? "",
+          number: l[numKey] ?? "",
+          status: l[statusKey] ?? "",
+        });
+      }
+    }
+    // ensure at least 2 rows
+    while (w.length < 2) w.push({ name: "", number: "", status: "" });
+
+    return { e, w };
+  }
 
   useEffect(() => {
-    if (!restroCode) {
-      setError("Missing restroCode — cannot load contacts.");
-      return;
-    }
+    const { e, w } = deriveFromLocal(local ?? {});
+    setEmails(e);
+    setWhatsapps(w);
+  }, [local]);
+
+  async function handleSave() {
     setLoading(true);
     setError(null);
 
-    fetch(`/api/restros/${encodeURIComponent(String(restroCode))}/contacts`)
-      .then(async (res) => {
-        if (!res.ok) {
-          // try to read JSON body (API usually returns JSON error details)
-          const txt = await res.text().catch(() => "");
-          throw new Error(txt || `Fetch failed (${res.status})`);
-        }
-        return res.json();
-      })
-      .then((json) => {
-        // Expect API to return something like { emails: [...], whatsapps: [...] }
-        const e = Array.isArray(json?.emails) ? json.emails : [];
-        const w = Array.isArray(json?.whatsapps) ? json.whatsapps : [];
-        setEmails(e);
-        setWhatsapps(w);
-        setDirty(false);
-      })
-      .catch((err) => {
-        // Show helpful error but keep UI usable (allow manual editing)
-        try {
-          // if API returned JSON text, parse to show message
-          const parsed = JSON.parse(String(err.message));
-          setError(`Failed to load contacts — ${JSON.stringify(parsed)}`);
-        } catch {
-          setError(`Failed to load contacts — ${String(err.message)}`);
-        }
-        // keep empty arrays so user can add manually
-        setEmails([]);
-        setWhatsapps([]);
-      })
-      .finally(() => setLoading(false));
-  }, [restroCode]);
+    // Build payload with exact RestroMaster column names
+    const payload: any = {};
 
-  function updateList(setter: (s: any) => void, idx: number, value: string) {
-    setter((prev: string[]) => {
-      const copy = [...prev];
-      copy[idx] = value;
-      setDirty(true);
-      return copy;
-    });
-  }
+    // emails
+    for (let i = 0; i < Math.max(2, emails.length); i++) {
+      const idx = i + 1;
+      payload[`EmailAddressName${idx}`] = emails[i]?.name ?? "";
+      payload[`EmailsforOrdersReceiving${idx}`] = emails[i]?.receiving ?? "";
+      payload[`EmailsforOrdersStatus${idx}`] = emails[i]?.status ?? "";
+    }
 
-  function addItem(setter: (s: any) => void) {
-    setter((prev: string[]) => {
-      setDirty(true);
-      return [...prev, ""];
-    });
-  }
-  function removeItem(setter: (s: any) => void, idx: number) {
-    setter((prev: string[]) => {
-      const copy = prev.filter((_, i) => i !== idx);
-      setDirty(true);
-      return copy;
-    });
-  }
+    // whatsapps (support up to 5 as your columns showed)
+    for (let i = 0; i < Math.max(2, whatsapps.length); i++) {
+      const idx = i + 1;
+      payload[`WhatsappMobileNumberName${idx}`] = whatsapps[i]?.name ?? "";
+      payload[`WhatsappMobileNumberforOrderDetails${idx}`] = whatsapps[i]?.number ?? "";
+      payload[`WhatsappMobileNumberStatus${idx}`] = whatsapps[i]?.status ?? "";
+    }
 
-  async function handleSave() {
-    if (!restroCode) {
-      setError("Cannot save: missing restro code.");
+    // patch the restro row
+    const code = restroCode || local?.RestroCode || local?.restro_code || local?.code || "";
+
+    if (!code) {
+      setError("Missing restroCode, cannot save contacts.");
+      setLoading(false);
       return;
     }
-    setSaving(true);
-    setError(null);
+
     try {
-      const payload = { emails, whatsapps };
-      const res = await fetch(`/api/restros/${encodeURIComponent(String(restroCode))}/contacts`, {
-        method: "POST",
+      const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
-        // Try parse JSON error message
-        try {
-          const j = JSON.parse(txt || "");
-          throw new Error(JSON.stringify(j));
-        } catch {
-          throw new Error(txt || `Save failed (${res.status})`);
+        throw new Error(txt || `Save failed (${res.status})`);
+      }
+      // optional: you might re-fetch parent restro or call parent's updateField - we will call updateField for a few keys
+      try {
+        if (updateField) {
+          // update parent "local" for primary keys so UI outside modal updates if needed
+          updateField("EmailsforOrdersReceiving1", payload["EmailsforOrdersReceiving1"]);
+          updateField("WhatsappMobileNumberforOrderDetails1", payload["WhatsappMobileNumberforOrderDetails1"]);
         }
-      }
-      // success — mark clean
-      setDirty(false);
-      // optionally update parent fields if desired
-      if (typeof updateField === "function") {
-        updateField("ContactsLoadedAt", new Date().toISOString());
-      }
+      } catch {}
+      alert("Contacts saved");
     } catch (err: any) {
-      // show server error (like "Could not find the table 'public.restro_email'")
+      console.error("save contacts failed", err);
       setError(String(err?.message ?? err));
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
+  }
+
+  // small helper update functions
+  function updateEmailRow(i: number, k: keyof (typeof emails)[number], v: string) {
+    setEmails((prev) => {
+      const copy = prev.slice();
+      copy[i] = { ...copy[i], [k]: v };
+      return copy;
+    });
+  }
+
+  function updateWhatsappRow(i: number, k: keyof (typeof whatsapps)[number], v: string) {
+    setWhatsapps((prev) => {
+      const copy = prev.slice();
+      copy[i] = { ...copy[i], [k]: v };
+      return copy;
+    });
   }
 
   return (
     <div style={{ padding: 18 }}>
       <h3 style={{ marginTop: 0 }}>Contacts</h3>
+      <p style={{ color: "#666", marginBottom: 8 }}>Edit email addresses and WhatsApp numbers stored on the RestroMaster row. Click Save to persist.</p>
 
-      {restroCode ? <div style={{ color: "#0b7285", marginBottom: 12 }}>Outlet: {restroCode}</div> : null}
+      {error && <div style={{ color: "red", marginBottom: 12 }}>Failed to load contacts — {String(error)}</div>}
 
-      {loading && <div>Loading contacts…</div>}
-
-      {error && (
-        <div style={{ color: "red", marginBottom: 12, whiteSpace: "pre-wrap" }}>
-          {error}
-        </div>
-      )}
-
-      <div style={{ maxWidth: 900 }}>
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontWeight: 600 }}>Emails</label>
-          {(emails.length === 0) && <div style={{ color: "#777", margin: "6px 0" }}>No saved emails — add below.</div>}
-          {emails.map((em, i) => (
-            <div key={"e" + i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <input
-                value={em}
-                onChange={(ev) => updateList(setEmails, i, ev.target.value)}
-                placeholder="name@example.com"
-                style={{ flex: 1, padding: 8, borderRadius: 6, border: "1px solid #e3e3e3" }}
-              />
-              <button onClick={() => removeItem(setEmails, i)} style={{ padding: "6px 8px", cursor: "pointer" }}>Remove</button>
-            </div>
-          ))}
-          <div style={{ marginTop: 8 }}>
-            <button onClick={() => addItem(setEmails)} style={{ padding: "8px 10px", cursor: "pointer" }}>Add Email</button>
+      <div style={{ maxWidth: 1100 }}>
+        <div style={{ marginBottom: 8, fontWeight: 600 }}>Emails</div>
+        {emails.map((r, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 180px", gap: 12, marginBottom: 8 }}>
+            <input placeholder={`Name ${i + 1}`} value={r.name} onChange={(e) => updateEmailRow(i, "name", e.target.value)} />
+            <input placeholder={`Email ${i + 1}`} value={r.receiving} onChange={(e) => updateEmailRow(i, "receiving", e.target.value)} />
+            <input placeholder="Status" value={r.status} onChange={(e) => updateEmailRow(i, "status", e.target.value)} />
           </div>
-        </div>
+        ))}
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontWeight: 600 }}>WhatsApp / Phone numbers</label>
-          {(whatsapps.length === 0) && <div style={{ color: "#777", margin: "6px 0" }}>No saved numbers — add below.</div>}
-          {whatsapps.map((ph, i) => (
-            <div key={"w" + i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <input
-                value={ph}
-                onChange={(ev) => updateList(setWhatsapps, i, ev.target.value)}
-                placeholder="+91 9XXXXXXXXX"
-                style={{ flex: 1, padding: 8, borderRadius: 6, border: "1px solid #e3e3e3" }}
-              />
-              <button onClick={() => removeItem(setWhatsapps, i)} style={{ padding: "6px 8px", cursor: "pointer" }}>Remove</button>
-            </div>
-          ))}
-          <div style={{ marginTop: 8 }}>
-            <button onClick={() => addItem(setWhatsapps)} style={{ padding: "8px 10px", cursor: "pointer" }}>Add Number</button>
+        <div style={{ height: 12 }} />
+
+        <div style={{ marginBottom: 8, fontWeight: 600 }}>WhatsApp numbers</div>
+        {whatsapps.map((r, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 180px", gap: 12, marginBottom: 8 }}>
+            <input placeholder={`Name ${i + 1}`} value={r.name} onChange={(e) => updateWhatsappRow(i, "name", e.target.value)} />
+            <input placeholder={`Mobile ${i + 1}`} value={r.number} onChange={(e) => updateWhatsappRow(i, "number", e.target.value)} />
+            <input placeholder="Status" value={r.status} onChange={(e) => updateWhatsappRow(i, "status", e.target.value)} />
           </div>
-        </div>
+        ))}
 
-        <div style={{ display: "flex", gap: 12 }}>
-          <button disabled={!dirty || saving} onClick={handleSave} style={{ padding: "8px 12px", background: "#0ea5e9", color: "#fff", border: "none", borderRadius: 6, cursor: (dirty && !saving) ? "pointer" : "not-allowed" }}>
-            {saving ? "Saving..." : "Save Contacts"}
+        <div style={{ marginTop: 18, display: "flex", gap: 8 }}>
+          <button onClick={handleSave} disabled={loading} style={{ padding: "8px 12px", borderRadius: 6, border: "none", background: "#0ea5e9", color: "#fff" }}>
+            {loading ? "Saving..." : "Save"}
           </button>
 
-          <button disabled={saving} onClick={() => { /* just reset local to previously fetched (re-run effect) */ setEmails([...emails]); setWhatsapps([...whatsapps]); setDirty(false); }} style={{ padding: "8px 12px" }}>
+          <button onClick={() => {
+            // reset from parent local
+            const { e, w } = ((): any => {
+              const L = local ?? {};
+              const outE: any[] = [];
+              for (let ii = 1; ii <= 3; ii++) {
+                outE.push({
+                  name: L[`EmailAddressName${ii}`] ?? "",
+                  receiving: L[`EmailsforOrdersReceiving${ii}`] ?? "",
+                  status: L[`EmailsforOrdersStatus${ii}`] ?? "",
+                });
+              }
+              const outW: any[] = [];
+              for (let ii = 1; ii <= 5; ii++) {
+                outW.push({
+                  name: L[`WhatsappMobileNumberName${ii}`] ?? "",
+                  number: L[`WhatsappMobileNumberforOrderDetails${ii}`] ?? "",
+                  status: L[`WhatsappMobileNumberStatus${ii}`] ?? "",
+                });
+              }
+              return { e: outE, w: outW };
+            })();
+            setEmails(e);
+            setWhatsapps(w);
+          }} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>
             Reset
           </button>
         </div>
       </div>
+
+      <style jsx>{`
+        input {
+          width: 100%;
+          padding: 8px;
+          border-radius: 6px;
+          border: 1px solid #e3e3e3;
+          box-sizing: border-box;
+        }
+        @media (max-width: 720px) {
+          div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }
