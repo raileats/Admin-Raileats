@@ -1,42 +1,38 @@
 "use client";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 
-interface ContactRow {
+type ContactRow = {
   id: string;
-  name: string;
-  value: string;
-  active: boolean;
-}
+  name?: string;
+  value?: string;
+  active?: boolean;
+};
 
-interface ContactsClientProps {
+type ContactsClientProps = {
+  restroCode: string | number;
   initialEmails?: ContactRow[];
   initialWhatsapps?: ContactRow[];
-}
+};
 
 export default function ContactsClient({
+  restroCode,
   initialEmails = [],
   initialWhatsapps = [],
 }: ContactsClientProps) {
-  const [emails, setEmails] = useState<ContactRow[]>(initialEmails);
-  const [whatsapps, setWhatsapps] = useState<ContactRow[]>(initialWhatsapps);
+  const [emails, setEmails] = useState<ContactRow[]>(
+    initialEmails.length ? initialEmails : []
+  );
+  const [whatsapps, setWhatsapps] = useState<ContactRow[]>(
+    initialWhatsapps.length ? initialWhatsapps : []
+  );
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const addEmail = () => {
-    setEmails([
-      ...emails,
-      { id: crypto.randomUUID(), name: "", value: "", active: true },
-    ]);
-  };
+  const addEmail = () =>
+    setEmails((s) => [...s, { id: crypto.randomUUID(), name: "", value: "", active: true }]);
 
-  const addWhatsapp = () => {
-    setWhatsapps([
-      ...whatsapps,
-      { id: crypto.randomUUID(), name: "", value: "", active: true },
-    ]);
-  };
+  const addWhatsapp = () =>
+    setWhatsapps((s) => [...s, { id: crypto.randomUUID(), name: "", value: "", active: true }]);
 
   const updateRow = (
     list: ContactRow[],
@@ -45,95 +41,152 @@ export default function ContactsClient({
     field: keyof ContactRow,
     val: any
   ) => {
-    const newList = list.map((r) =>
-      r.id === id ? { ...r, [field]: val } : r
-    );
-    setList(newList);
+    setList(list.map((r) => (r.id === id ? { ...r, [field]: val } : r)));
   };
 
-  const renderTable = (
-    title: string,
-    rows: ContactRow[],
-    setList: (v: ContactRow[]) => void,
-    type: "email" | "whatsapp"
-  ) => (
-    <div className="border rounded-xl p-4 bg-white mb-6 shadow-sm">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="font-semibold text-lg">{title}</h3>
-        <Button onClick={type === "email" ? addEmail : addWhatsapp}>
-          {type === "email" ? "Add New Email" : "Add New WhatsApp"}
-        </Button>
+  const removeRow = (list: ContactRow[], setList: (v: ContactRow[]) => void, id: string) => {
+    setList(list.filter((r) => r.id !== id));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const payload = {
+        emails: emails.map((r) => ({ name: r.name ?? "", value: r.value ?? "", active: !!r.active })),
+        whatsapps: whatsapps.map((r) => ({ name: r.name ?? "", value: r.value ?? "", active: !!r.active })),
+      };
+
+      const res = await fetch(`/api/restros/${restroCode}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        console.error("Save contacts error:", json);
+        setMsg(json?.error ?? "Failed to save contacts");
+      } else {
+        setMsg("Contacts saved successfully");
+      }
+    } catch (err) {
+      console.error("Save contacts unexpected:", err);
+      setMsg("Unexpected error saving contacts");
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMsg(null), 3500);
+    }
+  };
+
+  const SimpleRow = ({
+    row,
+    idx,
+    type,
+    list,
+    setList,
+  }: {
+    row: ContactRow;
+    idx: number;
+    type: "email" | "whatsapp";
+    list: ContactRow[];
+    setList: (v: ContactRow[]) => void;
+  }) => (
+    <div className="grid grid-cols-12 gap-3 items-center mb-3 border-b pb-3">
+      <div className="col-span-2">
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          {type === "email" ? `Email Address Name ${idx + 1}` : `Whatsapp Mobile Name ${idx + 1}`}
+        </label>
+        <input
+          className="w-full border rounded px-2 py-1 text-sm"
+          value={row.name ?? ""}
+          onChange={(e) => updateRow(list, setList, row.id!, "name", e.target.value)}
+        />
       </div>
-      {rows.length === 0 && (
-        <p className="text-gray-500 italic">No {type}s added yet.</p>
-      )}
-      {rows.map((row, idx) => (
-        <div
-          key={row.id}
-          className="grid grid-cols-12 gap-3 items-center mb-2 border-b pb-2"
+
+      <div className="col-span-4">
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          {type === "email" ? `Email Address ${idx + 1}` : `Whatsapp Mobile Number ${idx + 1}`}
+        </label>
+        <input
+          className="w-full border rounded px-2 py-1 text-sm"
+          value={row.value ?? ""}
+          placeholder={type === "email" ? "abc@example.com" : "9876543210"}
+          onChange={(e) => updateRow(list, setList, row.id!, "value", e.target.value)}
+        />
+      </div>
+
+      <div className="col-span-3 text-sm text-gray-700">
+        {type === "email"
+          ? `Emails for Orders Receiving ${idx + 1}`
+          : `Whatsapp Mobile Number for Orders Receiving ${idx + 1}`}
+      </div>
+
+      <div className="col-span-2 flex items-center">
+        <label className="inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!row.active}
+            onChange={(e) => updateRow(list, setList, row.id!, "active", e.target.checked)}
+            className="form-checkbox h-4 w-4 text-blue-600"
+          />
+          <span className="ml-2 text-sm">{row.active ? "Status On" : "Status Off"}</span>
+        </label>
+      </div>
+
+      <div className="col-span-1 text-right">
+        <button
+          type="button"
+          onClick={() => removeRow(list, setList, row.id!)}
+          className="text-red-600 text-sm"
         >
-          <div className="col-span-2">
-            <Label className="text-sm">
-              {type === "email"
-                ? `Email Address Name ${idx + 1}`
-                : `Whatsapp Mobile Name ${idx + 1}`}
-            </Label>
-            <Input
-              value={row.name}
-              onChange={(e) =>
-                updateRow(rows, setList, row.id, "name", e.target.value)
-              }
-            />
-          </div>
-          <div className="col-span-4">
-            <Label className="text-sm">
-              {type === "email"
-                ? `Email Address ${idx + 1}`
-                : `Whatsapp Mobile Number ${idx + 1}`}
-            </Label>
-            <Input
-              value={row.value}
-              onChange={(e) =>
-                updateRow(rows, setList, row.id, "value", e.target.value)
-              }
-              placeholder={
-                type === "email" ? "abc@example.com" : "9876543210"
-              }
-            />
-          </div>
-          <div className="col-span-3 text-gray-700 text-sm">
-            {type === "email"
-              ? `Emails for Orders Receiving ${idx + 1}`
-              : `Whatsapp Mobile Number for Orders Receiving ${idx + 1}`}
-          </div>
-          <div className="col-span-3 flex items-center justify-center">
-            <Switch
-              checked={row.active}
-              onCheckedChange={(checked) =>
-                updateRow(rows, setList, row.id, "active", checked)
-              }
-            />
-            <span className="ml-2 text-sm">
-              {row.active ? "Status On" : "Status Off"}
-            </span>
-          </div>
-        </div>
-      ))}
+          Remove
+        </button>
+      </div>
     </div>
   );
 
-  const handleSave = async () => {
-    console.log("Saving contacts:", { emails, whatsapps });
-    // 🔹 TODO: Add Supabase save logic here
-    // await saveContactsToSupabase(restroCode, { emails, whatsapps })
-  };
-
   return (
-    <div className="space-y-4">
-      {renderTable("Emails", emails, setEmails, "email")}
-      {renderTable("WhatsApp Numbers", whatsapps, setWhatsapps, "whatsapp")}
-      <div className="text-right">
-        <Button onClick={handleSave}>Save</Button>
+    <div className="space-y-6">
+      <div className="border rounded-lg p-4 bg-white">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-semibold">Emails</h3>
+          <button className="bg-blue-600 text-white px-3 py-1 rounded text-sm" onClick={addEmail}>
+            Add New Email
+          </button>
+        </div>
+
+        {emails.length === 0 && <p className="text-sm text-gray-500 italic">No emails added yet.</p>}
+        {emails.map((r, i) => (
+          <SimpleRow key={r.id} row={r} idx={i} type="email" list={emails} setList={setEmails} />
+        ))}
+      </div>
+
+      <div className="border rounded-lg p-4 bg-white">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-semibold">WhatsApp Numbers</h3>
+          <button className="bg-blue-600 text-white px-3 py-1 rounded text-sm" onClick={addWhatsapp}>
+            Add New WhatsApp
+          </button>
+        </div>
+
+        {whatsapps.length === 0 && <p className="text-sm text-gray-500 italic">No WhatsApp numbers added yet.</p>}
+        {whatsapps.map((r, i) => (
+          <SimpleRow key={r.id} row={r} idx={i} type="whatsapp" list={whatsapps} setList={setWhatsapps} />
+        ))}
+      </div>
+
+      <div className="flex justify-between items-center">
+        <div>{msg && <div className="text-sm text-green-600">{msg}</div>}</div>
+        <div>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={`px-4 py-2 rounded text-white ${saving ? "bg-gray-400" : "bg-green-600"}`}
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
       </div>
     </div>
   );
