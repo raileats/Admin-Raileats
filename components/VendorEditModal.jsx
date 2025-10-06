@@ -2,13 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import KeyValueGrid from "@/components/ui/KeyValueGrid";
-import ContactsClient from "@/components/tabs/ContactsClient"; // adjust path if needed
-
-// If you have restro-edit variants (adjust or remove if not present)
-import AddressDocsClient from "@/components/restro-edit/AddressDocsClient";
-import BankTab from "@/components/restro-edit/BankTab";
-import FutureClosedTab from "@/components/restro-edit/FutureClosedTab";
-import MenuTab from "@/components/restro-edit/MenuTab";
+import ContactsClient from "@/components/tabs/ContactsClient"; // ensure this path exists in your repo
 
 export default function VendorEditModal({ vendor, onClose, onSave, saving: parentSaving }) {
   const tabs = ["Basic Information", "Contacts", "Bank", "Other"];
@@ -36,13 +30,8 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
     });
   }, [vendor]);
 
-  // debug
   useEffect(() => {
-    console.log("DEBUG VendorEditModal vendor:", vendor && (vendor.VendorCode ?? vendor.id ?? vendor.code));
-  }, [vendor]);
-
-  // fetch contacts when vendor/local code available
-  useEffect(() => {
+    // fetch contacts when vendor/local code available
     const code = local?.VendorCode ?? local?.id ?? local?.code;
     if (!code) {
       setInitialEmails([]);
@@ -158,10 +147,8 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
     { keyLabel: "Active", value: <label className="inline-label"><input type="checkbox" checked={!!local.Active} onChange={(e) => updateField("Active", e.target.checked)} /> <span>{local.Active ? "Yes" : "No"}</span></label> },
   ];
 
-  // Compute restroCode safely to pass to ContactsClient
-  const restroCodeForContacts = String(
-    local?.VendorCode ?? local?.id ?? local?.code ?? vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? ""
-  );
+  // Determine restroCode to pass to ContactsClient when Contacts tab is active
+  const restroCodeForContacts = String(local?.VendorCode ?? local?.id ?? local?.code ?? vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? "");
 
   return (
     <div
