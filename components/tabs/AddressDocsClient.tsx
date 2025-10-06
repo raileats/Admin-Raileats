@@ -1,17 +1,15 @@
+// components/tabs/AddressDocsClient.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 type Props = {
   initialData?: any;
-  imagePrefix?: string; // optional prefix for image URLs
-  restroCode?: string; // ✅ <-- added this line to fix type error
+  imagePrefix?: string;
+  restroCode?: string; // <-- accept restroCode (optional)
 };
 
 export default function AddressDocsClient({ initialData = {}, imagePrefix = "", restroCode = "" }: Props) {
-  const router = useRouter();
-
   const [local, setLocal] = useState<any>({
     RestroAddress: initialData?.RestroAddress ?? "",
     City: initialData?.City ?? "",
@@ -42,20 +40,36 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
     });
   }, [initialData]);
 
-  // Local field update
   function update(key: string, value: any) {
     setLocal((s: any) => ({ ...s, [key]: value }));
+  }
+
+  // helper to persist address/docs to restro row if you need quick save from this component
+  async function saveAddressDocs() {
+    if (!restroCode) {
+      alert("Missing restroCode - cannot save.");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/restros/${encodeURIComponent(String(restroCode))}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(local),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(txt || `Save failed (${res.status})`);
+      }
+      alert("Address & Documents saved");
+    } catch (err: any) {
+      console.error("Save address/docs failed", err);
+      alert("Save failed: " + (err?.message ?? String(err)));
+    }
   }
 
   return (
     <div style={{ padding: 18 }}>
       <h3 style={{ textAlign: "center", marginBottom: 18, fontSize: 20 }}>Address & Documents</h3>
-
-      {restroCode && (
-        <div style={{ textAlign: "center", marginBottom: 10, color: "#0ea5e9" }}>
-          <strong>Outlet Code:</strong> {restroCode}
-        </div>
-      )}
 
       <div className="compact-grid">
         <div className="field full-col">
@@ -116,6 +130,12 @@ export default function AddressDocsClient({ initialData = {}, imagePrefix = "", 
           <label>GST Type</label>
           <input value={local.GSTType ?? ""} onChange={(e) => update("GSTType", e.target.value)} />
         </div>
+      </div>
+
+      <div style={{ marginTop: 18, textAlign: "center" }}>
+        <button onClick={saveAddressDocs} style={{ padding: "8px 12px", borderRadius: 6, border: "none", background: "#0ea5e9", color: "#fff", cursor: "pointer" }}>
+          Save Address & Docs
+        </button>
       </div>
 
       <style jsx>{`
