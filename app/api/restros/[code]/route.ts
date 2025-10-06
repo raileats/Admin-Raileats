@@ -1,170 +1,111 @@
-// path: app/api/restros/[code]/route.ts
+// app/api/restros/[code]/contacts/route.ts
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
-/**
- * Helper: normalizes empty string -> null, trims strings
- */
-function normalizeIncoming(value: any) {
-  if (value === "" || value === null || value === undefined) return null;
-  if (typeof value === "string") return value.trim();
-  return value;
-}
-
-/**
- * Safe getter that accepts multiple candidate keys and returns the first non-null value.
- */
-function getMaybe(obj: any, ...keys: string[]) {
-  if (!obj) return undefined;
-  for (const k of keys) {
-    if (k.includes(".")) {
-      const parts = k.split(".");
-      let cur: any = obj;
-      let ok = true;
-      for (const p of parts) {
-        if (cur && Object.prototype.hasOwnProperty.call(cur, p) && cur[p] !== undefined && cur[p] !== null) {
-          cur = cur[p];
-        } else {
-          ok = false;
-          break;
-        }
-      }
-      if (ok) return cur;
-    } else {
-      if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined && obj[k] !== null) return obj[k];
-      const v = (obj as any)[k];
-      if (v !== undefined && v !== null) return v;
-    }
-  }
-  return undefined;
-}
-
-export async function GET(_req: Request, { params }: { params: { code: string } }) {
+export async function GET(req: Request, { params }: { params: { code: string } }) {
   try {
-    const codeParam = params?.code ?? "";
-    if (!codeParam) return NextResponse.json({ ok: false, error: "Missing code param" }, { status: 400 });
+    const restroCode = params.code;
+    if (!restroCode) return NextResponse.json({ error: "Missing code" }, { status: 400 });
 
-    const tryColumns = [
-      { col: "RestroCode", val: codeParam },
-      { col: "restro_code", val: codeParam },
-      { col: "RestroId", val: codeParam },
-      { col: "restro_id", val: codeParam },
-      { col: "code", val: codeParam },
-    ];
+    const { data: emails, error: e1 } = await supabaseServer
+      .from("restro_email")
+      .select("*")
+      .eq("RestroCode", restroCode);
 
-    let row: any = null;
-    for (const t of tryColumns) {
-      const { data, error } = await supabaseServer
-        .from("RestroMaster")
-        .select("*")
-        .eq(t.col, t.val)
-        .limit(1)
-        .maybeSingle();
-      if (error) console.warn("Supabase lookup warning for", t.col, error.message ?? error);
-      if (data) { row = data; break; }
+    const { data: whats, error: e2 } = await supabaseServer
+      .from("restro_whatsapp")
+      .select("*")
+      .eq("RestroCode", restroCode);
+
+    if (e1 || e2) {
+      console.error("supabase fetch errors", e1, e2);
+      return NextResponse.json({ error: (e1 || e2).message || "Supabase error" }, { status: 500 });
     }
 
-    if (!row) {
-      const { data, error } = await supabaseServer
-        .from("RestroMaster")
-        .select("*")
-        .or(`RestroCode.eq.${codeParam},restro_code.eq.${codeParam}`)
-        .limit(1)
-        .maybeSingle();
-      if (!error && data) row = data;
-    }
+    // normalize keys for client (optional)
+    const emailsNorm = (emails || []).map((r: any) => ({
+      id: r.id,
+      name: r.Name ?? "",
+      value: r.Email ?? "",
+      active: !!r.Active,
+    }));
+    const whatsNorm = (whats || []).map((r: any) => ({
+      id: r.id,
+      name: r.Name ?? "",
+      value: r.Mobile ?? "",
+      active: !!r.Active,
+    }));
 
-    if (!row) return NextResponse.json({ ok: false, error: "Restro not found" }, { status: 404 });
-
-    const stationCode = getMaybe(row, "StationCode", "station_code", "stationCode", "station?.code") ?? null;
-    if (stationCode) {
-      try {
-        const sres = await supabaseServer
-          .from("Stations")
-          .select("StationId,StationName,StationCode,State,station_category,station_type,StateName")
-          .eq("StationCode", stationCode)
-          .limit(1)
-          .maybeSingle();
-        if (!sres.error && sres.data) {
-          const s: any = sres.data;
-          const mergedStationName =
-            getMaybe(row, "StationName", "station_name") ?? getMaybe(s, "StationName", "station_name", "name");
-          const mergedStationCode =
-            getMaybe(row, "StationCode", "station_code") ?? getMaybe(s, "StationCode", "station_code", "code");
-          const mergedState =
-            getMaybe(row, "State", "state", "StateName") ?? getMaybe(s, "State", "state", "StateName");
-          const mergedCategory =
-            getMaybe(row, "StationCategory", "station_category") ?? getMaybe(s, "station_category", "station_type", "category");
-
-          row = {
-            ...row,
-            StationName: mergedStationName ?? null,
-            StationCode: mergedStationCode ?? null,
-            State: mergedState ?? null,
-            StationCategory: mergedCategory ?? null,
-          };
-        }
-      } catch (err) {
-        console.warn("Error fetching station record:", err);
-      }
-    }
-
-    return NextResponse.json({ ok: true, row });
+    return NextResponse.json({ emails: emailsNorm, whatsapps: whatsNorm });
   } catch (err: any) {
-    console.error("GET /api/restros/[code] error:", err);
-    return NextResponse.json({ ok: false, error: err?.message ?? String(err) }, { status: 500 });
+    console.error("contacts GET unexpected:", err);
+    return NextResponse.json({ error: err?.message ?? "Unknown error" }, { status: 500 });
   }
 }
 
-export async function PATCH(req: Request, { params }: { params: { code: string } }) {
+export async function POST(req: Request, { params }: { params: { code: string } }) {
   try {
-    const codeParam = params?.code ?? "";
-    if (!codeParam) return NextResponse.json({ ok: false, error: "Missing code param" }, { status: 400 });
+    const restroCode = params.code;
+    const body = await req.json();
+    const emails: Array<{ name: string; value: string; active: boolean }> = body.emails || [];
+    const whatsapps: Array<{ name: string; value: string; active: boolean }> = body.whatsapps || [];
 
-    const body = await req.json().catch(() => ({}));
-    const allowedKeys = new Set([
-      "RestroName","RestroEmail","RestroPhone","OwnerName","OwnerEmail","OwnerPhone",
-      "BrandName","RestroDisplayPhoto","RestroRating","FSSAINumber","FSSAIExpiryDate",
-      "StationCode","StationName","State","StationCategory","WeeklyOff","OpenTime","ClosedTime",
-      "MinimumOrderValue","CutOffTime","RaileatsDeliveryCharge","RaileatsDeliveryChargeGSTRate",
-      "RaileatsDeliveryChargeGST","RaileatsDeliveryChargeTotalInclGST","OrdersPaymentOptionForCustomer",
-      "IRCTCOrdersPaymentOptionForCustomer","RestroTypeOfDelivery","IRCTC","Raileats","IsIrctcApproved",
-      // plus any extra keys you want to allow
-    ]);
-
-    const updates: Record<string, any> = {};
-    for (const k of Object.keys(body || {})) {
-      if (allowedKeys.has(k)) updates[k] = normalizeIncoming((body as any)[k]);
+    if (!restroCode) {
+      return NextResponse.json({ error: "Missing restro code" }, { status: 400 });
     }
 
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ ok: false, error: "No valid fields to update" }, { status: 400 });
+    // delete existing rows for this restro (simple approach)
+    let { error: delE } = await supabaseServer.from("restro_email").delete().eq("RestroCode", restroCode);
+    if (delE) {
+      console.error("delete restro_email error:", delE);
+      return NextResponse.json({ error: delE.message }, { status: 500 });
     }
 
-    const identifiers = [
-      { col: "RestroCode", val: codeParam },
-      { col: "restro_code", val: codeParam },
-      { col: "RestroId", val: codeParam },
-      { col: "restro_id", val: codeParam },
-      { col: "code", val: codeParam },
-    ];
-
-    let updateRes: any = null;
-    for (const id of identifiers) {
-      const attempt = await supabaseServer.from("RestroMaster").update(updates).eq(id.col, id.val).select().maybeSingle();
-      if (!attempt.error && attempt.data) { updateRes = attempt; break; }
+    let { error: delW } = await supabaseServer.from("restro_whatsapp").delete().eq("RestroCode", restroCode);
+    if (delW) {
+      console.error("delete restro_whatsapp error:", delW);
+      return NextResponse.json({ error: delW.message }, { status: 500 });
     }
 
-    if (!updateRes) {
-      const attempt = await supabaseServer.from("RestroMaster").update(updates).eq("RestroCode", codeParam).select().maybeSingle();
-      if (!attempt.error && attempt.data) updateRes = attempt;
+    const emailRows = emails
+      .filter((e) => (e.value || "").toString().trim() !== "")
+      .map((e) => ({
+        RestroCode: restroCode,
+        Name: e.name ?? "",
+        Email: e.value ?? "",
+        Active: e.active ? true : false,
+        CreatedAt: new Date().toISOString(),
+      }));
+
+    if (emailRows.length > 0) {
+      const { error: insE } = await supabaseServer.from("restro_email").insert(emailRows);
+      if (insE) {
+        console.error("insert restro_email error:", insE);
+        return NextResponse.json({ error: insE.message }, { status: 500 });
+      }
     }
 
-    if (!updateRes) return NextResponse.json({ ok: false, error: "Update failed or restro not found" }, { status: 404 });
+    const whatsappRows = whatsapps
+      .filter((w) => (w.value || "").toString().trim() !== "")
+      .map((w) => ({
+        RestroCode: restroCode,
+        Name: w.name ?? "",
+        Mobile: w.value ?? "",
+        Active: w.active ? true : false,
+        CreatedAt: new Date().toISOString(),
+      }));
 
-    return NextResponse.json({ ok: true, row: updateRes.data ?? null });
+    if (whatsappRows.length > 0) {
+      const { error: insW } = await supabaseServer.from("restro_whatsapp").insert(whatsappRows);
+      if (insW) {
+        console.error("insert restro_whatsapp error:", insW);
+        return NextResponse.json({ error: insW.message }, { status: 500 });
+      }
+    }
+
+    return NextResponse.json({ ok: true });
   } catch (err: any) {
-    console.error("PATCH /api/restros/[code] error:", err);
-    return NextResponse.json({ ok: false, error: err?.message ?? String(err) }, { status: 500 });
+    console.error("contacts POST unexpected:", err);
+    return NextResponse.json({ error: err?.message ?? "Unknown error" }, { status: 500 });
   }
 }
