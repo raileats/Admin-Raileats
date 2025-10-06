@@ -1,68 +1,61 @@
+// path: app/api/restros/[code]/contacts/route.ts
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { supabaseServer } from "@/lib/supabaseServer"; // use your server-side supabase helper
 
 export async function GET(request: Request, { params }: { params: { code: string } }) {
+  const code = params?.code ?? "";
+
+  if (!code) {
+    return NextResponse.json({ error: "Missing restro code" }, { status: 400 });
+  }
+
   try {
-    const code = params.code;
-    if (!code) {
-      return NextResponse.json({ error: "Missing restro code" }, { status: 400 });
+    // Query emails
+    const { data: emails, error: errEmails } = await supabaseServer
+      .from("restro_email")
+      .select("*")
+      .eq("RestroCode", code);
+
+    if (errEmails) {
+      console.error("Supabase emails error:", errEmails);
+      return NextResponse.json({ error: "Failed to query emails", details: errEmails }, { status: 500 });
     }
 
-    // Try multiple possible table names for emails
-    const emailTables = ["restro_email", "restro_emails", "restrocontactemail"];
-    let emailsData: any[] | null = null;
-    let emailsErr: any = null;
+    // Query whatsapps
+    const { data: whats, error: errWhats } = await supabaseServer
+      .from("restro_whatsapp")
+      .select("*")
+      .eq("RestroCode", code);
 
-    for (const tbl of emailTables) {
-      const { data, error } = await supabaseServer
-        .from(tbl)
-        .select("id, Name, Email, Active, RestroCode")
-        .eq("RestroCode", code);
-
-      if (!error) {
-        emailsData = data;
-        break;
-      } else {
-        emailsErr = error;
-      }
+    if (errWhats) {
+      console.error("Supabase whatsapps error:", errWhats);
+      return NextResponse.json({ error: "Failed to query whatsapps", details: errWhats }, { status: 500 });
     }
 
-    if (emailsData === null) {
-      console.error("All email table attempts failed:", emailsErr);
-      return NextResponse.json({ error: "Failed to query emails" }, { status: 500 });
-    }
+    // Normalize shape for client
+    const mapEmail = (r: any) => ({
+      id: r.id ?? `${r.RestroCode}-email-${Math.random()}`,
+      name: r.Name ?? "",
+      value: r.Email ?? "",
+      active: !!r.Active,
+      raw: r,
+    });
 
-    // Try multiple possible table names for whatsapps
-    const whatsappTables = ["restro_whatsapp", "restro_whatsapps", "restrocontactwhatsapp"];
-    let whatsData: any[] | null = null;
-    let whatsErr: any = null;
-
-    for (const tbl of whatsappTables) {
-      const { data, error } = await supabaseServer
-        .from(tbl)
-        .select("id, Name, Mobile, Active, RestroCode")
-        .eq("RestroCode", code);
-
-      if (!error) {
-        whatsData = data;
-        break;
-      } else {
-        whatsErr = error;
-      }
-    }
-
-    if (whatsData === null) {
-      console.error("All whatsapp table attempts failed:", whatsErr);
-      return NextResponse.json({ error: "Failed to query whatsapps" }, { status: 500 });
-    }
+    const mapWhats = (r: any) => ({
+      id: r.id ?? `${r.RestroCode}-wa-${Math.random()}`,
+      name: r.Name ?? "",
+      value: r.Mobile ?? "",
+      active: !!r.Active,
+      raw: r,
+    });
 
     return NextResponse.json({
       ok: true,
-      emails: emailsData ?? [],
-      whatsapps: whatsData ?? [],
+      emails: (emails || []).map(mapEmail),
+      whatsapps: (whats || []).map(mapWhats),
     });
-  } catch (err) {
-    console.error("contacts route error:", err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  } catch (err: any) {
+    console.error("Contacts route unexpected error:", err);
+    return NextResponse.json({ error: "Unexpected error", details: String(err) }, { status: 500 });
   }
 }
