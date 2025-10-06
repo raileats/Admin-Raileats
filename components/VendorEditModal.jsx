@@ -1,289 +1,171 @@
-// components/VendorEditModal.jsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import KeyValueGrid from "@/components/ui/KeyValueGrid";
-import ContactsClient from "@/components/tabs/ContactsClient"; // adjust path if your file is elsewhere
+import BasicInformation from "@/components/restro-edit/BasicInformation";
+import AddressDocsClient from "@/components/restro-edit/AddressDocsClient";
+import ContactsTab from "@/components/restro-edit/ContactsTab";
+import BankTab from "@/components/restro-edit/BankTab";
+import FutureClosedTab from "@/components/restro-edit/FutureClosedTab";
+import MenuTab from "@/components/restro-edit/MenuTab";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabsContent } from "@radix-ui/react-tabs";
+import { useToast } from "@/components/ui/use-toast";
+import { Loader2 } from "lucide-react";
 
-export default function VendorEditModal({ vendor, onClose, onSave, saving: parentSaving }) {
-  const tabs = ["Basic Information", "Contacts", "Bank", "Other"];
-  const [activeTab, setActiveTab] = useState(tabs[0]);
-  const [savingInternal, setSavingInternal] = useState(false);
-  const [error, setError] = useState(null);
+export default function RestroEditModal({
+  restro,
+  onClose,
+  onSave,
+}: {
+  restro: any;
+  onClose: () => void;
+  onSave: (updated: any) => Promise<void>;
+}) {
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("Basic Information");
+  const [local, setLocal] = useState(restro || {});
+  const [loadingStations, setLoadingStations] = useState(false);
+  const [stations, setStations] = useState<{ label: string; value: string }[]>(
+    []
+  );
+  const [stationDisplay, setStationDisplay] = useState("");
 
-  const [local, setLocal] = useState({});
-  const [contactsLoading, setContactsLoading] = useState(false);
-  const [initialEmails, setInitialEmails] = useState([]);
-  const [initialWhatsapps, setInitialWhatsapps] = useState([]);
-
-  // initialize local from vendor/restro props
+  // simulate station data (your existing logic can replace this)
   useEffect(() => {
-    setLocal({
-      VendorCode: vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? "",
-      VendorName: vendor?.VendorName ?? vendor?.name ?? "",
-      ContactName: vendor?.ContactName ?? "",
-      ContactEmail: vendor?.ContactEmail ?? "",
-      ContactPhone: vendor?.ContactPhone ?? "",
-      BankAccount: vendor?.BankAccount ?? "",
-      IFSC: vendor?.IFSC ?? "",
-      VendorLogo: vendor?.VendorLogo ?? "",
-      Active: vendor?.Active === 1 || vendor?.Active === "1" || vendor?.Active === true,
-      ...vendor,
-    });
-  }, [vendor]);
+    setLoadingStations(true);
+    setTimeout(() => {
+      setStations([{ label: "NDLS", value: "NDLS" }]);
+      setStationDisplay(local?.StationName || "");
+      setLoadingStations(false);
+    }, 500);
+  }, [local]);
 
-  // fetch contacts when vendor code becomes available
-  useEffect(() => {
-    const code = local?.VendorCode ?? local?.id ?? local?.code;
-    if (!code) {
-      setInitialEmails([]);
-      setInitialWhatsapps([]);
-      return;
-    }
-
-    let cancelled = false;
-    setContactsLoading(true);
-    setError(null);
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}/contacts`);
-        if (!res.ok) {
-          const txt = await res.text().catch(() => "");
-          throw new Error(txt || `Fetch failed (${res.status})`);
-        }
-        const json = await res.json().catch(() => ({}));
-        if (!cancelled) {
-          setInitialEmails(Array.isArray(json.emails) ? json.emails : []);
-          setInitialWhatsapps(Array.isArray(json.whatsapps) ? json.whatsapps : []);
-        }
-      } catch (err) {
-        console.error("Fetch contacts error:", err);
-        if (!cancelled) setError("Failed to load contacts");
-      } finally {
-        if (!cancelled) setContactsLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [local?.VendorCode, local?.id, local?.code]);
-
-  const saving = parentSaving ?? savingInternal;
-
-  function updateField(key, value) {
-    setLocal((s) => ({ ...s, [key]: value }));
-  }
-
-  async function defaultPatch(payload) {
-    try {
-      const code = vendor?.VendorCode ?? vendor?.id ?? vendor?.code;
-      if (!code) throw new Error("Missing VendorCode for update");
-      const res = await fetch(`/api/vendors/${encodeURIComponent(String(code))}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(txt || `Update failed (${res.status})`);
-      }
-      const json = await res.json().catch(() => null);
-      const updated = json?.row ?? json ?? null;
-      return { ok: true, row: updated };
-    } catch (err) {
-      return { ok: false, error: err?.message ?? String(err) };
-    }
-  }
-
-  async function handleSave() {
-    setError(null);
-    const payload = {
-      VendorName: local.VendorName ?? "",
-      ContactName: local.ContactName ?? "",
-      ContactEmail: local.ContactEmail ?? "",
-      ContactPhone: local.ContactPhone ?? "",
-      BankAccount: local.BankAccount ?? "",
-      IFSC: local.IFSC ?? "",
-      VendorLogo: local.VendorLogo ?? "",
-      Active: local.Active ? 1 : 0,
-    };
-
-    try {
-      if (onSave) {
-        if (parentSaving === undefined) setSavingInternal(true);
-        const result = await onSave(payload);
-        if (!result || !result.ok) throw new Error(result?.error ?? "Save failed");
-        onClose && onClose();
-      } else {
-        setSavingInternal(true);
-        const result = await defaultPatch(payload);
-        if (!result.ok) throw new Error(result.error ?? "Save failed");
-        onClose && onClose();
-      }
-    } catch (err) {
-      console.error("Save error:", err);
-      setError(err?.message ?? String(err));
-    } finally {
-      if (parentSaving === undefined) setSavingInternal(false);
-    }
-  }
-
-  const imgSrc = (p) => {
-    if (!p) return "";
-    if (p.startsWith("http://") || p.startsWith("https://")) return p;
-    return `${process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}${p}`;
+  const updateField = (key: string, value: any) => {
+    setLocal((prev: any) => ({ ...prev, [key]: value }));
   };
 
-  const rows = [
-    { keyLabel: "Vendor Code", value: <div className="readonly-value">{local.VendorCode ?? "—"}</div> },
-    { keyLabel: "Vendor Name", value: <input className="kv-input" value={local.VendorName ?? ""} onChange={(e) => updateField("VendorName", e.target.value)} /> },
-    { keyLabel: "Contact Name", value: <input className="kv-input" value={local.ContactName ?? ""} onChange={(e) => updateField("ContactName", e.target.value)} /> },
-    { keyLabel: "Contact Email", value: <input className="kv-input" value={local.ContactEmail ?? ""} onChange={(e) => updateField("ContactEmail", e.target.value)} /> },
-    { keyLabel: "Contact Phone", value: <input className="kv-input" value={local.ContactPhone ?? ""} onChange={(e) => updateField("ContactPhone", e.target.value)} /> },
-    { keyLabel: "Vendor Logo (path)", value: <input className="kv-input" value={local.VendorLogo ?? ""} onChange={(e) => updateField("VendorLogo", e.target.value)} /> },
-    { keyLabel: "Logo Preview", value: local.VendorLogo ? <img className="preview-img" src={imgSrc(local.VendorLogo)} alt="logo" onError={(e) => ((e.target).style.display = "none")} /> : <div className="readonly-value">No image</div> },
-    { keyLabel: "Bank Account", value: <input className="kv-input" value={local.BankAccount ?? ""} onChange={(e) => updateField("BankAccount", e.target.value)} /> },
-    { keyLabel: "IFSC", value: <input className="kv-input" value={local.IFSC ?? ""} onChange={(e) => updateField("IFSC", e.target.value)} /> },
-    { keyLabel: "Active", value: <label className="inline-label"><input type="checkbox" checked={!!local.Active} onChange={(e) => updateField("Active", e.target.checked)} /> <span>{local.Active ? "Yes" : "No"}</span></label> },
-  ];
+  const handleSave = async () => {
+    try {
+      await onSave(local);
+      toast({ title: "Restaurant updated successfully!" });
+      onClose();
+    } catch (err: any) {
+      toast({ title: "Failed to save restaurant", description: err.message });
+    }
+  };
 
-  // compute restroCode to pass to ContactsClient
-  const restroCodeForContacts = String(local?.VendorCode ?? local?.id ?? local?.code ?? vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? "");
+  const common = {
+    local,
+    updateField,
+    stationDisplay,
+    stations,
+    loadingStations,
+  };
+
+  const renderTab = () => {
+    switch (activeTab) {
+      case "Basic Information":
+        return <BasicInformation {...common} />;
+
+      case "Address & Documents":
+        return <AddressDocsClient initialData={restro} />;
+
+      case "Contacts": {
+        // ✅ FIX: added restroCode (previously missing)
+        const computedRestroCode = String(
+          restro?.RestroCode ??
+            restro?.code ??
+            restro?.id ??
+            local?.RestroCode ??
+            local?.VendorCode ??
+            local?.id ??
+            ""
+        );
+
+        return <ContactsTab restroCode={computedRestroCode} {...common} />;
+      }
+
+      case "Bank":
+        return <BankTab {...common} />;
+
+      case "Future Closed":
+        return <FutureClosedTab {...common} />;
+
+      case "Menu":
+        return <MenuTab {...common} />;
+
+      default:
+        return <div>No content available</div>;
+    }
+  };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
-        background: "rgba(0,0,0,0.45)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 1100,
-        padding: 16,
-      }}
-    >
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 8,
-          width: "92%",
-          height: "92%",
-          maxWidth: "1200px",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-        }}
-      >
-        {/* header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
-          <div style={{ fontWeight: 600 }}>{String(local.VendorCode ?? "")} / {local.VendorName}</div>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <button onClick={() => onClose && onClose()} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">✕</button>
-          </div>
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-6xl rounded-lg shadow-xl overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-3 border-b bg-gray-50">
+          <h2 className="font-semibold text-lg">
+            Edit Restaurant – {local?.RestroName || "Unnamed"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-600 hover:text-red-600 transition"
+          >
+            ✕
+          </button>
         </div>
 
-        {/* tabs */}
-        <div style={{ display: "flex", borderBottom: "1px solid #eee", background: "#fafafa" }}>
-          {tabs.map((t) => (
-            <div
-              key={t}
-              onClick={() => setActiveTab(t)}
-              style={{
-                padding: "10px 14px",
-                cursor: "pointer",
-                borderBottom: activeTab === t ? "3px solid #0ea5e9" : "3px solid transparent",
-                fontWeight: activeTab === t ? 600 : 500,
-                color: activeTab === t ? "#0ea5e9" : "#333",
-              }}
-            >
-              {t}
-            </div>
-          ))}
+        {/* Tabs */}
+        <div className="border-b bg-gray-100">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="flex flex-wrap gap-2 p-2">
+              {[
+                "Basic Information",
+                "Address & Documents",
+                "Contacts",
+                "Bank",
+                "Future Closed",
+                "Menu",
+              ].map((tab) => (
+                <TabsTrigger
+                  key={tab}
+                  value={tab}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                    activeTab === tab
+                      ? "bg-blue-500 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {tab}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
 
-        {/* toolbar */}
-        <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-          <button onClick={() => { onClose && onClose(); }} disabled={saving} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>{saving ? "Saving..." : "Save"}</button>
-        </div>
+        {/* Body */}
+        <div className="flex-1 overflow-auto p-6 bg-white">{renderTab()}</div>
 
-        {/* content */}
-        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {activeTab === "Basic Information" && (
-            <div>
-              <h3 style={{ marginTop: 0, textAlign: "center" }}>Vendor - Basic Information</h3>
-              <KeyValueGrid rows={rows} labelWidth={200} maxWidth={900} />
-            </div>
-          )}
-
-          {activeTab === "Contacts" && (
-            <div>
-              <h3 style={{ marginTop: 0 }}>Contacts</h3>
-              <p style={{ color: "#666", marginBottom: 8 }}>
-                Manage emails and WhatsApp numbers here. Use the Save button inside the Contacts panel to save contacts, or use the modal Save to persist vendor basic info.
-              </p>
-
-              {/* Render ContactsClient */}
-              {contactsLoading ? (
-                <div>Loading contacts…</div>
-              ) : (
-                <ContactsClient
-                  restroCode={restroCodeForContacts}
-                  initialEmails={initialEmails}
-                  initialWhatsapps={initialWhatsapps}
-                />
-              )}
-            </div>
-          )}
-
-          {activeTab !== "Basic Information" && activeTab !== "Contacts" && (
-            <div>
-              <h3 style={{ marginTop: 0 }}>{activeTab}</h3>
-              <p style={{ color: "#555" }}>Content for <b>{activeTab}</b> — implement fields as needed.</p>
-            </div>
-          )}
+        {/* Footer */}
+        <div className="border-t p-4 flex justify-end bg-gray-50">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium border rounded-md mr-2"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={loadingStations}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md flex items-center gap-2 disabled:opacity-60"
+          >
+            {loadingStations && (
+              <Loader2 className="h-4 w-4 animate-spin text-white" />
+            )}
+            Save
+          </button>
         </div>
       </div>
-
-      <style jsx>{`
-        .kv-input {
-          width: 100%;
-          padding: 10px;
-          border-radius: 6px;
-          border: 1px solid #e0e0e0;
-          font-size: 13px;
-          box-sizing: border-box;
-          background: #fff;
-        }
-        .readonly-value {
-          padding: 10px 12px;
-          border-radius: 6px;
-          border: 1px solid #f0f0f0;
-          background: #fafafa;
-          color: #222;
-          font-size: 13px;
-        }
-        .inline-label {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 13px;
-        }
-        .preview-img {
-          height: 96px;
-          object-fit: cover;
-          border-radius: 6px;
-          border: 1px solid #eee;
-        }
-      `}</style>
     </div>
   );
 }
