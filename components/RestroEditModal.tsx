@@ -410,7 +410,7 @@ export default function RestroEditModal({
   }
 
   // direct supabase client (browser) — used for direct update to RestroMaster
-  const supabase = supabaseBrowser();
+  const supabase = supabaseBrowser;
 
   // Save handler (validates then updates Supabase RestroMaster)
   async function handleSave() {
