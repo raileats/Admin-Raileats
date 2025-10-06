@@ -1,4 +1,4 @@
-components/ui/Toggle.tsx// components/ui/Toggle.tsx
+// components/ui/Toggle.tsx
 "use client";
 import React from "react";
 
