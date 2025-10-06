@@ -1,8 +1,8 @@
-// components/VendorEditModal.jsx
 "use client";
 
 import React, { useEffect, useState } from "react";
 import KeyValueGrid from "@/components/ui/KeyValueGrid";
+import ContactsClient from "@/components/tabs/ContactsClient"; // ensure path exists
 
 export default function VendorEditModal({ vendor, onClose, onSave, saving: parentSaving }) {
   const tabs = ["Basic Information", "Contacts", "Bank", "Other"];
@@ -11,11 +11,14 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
   const [error, setError] = useState(null);
 
   const [local, setLocal] = useState({});
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [initialEmails, setInitialEmails] = useState([]);
+  const [initialWhatsapps, setInitialWhatsapps] = useState([]);
 
   useEffect(() => {
     setLocal({
-      VendorCode: vendor?.VendorCode ?? "",
-      VendorName: vendor?.VendorName ?? "",
+      VendorCode: vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? "",
+      VendorName: vendor?.VendorName ?? vendor?.VendorName ?? "",
       ContactName: vendor?.ContactName ?? "",
       ContactEmail: vendor?.ContactEmail ?? "",
       ContactPhone: vendor?.ContactPhone ?? "",
@@ -26,6 +29,31 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
       ...vendor,
     });
   }, [vendor]);
+
+  // fetch contacts for this vendor/restro when modal opens and when vendor changes
+  useEffect(() => {
+    const code = local?.VendorCode ?? local?.id ?? local?.code;
+    if (!code) return;
+    setContactsLoading(true);
+    fetch(`/api/restros/${encodeURIComponent(String(code))}/contacts`, { method: "GET" })
+      .then(async (res) => {
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(txt || `Fetch failed (${res.status})`);
+        }
+        return res.json();
+      })
+      .then((json) => {
+        // Expecting { emails: [...], whatsapps: [...] }
+        setInitialEmails(Array.isArray(json.emails) ? json.emails : []);
+        setInitialWhatsapps(Array.isArray(json.whatsapps) ? json.whatsapps : []);
+      })
+      .catch((err) => {
+        console.error("Fetch contacts error:", err);
+        setError("Failed to load contacts");
+      })
+      .finally(() => setContactsLoading(false));
+  }, [local?.VendorCode, local?.id, local?.code]);
 
   const saving = parentSaving ?? savingInternal;
 
@@ -71,16 +99,12 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
       if (onSave) {
         if (parentSaving === undefined) setSavingInternal(true);
         const result = await onSave(payload);
-        if (!result || !result.ok) {
-          throw new Error(result?.error ?? "Save failed");
-        }
+        if (!result || !result.ok) throw new Error(result?.error ?? "Save failed");
         onClose();
       } else {
         setSavingInternal(true);
         const result = await defaultPatch(payload);
-        if (!result.ok) {
-          throw new Error(result.error ?? "Save failed");
-        }
+        if (!result.ok) throw new Error(result.error ?? "Save failed");
         onClose();
       }
     } catch (err) {
@@ -182,7 +206,27 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
             </div>
           )}
 
-          {activeTab !== "Basic Information" && (
+          {activeTab === "Contacts" && (
+            <div>
+              <h3 style={{ marginTop: 0 }}>Contacts</h3>
+              <p style={{ color: "#666", marginBottom: 8 }}>
+                Manage emails and WhatsApp numbers here. Use the Save button inside the Contacts panel to save contacts, or use the modal Save to persist vendor basic info.
+              </p>
+
+              {/* Render our ContactsClient component (client-side) */}
+              {contactsLoading ? (
+                <div>Loading contacts…</div>
+              ) : (
+                <ContactsClient
+                  restroCode={local?.VendorCode ?? local?.id ?? ""}
+                  initialEmails={initialEmails}
+                  initialWhatsapps={initialWhatsapps}
+                />
+              )}
+            </div>
+          )}
+
+          {activeTab !== "Basic Information" && activeTab !== "Contacts" && (
             <div>
               <h3 style={{ marginTop: 0 }}>{activeTab}</h3>
               <p style={{ color: "#555" }}>Content for <b>{activeTab}</b> — implement fields as needed.</p>
@@ -190,6 +234,7 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
           )}
         </div>
       </div>
+
       <style jsx>{`
         .kv-input {
           width: 100%;
