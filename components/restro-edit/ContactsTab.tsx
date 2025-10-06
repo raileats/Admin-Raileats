@@ -1,8 +1,7 @@
 // components/restro-edit/ContactsTab.tsx
 "use client";
 import React from "react";
-import Toggle from "@/components/ui/Toggle"; // use the Toggle component I shared earlier or your own
-import { InputWithIcon } from "@/components/RestroEditModal"; // if you exported it; otherwise inline similar InputWithIcon
+import Toggle from "@/components/ui/Toggle";
 
 type Props = {
   local?: any;
@@ -13,10 +12,8 @@ type Props = {
 };
 
 export default function ContactsTab({ local = {}, updateField = () => {}, InputWithIcon = null }: Props) {
-  // helper to safely read local values
   const g = (k: string) => (local && local[k] !== undefined && local[k] !== null ? local[k] : "");
 
-  // Map of fields we support (only 1..3)
   const emailFields = [
     { nameKey: "EmailAddressName1", emailKey: "EmailsforOrdersReceiving1", enabledKey: "EmailsforOrdersReceiving1Enabled" },
     { nameKey: "EmailAddressName2", emailKey: "EmailsforOrdersReceiving2", enabledKey: "EmailsforOrdersReceiving2Enabled" },
