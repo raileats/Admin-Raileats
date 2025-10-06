@@ -1,154 +1,153 @@
+// components/RestroEditModal.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import KeyValueGrid from "@/components/ui/KeyValueGrid";
-import ContactsClient from "@/components/tabs/ContactsClient"; // ensure this path exists in your repo
 
-export default function VendorEditModal({ vendor, onClose, onSave, saving: parentSaving }) {
-  const tabs = ["Basic Information", "Contacts", "Bank", "Other"];
-  const [activeTab, setActiveTab] = useState(tabs[0]);
-  const [savingInternal, setSavingInternal] = useState(false);
-  const [error, setError] = useState(null);
+// IMPORTANT: use the ContactsClient you added under components/tabs
+// We import it with the name ContactsTab so existing JSX stays consistent.
+import ContactsTab from "@/components/tabs/ContactsClient";
 
-  const [local, setLocal] = useState({});
-  const [contactsLoading, setContactsLoading] = useState(false);
-  const [initialEmails, setInitialEmails] = useState([]);
-  const [initialWhatsapps, setInitialWhatsapps] = useState([]);
+// Optional tabs — if these paths don't exist in your repo you can remove/replace them.
+// But keeping them as imports shouldn't break if those files exist.
+import AddressDocsClient from "@/components/restro-edit/AddressDocsClient";
+import BankTab from "@/components/restro-edit/BankTab";
+import FutureClosedTab from "@/components/restro-edit/FutureClosedTab";
+import MenuTab from "@/components/restro-edit/MenuTab";
+
+type Props = {
+  restro?: any;
+  vendor?: any;
+  onClose?: () => void;
+  onSave?: (payload: any) => Promise<any> | any;
+  show?: boolean;
+};
+
+export default function RestroEditModal({ restro, vendor, onClose, onSave, show = true }: Props) {
+  const tabs = [
+    "Basic Information",
+    "Address & Documents",
+    "Contacts",
+    "Bank",
+    "Future Closed",
+    "Menu",
+  ];
+  const [activeTab, setActiveTab] = useState<string>(tabs[0]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [local, setLocal] = useState<any>({});
+
+  // seed local state from incoming server props
+  useEffect(() => {
+    const base = restro ?? vendor ?? {};
+    setLocal((prev: any) => ({
+      ...prev,
+      RestroCode: base?.RestroCode ?? base?.VendorCode ?? base?.code ?? base?.id ?? prev?.RestroCode,
+      RestroName: base?.RestroName ?? base?.VendorName ?? base?.name ?? prev?.RestroName,
+      StationName: base?.StationName ?? prev?.StationName,
+      StationCode: base?.StationCode ?? prev?.StationCode,
+      State: base?.State ?? prev?.State,
+      ...base,
+    }));
+  }, [restro, vendor]);
+
+  // Robust restroCode (string) computed from multiple fallbacks
+  const restroCode: string = useMemo(() => {
+    const candidates = [
+      restro?.RestroCode,
+      restro?.code,
+      restro?.id,
+      vendor?.VendorCode,
+      vendor?.id,
+      local?.RestroCode,
+      local?.VendorCode,
+      local?.id,
+    ];
+    const pick = candidates.find((v) => typeof v !== "undefined" && v !== null && String(v) !== "");
+    return String(pick ?? "");
+  }, [restro, vendor, local]);
 
   useEffect(() => {
-    setLocal({
-      VendorCode: vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? "",
-      VendorName: vendor?.VendorName ?? vendor?.name ?? "",
-      ContactName: vendor?.ContactName ?? "",
-      ContactEmail: vendor?.ContactEmail ?? "",
-      ContactPhone: vendor?.ContactPhone ?? "",
-      BankAccount: vendor?.BankAccount ?? "",
-      IFSC: vendor?.IFSC ?? "",
-      VendorLogo: vendor?.VendorLogo ?? "",
-      Active: vendor?.Active === 1 || vendor?.Active === "1" || vendor?.Active === true,
-      ...vendor,
-    });
-  }, [vendor]);
+    // small runtime debug helpful in browser console
+    // eslint-disable-next-line no-console
+    console.log("RestroEditModal restroCode:", restroCode);
+  }, [restroCode]);
 
-  useEffect(() => {
-    // fetch contacts when vendor/local code available
-    const code = local?.VendorCode ?? local?.id ?? local?.code;
-    if (!code) {
-      setInitialEmails([]);
-      setInitialWhatsapps([]);
-      return;
-    }
-
-    let cancelled = false;
-    setContactsLoading(true);
-    setError(null);
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}/contacts`);
-        if (!res.ok) {
-          const txt = await res.text().catch(() => "");
-          throw new Error(txt || `Fetch failed (${res.status})`);
-        }
-        const json = await res.json();
-        if (!cancelled) {
-          setInitialEmails(Array.isArray(json.emails) ? json.emails : []);
-          setInitialWhatsapps(Array.isArray(json.whatsapps) ? json.whatsapps : []);
-        }
-      } catch (err) {
-        console.error("Fetch contacts error:", err);
-        if (!cancelled) setError("Failed to load contacts");
-      } finally {
-        if (!cancelled) setContactsLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [local?.VendorCode, local?.id, local?.code]);
-
-  const saving = parentSaving ?? savingInternal;
-
-  function updateField(key, value) {
-    setLocal((s) => ({ ...s, [key]: value }));
+  function updateField(key: string, value: any) {
+    setLocal((s: any) => ({ ...s, [key]: value }));
   }
 
-  async function defaultPatch(payload) {
-    try {
-      const code = vendor?.VendorCode ?? vendor?.id ?? vendor?.code;
-      if (!code) throw new Error("Missing VendorCode for update");
-      const res = await fetch(`/api/vendors/${encodeURIComponent(String(code))}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(txt || `Update failed (${res.status})`);
-      }
-      const json = await res.json().catch(() => null);
-      const updated = json?.row ?? json ?? null;
-      return { ok: true, row: updated };
-    } catch (err) {
-      return { ok: false, error: err?.message ?? String(err) };
-    }
-  }
-
-  async function handleSave() {
+  async function handleSaveBasic() {
     setError(null);
-    const payload = {
-      VendorName: local.VendorName ?? "",
-      ContactName: local.ContactName ?? "",
-      ContactEmail: local.ContactEmail ?? "",
-      ContactPhone: local.ContactPhone ?? "",
-      BankAccount: local.BankAccount ?? "",
-      IFSC: local.IFSC ?? "",
-      VendorLogo: local.VendorLogo ?? "",
-      Active: local.Active ? 1 : 0,
-    };
-
+    setSaving(true);
     try {
       if (onSave) {
-        if (parentSaving === undefined) setSavingInternal(true);
-        const result = await onSave(payload);
+        const result = await onSave(local);
         if (!result || !result.ok) throw new Error(result?.error ?? "Save failed");
-        onClose();
       } else {
-        setSavingInternal(true);
-        const result = await defaultPatch(payload);
-        if (!result.ok) throw new Error(result.error ?? "Save failed");
-        onClose();
+        const code = restroCode;
+        if (!code) throw new Error("Missing restro code");
+        const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(local),
+        });
+        if (!res.ok) throw new Error(`Save failed (${res.status})`);
       }
-    } catch (err) {
+      if (onClose) onClose();
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
       console.error("Save error:", err);
       setError(err?.message ?? String(err));
     } finally {
-      if (parentSaving === undefined) setSavingInternal(false);
+      setSaving(false);
     }
   }
 
-  const imgSrc = (p) => {
-    if (!p) return "";
-    if (p.startsWith("http://") || p.startsWith("https://")) return p;
-    return `${process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}${p}`;
+  // shared props for tab components
+  const common = {
+    local,
+    updateField,
+    // add other shared helpers/data if required
   };
 
-  const rows = [
-    { keyLabel: "Vendor Code", value: <div className="readonly-value">{local.VendorCode ?? "—"}</div> },
-    { keyLabel: "Vendor Name", value: <input className="kv-input" value={local.VendorName ?? ""} onChange={(e) => updateField("VendorName", e.target.value)} /> },
-    { keyLabel: "Contact Name", value: <input className="kv-input" value={local.ContactName ?? ""} onChange={(e) => updateField("ContactName", e.target.value)} /> },
-    { keyLabel: "Contact Email", value: <input className="kv-input" value={local.ContactEmail ?? ""} onChange={(e) => updateField("ContactEmail", e.target.value)} /> },
-    { keyLabel: "Contact Phone", value: <input className="kv-input" value={local.ContactPhone ?? ""} onChange={(e) => updateField("ContactPhone", e.target.value)} /> },
-    { keyLabel: "Vendor Logo (path)", value: <input className="kv-input" value={local.VendorLogo ?? ""} onChange={(e) => updateField("VendorLogo", e.target.value)} /> },
-    { keyLabel: "Logo Preview", value: local.VendorLogo ? <img className="preview-img" src={imgSrc(local.VendorLogo)} alt="logo" onError={(e) => ((e.target).style.display = "none")} /> : <div className="readonly-value">No image</div> },
-    { keyLabel: "Bank Account", value: <input className="kv-input" value={local.BankAccount ?? ""} onChange={(e) => updateField("BankAccount", e.target.value)} /> },
-    { keyLabel: "IFSC", value: <input className="kv-input" value={local.IFSC ?? ""} onChange={(e) => updateField("IFSC", e.target.value)} /> },
-    { keyLabel: "Active", value: <label className="inline-label"><input type="checkbox" checked={!!local.Active} onChange={(e) => updateField("Active", e.target.checked)} /> <span>{local.Active ? "Yes" : "No"}</span></label> },
-  ];
+  function renderTab() {
+    switch (activeTab) {
+      case "Basic Information":
+        return (
+          <div>
+            <h3 style={{ marginTop: 0, textAlign: "center" }}>Basic Information</h3>
+            <KeyValueGrid
+              rows={[
+                { keyLabel: "Restro Code", value: <div className="readonly-value">{local?.RestroCode ?? "—"}</div> },
+                { keyLabel: "Restro Name", value: <input className="kv-input" value={local?.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} /> },
+                { keyLabel: "Station", value: <input className="kv-input" value={local?.StationName ?? ""} onChange={(e) => updateField("StationName", e.target.value)} /> },
+                { keyLabel: "State", value: <input className="kv-input" value={local?.State ?? ""} onChange={(e) => updateField("State", e.target.value)} /> },
+              ]}
+              labelWidth={200}
+              maxWidth={900}
+            />
+          </div>
+        );
+      case "Address & Documents":
+        // If AddressDocsClient file is missing in repo, replace this with a placeholder component or remove the case.
+        // For now attempt to render if present.
+        return typeof AddressDocsClient !== "undefined" ? <AddressDocsClient initialData={restro ?? local} /> : <div>Address & Documents</div>;
+      case "Contacts":
+        // <<< CRITICAL: always pass restroCode prop to ContactsTab to satisfy its typing requirements >>>
+        return <ContactsTab restroCode={restroCode} {...common} />;
+      case "Bank":
+        return typeof BankTab !== "undefined" ? <BankTab {...common} /> : <div>Bank</div>;
+      case "Future Closed":
+        return typeof FutureClosedTab !== "undefined" ? <FutureClosedTab {...common} /> : <div>Future Closed</div>;
+      case "Menu":
+        return typeof MenuTab !== "undefined" ? <MenuTab {...common} /> : <div>Menu</div>;
+      default:
+        return <div>Unknown tab</div>;
+    }
+  }
 
-  // Determine restroCode to pass to ContactsClient when Contacts tab is active
-  const restroCodeForContacts = String(local?.VendorCode ?? local?.id ?? local?.code ?? vendor?.VendorCode ?? vendor?.id ?? vendor?.code ?? "");
+  if (!show) return null;
 
   return (
     <div
@@ -181,20 +180,20 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
       >
         {/* header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: "1px solid #e9e9e9" }}>
-          <div style={{ fontWeight: 600 }}>{String(local.VendorCode ?? "")} / {local.VendorName}</div>
+          <div style={{ fontWeight: 600 }}>{local?.RestroCode ?? local?.VendorCode ?? "—"} / {local?.RestroName ?? "—"}</div>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <button onClick={onClose} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">✕</button>
+            <button onClick={() => onClose && onClose()} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", padding: 6 }} aria-label="Close">✕</button>
           </div>
         </div>
 
-        {/* tabs */}
-        <div style={{ display: "flex", borderBottom: "1px solid #eee", background: "#fafafa" }}>
+        {/* tabs nav */}
+        <div style={{ display: "flex", gap: 12, padding: "10px 16px", borderBottom: "1px solid #f1f1f1", background: "#fafafa" }}>
           {tabs.map((t) => (
             <div
               key={t}
               onClick={() => setActiveTab(t)}
               style={{
-                padding: "10px 14px",
+                padding: "8px 12px",
                 cursor: "pointer",
                 borderBottom: activeTab === t ? "3px solid #0ea5e9" : "3px solid transparent",
                 fontWeight: activeTab === t ? 600 : 500,
@@ -209,45 +208,13 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
         {/* toolbar */}
         <div style={{ padding: 12, borderBottom: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {error && <div style={{ color: "red", marginRight: "auto" }}>{error}</div>}
-          <button onClick={() => { onClose(); }} disabled={saving} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>{saving ? "Saving..." : "Save"}</button>
+          <button onClick={() => onClose && onClose()} disabled={saving} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", cursor: "pointer" }}>Cancel</button>
+          <button onClick={handleSaveBasic} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>{saving ? "Saving..." : "Save"}</button>
         </div>
 
         {/* content */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {activeTab === "Basic Information" && (
-            <div>
-              <h3 style={{ marginTop: 0, textAlign: "center" }}>Vendor - Basic Information</h3>
-              <KeyValueGrid rows={rows} labelWidth={200} maxWidth={900} />
-            </div>
-          )}
-
-          {activeTab === "Contacts" && (
-            <div>
-              <h3 style={{ marginTop: 0 }}>Contacts</h3>
-              <p style={{ color: "#666", marginBottom: 8 }}>
-                Manage emails and WhatsApp numbers here. Use the Save button inside the Contacts panel to save contacts, or use the modal Save to persist vendor basic info.
-              </p>
-
-              {/* Render our ContactsClient component (client-side) */}
-              {contactsLoading ? (
-                <div>Loading contacts…</div>
-              ) : (
-                <ContactsClient
-                  restroCode={restroCodeForContacts}
-                  initialEmails={initialEmails}
-                  initialWhatsapps={initialWhatsapps}
-                />
-              )}
-            </div>
-          )}
-
-          {activeTab !== "Basic Information" && activeTab !== "Contacts" && (
-            <div>
-              <h3 style={{ marginTop: 0 }}>{activeTab}</h3>
-              <p style={{ color: "#555" }}>Content for <b>{activeTab}</b> — implement fields as needed.</p>
-            </div>
-          )}
+          {renderTab()}
         </div>
       </div>
 
@@ -268,18 +235,6 @@ export default function VendorEditModal({ vendor, onClose, onSave, saving: paren
           background: #fafafa;
           color: #222;
           font-size: 13px;
-        }
-        .inline-label {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 13px;
-        }
-        .preview-img {
-          height: 96px;
-          object-fit: cover;
-          border-radius: 6px;
-          border: 1px solid #eee;
         }
       `}</style>
     </div>
