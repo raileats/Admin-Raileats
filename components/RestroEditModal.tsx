@@ -1,9 +1,10 @@
+// components/RestroEditModal.tsx
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabaseBrowser"; // keep your existing client
 
-// Import all tab components
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
 import AddressDocsClient from "@/components/tabs/AddressDocsClient";
@@ -31,18 +32,53 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-// helper to safely pick nested keys
+/* ---------- small inline SVG icons for tabs (unchanged) ---------- */
+const Icon = {
+  basic: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 2L3 6v6c0 5 3.8 9.2 9 10 5.2-.8 9-5 9-10V6l-9-4z" />
+    </svg>
+  ),
+  settings: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-1.9-3.3-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.4 3.1a7.6 7.6 0 0 0-1.7 1l-2.5-1L2 11.4l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 1.9 3.3 2.5-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.4-3.1a7.6 7.6 0 0 0 1.7-1l2.5 1 1.9-3.3L19.4 15z" />
+    </svg>
+  ),
+  docs: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    </svg>
+  ),
+  contacts: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 4.9V22h16v-3.1c0-2.7-3.6-4.9-8-4.9z" />
+    </svg>
+  ),
+  bank: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 2L1 6l11 4 11-4-11-4zm0 7v13" />
+    </svg>
+  ),
+  calendar: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M7 10h5v5H7zM3 4h18v18H3z" />
+    </svg>
+  ),
+  menu: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" />
+    </svg>
+  ),
+};
+
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
     if (!obj) continue;
-    if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined && obj[k] !== null) {
-      return obj[k];
-    }
+    if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined && obj[k] !== null) return obj[k];
   }
   return undefined;
 }
 
-// helper for station line display
 function buildStationDisplay(obj: any) {
   const sName = (safeGet(obj, "StationName", "station_name", "station", "name") ?? "").toString().trim();
   const sCode = (safeGet(obj, "StationCode", "station_code", "Station_Code", "stationCode") ?? "").toString().trim();
@@ -55,6 +91,108 @@ function buildStationDisplay(obj: any) {
   else if (!left && state) left = state;
   return left || "—";
 }
+
+/* ---------- validators (UPDATED) ---------- */
+// email: require @ and basic tld part
+const emailRegex = /^\S+@\S+\.\S+$/;
+// phone: exactly 10 digits (numeric) — this enforces the user's requested rule
+const tenDigitRegex = /^\d{10}$/;
+
+function validateEmailString(s: string) {
+  if (!s) return false;
+  // allow comma-separated multiple emails
+  const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+  if (!parts.length) return false;
+  for (const p of parts) {
+    if (!emailRegex.test(p)) return false;
+  }
+  return true;
+}
+
+function validatePhoneString(s: string) {
+  if (!s) return false;
+  // allow comma-separated multiple numbers; each must be exactly 10 numeric digits
+  const parts = s.split(",").map((p) => p.replace(/\s+/g, "").trim()).filter(Boolean);
+  if (!parts.length) return false;
+  for (const p of parts) {
+    if (!tenDigitRegex.test(p)) return false;
+  }
+  return true;
+}
+
+/* ---------- New: reusable InputWithIcon component to be used in tabs ---------- */
+/* Usage: child tab imports/receives InputWithIcon via common props and uses:
+   <InputWithIcon name="OwnerPhone" value={local.OwnerPhone} onChange={(v)=>updateField('OwnerPhone',v)} type="phone" label="Owner Phone" />
+*/
+function InputWithIcon({
+  name,
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder = "",
+}: {
+  name?: string;
+  label?: string;
+  value: any;
+  onChange: (v: any) => void;
+  type?: "text" | "email" | "phone" | "whatsapp" | "name";
+  placeholder?: string;
+}) {
+  const [touched, setTouched] = useState(false);
+
+  const v = typeof value === "string" ? value : value ?? "";
+
+  // compute validity based on type
+  let valid = true;
+  if (type === "email") valid = validateEmailString(String(v));
+  else if (type === "phone" || type === "whatsapp") valid = validatePhoneString(String(v));
+  else if (type === "name") valid = String(v).trim().length > 0;
+  else valid = true;
+
+  const showError = touched && !valid;
+
+  // small icons as emoji — can be replaced by SVG if you prefer
+  const icon = type === "phone" ? "📞" : type === "whatsapp" ? "🟢" : type === "email" ? "✉️" : "👤";
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {label && <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{label}</div>}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <input
+          aria-label={label ?? name}
+          name={name}
+          placeholder={placeholder}
+          value={v}
+          onChange={(e) => {
+            onChange(e.target.value);
+          }}
+          onBlur={() => setTouched(true)}
+          onFocus={() => setTouched(true)}
+          style={{
+            flex: 1,
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: showError ? "1px solid #ef4444" : "1px solid #e6e6e6",
+            outline: "none",
+            fontSize: 14,
+          }}
+        />
+      </div>
+      {showError && (
+        <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
+          {type === "email" && "Please enter a valid email (example: name@example.com)."}
+          {type === "phone" && "Enter a 10-digit numeric mobile number (no spaces). For multiple, separate with commas."}
+          {type === "whatsapp" && "Enter a 10-digit numeric WhatsApp number (no spaces). For multiple, separate with commas."}
+          {type === "name" && "Please enter a name."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- rest of RestroEditModal (mostly unchanged) ---------- */
 
 export default function RestroEditModal({
   restro: restroProp,
@@ -72,6 +210,7 @@ export default function RestroEditModal({
   const [stations, setStations] = useState<{ label: string; value: string }[]>(stationsOptions ?? []);
   const [loadingStations, setLoadingStations] = useState(false);
   const [savingInternal, setSavingInternal] = useState(false);
+  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -82,21 +221,25 @@ export default function RestroEditModal({
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
 
-  // Close on ESC
+  // ESC to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape" || e.key === "Esc") doClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restro]);
 
-  // Fetch restro by code (when direct route open)
+  // If no restro prop, try to fetch by parsing URL /restros/:code/edit
   useEffect(() => {
     async function fetchRestro(code: string) {
       try {
         const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`);
-        if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(txt || `Fetch failed (${res.status})`);
+        }
         const json = await res.json().catch(() => null);
         const row = json?.row ?? json ?? null;
         if (row) setRestro(row);
@@ -107,26 +250,31 @@ export default function RestroEditModal({
     }
 
     if (!restro) {
-      const path = typeof window !== "undefined" ? window.location.pathname : "";
-      const match = path.match(/\/restros\/([^\/]+)\/edit/);
-      if (match && match[1]) fetchRestro(decodeURIComponent(match[1]));
+      try {
+        const path = typeof window !== "undefined" ? window.location.pathname : "";
+        const match = path.match(/\/restros\/([^\/]+)\/edit/);
+        if (match && match[1]) fetchRestro(decodeURIComponent(match[1]));
+      } catch (e) {
+        // ignore
+      }
     }
   }, [restro]);
 
-  // Load station list
+  // Load stations if no options provided
   useEffect(() => {
     if (stations && stations.length) return;
     (async () => {
       setLoadingStations(true);
       try {
         const res = await fetch("/api/stations");
-        if (!res.ok) return;
+        if (!res.ok) {
+          setLoadingStations(false);
+          return;
+        }
         const json = await res.json().catch(() => null);
         const rows = json?.rows ?? json?.data ?? json ?? [];
         const opts = (rows || []).map((r: any) => {
-          const label = `${(r.StationName ?? r.station_name ?? r.name ?? "").toString().trim()} ${
-            (r.StationCode ?? r.station_code) ? `(${r.StationCode ?? r.station_code})` : ""
-          }${r.State ? ` - ${r.State}` : ""}`.trim();
+          const label = `${(r.StationName ?? r.station_name ?? r.name ?? "").toString().trim()} ${(r.StationCode ?? r.station_code) ? `(${r.StationCode ?? r.station_code})` : ""}${r.State ? ` - ${r.State}` : ""}`.trim();
           return { label, value: (r.StationCode ?? r.station_code ?? "").toString() };
         });
         if (opts.length) setStations(opts);
@@ -153,17 +301,11 @@ export default function RestroEditModal({
       MinimumOrderValue: Number(safeGet(restro, "MinimumOrderValue", "minimum_order_value") ?? 0),
       CutOffTime: Number(safeGet(restro, "CutOffTime", "cut_off_time") ?? 0),
       RaileatsDeliveryCharge: Number(safeGet(restro, "RaileatsDeliveryCharge", "raileats_delivery_charge") ?? 0),
-      RaileatsDeliveryChargeGSTRate: Number(
-        safeGet(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0
-      ),
+      RaileatsDeliveryChargeGSTRate: Number(safeGet(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0),
       RaileatsDeliveryChargeGST: Number(safeGet(restro, "RaileatsDeliveryChargeGST", "raileats_delivery_charge_gst") ?? 0),
-      RaileatsDeliveryChargeTotalInclGST: Number(
-        safeGet(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0
-      ),
-      OrdersPaymentOptionForCustomer:
-        safeGet(restro, "OrdersPaymentOptionForCustomer", "orders_payment_option_for_customer") ?? "BOTH",
-      IRCTCOrdersPaymentOptionForCustomer:
-        safeGet(restro, "IRCTCOrdersPaymentOptionForCustomer", "irctc_orders_payment_option") ?? "BOTH",
+      RaileatsDeliveryChargeTotalInclGST: Number(safeGet(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0),
+      OrdersPaymentOptionForCustomer: safeGet(restro, "OrdersPaymentOptionForCustomer", "orders_payment_option_for_customer") ?? "BOTH",
+      IRCTCOrdersPaymentOptionForCustomer: safeGet(restro, "IRCTCOrdersPaymentOptionForCustomer", "irctc_orders_payment_option") ?? "BOTH",
       RestroTypeOfDelivery: safeGet(restro, "RestroTypeOfDelivery", "restro_type_of_delivery") ?? "RAILEATS",
       OwnerName: safeGet(restro, "OwnerName", "owner_name") ?? "",
       OwnerPhone: safeGet(restro, "OwnerPhone", "owner_phone") ?? "",
@@ -171,6 +313,13 @@ export default function RestroEditModal({
       BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
       RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
       RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
+      // copy any contacts-like fields (common names)
+      EmailAddressName1: restro?.EmailAddressName1 ?? restro?.EmailsforOrdersReceiving1 ?? restro?.EmailsforOrdersStatus1 ?? restro?.EmailAddressName1,
+      EmailsforOrdersReceiving1: restro?.EmailsforOrdersReceiving1 ?? "",
+      EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? 0,
+      WhatsappMobileNumberName1: restro?.WhatsappMobileNumberName1 ?? "",
+      WhatsappMobileNumberforOrderDetails1: restro?.WhatsappMobileNumberforOrderDetails1 ?? "",
+      WhatsappMobileNumberStatus1: restro?.WhatsappMobileNumberStatus1 ?? 0,
       ...restro,
     });
   }, [restro]);
@@ -180,71 +329,27 @@ export default function RestroEditModal({
   const updateField = useCallback((key: string, value: any) => {
     setLocal((s: any) => ({ ...s, [key]: value }));
     setError(null);
+    setNotification(null);
   }, []);
 
   async function defaultPatch(payload: any) {
     try {
       const code =
-        restro?.RestroCode ??
-        restro?.restro_code ??
-        restro?.RestroId ??
-        restro?.restro_id ??
-        restro?.code ??
-        local?.RestroCode;
+        restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? restro?.code ?? local?.RestroCode;
       if (!code) throw new Error("Missing RestroCode for update");
       const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(`Update failed (${res.status})`);
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(txt || `Update failed (${res.status})`);
+      }
       const json = await res.json().catch(() => null);
       return { ok: true, row: json?.row ?? json ?? null };
     } catch (err: any) {
       return { ok: false, error: err?.message ?? String(err) };
-    }
-  }
-
-  async function handleSave() {
-    setError(null);
-    const payload: any = {
-      RestroName: local.RestroName ?? "",
-      StationCode: local.StationCode ?? null,
-      StationName: local.StationName ?? null,
-      State: local.State ?? null,
-      WeeklyOff: local.WeeklyOff ?? null,
-      OpenTime: local.OpenTime ?? null,
-      ClosedTime: local.ClosedTime ?? null,
-      MinimumOrderValue: Number(local.MinimumOrderValue) || 0,
-      CutOffTime: Number(local.CutOffTime) || 0,
-      RaileatsDeliveryCharge: Number(local.RaileatsDeliveryCharge) || 0,
-      RaileatsDeliveryChargeGSTRate: Number(local.RaileatsDeliveryChargeGSTRate) || 0,
-      RaileatsDeliveryChargeGST: Number(local.RaileatsDeliveryChargeGST) || 0,
-      RaileatsDeliveryChargeTotalInclGST: Number(local.RaileatsDeliveryChargeTotalInclGST) || 0,
-      OrdersPaymentOptionForCustomer: local.OrdersPaymentOptionForCustomer ?? null,
-      IRCTCOrdersPaymentOptionForCustomer: local.IRCTCOrdersPaymentOptionForCustomer ?? null,
-      RestroTypeOfDelivery: local.RestroTypeOfDelivery ?? null,
-      IRCTC: local.IRCTC ? 1 : 0,
-      Raileats: local.Raileats ? 1 : 0,
-      IsIrctcApproved: local.IsIrctcApproved ? 1 : 0,
-    };
-
-    try {
-      if (onSave) {
-        if (parentSaving === undefined) setSavingInternal(true);
-        const result = await onSave(payload);
-        if (!result || !result.ok) throw new Error(result?.error ?? "Save failed");
-      } else {
-        if (parentSaving === undefined) setSavingInternal(true);
-        const result = await defaultPatch(payload);
-        if (!result.ok) throw new Error(result.error ?? "Save failed");
-      }
-      doClose();
-    } catch (err: any) {
-      console.error("Save error:", err);
-      setError(err?.message ?? String(err));
-    } finally {
-      if (parentSaving === undefined) setSavingInternal(false);
     }
   }
 
@@ -262,29 +367,131 @@ export default function RestroEditModal({
 
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
-  // compute restroCode (centralized)
+  // calculate a canonical restroCode to pass down
   const restroCode =
-    restro?.RestroCode ??
-    restro?.restro_code ??
-    restro?.RestroId ??
-    restro?.restro_id ??
-    restro?.code ??
-    local?.RestroCode ??
-    local?.restroCode ??
+    (local && (local.RestroCode ?? local.restro_code ?? local.id ?? local.code)) ||
+    (restro && (restro.RestroCode ?? restro.restro_code ?? restro.RestroId ?? restro.restro_id ?? restro.code)) ||
     "";
 
-  // pass restroCode to tabs
-  const common = { local, updateField, stationDisplay, stations, loadingStations, restroCode };
+  // ---------- validation routine (uses updated validators above) ----------
+  function collectValidationErrors(obj: any) {
+    const errs: string[] = [];
 
-  // tab renderer
+    // Heuristic: check keys that look like emails or contain "Email"
+    for (const key of Object.keys(obj)) {
+      const low = key.toLowerCase();
+      const val = obj[key];
+
+      if (!val || (typeof val === "string" && val.trim() === "")) continue;
+
+      // email-like keys
+      if (low.includes("email") || low.includes("emailsfor") || low.includes("emailaddress")) {
+        if (typeof val !== "string") {
+          errs.push(`${key}: expected text (email), got ${typeof val}`);
+        } else if (!validateEmailString(String(val))) {
+          errs.push(`${key}: invalid email(s) => "${String(val)}"`);
+        }
+      }
+
+      // whatsapp / mobile-like keys
+      if (low.includes("whatsapp") || low.includes("mobile") || low.includes("phone") || low.includes("contact")) {
+        // skip labels like "WhatsappMobileNumberName1" (these might be names), but check values that look numeric or likely numbers:
+        // If value contains digits or '+' treat as phone field
+        const text = String(val).trim();
+        if (/\d/.test(text)) {
+          if (!validatePhoneString(text)) {
+            errs.push(`${key}: invalid phone number(s) => "${text}". Expect 10-digit numeric numbers, comma-separated if multiple.`);
+          }
+        }
+      }
+    }
+
+    return errs;
+  }
+
+  // direct supabase client (browser) — used for direct update to RestroMaster
+  const supabase = supabaseBrowser();
+
+  // Save handler (validates then updates Supabase RestroMaster)
+  async function handleSave() {
+    setNotification(null);
+    setError(null);
+
+    // run validation
+    const validationErrors = collectValidationErrors(local);
+    if (validationErrors.length) {
+      setNotification({ type: "error", text: `Validation failed:\n• ${validationErrors.join("\n• ")}` });
+      // keep the error open longer
+      return;
+    }
+
+    if (!restroCode) {
+      setNotification({ type: "error", text: "Missing RestroCode — cannot save." });
+      return;
+    }
+
+    setSavingInternal(true);
+    try {
+      // Build payload: include only fields that exist in local or known contact keys
+      const payload: any = { ...local };
+
+      // Ensure we do not accidentally send nested objects; flatten simple values only
+      for (const k of Object.keys(payload)) {
+        if (typeof payload[k] === "object" && payload[k] !== null) {
+          // skip complex nested objects (you can adjust to include specific keys)
+          delete payload[k];
+        }
+      }
+
+      // Update RestroMaster table by RestroCode
+      const { error: supError } = await supabase.from("RestroMaster").update(payload).eq("RestroCode", restroCode);
+
+      if (supError) throw supError;
+
+      setNotification({ type: "success", text: "Changes saved successfully ✅" });
+
+      // refresh same page / data
+      setTimeout(() => {
+        if ((router as any).refresh) router.refresh();
+        else window.location.reload();
+      }, 700);
+    } catch (err: any) {
+      console.error("Save error:", err);
+      setNotification({ type: "error", text: `Save failed: ${err?.message ?? String(err)}` });
+    } finally {
+      setSavingInternal(false);
+      // auto clear after a few seconds
+      setTimeout(() => setNotification(null), 6000);
+    }
+  }
+
+  // Map tab name -> component render (only renders the external tab components)
   const renderTab = () => {
+    // include restroCode in common so child tabs that require it receive it
+    // IMPORTANT: pass down validators & InputWithIcon so tabs can render inline errors & icons
+    const common = {
+      local,
+      updateField,
+      stationDisplay,
+      stations,
+      loadingStations,
+      restroCode,
+      // new: pass helper component & validators
+      InputWithIcon,
+      validators: {
+        validateEmailString,
+        validatePhoneString,
+      },
+    };
+
     switch (activeTab) {
       case "Basic Information":
         return <BasicInformationTab {...common} />;
       case "Station Settings":
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        return <AddressDocsClient initialData={restro} restroCode={restroCode} />;
+        // AddressDocsClient: we pass initialData only (keeps compatibility)
+        return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
       case "Contacts":
         return <ContactsTab {...common} />;
       case "Bank":
@@ -297,6 +504,28 @@ export default function RestroEditModal({
         return <div>Unknown tab</div>;
     }
   };
+
+  // small helper that picks icon for tab
+  function tabIcon(t: string | undefined | null) {
+    switch (t) {
+      case "Basic Information":
+        return Icon.basic;
+      case "Station Settings":
+        return Icon.settings;
+      case "Address & Documents":
+        return Icon.docs;
+      case "Contacts":
+        return Icon.contacts;
+      case "Bank":
+        return Icon.bank;
+      case "Future Closed":
+        return Icon.calendar;
+      case "Menu":
+        return Icon.menu;
+      default:
+        return null;
+    }
+  }
 
   return (
     <div
@@ -313,51 +542,41 @@ export default function RestroEditModal({
       role="dialog"
       aria-modal="true"
     >
-      <div
-        style={{
-          background: "#fff",
-          width: "98%",
-          height: "98%",
-          maxWidth: 1700,
-          borderRadius: 8,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
+      <div style={{ background: "#fff", width: "98%", height: "98%", maxWidth: 1700, borderRadius: 8, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ position: "sticky", top: 0, zIndex: 1200, background: "#fff", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px" }}>
             <div style={{ fontWeight: 700 }}>
               <div style={{ fontSize: 15 }}>
                 {String(local.RestroCode ?? restro?.RestroCode ?? "")}
-                {(local.RestroName ?? restro?.RestroName) ? " / " : ""}
-                {local.RestroName ?? restro?.RestroName ?? ""}
+                {(local.RestroName ?? restro?.RestroName) ? " / " : ""}{local.RestroName ?? restro?.RestroName ?? ""}
               </div>
               <div style={{ fontWeight: 600, fontSize: 13, color: "#0b7285", marginTop: 4 }}>{stationDisplay}</div>
             </div>
 
-            <button
-              onClick={doClose}
-              aria-label="Close"
-              title="Close (Esc)"
-              style={{
-                background: "#ef4444",
-                color: "#fff",
-                border: "none",
-                fontSize: 18,
-                cursor: "pointer",
-                padding: 8,
-                borderRadius: 6,
-              }}
-            >
-              ✕
-            </button>
+            <div>
+              <button
+                onClick={doClose}
+                aria-label="Close"
+                title="Close (Esc)"
+                style={{
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: 18,
+                  cursor: "pointer",
+                  padding: 8,
+                  borderRadius: 6,
+                }}
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs row */}
           <div style={{ background: "#fafafa", borderBottom: "1px solid #eee" }}>
-            <div style={{ display: "flex", gap: 6, padding: "8px 12px" }}>
+            <div style={{ display: "flex", gap: 6, padding: "8px 12px", overflowX: "auto" }}>
               {TAB_NAMES.map((t) => (
                 <div
                   key={t}
@@ -366,64 +585,59 @@ export default function RestroEditModal({
                     padding: "10px 14px",
                     cursor: "pointer",
                     borderBottom: activeTab === t ? "3px solid #0ea5e9" : "3px solid transparent",
-                    fontWeight: activeTab === t ? 600 : 500,
+                    fontWeight: activeTab === t ? 700 : 500,
                     color: activeTab === t ? "#0ea5e9" : "#333",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  {t}
+                  <span style={{ display: "inline-flex", alignItems: "center", color: activeTab === t ? "#0ea5e9" : "#666" }}>{tabIcon(t)}</span>
+                  <span>{t}</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Tab Content */}
+        {/* Notification */}
+        {notification && (
+          <div
+            style={{
+              padding: 10,
+              textAlign: "center",
+              background: notification.type === "success" ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
+              color: notification.type === "success" ? "#065f46" : "#991b1b",
+              fontWeight: 600,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {notification.text}
+          </div>
+        )}
+
+        {/* Content */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>{renderTab()}</div>
 
         {/* Footer */}
-        <div
-          style={{
-            padding: 12,
-            borderTop: "1px solid #eee",
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 8,
-            background: "#fff",
-          }}
-        >
-          <button
-            onClick={doClose}
-            style={{
-              background: "#fff",
-              color: "#333",
-              border: "1px solid #e3e3e3",
-              padding: "8px 12px",
-              borderRadius: 6,
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-
+        <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff" }}>
+          <div />
           <div>
             {error && <div style={{ color: "red", marginRight: 12, display: "inline-block" }}>{error}</div>}
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                background: saving ? "#7fcfe9" : "#0ea5e9",
-                color: "#fff",
-                padding: "8px 12px",
-                borderRadius: 6,
-                border: "none",
-                cursor: saving ? "not-allowed" : "pointer",
-              }}
-            >
+            <button onClick={doClose} style={{ background: "#fff", color: "#333", border: "1px solid #e3e3e3", padding: "8px 12px", borderRadius: 6, marginRight: 8 }}>
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer", fontWeight: 600 }}>
               {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        /* minimal shared styles (tab components should style their own forms) */
+      `}</style>
     </div>
   );
 }
