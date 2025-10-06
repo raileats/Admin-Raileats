@@ -1,5 +1,5 @@
-"use client";
-import { useState } from "react";
+="use client";
+import { useState, useEffect } from "react";
 
 type ContactRow = {
   id: string;
@@ -19,6 +19,13 @@ export default function ContactsClient({
   initialEmails = [],
   initialWhatsapps = [],
 }: ContactsClientProps) {
+  // Diagnostic log to inspect incoming props
+  useEffect(() => {
+    console.log("ContactsClient initial:", { restroCode, initialEmails, initialWhatsapps });
+  }, [restroCode, initialEmails, initialWhatsapps]);
+
+  // If server did not return any rows, show an example/sample row so UI looks like screenshot.
+  // But keep actual state separate so Save will write actual user entries.
   const [emails, setEmails] = useState<ContactRow[]>(
     initialEmails.length ? initialEmails : []
   );
@@ -27,6 +34,24 @@ export default function ContactsClient({
   );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // If there is absolutely no data and it's first render, create sample rows for visual parity.
+  useEffect(() => {
+    if (!initialEmails.length && !initialWhatsapps.length) {
+      // only add sample rows for display, not saved automatically
+      setEmails([
+        { id: "sample-email-1", name: "Akhil", value: "abc@gmail.com", active: true },
+        { id: "sample-email-2", name: "Ram", value: "abc@gmail.com", active: true },
+      ]);
+      setWhatsapps([
+        { id: "sample-wa-1", name: "Vinod Kumar", value: "9876543210", active: true },
+        { id: "sample-wa-2", name: "Rajesh", value: "9876543210", active: true },
+        { id: "sample-wa-3", name: "Suresh", value: "9876543210", active: true },
+      ]);
+    }
+    // NOTE: if there is real data, we keep it as-is.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addEmail = () =>
     setEmails((s) => [...s, { id: crypto.randomUUID(), name: "", value: "", active: true }]);
@@ -52,10 +77,22 @@ export default function ContactsClient({
     setSaving(true);
     setMsg(null);
     try {
+      // filter out sample rows that we added for display (IDs starting with "sample-")
+      const realEmails = emails.filter((e) => !e.id?.toString().startsWith("sample-"));
+      const realWhats = whatsapps.filter((w) => !w.id?.toString().startsWith("sample-"));
+
       const payload = {
-        emails: emails.map((r) => ({ name: r.name ?? "", value: r.value ?? "", active: !!r.active })),
-        whatsapps: whatsapps.map((r) => ({ name: r.name ?? "", value: r.value ?? "", active: !!r.active })),
+        emails: realEmails.map((r) => ({ name: r.name ?? "", value: r.value ?? "", active: !!r.active })),
+        whatsapps: realWhats.map((r) => ({ name: r.name ?? "", value: r.value ?? "", active: !!r.active })),
       };
+
+      // If there's nothing real to save, don't call the API — show message instead
+      if (payload.emails.length === 0 && payload.whatsapps.length === 0) {
+        setMsg("No real contact entries to save (sample rows ignored). Add contacts then Save.");
+        setSaving(false);
+        setTimeout(() => setMsg(null), 3500);
+        return;
+      }
 
       const res = await fetch(`/api/restros/${restroCode}/contacts`, {
         method: "POST",
@@ -69,6 +106,7 @@ export default function ContactsClient({
         setMsg(json?.error ?? "Failed to save contacts");
       } else {
         setMsg("Contacts saved successfully");
+        // update local state ids if server returns inserted rows (optional)
       }
     } catch (err) {
       console.error("Save contacts unexpected:", err);
@@ -147,11 +185,11 @@ export default function ContactsClient({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-2">
       <div className="border rounded-lg p-4 bg-white">
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-lg font-semibold">Emails</h3>
-          <button className="bg-blue-600 text-white px-3 py-1 rounded text-sm" onClick={addEmail}>
+          <button className="bg-orange-600 text-white px-3 py-1 rounded text-sm" onClick={addEmail}>
             Add New Email
           </button>
         </div>
@@ -165,7 +203,7 @@ export default function ContactsClient({
       <div className="border rounded-lg p-4 bg-white">
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-lg font-semibold">WhatsApp Numbers</h3>
-          <button className="bg-blue-600 text-white px-3 py-1 rounded text-sm" onClick={addWhatsapp}>
+          <button className="bg-orange-600 text-white px-3 py-1 rounded text-sm" onClick={addWhatsapp}>
             Add New WhatsApp
           </button>
         </div>
