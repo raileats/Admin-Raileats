@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 
 /**
  * components/RestroEditModal.tsx
- * Client component for editing a Restro inside a modal.
+ * Client component for editing a Restro inside a modal (updated).
  *
  * Usage:
  *  <RestroEditModal restroCode={code} isOpen={isOpen} onClose={()=>setIsOpen(false)} />
@@ -212,10 +212,13 @@ function StationSettingsTab({ restro, onChange }: { restro: any; onChange: (k: s
   );
 }
 
+/* ----------------- Address / Documents Tab (updated upload flow) ----------------- */
+
 function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChange: (k: string, v: any) => void; restroCode: string }) {
   const [fssaiNumber, setFssaiNumber] = useState("");
   const [fssaiExpiry, setFssaiExpiry] = useState("");
   const [fssaiFile, setFssaiFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!restro) return;
@@ -231,27 +234,63 @@ function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChang
     return d >= min;
   }
 
+  async function uploadFileToServer(file: File) {
+    // Sends raw ArrayBuffer to server upload endpoint which writes to Supabase storage
+    const filename = file.name || `upload_${Date.now()}`;
+    const contentType = file.type || "application/octet-stream";
+    const arrayBuffer = await file.arrayBuffer();
+
+    const res = await fetch(`/api/restros/${restroCode}/upload-file`, {
+      method: "POST",
+      headers: {
+        "Content-Type": contentType,
+        "x-file-name": filename,
+      },
+      body: arrayBuffer,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error("Upload failed: " + text);
+    }
+    const data = await res.json();
+    return data.file_url as string; // server returns uploaded file URL
+  }
+
   async function addNewFssaiEntry() {
     if (!validateFssaiExpiry(fssaiExpiry)) {
       alert("FSSAI expiry must be at least 1 month from today");
       return;
     }
-    const form = new FormData();
-    form.append("type", "fssai");
-    form.append("fssai_number", fssaiNumber);
-    form.append("fssai_expiry", fssaiExpiry);
-    if (fssaiFile) form.append("fssai_file", fssaiFile);
 
-    const res = await fetch(`/api/restros/${restroCode}/docs`, {
-      method: "POST",
-      body: form,
-    });
-    if (!res.ok) {
-      alert("Failed to add FSSAI");
-      return;
+    setUploading(true);
+    try {
+      let file_url: string | null = null;
+      if (fssaiFile) {
+        file_url = await uploadFileToServer(fssaiFile);
+      }
+
+      // Now call docs route with JSON (no multipart)
+      const body = { type: "fssai", fssai_number: fssaiNumber, fssai_expiry: fssaiExpiry, file_url };
+      const res = await fetch(`/api/restros/${restroCode}/docs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "Failed to add FSSAI");
+      }
+
+      alert("FSSAI added");
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      alert("Error: " + err.message);
+    } finally {
+      setUploading(false);
     }
-    alert("FSSAI added");
-    window.location.reload();
   }
 
   return (
@@ -288,8 +327,8 @@ function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChang
           </div>
 
           <div className="mt-3">
-            <button className="px-3 py-1 rounded bg-green-500 text-white" onClick={addNewFssaiEntry}>
-              Add New FSSAI Entry
+            <button className="px-3 py-1 rounded bg-green-500 text-white" onClick={addNewFssaiEntry} disabled={uploading}>
+              {uploading ? "Uploading..." : "Add New FSSAI Entry"}
             </button>
           </div>
         </div>
@@ -311,7 +350,8 @@ function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChang
                   headers: { "Content-Type": "application/json" },
                 });
                 if (!res.ok) {
-                  alert("Failed to add GST");
+                  const text = await res.text();
+                  alert("Failed to add GST: " + text);
                   return;
                 }
                 alert("GST added");
@@ -340,7 +380,8 @@ function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChang
                   headers: { "Content-Type": "application/json" },
                 });
                 if (!res.ok) {
-                  alert("Failed to add PAN");
+                  const text = await res.text();
+                  alert("Failed to add PAN: " + text);
                   return;
                 }
                 alert("PAN added");
@@ -355,6 +396,8 @@ function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChang
     </div>
   );
 }
+
+/* ----------------- ContactsTab (unchanged) ----------------- */
 
 function ContactsTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
   function EmailRow({ idx }: { idx: number }) {
