@@ -431,7 +431,12 @@ export default function RestroEditModal({
       case "Station Settings":
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
+        // wrap in a wrapper to selectively hide child save-row/button via CSS
+        return (
+          <div className="address-docs-wrapper">
+            <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />
+          </div>
+        );
       case "Contacts":
         return <ContactsTab {...common} />;
       case "Bank":
@@ -541,8 +546,12 @@ export default function RestroEditModal({
         )}
 
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {/* NOTE: no extra modal-level title here — child tabs render their own titles.
-              This avoids duplicate headings and ensures child components control their heading markup. */}
+          {/* Keep a single modal-level header for clarity */}
+          <div style={{ textAlign: "center", marginBottom: 14 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#0b1220" }}>{activeTab}</div>
+            <div style={{ fontSize: 13, color: "#6b7280", marginTop: 6 }}>{/* optional subtitle if needed */}</div>
+          </div>
+
           <div className="tab-content" style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
             {renderTab()}
           </div>
@@ -563,9 +572,62 @@ export default function RestroEditModal({
       </div>
 
       <style jsx>{`
+        /* Scope: modal root forced Arial */
         .restro-modal-root { font-family: Arial, Helvetica, sans-serif; }
-        .tab-content { box-sizing: border-box; padding: 6px; }
-        input, select, textarea, button { font-family: inherit; font-size: 14px; }
+
+        /* Important: hide duplicate headings rendered inside child tabs.
+           Many of the child tab components use h3/.tab-heading/.title/.kicker — hide them so modal shows the single header */
+        .tab-content h1,
+        .tab-content h2,
+        .tab-content h3,
+        .tab-content .tab-heading,
+        .tab-content .title,
+        .tab-content .kicker {
+          display: none !important;
+        }
+
+        /* Hide any local save row inside AddressDocsClient by scoping to wrapper:
+           this removes "Save Address & Docs" that child may render. */
+        .address-docs-wrapper .save-row,
+        .address-docs-wrapper .btn.primary,
+        .address-docs-wrapper .local-save {
+          display: none !important;
+        }
+
+        /* Basic input/button normalization inside modal */
+        .tab-content input,
+        .tab-content select,
+        .tab-content textarea,
+        .tab-content button {
+          font-family: inherit;
+          font-size: 14px;
+        }
+
+        /* Slight card look for child tab card containers */
+        .tab-content > * {
+          box-sizing: border-box;
+        }
+
+        /* If child components use a .form-grid or .restro-grid - keep consistent spacing */
+        .tab-content .form-grid,
+        .tab-content .restro-grid {
+          margin-top: 6px;
+        }
+
+        /* Help text */
+        .tab-content .helper,
+        .tab-content .hint {
+          color: #6b7280;
+          font-size: 13px;
+        }
+
+        /* Make sure toggles / icons align */
+        .tab-content .input-with-icon .icon { color: #6b21a8; }
+
+        /* ensure the modal-level header doesn't push child layout */
+        @media (max-width: 900px) {
+          .tab-content { padding: 0 6px; }
+        }
       `}</style>
     </div>
   );
