@@ -1,82 +1,73 @@
 // components/TabContainer.tsx
 "use client";
-
 import React from "react";
 
-type TabItem = {
-  key: string;
-  label: string;
-  icon?: React.ReactNode;
-};
-
 type Props = {
-  tabs?: TabItem[]; // optional list of tabs (for header nav) - you can pass [] if unused
-  activeKey?: string;
-  onChange?: (key: string) => void;
-  header?: string | null; // preferred prop name for title
-  title?: string | null; // alias for backward compatibility
-  showDivider?: boolean;
+  title?: string;
+  subtitle?: string;
   children?: React.ReactNode;
-  compact?: boolean;
 };
 
-export default function TabContainer({
-  tabs = [],
-  activeKey,
-  onChange,
-  header,
-  title,
-  showDivider = true,
-  children,
-  compact = false,
-}: Props) {
-  const visibleTitle = header ?? title ?? null;
-
+export default function TabContainer({ title, subtitle, children }: Props) {
   return (
-    <div style={{ width: "100%" }}>
-      {/* Top title */}
-      {visibleTitle && (
-        <div style={{ textAlign: "center", marginBottom: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{visibleTitle}</h3>
-        </div>
-      )}
+    <div className="tab-wrap">
+      {title && <h2 className="tab-title">{title}</h2>}
+      {subtitle && <div className="tab-subtitle">{subtitle}</div>}
 
-      {/* Tabs row (if provided) */}
-      {tabs && tabs.length > 0 && (
-        <div style={{ display: "flex", gap: 8, padding: "8px 12px", overflowX: "auto", alignItems: "center", marginBottom: 12 }}>
-          {tabs.map((t) => {
-            const active = t.key === activeKey;
-            return (
-              <button
-                key={t.key}
-                onClick={() => onChange && onChange(t.key)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: active ? "2px solid #0ea5e9" : "1px solid #e6e6e6",
-                  background: active ? "rgba(14,165,233,0.06)" : "#fff",
-                  color: active ? "#0e7ea8" : "#333",
-                  cursor: "pointer",
-                  fontWeight: active ? 700 : 600,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {t.icon && <span style={{ display: "inline-flex", alignItems: "center" }}>{t.icon}</span>}
-                <span style={{ fontSize: compact ? 13 : 14 }}>{t.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <div className="tab-card">
+        {children}
+      </div>
 
-      {/* optional divider */}
-      {showDivider && <div style={{ height: 1, background: "#f0f0f0", marginBottom: 14 }} />}
+      <style jsx>{`
+        .tab-wrap { max-width: 1200px; margin: 12px auto 40px; padding: 0 18px; }
+        .tab-title { text-align: center; margin: 12px 0 6px; font-size: 20px; font-weight: 700; color: #1f2937; }
+        .tab-subtitle { text-align: center; margin-bottom: 14px; color: #374151; font-weight: 600; }
+        .tab-card {
+          background: #fff;
+          border-radius: 8px;
+          border: 1px solid #eee;
+          padding: 28px 30px;
+          box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+        }
 
-      {/* content slot */}
-      <div style={{ width: "100%" }}>{children}</div>
+        /* small helper classes available inside cards */
+        :global(.restro-grid) {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 18px 28px;
+          align-items: start;
+        }
+        @media (max-width: 1100px) {
+          :global(.restro-grid) { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 720px) {
+          :global(.restro-grid) { grid-template-columns: 1fr; }
+        }
+
+        :global(.restro-label) {
+          display: block;
+          font-size: 13px;
+          font-weight: 600;
+          color: #374151;
+          margin-bottom: 8px;
+        }
+        :global(.restro-input) {
+          width: 100%;
+          padding: 8px 10px;
+          border-radius: 6px;
+          border: 1px solid #e6e6e6;
+          font-size: 14px;
+        }
+        :global(.restro-readonly) {
+          padding: 8px 10px;
+          background: #fafafa;
+          border-radius: 6px;
+          border: 1px solid #f0f0f0;
+        }
+
+        /* smaller field container for two-column inline forms */
+        :global(.field) { margin-bottom: 10px; }
+      `}</style>
     </div>
   );
 }
