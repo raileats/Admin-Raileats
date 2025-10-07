@@ -13,10 +13,7 @@ export default function TabContainer({ title, subtitle, children }: Props) {
     <div className="tab-wrap">
       {title && <h2 className="tab-title">{title}</h2>}
       {subtitle && <div className="tab-subtitle">{subtitle}</div>}
-
-      <div className="tab-card">
-        {children}
-      </div>
+      <div className="tab-card">{children}</div>
 
       <style jsx>{`
         .tab-wrap { max-width: 1200px; margin: 12px auto 40px; padding: 0 18px; }
@@ -30,7 +27,7 @@ export default function TabContainer({ title, subtitle, children }: Props) {
           box-shadow: 0 1px 0 rgba(0,0,0,0.02);
         }
 
-        /* small helper classes available inside cards */
+        /* shared classes for inputs/layout used by tabs */
         :global(.restro-grid) {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
@@ -43,30 +40,16 @@ export default function TabContainer({ title, subtitle, children }: Props) {
         @media (max-width: 720px) {
           :global(.restro-grid) { grid-template-columns: 1fr; }
         }
-
         :global(.restro-label) {
-          display: block;
-          font-size: 13px;
-          font-weight: 600;
-          color: #374151;
-          margin-bottom: 8px;
+          display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:8px;
         }
         :global(.restro-input) {
-          width: 100%;
-          padding: 8px 10px;
-          border-radius: 6px;
-          border: 1px solid #e6e6e6;
-          font-size: 14px;
+          width:100%; padding:8px 10px; border-radius:6px; border:1px solid #e6e6e6; font-size:14px;
         }
         :global(.restro-readonly) {
-          padding: 8px 10px;
-          background: #fafafa;
-          border-radius: 6px;
-          border: 1px solid #f0f0f0;
+          padding:8px 10px; background:#fafafa; border-radius:6px; border:1px solid:#f0f0f0;
         }
-
-        /* smaller field container for two-column inline forms */
-        :global(.field) { margin-bottom: 10px; }
+        :global(.field){ margin-bottom:10px; }
       `}</style>
     </div>
   );
