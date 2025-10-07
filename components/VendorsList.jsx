@@ -1,10 +1,6 @@
 // components/VendorsList.jsx
 "use client";
 import React, { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
-
-// relative import for modal inside components folder
-const VendorEditModal = dynamic(() => import("./VendorEditModal"), { ssr: false });
 
 export default function VendorsList({ refreshKey = 0 }) {
   const [vendors, setVendors] = useState([]);
@@ -13,7 +9,6 @@ export default function VendorsList({ refreshKey = 0 }) {
   const [alpha, setAlpha] = useState("");
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
-  const [editingVendor, setEditingVendor] = useState(null);
   const pageSize = 20;
 
   useEffect(() => {
@@ -60,6 +55,7 @@ export default function VendorsList({ refreshKey = 0 }) {
         const txt = await res.text();
         alert("Update failed: " + txt);
       }
+      // refresh list after update
       fetchList();
     } catch (err) {
       console.error("toggleOnline error:", err);
@@ -67,13 +63,19 @@ export default function VendorsList({ refreshKey = 0 }) {
     }
   }
 
+  // If you DO have an admin edit route, this will navigate to it.
+  // Otherwise it will open a small inline prompt to edit outlet name (non-modal).
   function openEdit(v) {
-    setEditingVendor(v);
-  }
+    const adminRoute = `/admin/vendors/${encodeURIComponent(v.outlet_id)}`;
+    // try navigation if route likely exists
+    if (typeof window !== "undefined") {
+      // attempt a soft navigate (user can implement a route)
+      window.location.href = adminRoute;
+      return;
+    }
 
-  function onSavedCallback() {
-    fetchList();
-    setEditingVendor(null);
+    // fallback: nothing (shouldn't reach here in browser)
+    alert("Edit not available.");
   }
 
   return (
@@ -142,6 +144,7 @@ export default function VendorsList({ refreshKey = 0 }) {
                     <button
                       className="px-2 py-1 text-xs bg-amber-400 rounded"
                       onClick={() => openEdit(v)}
+                      title="Open vendor edit page"
                     >
                       Edit
                     </button>
@@ -158,14 +161,6 @@ export default function VendorsList({ refreshKey = 0 }) {
         <span>Page {page} / {Math.max(1, Math.ceil(count / pageSize))}</span>
         <button disabled={page * pageSize >= count} onClick={() => setPage(p => p + 1)} className="px-2 py-1 border rounded">Next</button>
       </div>
-
-      {editingVendor && (
-        <VendorEditModal
-          vendor={editingVendor}
-          onClose={() => setEditingVendor(null)}
-          onSaved={onSavedCallback}
-        />
-      )}
     </div>
   );
 }
