@@ -1,8 +1,9 @@
 // components/RestroEditModal.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabaseBrowser"; // keep your existing client
 
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
@@ -31,7 +32,45 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ---------- helpers ---------- */
+/* ---------- inline SVG icons ---------- */
+const Icon = {
+  basic: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 2L3 6v6c0 5 3.8 9.2 9 10 5.2-.8 9-5 9-10V6l-9-4z" />
+    </svg>
+  ),
+  settings: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-1.9-3.3-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.4 3.1a7.6 7.6 0 0 0-1.7 1l-2.5-1L2 11.4l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 1.9 3.3 2.5-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.4-3.1a7.6 7.6 0 0 0 1.7-1l2.5 1 1.9-3.3L19.4 15z" />
+    </svg>
+  ),
+  docs: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    </svg>
+  ),
+  contacts: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 4.9V22h16v-3.1c0-2.7-3.6-4.9-8-4.9z" />
+    </svg>
+  ),
+  bank: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 2L1 6l11 4 11-4-11-4zm0 7v13" />
+    </svg>
+  ),
+  calendar: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M7 10h5v5H7zM3 4h18v18H3z" />
+    </svg>
+  ),
+  menu: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" />
+    </svg>
+  ),
+};
+
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
     if (!obj) continue;
@@ -40,44 +79,27 @@ function safeGet(obj: any, ...keys: string[]) {
   return undefined;
 }
 
-function buildStationDisplay(obj: any) {
-  const sName = (safeGet(obj, "StationName", "station_name", "station", "name") ?? "").toString().trim();
-  const sCode = (safeGet(obj, "StationCode", "station_code", "Station_Code", "stationCode") ?? "").toString().trim();
-  const state = (safeGet(obj, "State", "state", "state_name", "StateName") ?? "").toString().trim();
-  const parts: string[] = [];
-  if (sName) parts.push(sName);
-  if (sCode) parts.push(`(${sCode})`);
-  let left = parts.join(" ");
-  if (left && state) left = `${left} - ${state}`;
-  else if (!left && state) left = state;
-  return left || "—";
-}
-
 /* ---------- validators ---------- */
+// email: require @ and basic tld part
 const emailRegex = /^\S+@\S+\.\S+$/;
+// phone: exactly 10 digits (numeric)
 const tenDigitRegex = /^\d{10}$/;
-
 function validateEmailString(s: string) {
   if (!s) return false;
   const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
   if (!parts.length) return false;
-  for (const p of parts) {
-    if (!emailRegex.test(p)) return false;
-  }
+  for (const p of parts) if (!emailRegex.test(p)) return false;
   return true;
 }
-
 function validatePhoneString(s: string) {
   if (!s) return false;
   const parts = s.split(",").map((p) => p.replace(/\s+/g, "").trim()).filter(Boolean);
   if (!parts.length) return false;
-  for (const p of parts) {
-    if (!tenDigitRegex.test(p)) return false;
-  }
+  for (const p of parts) if (!tenDigitRegex.test(p)) return false;
   return true;
 }
 
-/* ---------- small reusable UI (InputWithIcon + Toggle) ---------- */
+/* ---------- small reusable InputWithIcon (export if needed by children) ---------- */
 function InputWithIcon({
   name,
   label,
@@ -85,6 +107,7 @@ function InputWithIcon({
   onChange,
   type = "text",
   placeholder = "",
+  maxLength,
 }: {
   name?: string;
   label?: string;
@@ -92,23 +115,14 @@ function InputWithIcon({
   onChange: (v: any) => void;
   type?: "text" | "email" | "phone" | "whatsapp" | "name";
   placeholder?: string;
+  maxLength?: number;
 }) {
   const [touched, setTouched] = useState(false);
   const v = typeof value === "string" ? value : value ?? "";
 
-  // if phone/whatsapp: sanitize to digits only and limit to 10 when user types
-  const handleChange = (raw: string) => {
-    if (type === "phone" || type === "whatsapp") {
-      const cleaned = String(raw).replace(/\D/g, "").slice(0, 10);
-      onChange(cleaned);
-    } else {
-      onChange(raw);
-    }
-  };
-
   let valid = true;
   if (type === "email") valid = validateEmailString(String(v));
-  else if (type === "phone" || type === "whatsapp") valid = v === "" ? true : validatePhoneString(String(v));
+  else if (type === "phone" || type === "whatsapp") valid = validatePhoneString(String(v));
   else if (type === "name") valid = String(v).trim().length > 0;
   else valid = true;
 
@@ -125,11 +139,10 @@ function InputWithIcon({
           name={name}
           placeholder={placeholder}
           value={v}
-          onChange={(e) => handleChange(e.target.value)}
+          onChange={(e) => onChange(e.target.value)}
           onBlur={() => setTouched(true)}
           onFocus={() => setTouched(true)}
-          inputMode={type === "phone" || type === "whatsapp" ? "numeric" : "text"}
-          maxLength={type === "phone" || type === "whatsapp" ? 10 : undefined}
+          maxLength={maxLength}
           style={{
             flex: 1,
             padding: "8px 10px",
@@ -152,64 +165,7 @@ function InputWithIcon({
   );
 }
 
-/* Improved Toggle: checkbox-based (more reliable than button + manual left/position) */
-function Toggle({
-  checked,
-  onChange,
-  label,
-  id,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label?: string;
-  id?: string;
-}) {
-  const inputId = id ?? `toggle_${Math.random().toString(36).slice(2, 8)}`;
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <label htmlFor={inputId} style={{ display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
-        <input
-          id={inputId}
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          style={{ display: "none" }}
-        />
-        <span
-          aria-hidden
-          style={{
-            width: 44,
-            height: 24,
-            borderRadius: 999,
-            background: checked ? "#06b6d4" : "#e6e6e6",
-            display: "inline-block",
-            position: "relative",
-            transition: "background-color 120ms ease",
-            verticalAlign: "middle",
-          }}
-        >
-          <span
-            style={{
-              display: "block",
-              width: 18,
-              height: 18,
-              borderRadius: 999,
-              background: "#fff",
-              position: "absolute",
-              top: 3,
-              left: checked ? 23 : 3,
-              transition: "left 120ms ease",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
-            }}
-          />
-        </span>
-      </label>
-      {label && <div style={{ fontSize: 13, color: "#444" }}>{label}</div>}
-    </div>
-  );
-}
-
-/* ---------- component ---------- */
+/* ---------- RestroEditModal component ---------- */
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
@@ -237,7 +193,6 @@ export default function RestroEditModal({
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
 
-  // ESC to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape" || e.key === "Esc") doClose();
@@ -247,7 +202,7 @@ export default function RestroEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restro]);
 
-  // If no restro prop, try to fetch by parsing URL /restros/:code/edit (keeps compatibility)
+  // Fetch restro by URL if not provided
   useEffect(() => {
     async function fetchRestro(code: string) {
       try {
@@ -276,7 +231,7 @@ export default function RestroEditModal({
     }
   }, [restro]);
 
-  // Load stations if not provided
+  // Load stations
   useEffect(() => {
     if (stations && stations.length) return;
     (async () => {
@@ -302,7 +257,7 @@ export default function RestroEditModal({
     })();
   }, []);
 
-  // Populate local state from restro
+  // populate local
   useEffect(() => {
     if (!restro) return;
     setLocal({
@@ -329,23 +284,13 @@ export default function RestroEditModal({
       BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
       RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
       RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
-      // emails (only 2 supported in DB)
-      EmailAddressName1: restro?.EmailAddressName1 ?? "",
+      // contacts-like fields
+      EmailAddressName1: restro?.EmailAddressName1 ?? restro?.EmailsforOrdersReceiving1 ?? restro?.EmailsforOrdersStatus1 ?? restro?.EmailAddressName1,
       EmailsforOrdersReceiving1: restro?.EmailsforOrdersReceiving1 ?? "",
-      EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? "OFF",
-      EmailAddressName2: restro?.EmailAddressName2 ?? "",
-      EmailsforOrdersReceiving2: restro?.EmailsforOrdersReceiving2 ?? "",
-      EmailsforOrdersStatus2: restro?.EmailsforOrdersStatus2 ?? "OFF",
-      // whatsapp (up to 3)
+      EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? 0,
       WhatsappMobileNumberName1: restro?.WhatsappMobileNumberName1 ?? "",
       WhatsappMobileNumberforOrderDetails1: restro?.WhatsappMobileNumberforOrderDetails1 ?? "",
-      WhatsappMobileNumberStatus1: restro?.WhatsappMobileNumberStatus1 ?? "OFF",
-      WhatsappMobileNumberName2: restro?.WhatsappMobileNumberName2 ?? "",
-      WhatsappMobileNumberforOrderDetails2: restro?.WhatsappMobileNumberforOrderDetails2 ?? "",
-      WhatsappMobileNumberStatus2: restro?.WhatsappMobileNumberStatus2 ?? "OFF",
-      WhatsappMobileNumberName3: restro?.WhatsappMobileNumberName3 ?? "",
-      WhatsappMobileNumberforOrderDetails3: restro?.WhatsappMobileNumberforOrderDetails3 ?? "",
-      WhatsappMobileNumberStatus3: restro?.WhatsappMobileNumberStatus3 ?? "OFF",
+      WhatsappMobileNumberStatus1: restro?.WhatsappMobileNumberStatus1 ?? 0,
       ...restro,
     });
   }, [restro]);
@@ -363,25 +308,27 @@ export default function RestroEditModal({
       const code =
         restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? restro?.code ?? local?.RestroCode;
       if (!code) throw new Error("Missing RestroCode for update");
-
       const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      const text = await res.text().catch(() => "");
-      let json = null;
+      let text = "";
       try {
-        json = text ? JSON.parse(text) : null;
+        text = await res.text();
+      } catch (e) {
+        text = "";
+      }
+      let json: any = null;
+      try {
+        json = JSON.parse(text);
       } catch {
         json = null;
       }
 
       if (!res.ok) {
-        throw new Error((json?.error?.message ?? json?.error ?? text) || `Update failed (${res.status})`);
+        throw new Error(json?.error?.message ?? json?.error ?? text || `Update failed (${res.status})`);
       }
-
       return { ok: true, row: json?.row ?? json?.data ?? json ?? null };
     } catch (err: any) {
       return { ok: false, error: err?.message ?? String(err) };
@@ -400,88 +347,50 @@ export default function RestroEditModal({
     }
   }
 
-  const stationDisplay = buildStationDisplay({ ...restro, ...local });
+  // human-friendly station display
+  const stationDisplay = `${String(local.StationName ?? restro?.StationName ?? "")}${local.State ? " - " + local.State : ""}`;
 
+  // canonical restroCode
   const restroCode =
     (local && (local.RestroCode ?? local.restro_code ?? local.id ?? local.code)) ||
     (restro && (restro.RestroCode ?? restro.restro_code ?? restro.RestroId ?? restro.restro_id ?? restro.code)) ||
     "";
 
-  // validation: validate only populated email/phone fields
+  // validation
   function collectValidationErrors(obj: any) {
     const errs: string[] = [];
-
     for (const key of Object.keys(obj)) {
       const low = key.toLowerCase();
       const val = obj[key];
+      if (!val || (typeof val === "string" && val.trim() === "")) continue;
 
-      if (val === undefined || val === null) continue;
-      if (typeof val === "string" && val.trim() === "") continue;
-
-      // skip name fields
-      if (low.includes("name")) continue;
-
-      // skip status/enabled fields
-      if (low.includes("status") || low.includes("enabled") || low.endsWith("_status") || low.endsWith("_enabled")) continue;
-
-      // email-like keys
       if (low.includes("email") || low.includes("emailsfor") || low.includes("emailaddress")) {
-        if (typeof val !== "string") {
-          errs.push(`${key}: expected text (email), got ${typeof val}`);
-          continue;
-        }
-        const s = val.trim();
-        if (s === "") continue;
-        if (!validateEmailString(s)) {
-          errs.push(`${key}: invalid email(s) => "${s}"`);
-        }
-        continue;
+        if (typeof val !== "string") errs.push(`${key}: expected text (email), got ${typeof val}`);
+        else if (!validateEmailString(String(val))) errs.push(`${key}: invalid email(s) => "${String(val)}"`);
       }
 
-      // phone/whatsapp keys
       if (low.includes("whatsapp") || low.includes("mobile") || low.includes("phone") || low.includes("contact")) {
-        const s = String(val).trim();
-        if (s === "") continue;
-        if (/\d/.test(s)) {
-          // allow only digits and exact 10 digits
-          const cleaned = s.replace(/\D/g, "");
-          if (!tenDigitRegex.test(cleaned)) {
-            errs.push(`${key}: invalid phone number(s) => "${s}". Expect 10-digit numeric.`);
+        const text = String(val).trim();
+        if (/\d/.test(text)) {
+          if (!validatePhoneString(text)) {
+            errs.push(`${key}: invalid phone number(s) => "${text}". Expect 10-digit numeric numbers.`);
           }
         }
-        continue;
       }
     }
-
     return errs;
   }
 
-  // Derived validation state (memoized to avoid recalculating every render)
-  const validationErrors = useMemo(() => collectValidationErrors(local), [local]);
-
-  // Require at least one valid primary contact in slot 1: either Email1 valid OR Mobile1 valid
-  const primaryContactValid = useMemo(() => {
-    const email1 = (local.EmailsforOrdersReceiving1 ?? "").toString().trim();
-    const mobile1 = (local.WhatsappMobileNumberforOrderDetails1 ?? "").toString().replace(/\D/g, "");
-    return (email1 && validateEmailString(email1)) || (mobile1 && tenDigitRegex.test(mobile1));
-  }, [local]);
-
-  // Save disabled when saving OR validationErrors exist OR primaryContact not valid
-  const saveDisabled = saving || validationErrors.length > 0 || !primaryContactValid;
+  // supabase client (browser)
+  const supabase = supabaseBrowser; // keep as export in your lib
 
   async function handleSave() {
     setNotification(null);
     setError(null);
 
-    // re-run validation
-    const validationErrorsNow = collectValidationErrors(local);
-    if (validationErrorsNow.length) {
-      setNotification({ type: "error", text: `Validation failed:\n• ${validationErrorsNow.join("\n• ")}` });
-      return;
-    }
-
-    if (!primaryContactValid) {
-      setNotification({ type: "error", text: `Please provide a valid Email 1 or a 10-digit Mobile 1 before saving.` });
+    const validationErrors = collectValidationErrors(local);
+    if (validationErrors.length) {
+      setNotification({ type: "error", text: `Validation failed:\n• ${validationErrors.join("\n• ")}` });
       return;
     }
 
@@ -492,47 +401,20 @@ export default function RestroEditModal({
 
     setSavingInternal(true);
     try {
-      // Build payload: whitelist only fields that are updatable and present in local
-      const allowed = [
-        "EmailAddressName1", "EmailsforOrdersReceiving1", "EmailsforOrdersStatus1",
-        "EmailAddressName2", "EmailsforOrdersReceiving2", "EmailsforOrdersStatus2",
-        "WhatsappMobileNumberName1", "WhatsappMobileNumberforOrderDetails1", "WhatsappMobileNumberStatus1",
-        "WhatsappMobileNumberName2", "WhatsappMobileNumberforOrderDetails2", "WhatsappMobileNumberStatus2",
-        "WhatsappMobileNumberName3", "WhatsappMobileNumberforOrderDetails3", "WhatsappMobileNumberStatus3",
-        // add more permitted columns if needed
-      ];
+      const payload: any = { ...local };
 
-      const payload: any = {};
-      for (const k of allowed) {
-        let v = local && local[k];
-        if (v === undefined || v === null) continue;
-        if (typeof v === "string") {
-          v = v.trim();
-          if (v === "") continue;
-        }
-        // sanitize mobile fields to digits only (and max 10)
-        if (k.toLowerCase().includes("whatsapp") && k.toLowerCase().includes("orderdetails")) {
-          v = String(v).replace(/\D/g, "").slice(0, 10);
-          if (v === "") continue;
-        }
-        payload[k] = v;
+      // flatten: remove nested objects
+      for (const k of Object.keys(payload)) {
+        if (typeof payload[k] === "object" && payload[k] !== null) delete payload[k];
       }
 
-      console.log("DEBUG: update payload:", payload);
+      // prefer server patching via API or direct supabase client
+      // using supabase client (browser)
+      // note: supabase.from(...).update(...).eq(...)
+      // If using supabaseBrowser export, ensure it's a Supabase client instance
+      const { error: supError, data } = await (supabase as any).from("RestroMaster").update(payload).eq("RestroCode", restroCode);
 
-      if (Object.keys(payload).length === 0) {
-        setNotification({ type: "success", text: "Save completed (no changes applied)." });
-        setSavingInternal(false);
-        setTimeout(() => setNotification(null), 4000);
-        return;
-      }
-
-      const result = await defaultPatch(payload);
-      console.log("DEBUG defaultPatch result:", result);
-
-      if (!result.ok) {
-        throw new Error(result.error ?? "Update failed");
-      }
+      if (supError) throw supError;
 
       setNotification({ type: "success", text: "Changes saved successfully ✅" });
 
@@ -549,7 +431,7 @@ export default function RestroEditModal({
     }
   }
 
-  // common props passed to child tabs
+  // prepare common props to pass to each tab
   const common = {
     local,
     updateField,
@@ -558,14 +440,33 @@ export default function RestroEditModal({
     loadingStations,
     restroCode,
     InputWithIcon,
-    Toggle,
     validators: {
       validateEmailString,
       validatePhoneString,
     },
   };
 
-  // render tab mapping — returns original tab components (child files must exist)
+  function tabIcon(t: string | undefined | null) {
+    switch (t) {
+      case "Basic Information":
+        return Icon.basic;
+      case "Station Settings":
+        return Icon.settings;
+      case "Address & Documents":
+        return Icon.docs;
+      case "Contacts":
+        return Icon.contacts;
+      case "Bank":
+        return Icon.bank;
+      case "Future Closed":
+        return Icon.calendar;
+      case "Menu":
+        return Icon.menu;
+      default:
+        return null;
+    }
+  }
+
   const renderTab = () => {
     switch (activeTab) {
       case "Basic Information":
@@ -575,7 +476,6 @@ export default function RestroEditModal({
       case "Address & Documents":
         return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
       case "Contacts":
-        // use existing ContactsTab if you prefer; ensure it uses Toggle & InputWithIcon from common
         return <ContactsTab {...common} />;
       case "Bank":
         return <BankTab {...common} />;
@@ -638,26 +538,31 @@ export default function RestroEditModal({
           {/* Tabs row */}
           <div style={{ background: "#fafafa", borderBottom: "1px solid #eee" }}>
             <div style={{ display: "flex", gap: 6, padding: "8px 12px", overflowX: "auto" }}>
-              {TAB_NAMES.map((t) => (
-                <div
-                  key={t}
-                  onClick={() => setActiveTab(t)}
-                  style={{
-                    padding: "10px 14px",
-                    cursor: "pointer",
-                    borderBottom: activeTab === t ? "3px solid #0ea5e9" : "3px solid transparent",
-                    fontWeight: activeTab === t ? 700 : 500,
-                    color: activeTab === t ? "#0ea5e9" : "#333",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  <span style={{ display: "inline-flex", alignItems: "center", color: activeTab === t ? "#0ea5e9" : "#666" }}>{/* icon could go here */}</span>
-                  <span>{t}</span>
-                </div>
-              ))}
+              {TAB_NAMES.map((t) => {
+                const active = activeTab === t;
+                return (
+                  <div
+                    key={t}
+                    onClick={() => setActiveTab(t)}
+                    role="button"
+                    aria-pressed={active}
+                    style={{
+                      padding: "10px 14px",
+                      cursor: "pointer",
+                      borderBottom: active ? "3px solid #0ea5e9" : "3px solid transparent",
+                      fontWeight: active ? 800 : 600,
+                      color: active ? "#0ea5e9" : "#333",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center", color: active ? "#0ea5e9" : "#666" }}>{tabIcon(t)}</span>
+                    <span style={{ fontSize: 14 }}>{t}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -682,37 +587,24 @@ export default function RestroEditModal({
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>{renderTab()}</div>
 
         {/* Footer */}
-        <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff", alignItems: "center" }}>
-          <div style={{ color: "#666", fontSize: 13 }}>
-            {/* show inline validation hint */}
-            {validationErrors.length > 0 && <div style={{ color: "#b91c1c" }}>Validation: {validationErrors[0]}{validationErrors.length>1?` (+${validationErrors.length-1} more)`: ""}</div>}
-            {!primaryContactValid && <div style={{ color: "#b91c1c" }}>Provide a valid Email 1 or a 10-digit Mobile 1 to enable Save.</div>}
-          </div>
-
+        <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff" }}>
+          <div />
           <div>
             {error && <div style={{ color: "red", marginRight: 12, display: "inline-block" }}>{error}</div>}
             <button onClick={doClose} style={{ background: "#fff", color: "#333", border: "1px solid #e3e3e3", padding: "8px 12px", borderRadius: 6, marginRight: 8 }}>
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              disabled={saveDisabled}
-              title={saveDisabled ? (validationErrors.length ? validationErrors.join("; ") : "Provide primary contact") : "Save changes"}
-              style={{
-                background: saveDisabled ? "#9fd8e6" : "#0ea5e9",
-                color: "#fff",
-                padding: "8px 12px",
-                borderRadius: 6,
-                border: "none",
-                cursor: saveDisabled ? "not-allowed" : "pointer",
-                fontWeight: 600,
-              }}
-            >
+            <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer", fontWeight: 700 }}>
               {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        /* minimal shared styles */
+        /* make active tab label bold & colored (already inline) */
+      `}</style>
     </div>
   );
 }
