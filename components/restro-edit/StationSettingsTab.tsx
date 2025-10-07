@@ -2,19 +2,21 @@
 "use client";
 
 import React from "react";
-import TabContainer from "@/components/TabContainer";
 
 type Props = {
   local: any;
   updateField: (k: string, v: any) => void;
   stationDisplay?: string;
-  stations?: { label: string; value: string }[];
-  loadingStations?: boolean;
 };
 
 export default function StationSettingsTab({ local = {}, updateField, stationDisplay }: Props) {
   return (
-    <TabContainer title="Station Settings" kicker="Station Settings">
+    <div className="tab-card">
+      <div className="heading">
+        <div className="kicker">Station Settings</div>
+        <h2 className="title">Station Settings</h2>
+      </div>
+
       <div className="form-grid">
         <div className="field">
           <div className="label">Station</div>
@@ -102,14 +104,20 @@ export default function StationSettingsTab({ local = {}, updateField, stationDis
       </div>
 
       <style jsx>{`
-        .form-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: var(--gap); }
+        .tab-card { margin: 20px auto; max-width: 1200px; padding: 26px; border-radius: 10px; border: 1px solid #f3f3f3; background:#fff; box-shadow:0 6px 20px rgba(11,15,30,0.03); }
+        .heading { text-align:center; margin-bottom:18px; }
+        .kicker { font-weight:700; color:#6b7280; margin-bottom:6px; }
+        .title { font-weight:800; font-size:1.25rem; color:var(--text); margin:0; }
+
+        .form-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:18px; }
         @media (max-width:1100px) { .form-grid { grid-template-columns: repeat(2,1fr); } }
-        @media (max-width:720px) { .form-grid { grid-template-columns: 1fr; } }
+        @media (max-width:720px) { .form-grid { grid-template-columns:1fr; } }
+
         .field { display:flex; flex-direction:column; }
-        .label { font-size:0.9rem; font-weight:var(--label-weight); color:var(--muted); margin-bottom:8px; }
-        .input { padding:10px 12px; height:44px; border-radius:8px; border:1px solid var(--border); font-size:1rem; }
-        .readonly { padding:10px 12px; border-radius:8px; background:var(--soft-bg); border:1px solid #f3f3f3; }
+        .label { font-size:0.9rem; font-weight:600; color:#6b7280; margin-bottom:8px; }
+        .input { padding:10px 12px; height:44px; border-radius:8px; border:1px solid #e6e6e6; font-size:1rem; }
+        .readonly { padding:10px 12px; border-radius:8px; background:#fbfdff; border:1px solid #f3f3f3; }
       `}</style>
-    </TabContainer>
+    </div>
   );
 }
