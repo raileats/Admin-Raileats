@@ -1,8 +1,9 @@
+// components/RestroEditModal.tsx
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { supabase as supabaseBrowser } from "@/lib/supabaseBrowser"; // adjust if your export name diff
+import { supabase as supabaseBrowser } from "@/lib/supabaseBrowser";
 
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
@@ -32,41 +33,13 @@ const TAB_NAMES = [
 ];
 
 const Icon = {
-  basic: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M12 2L3 6v6c0 5 3.8 9.2 9 10 5.2-.8 9-5 9-10V6l-9-4z" />
-    </svg>
-  ),
-  settings: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-1.9-3.3-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.4 3.1a7.6 7.6 0 0 0-1.7 1l-2.5-1L2 11.4l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 1.9 3.3 2.5-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.4-3.1a7.6 7.6 0 0 0 1.7-1l2.5 1 1.9-3.3L19.4 15z" />
-    </svg>
-  ),
-  docs: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    </svg>
-  ),
-  contacts: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 4.9V22h16v-3.1c0-2.7-3.6-4.9-8-4.9z" />
-    </svg>
-  ),
-  bank: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M12 2L1 6l11 4 11-4-11-4zm0 7v13" />
-    </svg>
-  ),
-  calendar: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M7 10h5v5H7zM3 4h18v18H3z" />
-    </svg>
-  ),
-  menu: (
-    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
-      <path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" />
-    </svg>
-  ),
+  basic: <span style={{ display: "inline-block", width: 16 }}>🔹</span>,
+  settings: <span style={{ display: "inline-block", width: 16 }}>⚙️</span>,
+  docs: <span style={{ display: "inline-block", width: 16 }}>📄</span>,
+  contacts: <span style={{ display: "inline-block", width: 16 }}>👥</span>,
+  bank: <span style={{ display: "inline-block", width: 16 }}>🏦</span>,
+  calendar: <span style={{ display: "inline-block", width: 16 }}>📅</span>,
+  menu: <span style={{ display: "inline-block", width: 16 }}>☰</span>,
 };
 
 function safeGet(obj: any, ...keys: string[]) {
@@ -77,7 +50,7 @@ function safeGet(obj: any, ...keys: string[]) {
   return undefined;
 }
 
-/* validators */
+/* validators (kept same) */
 const emailRegex = /^\S+@\S+\.\S+$/;
 const tenDigitRegex = /^\d{10}$/;
 function validateEmailString(s: string) {
@@ -95,7 +68,7 @@ function validatePhoneString(s: string) {
   return true;
 }
 
-/* InputWithIcon (same as you had) */
+/* InputWithIcon fallback */
 function InputWithIcon({
   name,
   label,
@@ -104,15 +77,7 @@ function InputWithIcon({
   type = "text",
   placeholder = "",
   maxLength,
-}: {
-  name?: string;
-  label?: string;
-  value: any;
-  onChange: (v: any) => void;
-  type?: "text" | "email" | "phone" | "whatsapp" | "name";
-  placeholder?: string;
-  maxLength?: number;
-}) {
+}: any) {
   const [touched, setTouched] = useState(false);
   const v = typeof value === "string" ? value : value ?? "";
 
@@ -161,7 +126,7 @@ function InputWithIcon({
   );
 }
 
-/* Toggle component passed down so ContactsTab aligns with parent layout */
+/* Toggle component */
 function Toggle({ checked, onChange }: { checked?: boolean; onChange: (v: boolean) => void }) {
   return (
     <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
@@ -196,7 +161,6 @@ function Toggle({ checked, onChange }: { checked?: boolean; onChange: (v: boolea
   );
 }
 
-/* main component */
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
@@ -284,7 +248,6 @@ export default function RestroEditModal({
       BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
       RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
       RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
-      // contacts-like fields
       EmailAddressName1: restro?.EmailAddressName1 ?? "",
       EmailsforOrdersReceiving1: restro?.EmailsforOrdersReceiving1 ?? "",
       EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? 0,
@@ -315,7 +278,6 @@ export default function RestroEditModal({
         body: JSON.stringify(payload),
       });
 
-      // read text safely
       let text = "";
       try {
         text = await res.text();
@@ -323,7 +285,6 @@ export default function RestroEditModal({
         text = "";
       }
 
-      // try parse JSON if possible
       let json: any = null;
       try {
         json = JSON.parse(text);
@@ -331,7 +292,6 @@ export default function RestroEditModal({
         json = null;
       }
 
-      // compute human-friendly message using parentheses to avoid mixing ?? and ||
       const possibleError = (json?.error?.message ?? json?.error ?? text);
       if (!res.ok) {
         throw new Error(possibleError || `Update failed (${res.status})`);
@@ -386,7 +346,6 @@ export default function RestroEditModal({
     return errs;
   }
 
-  // use the supabase instance exported from your lib
   const supabase = supabaseBrowser;
 
   async function handleSave() {
@@ -407,15 +366,11 @@ export default function RestroEditModal({
     setSavingInternal(true);
     try {
       const payload: any = { ...local };
-
-      // remove nested objects
       for (const k of Object.keys(payload)) {
         if (typeof payload[k] === "object" && payload[k] !== null) delete payload[k];
       }
 
-      // update using supabase client
       const { error: supError } = await (supabase as any).from("RestroMaster").update(payload).eq("RestroCode", restroCode);
-
       if (supError) throw supError;
 
       setNotification({ type: "success", text: "Changes saved successfully ✅" });
@@ -476,7 +431,7 @@ export default function RestroEditModal({
       case "Station Settings":
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
+        return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} hideLocalSave={true} />;
       case "Contacts":
         return <ContactsTab {...common} />;
       case "Bank":
@@ -492,6 +447,7 @@ export default function RestroEditModal({
 
   return (
     <div
+      className="restro-modal-root"
       style={{
         position: "fixed",
         inset: 0,
@@ -501,6 +457,7 @@ export default function RestroEditModal({
         alignItems: "center",
         padding: 16,
         zIndex: 1100,
+        fontFamily: "Arial, Helvetica, sans-serif", // enforce Arial across modal
       }}
       role="dialog"
       aria-modal="true"
@@ -584,12 +541,15 @@ export default function RestroEditModal({
         )}
 
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {/* centered section header for each tab */}
+          {/* Single centered header (modal-level) */}
           <div style={{ textAlign: "center", marginBottom: 14 }}>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{activeTab}</h3>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#0b1220" }}>{activeTab}</div>
           </div>
 
-          <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>{renderTab()}</div>
+          {/* render tab content; wrap to allow CSS targeting of child headings */}
+          <div className="tab-content" style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+            {renderTab()}
+          </div>
         </div>
 
         <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff" }}>
@@ -607,12 +567,21 @@ export default function RestroEditModal({
       </div>
 
       <style jsx>{`
-        /* shared small tweaks to make tabs/forms consistent */
-        h3 { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial; }
-        input[type="text"], input[type="number"], input[type="date"], input[type="time"], select, textarea {
-          font-size: 14px;
-          font-family: inherit;
+        /* enforce Arial for modal content (if you want global Arial, keep it in globals.css) */
+        .restro-modal-root { font-family: Arial, Helvetica, sans-serif; }
+
+        /* hide any leftover h3 headings inside child tab components so we don't get duplicates */
+        .tab-content h3,
+        .tab-content .tab-heading,
+        .tab-content .title {
+          display: none !important;
         }
+
+        /* minor responsive tweaks */
+        .tab-content { box-sizing: border-box; padding: 6px; }
+
+        /* keep inputs same font-size */
+        input, select, textarea, button { font-family: inherit; font-size: 14px; }
       `}</style>
     </div>
   );
