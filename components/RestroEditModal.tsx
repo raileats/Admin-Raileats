@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 
 /**
  * components/RestroEditModal.tsx
- * Client component (contains hooks) — used inside Server pages.
+ * Client component for editing a Restro inside a modal.
  *
  * Usage:
  *  <RestroEditModal restroCode={code} isOpen={isOpen} onClose={()=>setIsOpen(false)} />
