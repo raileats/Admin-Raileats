@@ -69,7 +69,7 @@ function TextInput({
   onChange: (v: string) => void;
   placeholder?: string;
   maxLength?: number;
-  inputMode?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
 }) {
   return (
     <div style={{ marginBottom: 12 }}>
@@ -295,7 +295,7 @@ export default function RestroEditModal({
         json = null;
       }
       if (!res.ok) {
-        // <-- FIXED: parenthesized the nullish chain before OR to avoid syntax error when compiled
+        // parenthesized to avoid mixing ?? with ||
         throw new Error((json?.error?.message ?? json?.error ?? text) || `Update failed (${res.status})`);
       }
       return { ok: true, row: json?.row ?? json?.data ?? json ?? null };
