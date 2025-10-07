@@ -66,9 +66,9 @@ export default function ContactsTab(props: CommonProps) {
         </label>
       );
 
-  // sanitize phone helper
-  const sanitizePhone = useCallback((raw: string) => {
-    if (!raw && raw !== 0) return "";
+  // sanitize phone helper — accept any input, return digits-only (max 10)
+  const sanitizePhone = useCallback((raw: any) => {
+    if (raw === undefined || raw === null) return "";
     const cleaned = String(raw).replace(/\D/g, "").slice(0, 10);
     return cleaned;
   }, []);
@@ -76,8 +76,9 @@ export default function ContactsTab(props: CommonProps) {
   // Generic onToggle helper with debug
   const handleToggle = useCallback(
     (field: string, checked: boolean) => {
-      // map boolean -> "ON"/"OFF" as your DB expects
       const val = checked ? "ON" : "OFF";
+      // debug to confirm toggle event reached here
+      // eslint-disable-next-line no-console
       console.debug(`[ContactsTab] toggle ${field} => ${val}`);
       updateField(field, val);
     },
