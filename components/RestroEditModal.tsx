@@ -295,7 +295,8 @@ export default function RestroEditModal({
         json = null;
       }
       if (!res.ok) {
-        throw new Error(json?.error?.message ?? json?.error ?? text || `Update failed (${res.status})`);
+        // <-- FIXED: parenthesized the nullish chain before OR to avoid syntax error when compiled
+        throw new Error((json?.error?.message ?? json?.error ?? text) || `Update failed (${res.status})`);
       }
       return { ok: true, row: json?.row ?? json?.data ?? json ?? null };
     } catch (err: any) {
