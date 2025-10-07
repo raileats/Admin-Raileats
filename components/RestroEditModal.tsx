@@ -4,6 +4,15 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
+// your existing tab components (ensure these files exist)
+import BasicInformationTab from "./restro-edit/BasicInformationTab";
+import StationSettingsTab from "./restro-edit/StationSettingsTab";
+import AddressDocsClient from "@/components/tabs/AddressDocsClient";
+import ContactsTab from "./restro-edit/ContactsTab";
+import BankTab from "./restro-edit/BankTab";
+import FutureClosedTab from "./restro-edit/FutureClosedTab";
+import MenuTab from "./restro-edit/MenuTab";
+
 type Props = {
   restro?: any;
   onClose?: () => void;
@@ -23,6 +32,7 @@ const TAB_NAMES = [
   "Menu",
 ];
 
+/* ---------- helpers ---------- */
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
     if (!obj) continue;
@@ -31,7 +41,20 @@ function safeGet(obj: any, ...keys: string[]) {
   return undefined;
 }
 
-/* validators */
+function buildStationDisplay(obj: any) {
+  const sName = (safeGet(obj, "StationName", "station_name", "station", "name") ?? "").toString().trim();
+  const sCode = (safeGet(obj, "StationCode", "station_code", "Station_Code", "stationCode") ?? "").toString().trim();
+  const state = (safeGet(obj, "State", "state", "state_name", "StateName") ?? "").toString().trim();
+  const parts: string[] = [];
+  if (sName) parts.push(sName);
+  if (sCode) parts.push(`(${sCode})`);
+  let left = parts.join(" ");
+  if (left && state) left = `${left} - ${state}`;
+  else if (!left && state) left = state;
+  return left || "—";
+}
+
+/* ---------- validators ---------- */
 const emailRegex = /^\S+@\S+\.\S+$/;
 const tenDigitRegex = /^\d{10}$/;
 
@@ -55,45 +78,69 @@ function validatePhoneString(s: string) {
   return true;
 }
 
-/* small Input */
-function TextInput({
+/* ---------- small reusable UI (Input, Toggle) ---------- */
+function InputWithIcon({
+  name,
   label,
   value,
   onChange,
-  placeholder,
-  maxLength,
-  inputMode,
+  type = "text",
+  placeholder = "",
 }: {
+  name?: string;
   label?: string;
-  value: string;
-  onChange: (v: string) => void;
+  value: any;
+  onChange: (v: any) => void;
+  type?: "text" | "email" | "phone" | "whatsapp" | "name";
   placeholder?: string;
-  maxLength?: number;
-  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
 }) {
+  const [touched, setTouched] = useState(false);
+  const v = typeof value === "string" ? value : value ?? "";
+
+  let valid = true;
+  if (type === "email") valid = validateEmailString(String(v));
+  else if (type === "phone" || type === "whatsapp") valid = validatePhoneString(String(v));
+  else if (type === "name") valid = String(v).trim().length > 0;
+  else valid = true;
+
+  const showError = touched && !valid;
+  const icon = type === "phone" ? "📞" : type === "whatsapp" ? "🟢" : type === "email" ? "✉️" : "👤";
+
   return (
     <div style={{ marginBottom: 12 }}>
       {label && <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{label}</div>}
-      <input
-        value={value ?? ""}
-        placeholder={placeholder ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        maxLength={maxLength}
-        inputMode={inputMode}
-        style={{
-          width: "100%",
-          padding: "8px 10px",
-          borderRadius: 6,
-          border: "1px solid #e6e6e6",
-          outline: "none",
-          fontSize: 14,
-        }}
-      />
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <input
+          aria-label={label ?? name}
+          name={name}
+          placeholder={placeholder}
+          value={v}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setTouched(true)}
+          onFocus={() => setTouched(true)}
+          style={{
+            flex: 1,
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: showError ? "1px solid #ef4444" : "1px solid #e6e6e6",
+            outline: "none",
+            fontSize: 14,
+          }}
+        />
+      </div>
+      {showError && (
+        <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
+          {type === "email" && "Please enter a valid email (example: name@example.com)."}
+          {type === "phone" && "Enter a 10-digit numeric mobile number (no spaces). For multiple, separate with commas."}
+          {type === "whatsapp" && "Enter a 10-digit numeric WhatsApp number (no spaces). For multiple, separate with commas."}
+          {type === "name" && "Please enter a name."}
+        </div>
+      )}
     </div>
   );
 }
 
-/* Toggle component (simple) */
 function Toggle({
   checked,
   onChange,
@@ -138,6 +185,7 @@ function Toggle({
   );
 }
 
+/* ---------- component ---------- */
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
@@ -165,6 +213,7 @@ export default function RestroEditModal({
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
 
+  // ESC to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape" || e.key === "Esc") doClose();
@@ -174,19 +223,96 @@ export default function RestroEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restro]);
 
+  // If no restro prop, try to fetch by parsing URL /restros/:code/edit (keeps compatibility)
+  useEffect(() => {
+    async function fetchRestro(code: string) {
+      try {
+        const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`);
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(txt || `Fetch failed (${res.status})`);
+        }
+        const json = await res.json().catch(() => null);
+        const row = json?.row ?? json ?? null;
+        if (row) setRestro(row);
+      } catch (err) {
+        console.warn("Restro fetch error", err);
+        setError("Failed to load outlet data.");
+      }
+    }
+
+    if (!restro) {
+      try {
+        const path = typeof window !== "undefined" ? window.location.pathname : "";
+        const match = path.match(/\/restros\/([^\/]+)\/edit/);
+        if (match && match[1]) fetchRestro(decodeURIComponent(match[1]));
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [restro]);
+
+  // Load stations if not provided
+  useEffect(() => {
+    if (stations && stations.length) return;
+    (async () => {
+      setLoadingStations(true);
+      try {
+        const res = await fetch("/api/stations");
+        if (!res.ok) {
+          setLoadingStations(false);
+          return;
+        }
+        const json = await res.json().catch(() => null);
+        const rows = json?.rows ?? json?.data ?? json ?? [];
+        const opts = (rows || []).map((r: any) => {
+          const label = `${(r.StationName ?? r.station_name ?? r.name ?? "").toString().trim()} ${(r.StationCode ?? r.station_code) ? `(${r.StationCode ?? r.station_code})` : ""}${r.State ? ` - ${r.State}` : ""}`.trim();
+          return { label, value: (r.StationCode ?? r.station_code ?? "").toString() };
+        });
+        if (opts.length) setStations(opts);
+      } catch (err) {
+        console.warn("stations fetch failed", err);
+      } finally {
+        setLoadingStations(false);
+      }
+    })();
+  }, []);
+
+  // Populate local state from restro
   useEffect(() => {
     if (!restro) return;
     setLocal({
       RestroName: safeGet(restro, "RestroName", "restro_name", "name") ?? "",
       RestroCode: safeGet(restro, "RestroCode", "restro_code", "code", "RestroId", "restro_id") ?? "",
-      // Emails: only 2
+      StationCode: safeGet(restro, "StationCode", "station_code", "Station_Code", "stationCode") ?? "",
+      StationName: safeGet(restro, "StationName", "station_name", "station") ?? "",
+      State: safeGet(restro, "State", "state", "state_name", "StateName") ?? "",
+      WeeklyOff: safeGet(restro, "WeeklyOff", "weekly_off") ?? "SUN",
+      OpenTime: safeGet(restro, "OpenTime", "open_time") ?? "10:00",
+      ClosedTime: safeGet(restro, "ClosedTime", "closed_time") ?? "23:00",
+      MinimumOrderValue: Number(safeGet(restro, "MinimumOrderValue", "minimum_order_value") ?? 0),
+      CutOffTime: Number(safeGet(restro, "CutOffTime", "cut_off_time") ?? 0),
+      RaileatsDeliveryCharge: Number(safeGet(restro, "RaileatsDeliveryCharge", "raileats_delivery_charge") ?? 0),
+      RaileatsDeliveryChargeGSTRate: Number(safeGet(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0),
+      RaileatsDeliveryChargeGST: Number(safeGet(restro, "RaileatsDeliveryChargeGST", "raileats_delivery_charge_gst") ?? 0),
+      RaileatsDeliveryChargeTotalInclGST: Number(safeGet(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0),
+      OrdersPaymentOptionForCustomer: safeGet(restro, "OrdersPaymentOptionForCustomer", "orders_payment_option_for_customer") ?? "BOTH",
+      IRCTCOrdersPaymentOptionForCustomer: safeGet(restro, "IRCTCOrdersPaymentOptionForCustomer", "irctc_orders_payment_option") ?? "BOTH",
+      RestroTypeOfDelivery: safeGet(restro, "RestroTypeOfDelivery", "restro_type_of_delivery") ?? "RAILEATS",
+      OwnerName: safeGet(restro, "OwnerName", "owner_name") ?? "",
+      OwnerPhone: safeGet(restro, "OwnerPhone", "owner_phone") ?? "",
+      RestroDisplayPhoto: safeGet(restro, "RestroDisplayPhoto", "restro_display_photo") ?? "",
+      BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
+      RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
+      RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
+      // emails (only 2 supported in DB)
       EmailAddressName1: restro?.EmailAddressName1 ?? "",
       EmailsforOrdersReceiving1: restro?.EmailsforOrdersReceiving1 ?? "",
       EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? "OFF",
       EmailAddressName2: restro?.EmailAddressName2 ?? "",
       EmailsforOrdersReceiving2: restro?.EmailsforOrdersReceiving2 ?? "",
       EmailsforOrdersStatus2: restro?.EmailsforOrdersStatus2 ?? "OFF",
-      // WhatsApp: 3 entries
+      // whatsapp (up to 3)
       WhatsappMobileNumberName1: restro?.WhatsappMobileNumberName1 ?? "",
       WhatsappMobileNumberforOrderDetails1: restro?.WhatsappMobileNumberforOrderDetails1 ?? "",
       WhatsappMobileNumberStatus1: restro?.WhatsappMobileNumberStatus1 ?? "OFF",
@@ -208,73 +334,6 @@ export default function RestroEditModal({
     setNotification(null);
   }, []);
 
-  function doClose() {
-    if (onClose) {
-      try {
-        onClose();
-      } catch {
-        router.push("/admin/restros");
-      }
-    } else {
-      router.push("/admin/restros");
-    }
-  }
-
-  const restroCode =
-    (local && (local.RestroCode ?? local.restro_code ?? local.id ?? local.code)) ||
-    (restro && (restro.RestroCode ?? restro.restro_code ?? restro.RestroId ?? restro.restro_id ?? restro.code)) ||
-    "";
-
-  // Validation: only validate populated emails & phones
-  function collectValidationErrors(obj: any) {
-    const errs: string[] = [];
-
-    for (const key of Object.keys(obj)) {
-      const low = key.toLowerCase();
-      const val = obj[key];
-
-      if (val === undefined || val === null) continue;
-      if (typeof val === "string" && val.trim() === "") continue;
-
-      // skip name fields
-      if (low.includes("name")) continue;
-
-      // skip status/enabled fields
-      if (low.includes("status") || low.includes("enabled") || low.endsWith("_status") || low.endsWith("_enabled")) continue;
-
-      // email-like keys
-      if (low.includes("email") || low.includes("emailsfor") || low.includes("emailaddress")) {
-        if (typeof val !== "string") {
-          errs.push(`${key}: expected text (email), got ${typeof val}`);
-          continue;
-        }
-        const s = val.trim();
-        if (s === "") continue;
-        if (!validateEmailString(s)) {
-          errs.push(`${key}: invalid email(s) => "${s}"`);
-        }
-        continue;
-      }
-
-      // phone/whatsapp keys
-      if (low.includes("whatsapp") || low.includes("mobile") || low.includes("phone") || low.includes("contact")) {
-        const s = String(val).trim();
-        if (s === "") continue;
-        if (/\d/.test(s)) {
-          // allow only digits and exact 10 digits
-          const cleaned = s.replace(/\D/g, "");
-          if (!tenDigitRegex.test(cleaned)) {
-            errs.push(`${key}: invalid phone number(s) => "${s}". Expect 10-digit numeric.`);
-          }
-        }
-        continue;
-      }
-    }
-
-    return errs;
-  }
-
-  // defaultPatch: calls your server-side API (/api/restros/[code]) which should use service_role
   async function defaultPatch(payload: any) {
     try {
       const code =
@@ -294,14 +353,76 @@ export default function RestroEditModal({
       } catch {
         json = null;
       }
+
       if (!res.ok) {
-        // parenthesized to avoid mixing ?? with ||
         throw new Error((json?.error?.message ?? json?.error ?? text) || `Update failed (${res.status})`);
       }
+
       return { ok: true, row: json?.row ?? json?.data ?? json ?? null };
     } catch (err: any) {
       return { ok: false, error: err?.message ?? String(err) };
     }
+  }
+
+  function doClose() {
+    if (onClose) {
+      try {
+        onClose();
+      } catch {
+        router.push("/admin/restros");
+      }
+    } else {
+      router.push("/admin/restros");
+    }
+  }
+
+  const stationDisplay = buildStationDisplay({ ...restro, ...local });
+
+  const restroCode =
+    (local && (local.RestroCode ?? local.restro_code ?? local.id ?? local.code)) ||
+    (restro && (restro.RestroCode ?? restro.restro_code ?? restro.RestroId ?? restro.restro_id ?? restro.code)) ||
+    "";
+
+  // validation: validate only populated email/phone fields
+  function collectValidationErrors(obj: any) {
+    const errs: string[] = [];
+
+    for (const key of Object.keys(obj)) {
+      const low = key.toLowerCase();
+      const val = obj[key];
+
+      if (val === undefined || val === null) continue;
+      if (typeof val === "string" && val.trim() === "") continue;
+
+      // skip name and status fields
+      if (low.includes("name")) continue;
+      if (low.includes("status") || low.includes("enabled")) continue;
+
+      // emails
+      if (low.includes("email") || low.includes("emailsfor") || low.includes("emailaddress")) {
+        if (typeof val !== "string") {
+          errs.push(`${key}: expected text (email), got ${typeof val}`);
+        } else {
+          const s = val.trim();
+          if (s && !validateEmailString(s)) errs.push(`${key}: invalid email(s) => "${s}"`);
+        }
+        continue;
+      }
+
+      // phones/whatsapp
+      if (low.includes("whatsapp") || low.includes("mobile") || low.includes("phone") || low.includes("contact")) {
+        const s = String(val).trim();
+        if (s && /\d/.test(s)) {
+          const cleaned = s.replace(/\D/g, "");
+          if (!tenDigitRegex.test(cleaned)) {
+            errs.push(`${key}: invalid phone number(s) => "${s}". Expect 10-digit numeric.`);
+          }
+        }
+        continue;
+      }
+    }
+
+    return errs;
   }
 
   async function handleSave() {
@@ -321,13 +442,14 @@ export default function RestroEditModal({
 
     setSavingInternal(true);
     try {
-      // Build payload using whitelist (must match server whitelist)
+      // Build payload: whitelist only fields that are updatable and present in local
       const allowed = [
         "EmailAddressName1", "EmailsforOrdersReceiving1", "EmailsforOrdersStatus1",
         "EmailAddressName2", "EmailsforOrdersReceiving2", "EmailsforOrdersStatus2",
         "WhatsappMobileNumberName1", "WhatsappMobileNumberforOrderDetails1", "WhatsappMobileNumberStatus1",
         "WhatsappMobileNumberName2", "WhatsappMobileNumberforOrderDetails2", "WhatsappMobileNumberStatus2",
         "WhatsappMobileNumberName3", "WhatsappMobileNumberforOrderDetails3", "WhatsappMobileNumberStatus3",
+        // add any more columns you permit
       ];
 
       const payload: any = {};
@@ -373,176 +495,38 @@ export default function RestroEditModal({
     }
   }
 
-  /* ---------- Contacts panel (internal) ---------- */
-  function ContactsPanel() {
-    // helpers to sanitize phone to digits and max 10
-    const sanitizePhone = (s: any) => {
-      if (!s && s !== 0) return "";
-      const cleaned = String(s).replace(/\D/g, "").slice(0, 10);
-      return cleaned;
-    };
+  // common props passed to child tabs
+  const common = {
+    local,
+    updateField,
+    stationDisplay,
+    stations,
+    loadingStations,
+    restroCode,
+    InputWithIcon,
+    validators: {
+      validateEmailString,
+      validatePhoneString,
+    },
+  };
 
-    return (
-      <div>
-        <h3>Emails</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: 16, alignItems: "center" }}>
-          {/* Email 1 */}
-          <div>
-            <TextInput
-              label="Name 1"
-              value={local.EmailAddressName1 ?? ""}
-              onChange={(v) => updateField("EmailAddressName1", v)}
-              placeholder="Name 1"
-            />
-          </div>
-          <div>
-            <TextInput
-              label="Email 1"
-              value={local.EmailsforOrdersReceiving1 ?? ""}
-              onChange={(v) => updateField("EmailsforOrdersReceiving1", v)}
-              placeholder="email1@example.com"
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-start" }}>
-            <Toggle
-              checked={String(local.EmailsforOrdersStatus1 ?? "OFF") === "ON"}
-              onChange={(v) => updateField("EmailsforOrdersStatus1", v ? "ON" : "OFF")}
-              label={String(local.EmailsforOrdersStatus1 ?? "OFF") === "ON" ? "ON" : "OFF"}
-            />
-          </div>
-
-          {/* Email 2 */}
-          <div>
-            <TextInput
-              label="Name 2"
-              value={local.EmailAddressName2 ?? ""}
-              onChange={(v) => updateField("EmailAddressName2", v)}
-              placeholder="Name 2"
-            />
-          </div>
-          <div>
-            <TextInput
-              label="Email 2"
-              value={local.EmailsforOrdersReceiving2 ?? ""}
-              onChange={(v) => updateField("EmailsforOrdersReceiving2", v)}
-              placeholder="email2@example.com"
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-start" }}>
-            <Toggle
-              checked={String(local.EmailsforOrdersStatus2 ?? "OFF") === "ON"}
-              onChange={(v) => updateField("EmailsforOrdersStatus2", v ? "ON" : "OFF")}
-              label={String(local.EmailsforOrdersStatus2 ?? "OFF") === "ON" ? "ON" : "OFF"}
-            />
-          </div>
-        </div>
-
-        <hr style={{ margin: "18px 0" }} />
-
-        <h3>WhatsApp numbers</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: 16, alignItems: "center" }}>
-          {/* WA 1 */}
-          <div>
-            <TextInput
-              label="Name 1"
-              value={local.WhatsappMobileNumberName1 ?? ""}
-              onChange={(v) => updateField("WhatsappMobileNumberName1", v)}
-              placeholder="Name 1"
-            />
-          </div>
-          <div>
-            <TextInput
-              label="Mobile 1"
-              value={local.WhatsappMobileNumberforOrderDetails1 ?? ""}
-              onChange={(v) => updateField("WhatsappMobileNumberforOrderDetails1", sanitizePhone(v))}
-              placeholder="10-digit mobile"
-              maxLength={10}
-              inputMode="numeric"
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-start" }}>
-            <Toggle
-              checked={String(local.WhatsappMobileNumberStatus1 ?? "OFF") === "ON"}
-              onChange={(v) => updateField("WhatsappMobileNumberStatus1", v ? "ON" : "OFF")}
-              label={String(local.WhatsappMobileNumberStatus1 ?? "OFF") === "ON" ? "ON" : "OFF"}
-            />
-          </div>
-
-          {/* WA 2 */}
-          <div>
-            <TextInput
-              label="Name 2"
-              value={local.WhatsappMobileNumberName2 ?? ""}
-              onChange={(v) => updateField("WhatsappMobileNumberName2", v)}
-              placeholder="Name 2"
-            />
-          </div>
-          <div>
-            <TextInput
-              label="Mobile 2"
-              value={local.WhatsappMobileNumberforOrderDetails2 ?? ""}
-              onChange={(v) => updateField("WhatsappMobileNumberforOrderDetails2", sanitizePhone(v))}
-              placeholder="10-digit mobile"
-              maxLength={10}
-              inputMode="numeric"
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-start" }}>
-            <Toggle
-              checked={String(local.WhatsappMobileNumberStatus2 ?? "OFF") === "ON"}
-              onChange={(v) => updateField("WhatsappMobileNumberStatus2", v ? "ON" : "OFF")}
-              label={String(local.WhatsappMobileNumberStatus2 ?? "OFF") === "ON" ? "ON" : "OFF"}
-            />
-          </div>
-
-          {/* WA 3 */}
-          <div>
-            <TextInput
-              label="Name 3"
-              value={local.WhatsappMobileNumberName3 ?? ""}
-              onChange={(v) => updateField("WhatsappMobileNumberName3", v)}
-              placeholder="Name 3"
-            />
-          </div>
-          <div>
-            <TextInput
-              label="Mobile 3"
-              value={local.WhatsappMobileNumberforOrderDetails3 ?? ""}
-              onChange={(v) => updateField("WhatsappMobileNumberforOrderDetails3", sanitizePhone(v))}
-              placeholder="10-digit mobile"
-              maxLength={10}
-              inputMode="numeric"
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-start" }}>
-            <Toggle
-              checked={String(local.WhatsappMobileNumberStatus3 ?? "OFF") === "ON"}
-              onChange={(v) => updateField("WhatsappMobileNumberStatus3", v ? "ON" : "OFF")}
-              label={String(local.WhatsappMobileNumberStatus3 ?? "OFF") === "ON" ? "ON" : "OFF"}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // renderTab: we still allow other tabs to be placeholders (child components can be added later)
+  // render tab mapping — returns original tab components (child files must exist)
   const renderTab = () => {
     switch (activeTab) {
-      case "Contacts":
-        return <ContactsPanel />;
       case "Basic Information":
-        return <div>Basic Information tab (not changed)</div>;
+        return <BasicInformationTab {...common} />;
       case "Station Settings":
-        return <div>Station Settings tab (not changed)</div>;
+        return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        return <div>Address & Documents tab (not changed)</div>;
+        return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
+      case "Contacts":
+        return <ContactsTab {...common} />;
       case "Bank":
-        return <div>Bank tab (not changed)</div>;
+        return <BankTab {...common} />;
       case "Future Closed":
-        return <div>Future Closed tab (not changed)</div>;
+        return <FutureClosedTab {...common} />;
       case "Menu":
-        return <div>Menu tab (not changed)</div>;
+        return <MenuTab {...common} />;
       default:
         return <div>Unknown tab</div>;
     }
@@ -563,7 +547,7 @@ export default function RestroEditModal({
       role="dialog"
       aria-modal="true"
     >
-      <div style={{ background: "#fff", width: "98%", height: "98%", maxWidth: 1400, borderRadius: 8, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ background: "#fff", width: "98%", height: "98%", maxWidth: 1700, borderRadius: 8, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ position: "sticky", top: 0, zIndex: 1200, background: "#fff", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px" }}>
@@ -572,6 +556,7 @@ export default function RestroEditModal({
                 {String(local.RestroCode ?? restro?.RestroCode ?? "")}
                 {(local.RestroName ?? restro?.RestroName) ? " / " : ""}{local.RestroName ?? restro?.RestroName ?? ""}
               </div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#0b7285", marginTop: 4 }}>{stationDisplay}</div>
             </div>
 
             <div>
@@ -613,6 +598,7 @@ export default function RestroEditModal({
                     whiteSpace: "nowrap",
                   }}
                 >
+                  <span style={{ display: "inline-flex", alignItems: "center", color: activeTab === t ? "#0ea5e9" : "#666" }}>{/* icon could go here */}</span>
                   <span>{t}</span>
                 </div>
               ))}
@@ -653,6 +639,10 @@ export default function RestroEditModal({
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        /* minimal shared styles (tab components should style their own forms) */
+      `}</style>
     </div>
   );
 }
