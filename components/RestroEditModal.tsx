@@ -22,22 +22,6 @@ type Props = {
   initialTab?: string;
 };
 
-type FssaiEntry = {
-  id: string; // UI id
-  number: string;
-  expiry?: string | null; // ISO date string
-  active: boolean;
-  createdAt?: string;
-};
-
-type GstEntry = {
-  id: string;
-  number: string;
-  expiry?: string | null;
-  active: boolean;
-  createdAt?: string;
-};
-
 const TAB_NAMES = [
   "Basic Information",
   "Station Settings",
@@ -66,7 +50,7 @@ function safeGet(obj: any, ...keys: string[]) {
   return undefined;
 }
 
-/* minimal validators */
+/* validators (kept same) */
 const emailRegex = /^\S+@\S+\.\S+$/;
 const tenDigitRegex = /^\d{10}$/;
 function validateEmailString(s: string) {
@@ -84,7 +68,7 @@ function validatePhoneString(s: string) {
   return true;
 }
 
-/* InputWithIcon (kept same-ish) */
+/* InputWithIcon fallback */
 function InputWithIcon({
   name,
   label,
@@ -132,9 +116,9 @@ function InputWithIcon({
       </div>
       {showError && (
         <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
-          {type === "email" && "Please enter a valid email."}
-          {type === "phone" && "Enter a 10-digit mobile number."}
-          {type === "whatsapp" && "Enter a 10-digit WhatsApp number."}
+          {type === "email" && "Please enter a valid email (example: name@example.com)."}
+          {type === "phone" && "Enter a 10-digit numeric mobile number (no spaces)."}
+          {type === "whatsapp" && "Enter a 10-digit numeric WhatsApp number (no spaces)."}
           {type === "name" && "Please enter a name."}
         </div>
       )}
@@ -196,15 +180,6 @@ export default function RestroEditModal({
   const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // FSSAI / GST UI lists
-  const [fssaiList, setFssaiList] = useState<FssaiEntry[]>([]);
-  const [gstList, setGstList] = useState<GstEntry[]>([]);
-
-  // add modal
-  const [addModalType, setAddModalType] = useState<null | "fssai" | "gst">(null);
-  const [newNumber, setNewNumber] = useState("");
-  const [newExpiry, setNewExpiry] = useState<string | null>(null);
-
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
@@ -213,12 +188,44 @@ export default function RestroEditModal({
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
 
-  // hydrate local and fssai/gst lists from restro when restro changes
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" || e.key === "Esc") doClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restro]);
+
+  useEffect(() => {
+    if (stations && stations.length) return;
+    (async () => {
+      setLoadingStations(true);
+      try {
+        const res = await fetch("/api/stations");
+        if (!res.ok) {
+          setLoadingStations(false);
+          return;
+        }
+        const json = await res.json().catch(() => null);
+        const rows = json?.rows ?? json?.data ?? json ?? [];
+        const opts = (rows || []).map((r: any) => {
+          const label = `${(r.StationName ?? r.station_name ?? r.name ?? "").toString().trim()} ${(r.StationCode ?? r.station_code) ? `(${r.StationCode ?? r.station_code})` : ""}${r.State ? ` - ${r.State}` : ""}`.trim();
+          return { label, value: (r.StationCode ?? r.station_code ?? "").toString() };
+        });
+        if (opts.length) setStations(opts);
+      } catch (err) {
+        console.warn("stations fetch failed", err);
+      } finally {
+        setLoadingStations(false);
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     if (!restro) return;
-
-    // populate local fields (existing code)
-    const baseLocal = {
+    // populate local fields but do NOT include FSSAI/GST here (we'll manage in Address & Docs)
+    setLocal({
       RestroName: safeGet(restro, "RestroName", "restro_name", "name") ?? "",
       RestroCode: safeGet(restro, "RestroCode", "restro_code", "code", "RestroId", "restro_id") ?? "",
       StationCode: safeGet(restro, "StationCode", "station_code", "Station_Code", "stationCode") ?? "",
@@ -229,95 +236,28 @@ export default function RestroEditModal({
       ClosedTime: safeGet(restro, "ClosedTime", "closed_time") ?? "23:00",
       MinimumOrderValue: Number(safeGet(restro, "MinimumOrderValue", "minimum_order_value") ?? 0),
       CutOffTime: Number(safeGet(restro, "CutOffTime", "cut_off_time") ?? 0),
+      RaileatsDeliveryCharge: Number(safeGet(restro, "RaileatsDeliveryCharge", "raileats_delivery_charge") ?? 0),
+      RaileatsDeliveryChargeGSTRate: Number(safeGet(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0),
+      RaileatsDeliveryChargeGST: Number(safeGet(restro, "RaileatsDeliveryChargeGST", "raileats_delivery_charge_gst") ?? 0),
+      RaileatsDeliveryChargeTotalInclGST: Number(safeGet(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0),
+      OrdersPaymentOptionForCustomer: safeGet(restro, "OrdersPaymentOptionForCustomer", "orders_payment_option_for_customer") ?? "BOTH",
+      IRCTCOrdersPaymentOptionForCustomer: safeGet(restro, "IRCTCOrdersPaymentOptionForCustomer", "irctc_orders_payment_option") ?? "BOTH",
+      RestroTypeOfDelivery: safeGet(restro, "RestroTypeOfDelivery", "restro_type_of_delivery") ?? "RAILEATS",
       OwnerName: safeGet(restro, "OwnerName", "owner_name") ?? "",
       OwnerPhone: safeGet(restro, "OwnerPhone", "owner_phone") ?? "",
       RestroDisplayPhoto: safeGet(restro, "RestroDisplayPhoto", "restro_display_photo") ?? "",
       BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
       RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
       RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
-      // keep any existing fields
+      // existing single values (kept for backward compatibility)
+      FSSAI_Number: restro?.FSSAI_Number ?? restro?.FSSAI ?? restro?.FssaiNumber ?? "",
+      FSSAI_Expiry: restro?.FSSAI_Expiry ?? restro?.FssaiExpiry ?? "",
+      GST_Number: restro?.GST_Number ?? restro?.GST ?? restro?.gst_number ?? "",
+      // lists (if previously stored as JSON in db we keep it, otherwise initialize below)
+      _fssaiList: restro?._fssaiList ? restro._fssaiList : (restro?.FSSAI ? [{ number: restro.FSSAI, expiry: restro.FSSAI_Expiry || "", active: true }] : []),
+      _gstList: restro?._gstList ? restro._gstList : (restro?.GST ? [{ number: restro.GST, expiry: restro.GST_Expiry || "", active: true }] : []),
       ...restro,
-    };
-
-    setLocal(baseLocal);
-
-    // Try to read pre-stored history fields that your DB might have (common names)
-    // If no history exists, create single-entry lists from common single fields
-    try {
-      const maybeFssaiHistory =
-        restro?.FSSAIHistory ||
-        restro?.fssai_history ||
-        restro?.fssai_list ||
-        restro?.FSSAIList ||
-        null;
-
-      if (Array.isArray(maybeFssaiHistory) && maybeFssaiHistory.length) {
-        const mapped = maybeFssaiHistory.map((x: any, idx: number) => ({
-          id: String(x.id ?? idx),
-          number: String(x.number ?? x.fssai_no ?? x.FSSAI ?? ""),
-          expiry: x.expiry ?? x.expiry_at ?? x.expiry_date ?? null,
-          active: !!x.active,
-          createdAt: x.createdAt ?? x.created_at ?? undefined,
-        }));
-        setFssaiList(mapped);
-      } else {
-        // fallback: single fields
-        const singleNumber =
-          safeGet(restro, "FSSAINo", "FSSAINumber", "fssai_no", "fssai_number") ??
-          safeGet(restro, "FSSAI_Number", "FSSAI");
-        const singleExpiry = safeGet(restro, "FSSAIExpiry", "fssai_expiry", "FSSAI_Expiry", "fssai_expiry_date") ?? null;
-        if (singleNumber) {
-          setFssaiList([
-            {
-              id: "f1",
-              number: String(singleNumber),
-              expiry: singleExpiry ?? null,
-              active: true,
-              createdAt: undefined,
-            },
-          ]);
-        } else {
-          setFssaiList([]);
-        }
-      }
-    } catch (e) {
-      setFssaiList([]);
-    }
-
-    // GST list - attempt similar hydrate
-    try {
-      const maybeGstHistory = restro?.GSTHistory || restro?.gst_history || restro?.gst_list || null;
-      if (Array.isArray(maybeGstHistory) && maybeGstHistory.length) {
-        const mapped = maybeGstHistory.map((x: any, idx: number) => ({
-          id: String(x.id ?? idx),
-          number: String(x.number ?? x.gst_no ?? x.GST ?? ""),
-          expiry: x.expiry ?? x.expiry_at ?? x.expiry_date ?? null,
-          active: !!x.active,
-          createdAt: x.createdAt ?? x.created_at ?? undefined,
-        }));
-        setGstList(mapped);
-      } else {
-        const singleGst =
-          safeGet(restro, "GSTNo", "GSTNumber", "gst_no", "gst_number") ??
-          safeGet(restro, "GST_Number", "GST");
-        const singleGstExpiry = safeGet(restro, "GSTExpiry", "gst_expiry") ?? null;
-        if (singleGst) {
-          setGstList([
-            {
-              id: "g1",
-              number: String(singleGst),
-              expiry: singleGstExpiry ?? null,
-              active: true,
-              createdAt: undefined,
-            },
-          ]);
-        } else {
-          setGstList([]);
-        }
-      }
-    } catch (e) {
-      setGstList([]);
-    }
+    });
   }, [restro]);
 
   const saving = parentSaving ?? savingInternal;
@@ -327,69 +267,6 @@ export default function RestroEditModal({
     setError(null);
     setNotification(null);
   }, []);
-
-  // small helper to generate ids
-  function makeId(prefix = "") {
-    return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  }
-
-  // Add new fssai / gst handlers (UI-level)
-  function openAddModal(type: "fssai" | "gst") {
-    setNewNumber("");
-    setNewExpiry(null);
-    setAddModalType(type);
-  }
-  function closeAddModal() {
-    setAddModalType(null);
-    setNewNumber("");
-    setNewExpiry(null);
-  }
-
-  function saveNewFssai() {
-    if (!newNumber || newNumber.trim() === "") {
-      setNotification({ type: "error", text: "Enter FSSAI number" });
-      return;
-    }
-    // mark existing active as inactive
-    const updated = fssaiList.map((f) => ({ ...f, active: false }));
-    const entry: FssaiEntry = {
-      id: makeId("fssai_"),
-      number: newNumber.trim(),
-      expiry: newExpiry ?? null,
-      active: true,
-      createdAt: new Date().toISOString(),
-    };
-    setFssaiList([...updated, entry]);
-
-    // update local so handleSave sends this active FSSAI fields to backend
-    updateField("FSSAINumber", entry.number);
-    updateField("FSSAIExpiry", entry.expiry ?? "");
-
-    setNotification({ type: "success", text: "New FSSAI added (local)." });
-    closeAddModal();
-  }
-
-  function saveNewGst() {
-    if (!newNumber || newNumber.trim() === "") {
-      setNotification({ type: "error", text: "Enter GST number" });
-      return;
-    }
-    const updated = gstList.map((g) => ({ ...g, active: false }));
-    const entry: GstEntry = {
-      id: makeId("gst_"),
-      number: newNumber.trim(),
-      expiry: newExpiry ?? null,
-      active: true,
-      createdAt: new Date().toISOString(),
-    };
-    setGstList([...updated, entry]);
-
-    updateField("GSTNumber", entry.number);
-    updateField("GSTExpiry", entry.expiry ?? "");
-
-    setNotification({ type: "success", text: "New GST added (local)." });
-    closeAddModal();
-  }
 
   async function defaultPatch(payload: any) {
     try {
@@ -417,7 +294,7 @@ export default function RestroEditModal({
         json = null;
       }
 
-      const possibleError = json?.error?.message ?? json?.error ?? text;
+      const possibleError = (json?.error?.message ?? json?.error ?? text);
       if (!res.ok) {
         throw new Error(possibleError || `Update failed (${res.status})`);
       }
@@ -491,34 +368,16 @@ export default function RestroEditModal({
     setSavingInternal(true);
     try {
       const payload: any = { ...local };
-
-      // include active fssai/gst values explicitly so backend can store them
-      const activeF = fssaiList.find((f) => f.active);
-      if (activeF) {
-        payload.FSSAINumber = activeF.number;
-        payload.FSSAIExpiry = activeF.expiry ?? null;
-      }
-      const activeG = gstList.find((g) => g.active);
-      if (activeG) {
-        payload.GSTNumber = activeG.number;
-        payload.GSTExpiry = activeG.expiry ?? null;
-      }
-
-      // OPTIONAL: add the whole history arrays as JSON fields so backend can persist
-      try {
-        payload.FSSAIHistory = JSON.stringify(fssaiList);
-      } catch {}
-      try {
-        payload.GSTHistory = JSON.stringify(gstList);
-      } catch {}
-
-      // remove nested objects from payload for safety
       for (const k of Object.keys(payload)) {
-        if (typeof payload[k] === "object" && payload[k] !== null) delete payload[k];
+        if (typeof payload[k] === "object" && payload[k] !== null) {
+          // allow arrays _fssaiList/_gstList to be saved as JSON (if DB supports)
+          if (Array.isArray(payload[k])) continue;
+          delete payload[k];
+        }
       }
 
+      // write to table (existing code)
       const { error: supError } = await (supabase as any).from("RestroMaster").update(payload).eq("RestroCode", restroCode);
-
       if (supError) throw supError;
 
       setNotification({ type: "success", text: "Changes saved successfully ✅" });
@@ -549,10 +408,6 @@ export default function RestroEditModal({
       validateEmailString,
       validatePhoneString,
     },
-    // pass fssai/gst UI state & helpers to child tabs if they want to consume
-    fssaiList,
-    gstList,
-    openAddModal,
   };
 
   function tabIcon(t: string | undefined | null) {
@@ -583,69 +438,8 @@ export default function RestroEditModal({
       case "Station Settings":
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        // wrap AddressDocsClient with FSSAI/GST listing UI and add-button
-        return (
-          <div>
-            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 18 }}>
-              {/* FSSAI card */}
-              <div style={{ flex: 1, background: "#fff", border: "1px solid #f1f1f1", borderRadius: 8, padding: 14, boxShadow: "0 6px 18px rgba(11,15,30,0.03)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ fontWeight: 700 }}>FSSAI</div>
-                  <button onClick={() => openAddModal("fssai")} style={{ background: "#06b6d4", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 6, cursor: "pointer" }}>
-                    Add New FSSAI
-                  </button>
-                </div>
-                {fssaiList.length === 0 ? (
-                  <div style={{ color: "#6b7280" }}>No FSSAI on record</div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {fssaiList.map((f) => (
-                      <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, color: "#374151", fontWeight: 600 }}>{f.number}</div>
-                          <div style={{ fontSize: 12, color: "#6b7280" }}>{f.expiry ? `Expiry: ${f.expiry}` : "No expiry"}</div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ fontSize: 12, color: f.active ? "#065f46" : "#6b7280", fontWeight: 700 }}>{f.active ? "Active" : "Inactive"}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* GST card */}
-              <div style={{ flex: 1, background: "#fff", border: "1px solid #f1f1f1", borderRadius: 8, padding: 14, boxShadow: "0 6px 18px rgba(11,15,30,0.03)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ fontWeight: 700 }}>GST</div>
-                  <button onClick={() => openAddModal("gst")} style={{ background: "#06b6d4", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 6, cursor: "pointer" }}>
-                    Add New GST
-                  </button>
-                </div>
-                {gstList.length === 0 ? (
-                  <div style={{ color: "#6b7280" }}>No GST on record</div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {gstList.map((g) => (
-                      <div key={g.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, color: "#374151", fontWeight: 600 }}>{g.number}</div>
-                          <div style={{ fontSize: 12, color: "#6b7280" }}>{g.expiry ? `Expiry: ${g.expiry}` : "No expiry"}</div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ fontSize: 12, color: g.active ? "#065f46" : "#6b7280", fontWeight: 700 }}>{g.active ? "Active" : "Inactive"}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* actual AddressDocs component */}
-            <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />
-          </div>
-        );
+        // pass common props so AddressDocsClient can update local (e.g. _fssaiList/_gstList)
+        return <AddressDocsClient {...common} initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
       case "Contacts":
         return <ContactsTab {...common} />;
       case "Bank":
@@ -659,10 +453,6 @@ export default function RestroEditModal({
     }
   };
 
-  // active FSSAI & GST summary for Basic Information tab
-  const activeFssai = fssaiList.find((f) => f.active);
-  const activeGst = gstList.find((g) => g.active);
-
   return (
     <div
       className="restro-modal-root"
@@ -675,7 +465,7 @@ export default function RestroEditModal({
         alignItems: "center",
         padding: 16,
         zIndex: 1100,
-        fontFamily: "Arial, Helvetica, sans-serif",
+        fontFamily: "Arial, Helvetica, sans-serif", // enforce Arial across modal
       }}
       role="dialog"
       aria-modal="true"
@@ -759,34 +549,7 @@ export default function RestroEditModal({
         )}
 
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {/* When Basic Information is active show small non-editable summary of active FSSAI/GST */}
-          {activeTab === "Basic Information" && (
-            <div style={{ maxWidth: 1200, margin: "0 auto 18px", display: "flex", gap: 12 }}>
-              <div style={{ flex: 1, background: "#fff", border: "1px solid #f3f3f3", padding: 12, borderRadius: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>Current FSSAI</div>
-                {activeFssai ? (
-                  <div style={{ marginTop: 6 }}>
-                    <div style={{ fontWeight: 700 }}>{activeFssai.number}</div>
-                    <div style={{ color: "#6b7280", fontSize: 13 }}>{activeFssai.expiry ? `Expiry: ${activeFssai.expiry}` : "No expiry"}</div>
-                  </div>
-                ) : (
-                  <div style={{ color: "#6b7280", marginTop: 6 }}>No FSSAI set</div>
-                )}
-              </div>
-              <div style={{ flex: 1, background: "#fff", border: "1px solid #f3f3f3", padding: 12, borderRadius: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>Current GST</div>
-                {activeGst ? (
-                  <div style={{ marginTop: 6 }}>
-                    <div style={{ fontWeight: 700 }}>{activeGst.number}</div>
-                    <div style={{ color: "#6b7280", fontSize: 13 }}>{activeGst.expiry ? `Expiry: ${activeGst.expiry}` : "No expiry"}</div>
-                  </div>
-                ) : (
-                  <div style={{ color: "#6b7280", marginTop: 6 }}>No GST set</div>
-                )}
-              </div>
-            </div>
-          )}
-
+          {/* NOTE: no extra modal-level title here — child tabs render their own titles. */}
           <div className="tab-content" style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
             {renderTab()}
           </div>
@@ -805,53 +568,6 @@ export default function RestroEditModal({
           </div>
         </div>
       </div>
-
-      {/* Add FSSAI / GST modal (simple) */}
-      {addModalType && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1300,
-          }}
-        >
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} onClick={closeAddModal} />
-          <div style={{ background: "#fff", padding: 18, width: 480, borderRadius: 8, boxShadow: "0 10px 40px rgba(0,0,0,0.15)", zIndex: 1301 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>{addModalType === "fssai" ? "Add New FSSAI" : "Add New GST"}</div>
-              <button onClick={closeAddModal} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 20 }}>✕</button>
-            </div>
-
-            <div style={{ marginBottom: 10 }}>
-              <label style={{ display: "block", marginBottom: 6, fontWeight: 700, color: "#374151" }}>{addModalType === "fssai" ? "FSSAI Number" : "GST Number"}</label>
-              <input value={newNumber} onChange={(e) => setNewNumber(e.target.value)} placeholder="Enter number" style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid #e6e6e6" }} />
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", marginBottom: 6, fontWeight: 700, color: "#374151" }}>Expiry date (optional)</label>
-              <input type="date" value={newExpiry ?? ""} onChange={(e) => setNewExpiry(e.target.value || null)} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid #e6e6e6" }} />
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button onClick={closeAddModal} style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #e6e6e6", background: "#fff" }}>Cancel</button>
-              <button
-                onClick={() => {
-                  if (addModalType === "fssai") saveNewFssai();
-                  else saveNewGst();
-                }}
-                style={{ padding: "8px 12px", borderRadius: 6, border: "none", background: "#0ea5e9", color: "#fff" }}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <style jsx>{`
         .restro-modal-root { font-family: Arial, Helvetica, sans-serif; }
