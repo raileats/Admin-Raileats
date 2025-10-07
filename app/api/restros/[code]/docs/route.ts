@@ -1,14 +1,14 @@
-export const config = { runtime: "node" };
+// Use the segment export for runtime (new style)
+export const runtime = "node";
 
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer"; // make sure this is your server-side supabase client (service role)
+import { supabaseServer } from "@/lib/supabaseServer"; // ensure this exports a server-side Supabase client (service role)
 import formidable from "formidable";
 import fs from "fs";
 import path from "path";
 
 /**
  * parseForm - parse incoming multipart/form-data using formidable
- * Note: In Next.js node runtime API routes, formidable works as shown.
  */
 function parseForm(req: Request): Promise<{ fields: any; files: any }> {
   return new Promise((resolve, reject) => {
@@ -71,8 +71,7 @@ export async function POST(req: Request, { params }: { params: { code: string } 
         if (!publicUrlErr && publicData?.publicUrl) {
           public_url = publicData.publicUrl;
         } else {
-          // If bucket is private, you may want to create signed URL here instead.
-          public_url = null;
+          public_url = null; // bucket may be private — handle signed URLs if needed
         }
       }
 
