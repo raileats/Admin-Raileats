@@ -1,10 +1,9 @@
 // components/RestroEditModal.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
-// your existing tab components (ensure these files exist)
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
 import AddressDocsClient from "@/components/tabs/AddressDocsClient";
@@ -78,7 +77,7 @@ function validatePhoneString(s: string) {
   return true;
 }
 
-/* ---------- small reusable UI (Input, Toggle) ---------- */
+/* ---------- small reusable UI (InputWithIcon + Toggle) ---------- */
 function InputWithIcon({
   name,
   label,
@@ -97,9 +96,19 @@ function InputWithIcon({
   const [touched, setTouched] = useState(false);
   const v = typeof value === "string" ? value : value ?? "";
 
+  // if phone/whatsapp: sanitize to digits only and limit to 10 when user types
+  const handleChange = (raw: string) => {
+    if (type === "phone" || type === "whatsapp") {
+      const cleaned = String(raw).replace(/\D/g, "").slice(0, 10);
+      onChange(cleaned);
+    } else {
+      onChange(raw);
+    }
+  };
+
   let valid = true;
   if (type === "email") valid = validateEmailString(String(v));
-  else if (type === "phone" || type === "whatsapp") valid = validatePhoneString(String(v));
+  else if (type === "phone" || type === "whatsapp") valid = v === "" ? true : validatePhoneString(String(v));
   else if (type === "name") valid = String(v).trim().length > 0;
   else valid = true;
 
@@ -116,9 +125,11 @@ function InputWithIcon({
           name={name}
           placeholder={placeholder}
           value={v}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
           onBlur={() => setTouched(true)}
           onFocus={() => setTouched(true)}
+          inputMode={type === "phone" || type === "whatsapp" ? "numeric" : "text"}
+          maxLength={type === "phone" || type === "whatsapp" ? 10 : undefined}
           style={{
             flex: 1,
             padding: "8px 10px",
@@ -132,8 +143,8 @@ function InputWithIcon({
       {showError && (
         <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
           {type === "email" && "Please enter a valid email (example: name@example.com)."}
-          {type === "phone" && "Enter a 10-digit numeric mobile number (no spaces). For multiple, separate with commas."}
-          {type === "whatsapp" && "Enter a 10-digit numeric WhatsApp number (no spaces). For multiple, separate with commas."}
+          {type === "phone" && "Enter a 10-digit numeric mobile number (no spaces)."}
+          {type === "whatsapp" && "Enter a 10-digit numeric WhatsApp number (no spaces)."}
           {type === "name" && "Please enter a name."}
         </div>
       )}
@@ -141,45 +152,58 @@ function InputWithIcon({
   );
 }
 
+/* Improved Toggle: checkbox-based (more reliable than button + manual left/position) */
 function Toggle({
   checked,
   onChange,
   label,
+  id,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label?: string;
+  id?: string;
 }) {
+  const inputId = id ?? `toggle_${Math.random().toString(36).slice(2, 8)}`;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <button
-        onClick={() => onChange(!checked)}
-        aria-pressed={checked}
-        style={{
-          width: 44,
-          height: 24,
-          borderRadius: 999,
-          border: "none",
-          background: checked ? "#06b6d4" : "#e6e6e6",
-          cursor: "pointer",
-          position: "relative",
-          padding: 2,
-        }}
-      >
-        <span
-          style={{
-            position: "absolute",
-            left: checked ? 22 : 2,
-            top: 2,
-            width: 18,
-            height: 18,
-            borderRadius: 999,
-            background: "#fff",
-            transition: "left 120ms ease",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
-          }}
+      <label htmlFor={inputId} style={{ display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
+        <input
+          id={inputId}
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          style={{ display: "none" }}
         />
-      </button>
+        <span
+          aria-hidden
+          style={{
+            width: 44,
+            height: 24,
+            borderRadius: 999,
+            background: checked ? "#06b6d4" : "#e6e6e6",
+            display: "inline-block",
+            position: "relative",
+            transition: "background-color 120ms ease",
+            verticalAlign: "middle",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              background: "#fff",
+              position: "absolute",
+              top: 3,
+              left: checked ? 23 : 3,
+              transition: "left 120ms ease",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
+            }}
+          />
+        </span>
+      </label>
       {label && <div style={{ fontSize: 13, color: "#444" }}>{label}</div>}
     </div>
   );
@@ -394,25 +418,32 @@ export default function RestroEditModal({
       if (val === undefined || val === null) continue;
       if (typeof val === "string" && val.trim() === "") continue;
 
-      // skip name and status fields
+      // skip name fields
       if (low.includes("name")) continue;
-      if (low.includes("status") || low.includes("enabled")) continue;
 
-      // emails
+      // skip status/enabled fields
+      if (low.includes("status") || low.includes("enabled") || low.endsWith("_status") || low.endsWith("_enabled")) continue;
+
+      // email-like keys
       if (low.includes("email") || low.includes("emailsfor") || low.includes("emailaddress")) {
         if (typeof val !== "string") {
           errs.push(`${key}: expected text (email), got ${typeof val}`);
-        } else {
-          const s = val.trim();
-          if (s && !validateEmailString(s)) errs.push(`${key}: invalid email(s) => "${s}"`);
+          continue;
+        }
+        const s = val.trim();
+        if (s === "") continue;
+        if (!validateEmailString(s)) {
+          errs.push(`${key}: invalid email(s) => "${s}"`);
         }
         continue;
       }
 
-      // phones/whatsapp
+      // phone/whatsapp keys
       if (low.includes("whatsapp") || low.includes("mobile") || low.includes("phone") || low.includes("contact")) {
         const s = String(val).trim();
-        if (s && /\d/.test(s)) {
+        if (s === "") continue;
+        if (/\d/.test(s)) {
+          // allow only digits and exact 10 digits
           const cleaned = s.replace(/\D/g, "");
           if (!tenDigitRegex.test(cleaned)) {
             errs.push(`${key}: invalid phone number(s) => "${s}". Expect 10-digit numeric.`);
@@ -425,13 +456,32 @@ export default function RestroEditModal({
     return errs;
   }
 
+  // Derived validation state (memoized to avoid recalculating every render)
+  const validationErrors = useMemo(() => collectValidationErrors(local), [local]);
+
+  // Require at least one valid primary contact in slot 1: either Email1 valid OR Mobile1 valid
+  const primaryContactValid = useMemo(() => {
+    const email1 = (local.EmailsforOrdersReceiving1 ?? "").toString().trim();
+    const mobile1 = (local.WhatsappMobileNumberforOrderDetails1 ?? "").toString().replace(/\D/g, "");
+    return (email1 && validateEmailString(email1)) || (mobile1 && tenDigitRegex.test(mobile1));
+  }, [local]);
+
+  // Save disabled when saving OR validationErrors exist OR primaryContact not valid
+  const saveDisabled = saving || validationErrors.length > 0 || !primaryContactValid;
+
   async function handleSave() {
     setNotification(null);
     setError(null);
 
-    const validationErrors = collectValidationErrors(local);
-    if (validationErrors.length) {
-      setNotification({ type: "error", text: `Validation failed:\n• ${validationErrors.join("\n• ")}` });
+    // re-run validation
+    const validationErrorsNow = collectValidationErrors(local);
+    if (validationErrorsNow.length) {
+      setNotification({ type: "error", text: `Validation failed:\n• ${validationErrorsNow.join("\n• ")}` });
+      return;
+    }
+
+    if (!primaryContactValid) {
+      setNotification({ type: "error", text: `Please provide a valid Email 1 or a 10-digit Mobile 1 before saving.` });
       return;
     }
 
@@ -449,19 +499,23 @@ export default function RestroEditModal({
         "WhatsappMobileNumberName1", "WhatsappMobileNumberforOrderDetails1", "WhatsappMobileNumberStatus1",
         "WhatsappMobileNumberName2", "WhatsappMobileNumberforOrderDetails2", "WhatsappMobileNumberStatus2",
         "WhatsappMobileNumberName3", "WhatsappMobileNumberforOrderDetails3", "WhatsappMobileNumberStatus3",
-        // add any more columns you permit
+        // add more permitted columns if needed
       ];
 
       const payload: any = {};
       for (const k of allowed) {
-        const v = local && local[k];
+        let v = local && local[k];
         if (v === undefined || v === null) continue;
         if (typeof v === "string") {
-          if (v.trim() === "") continue;
-          payload[k] = v.trim();
-        } else {
-          payload[k] = v;
+          v = v.trim();
+          if (v === "") continue;
         }
+        // sanitize mobile fields to digits only (and max 10)
+        if (k.toLowerCase().includes("whatsapp") && k.toLowerCase().includes("orderdetails")) {
+          v = String(v).replace(/\D/g, "").slice(0, 10);
+          if (v === "") continue;
+        }
+        payload[k] = v;
       }
 
       console.log("DEBUG: update payload:", payload);
@@ -504,6 +558,7 @@ export default function RestroEditModal({
     loadingStations,
     restroCode,
     InputWithIcon,
+    Toggle,
     validators: {
       validateEmailString,
       validatePhoneString,
@@ -520,6 +575,7 @@ export default function RestroEditModal({
       case "Address & Documents":
         return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
       case "Contacts":
+        // use existing ContactsTab if you prefer; ensure it uses Toggle & InputWithIcon from common
         return <ContactsTab {...common} />;
       case "Bank":
         return <BankTab {...common} />;
@@ -626,23 +682,37 @@ export default function RestroEditModal({
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>{renderTab()}</div>
 
         {/* Footer */}
-        <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff" }}>
-          <div />
+        <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff", alignItems: "center" }}>
+          <div style={{ color: "#666", fontSize: 13 }}>
+            {/* show inline validation hint */}
+            {validationErrors.length > 0 && <div style={{ color: "#b91c1c" }}>Validation: {validationErrors[0]}{validationErrors.length>1?` (+${validationErrors.length-1} more)`: ""}</div>}
+            {!primaryContactValid && <div style={{ color: "#b91c1c" }}>Provide a valid Email 1 or a 10-digit Mobile 1 to enable Save.</div>}
+          </div>
+
           <div>
             {error && <div style={{ color: "red", marginRight: 12, display: "inline-block" }}>{error}</div>}
             <button onClick={doClose} style={{ background: "#fff", color: "#333", border: "1px solid #e3e3e3", padding: "8px 12px", borderRadius: 6, marginRight: 8 }}>
               Cancel
             </button>
-            <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer", fontWeight: 600 }}>
+            <button
+              onClick={handleSave}
+              disabled={saveDisabled}
+              title={saveDisabled ? (validationErrors.length ? validationErrors.join("; ") : "Provide primary contact") : "Save changes"}
+              style={{
+                background: saveDisabled ? "#9fd8e6" : "#0ea5e9",
+                color: "#fff",
+                padding: "8px 12px",
+                borderRadius: 6,
+                border: "none",
+                cursor: saveDisabled ? "not-allowed" : "pointer",
+                fontWeight: 600,
+              }}
+            >
               {saving ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        /* minimal shared styles (tab components should style their own forms) */
-      `}</style>
     </div>
   );
 }
