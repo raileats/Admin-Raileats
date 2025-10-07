@@ -1,237 +1,98 @@
-/* globals.css - unified Arial-based design */
-
-/* Removed Google Inter import */
-
-/* Font variables */
-:root {
-  --font-family: "Arial", "Helvetica Neue", Helvetica, sans-serif;
+/* globals.css - add/replace these rules in your global stylesheet */
+:root{
+  --font-family: "Arial", Helvetica, sans-serif;
   --accent: #0ea5e9;
   --text: #0f1724;
   --muted: #6b7280;
   --border: #e6e6e6;
   --card-bg: #ffffff;
   --soft-bg: #fbfdff;
-  --label-weight: 600;
+  --label-weight: 700;
   --radius: 10px;
   --gap: 18px;
 }
 
-/* Base */
-html,
-body,
-#__next {
-  height: 100%;
-}
-
+html,body,#__next { height:100%; }
 body {
   margin: 0;
   font-family: var(--font-family);
   color: var(--text);
   background: #ffffff;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
   font-size: 16px;
   line-height: 1.45;
-  letter-spacing: 0.2px;
 }
 
-/* Modal shell (optional) */
-.rmodal-backdrop {
-  background: rgba(0, 0, 0, 0.45);
-}
-
-/* Top tabs bar */
+/* top tabs bar (if used globally) */
 .tab-bar {
-  display: flex;
-  gap: 8px;
-  padding: 12px 24px;
-  background: #fafafa;
-  border-bottom: 1px solid #eee;
-  align-items: center;
-  overflow: auto;
-  font-family: var(--font-family);
+  display:flex;
+  gap:8px;
+  padding:12px 24px;
+  background:#fafafa;
+  border-bottom:1px solid #eee;
+  align-items:center;
+  overflow:auto;
 }
 .tab-bar .tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  cursor: pointer;
-  border-radius: 8px;
-  color: var(--muted);
-  font-weight: 700;
-  white-space: nowrap;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 16px;
+  cursor:pointer;
+  border-radius:8px;
+  color:var(--muted);
+  font-weight:700;
+  white-space:nowrap;
 }
 .tab-bar .tab.active {
-  color: var(--accent);
-  border-bottom: 3px solid var(--accent);
-  background: transparent;
+  color:var(--accent);
+  border-bottom:3px solid var(--accent);
 }
 
-/* TabContainer card */
-.tab-container {
-  padding: 28px;
-  background: var(--card-bg);
-  border-radius: var(--radius);
-  border: 1px solid #f3f3f3;
-  box-shadow: 0 6px 20px rgba(11, 15, 30, 0.03);
-  margin: 20px auto;
-  max-width: 1200px;
-  font-family: var(--font-family);
-}
-
-/* Section title area */
-.tab-heading {
-  text-align: center;
-  margin: 0 0 16px 0;
-}
-.tab-heading .kicker {
-  font-weight: 700;
-  font-size: 1.125rem;
-  color: var(--text);
-  margin-bottom: 6px;
-}
-.tab-heading .title {
-  font-weight: 700;
-  font-size: 1.4rem;
-  color: #0b1220;
-}
-
-/* Generic grid for forms */
+/* form & grid helpers (shared used by tabs above) */
 .form-grid {
-  display: grid;
+  display:grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--gap);
-  align-items: start;
-  font-family: var(--font-family);
+  align-items:start;
 }
-@media (max-width: 1100px) {
-  .form-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (max-width: 720px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-}
+@media (max-width:1100px) { .form-grid{ grid-template-columns: repeat(2,1fr);} }
+@media (max-width:720px) { .form-grid{ grid-template-columns:1fr;} }
 
-/* Field */
-.field {
-  display: flex;
-  flex-direction: column;
-  font-family: var(--font-family);
-}
+.field { display:flex; flex-direction:column; }
 .field .label {
-  font-size: 0.9rem;
-  font-weight: var(--label-weight);
-  color: var(--muted);
-  margin-bottom: 8px;
+  font-size:0.9rem; font-weight:var(--label-weight); color:var(--muted); margin-bottom:8px;
 }
-.field .input {
-  padding: 10px 12px;
-  height: 44px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  font-size: 1rem;
+.input {
+  padding:10px 12px; height:44px; border-radius:8px; border:1px solid var(--border); font-size:1rem;
   background: #fff;
-  outline: none;
-  font-family: var(--font-family);
+  outline:none;
 }
-.field .readonly {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--soft-bg);
-  border: 1px solid #f3f3f3;
-  font-family: var(--font-family);
-}
+.readonly { padding:10px 12px; border-radius:8px; background:var(--soft-bg); border:1px solid #f3f3f3; }
 
-/* Textarea styling */
 .field textarea {
-  min-height: 80px;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  font-size: 1rem;
-  resize: vertical;
-  font-family: var(--font-family);
+  min-height:80px; padding:12px; border-radius:8px; border:1px solid var(--border); font-size:1rem; resize:vertical;
 }
 
-/* Helper text */
-.helper {
-  color: var(--muted);
-  font-size: 0.9rem;
-  margin-top: 8px;
-  font-family: var(--font-family);
-}
+/* Small helper text */
+.helper { color:var(--muted); font-size:0.9rem; margin-top:8px; }
 
-/* Toggle pill */
-.toggle-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 56px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-weight: 700;
-  cursor: pointer;
-  border: none;
-  font-family: var(--font-family);
-}
-.toggle-pill.off {
-  background: #f1f5f9;
-  color: var(--muted);
-}
-.toggle-pill.on {
-  background: var(--accent);
-  color: #fff;
-}
+/* Toggles styled */
+.toggle-pill { display:inline-flex; align-items:center; justify-content:center; min-width:56px; padding:6px 12px; border-radius:999px; font-weight:700; cursor:pointer; }
+.toggle-pill.off { background:#f1f5f9; color:var(--muted); }
+.toggle-pill.on { background:var(--accent); color:#fff; }
 
-/* Input with icon */
-.input-with-icon {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-family: var(--font-family);
-}
-.input-with-icon .icon {
-  font-size: 18px;
-  color: #6b21a8;
-}
-.input-with-icon input {
-  flex: 1;
-  font-family: var(--font-family);
-}
+/* input-with-icon helper */
+.input-with-icon { display:flex; align-items:center; gap:10px; }
+.input-with-icon .icon { font-size:18px; color: #6b21a8; }
+.input-with-icon input { flex:1; }
 
 /* Save / Cancel row */
-.save-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 12px 0;
-  font-family: var(--font-family);
-}
-.btn {
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-weight: 700;
-  border: 1px solid #e6e6e6;
-  cursor: pointer;
-  background: #fff;
-  font-family: var(--font-family);
-}
-.btn.primary {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-}
-.btn.ghost {
-  background: #fff;
-  color: var(--text);
-  border: 1px solid #e6e6e6;
-}
+.save-row { display:flex; justify-content:flex-end; gap:12px; padding:12px 0; }
+.btn { padding:10px 14px; border-radius:8px; font-weight:700; border:1px solid #e6e6e6; cursor:pointer; background:#fff; }
+.btn.primary { background:var(--accent); color:#fff; border:none; }
+.btn.ghost { background:#fff; color:var(--text); border:1px solid #e6e6e6; }
 
-/* smaller input width */
-.input-sm {
-  max-width: 420px;
-}
+/* limit very wide text inputs (contacts name etc) */
+.input-sm { max-width:420px; }
