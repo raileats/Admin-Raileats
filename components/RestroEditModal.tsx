@@ -50,7 +50,7 @@ function safeGet(obj: any, ...keys: string[]) {
   return undefined;
 }
 
-/* validators (kept same) */
+/* validators */
 const emailRegex = /^\S+@\S+\.\S+$/;
 const tenDigitRegex = /^\d{10}$/;
 function validateEmailString(s: string) {
@@ -68,7 +68,7 @@ function validatePhoneString(s: string) {
   return true;
 }
 
-/* InputWithIcon fallback */
+/* InputWithIcon fallback (kept) */
 function InputWithIcon({
   name,
   label,
@@ -248,12 +248,22 @@ export default function RestroEditModal({
       BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
       RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
       RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
+      // ensure we include both email slots and 3 whatsapp slots
       EmailAddressName1: restro?.EmailAddressName1 ?? "",
       EmailsforOrdersReceiving1: restro?.EmailsforOrdersReceiving1 ?? "",
       EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? 0,
+      EmailAddressName2: restro?.EmailAddressName2 ?? "",
+      EmailsforOrdersReceiving2: restro?.EmailsforOrdersReceiving2 ?? "",
+      EmailsforOrdersStatus2: restro?.EmailsforOrdersStatus2 ?? 0,
       WhatsappMobileNumberName1: restro?.WhatsappMobileNumberName1 ?? "",
       WhatsappMobileNumberforOrderDetails1: restro?.WhatsappMobileNumberforOrderDetails1 ?? "",
       WhatsappMobileNumberStatus1: restro?.WhatsappMobileNumberStatus1 ?? 0,
+      WhatsappMobileNumberName2: restro?.WhatsappMobileNumberName2 ?? "",
+      WhatsappMobileNumberforOrderDetails2: restro?.WhatsappMobileNumberforOrderDetails2 ?? "",
+      WhatsappMobileNumberStatus2: restro?.WhatsappMobileNumberStatus2 ?? 0,
+      WhatsappMobileNumberName3: restro?.WhatsappMobileNumberName3 ?? "",
+      WhatsappMobileNumberforOrderDetails3: restro?.WhatsappMobileNumberforOrderDetails3 ?? "",
+      WhatsappMobileNumberStatus3: restro?.WhatsappMobileNumberStatus3 ?? 0,
       ...restro,
     });
   }, [restro]);
@@ -278,6 +288,7 @@ export default function RestroEditModal({
         body: JSON.stringify(payload),
       });
 
+      // read text safely
       let text = "";
       try {
         text = await res.text();
@@ -285,6 +296,7 @@ export default function RestroEditModal({
         text = "";
       }
 
+      // try parse JSON if possible
       let json: any = null;
       try {
         json = JSON.parse(text);
@@ -292,6 +304,7 @@ export default function RestroEditModal({
         json = null;
       }
 
+      // compute human-friendly message
       const possibleError = (json?.error?.message ?? json?.error ?? text);
       if (!res.ok) {
         throw new Error(possibleError || `Update failed (${res.status})`);
@@ -366,11 +379,15 @@ export default function RestroEditModal({
     setSavingInternal(true);
     try {
       const payload: any = { ...local };
+
+      // remove nested objects
       for (const k of Object.keys(payload)) {
         if (typeof payload[k] === "object" && payload[k] !== null) delete payload[k];
       }
 
+      // update using supabase client
       const { error: supError } = await (supabase as any).from("RestroMaster").update(payload).eq("RestroCode", restroCode);
+
       if (supError) throw supError;
 
       setNotification({ type: "success", text: "Changes saved successfully ✅" });
@@ -431,12 +448,7 @@ export default function RestroEditModal({
       case "Station Settings":
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        // wrap in a wrapper to selectively hide child save-row/button via CSS
-        return (
-          <div className="address-docs-wrapper">
-            <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />
-          </div>
-        );
+        return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
       case "Contacts":
         return <ContactsTab {...common} />;
       case "Bank":
@@ -546,12 +558,7 @@ export default function RestroEditModal({
         )}
 
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {/* Keep a single modal-level header for clarity */}
-          <div style={{ textAlign: "center", marginBottom: 14 }}>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#0b1220" }}>{activeTab}</div>
-            <div style={{ fontSize: 13, color: "#6b7280", marginTop: 6 }}>{/* optional subtitle if needed */}</div>
-          </div>
-
+          {/* Modal-level: no duplicate heading here; child tabs are responsible for their own heading markup */}
           <div className="tab-content" style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
             {renderTab()}
           </div>
@@ -572,62 +579,9 @@ export default function RestroEditModal({
       </div>
 
       <style jsx>{`
-        /* Scope: modal root forced Arial */
         .restro-modal-root { font-family: Arial, Helvetica, sans-serif; }
-
-        /* Important: hide duplicate headings rendered inside child tabs.
-           Many of the child tab components use h3/.tab-heading/.title/.kicker — hide them so modal shows the single header */
-        .tab-content h1,
-        .tab-content h2,
-        .tab-content h3,
-        .tab-content .tab-heading,
-        .tab-content .title,
-        .tab-content .kicker {
-          display: none !important;
-        }
-
-        /* Hide any local save row inside AddressDocsClient by scoping to wrapper:
-           this removes "Save Address & Docs" that child may render. */
-        .address-docs-wrapper .save-row,
-        .address-docs-wrapper .btn.primary,
-        .address-docs-wrapper .local-save {
-          display: none !important;
-        }
-
-        /* Basic input/button normalization inside modal */
-        .tab-content input,
-        .tab-content select,
-        .tab-content textarea,
-        .tab-content button {
-          font-family: inherit;
-          font-size: 14px;
-        }
-
-        /* Slight card look for child tab card containers */
-        .tab-content > * {
-          box-sizing: border-box;
-        }
-
-        /* If child components use a .form-grid or .restro-grid - keep consistent spacing */
-        .tab-content .form-grid,
-        .tab-content .restro-grid {
-          margin-top: 6px;
-        }
-
-        /* Help text */
-        .tab-content .helper,
-        .tab-content .hint {
-          color: #6b7280;
-          font-size: 13px;
-        }
-
-        /* Make sure toggles / icons align */
-        .tab-content .input-with-icon .icon { color: #6b21a8; }
-
-        /* ensure the modal-level header doesn't push child layout */
-        @media (max-width: 900px) {
-          .tab-content { padding: 0 6px; }
-        }
+        .tab-content { box-sizing: border-box; padding: 6px; }
+        input, select, textarea, button { font-family: inherit; font-size: 14px; }
       `}</style>
     </div>
   );
