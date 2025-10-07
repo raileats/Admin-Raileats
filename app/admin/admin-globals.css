@@ -1,18 +1,155 @@
-/* admin specific styles */
-:root {
-  --admin-bg: #f8fafc;
-  --admin-sidebar-bg: #ffffff;
-  --admin-border: #e6e8eb;
-  --text: #111827;
+/* globals.css - paste into your global stylesheet and import in _app.tsx or layout */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+
+:root{
+  --font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --accent: #0ea5e9;
+  --text: #0f1724;
   --muted: #6b7280;
+  --border: #e6e6e6;
+  --card-bg: #ffffff;
+  --soft-bg: #fbfdff;
+  --label-weight: 600;
+  --radius: 10px;
+  --gap: 18px;
 }
 
-html, body {
-  height: 100%;
+/* Base */
+html,body,#__next { height:100%; }
+body {
   margin: 0;
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  background: var(--admin-bg);
+  font-family: var(--font-family);
   color: var(--text);
+  background: #ffffff;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  font-size: 16px;
+  line-height: 1.4;
 }
 
-a { color: inherit; text-decoration: none; }
+/* Modal shell (optional) - if you use full modal */
+.rmodal-backdrop {
+  background: rgba(0,0,0,0.45);
+}
+
+/* Top tabs bar */
+.tab-bar {
+  display:flex;
+  gap:8px;
+  padding:12px 24px;
+  background:#fafafa;
+  border-bottom:1px solid #eee;
+  align-items:center;
+  overflow:auto;
+}
+.tab-bar .tab {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 16px;
+  cursor:pointer;
+  border-radius:8px;
+  color:var(--muted);
+  font-weight:700;
+  white-space:nowrap;
+}
+.tab-bar .tab.active {
+  color:var(--accent);
+  border-bottom:3px solid var(--accent);
+  background:transparent;
+}
+
+/* TabContainer card */
+.tab-container {
+  padding:28px;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  border: 1px solid #f3f3f3;
+  box-shadow: 0 6px 20px rgba(11, 15, 30, 0.03);
+  margin: 20px auto;
+  max-width: 1200px;
+}
+
+/* Section title area (centered) */
+.tab-heading {
+  text-align:center;
+  margin:0 0 16px 0;
+}
+.tab-heading .kicker {
+  font-weight:700;
+  font-size:1.125rem;
+  color:var(--text);
+  margin-bottom:6px;
+}
+.tab-heading .title {
+  font-weight:700;
+  font-size:1.4rem;
+  color:#0b1220;
+}
+
+/* Generic grid for forms - 3 cols desktop, 2 tablet, 1 mobile */
+.form-grid {
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap);
+  align-items:start;
+}
+@media (max-width:1100px) { .form-grid{ grid-template-columns: repeat(2,1fr);} }
+@media (max-width:720px) { .form-grid{ grid-template-columns:1fr;} }
+
+/* Field */
+.field { display:flex; flex-direction:column; }
+.field .label {
+  font-size:0.875rem; font-weight:var(--label-weight); color:var(--muted); margin-bottom:8px;
+}
+.field .input {
+  padding:10px 12px; height:44px; border-radius:8px; border:1px solid var(--border); font-size:1rem;
+  background: #fff;
+  outline:none;
+}
+.field .readonly {
+  padding:10px 12px; border-radius:8px; background:var(--soft-bg); border:1px solid #f3f3f3;
+}
+
+/* Textarea styling */
+.field textarea {
+  min-height:80px;
+  padding:12px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  font-size:1rem;
+  resize:vertical;
+}
+
+/* Small helper text */
+.helper { color:var(--muted); font-size:0.9rem; margin-top:8px; }
+
+/* Toggle pill */
+.toggle-pill {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:56px; padding:6px 12px; border-radius:999px; font-weight:700; cursor:pointer;
+  border: none;
+}
+.toggle-pill.off { background:#f1f5f9; color:var(--muted); }
+.toggle-pill.on { background:var(--accent); color:#fff; }
+
+/* Compact input icon wrapper (for InputWithIcon) */
+.input-with-icon {
+  display:flex; align-items:center; gap:10px;
+}
+.input-with-icon .icon { font-size:18px; color: #6b21a8; } /* purple icon like your screenshot */
+.input-with-icon input { flex:1; }
+
+/* Save / Cancel row */
+.save-row {
+  display:flex; justify-content:flex-end; gap:12px; padding:12px 0;
+}
+.btn {
+  padding:10px 14px; border-radius:8px; font-weight:700; border:1px solid #e6e6e6; cursor:pointer;
+  background:#fff;
+}
+.btn.primary { background:var(--accent); color:#fff; border:none; }
+.btn.ghost { background:#fff; color:var(--text); border:1px solid #e6e6e6; }
+
+/* reduce excessively long inputs e.g. contact name fields */
+.input-sm { max-width:420px; }
