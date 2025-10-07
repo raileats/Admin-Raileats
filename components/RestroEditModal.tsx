@@ -541,12 +541,8 @@ export default function RestroEditModal({
         )}
 
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {/* Single centered header (modal-level) */}
-          <div style={{ textAlign: "center", marginBottom: 14 }}>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#0b1220" }}>{activeTab}</div>
-          </div>
-
-          {/* render tab content; wrap to allow CSS targeting of child headings */}
+          {/* NOTE: no extra modal-level title here — child tabs render their own titles.
+              This avoids duplicate headings and ensures child components control their heading markup. */}
           <div className="tab-content" style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
             {renderTab()}
           </div>
@@ -567,20 +563,8 @@ export default function RestroEditModal({
       </div>
 
       <style jsx>{`
-        /* enforce Arial for modal content (if you want global Arial, keep it in globals.css) */
         .restro-modal-root { font-family: Arial, Helvetica, sans-serif; }
-
-        /* hide any leftover h3 headings inside child tab components so we don't get duplicates */
-        .tab-content h3,
-        .tab-content .tab-heading,
-        .tab-content .title {
-          display: none !important;
-        }
-
-        /* minor responsive tweaks */
         .tab-content { box-sizing: border-box; padding: 6px; }
-
-        /* keep inputs same font-size */
         input, select, textarea, button { font-family: inherit; font-size: 14px; }
       `}</style>
     </div>
