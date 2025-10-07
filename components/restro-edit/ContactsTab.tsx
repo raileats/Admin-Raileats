@@ -2,8 +2,9 @@
 "use client";
 
 import React, { useCallback } from "react";
+import TabContainer from "@/components/TabContainer";
 
-type CommonProps = {
+type Props = {
   local: any;
   updateField: (k: string, v: any) => void;
   stationDisplay?: string;
@@ -18,66 +19,66 @@ type CommonProps = {
   };
 };
 
-export default function ContactsTab(props: CommonProps) {
-  const {
-    local = {},
-    updateField,
-    InputWithIcon,
-    Toggle,
-    validators = {},
-  } = props;
-
-  // Fallback InputWithIcon if parent didn't pass one
+export default function ContactsTab({
+  local = {},
+  updateField,
+  InputWithIcon,
+  Toggle,
+  validators = {},
+}: Props) {
+  // fallback simple Input (used when parent didn't pass InputWithIcon)
   const Input = InputWithIcon
     ? InputWithIcon
     : ({ label, value, onChange, type = "text", placeholder = "", maxLength }: any) => (
         <div style={{ marginBottom: 12 }}>
           {label && <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{label}</div>}
           <input
+            className="restro-input"
             value={value ?? ""}
             placeholder={placeholder ?? ""}
             onChange={(e) => onChange(e.target.value)}
             maxLength={maxLength}
             inputMode={type === "phone" || type === "whatsapp" ? "numeric" : "text"}
-            style={{
-              width: "100%",
-              padding: "8px 10px",
-              borderRadius: 6,
-              border: "1px solid #e6e6e6",
-              outline: "none",
-              fontSize: 14,
-            }}
+            style={{ fontSize: 14 }}
           />
         </div>
       );
 
-  // Fallback Toggle if parent didn't pass one (simple checkbox)
+  // fallback Toggle (simple button-like) if parent didn't pass a Toggle component
   const ToggleComp = Toggle
     ? Toggle
     : ({ checked, onChange, label }: any) => (
-        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={!!checked}
-            onChange={(e) => onChange(e.target.checked)}
-            style={{ width: 20, height: 20 }}
-          />
-          {label && <span style={{ fontSize: 13 }}>{label}</span>}
-        </label>
+        <div className="restro-toggle">
+          <button
+            type="button"
+            onClick={() => onChange(!checked)}
+            style={{
+              cursor: "pointer",
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid #e6e6e6",
+              background: checked ? "#0ea5e9" : "#fff",
+              color: checked ? "#fff" : "#333",
+            }}
+          >
+            {checked ? "ON" : "OFF"}
+          </button>
+          {label && <span style={{ color: "#666", fontSize: 13 }}>{label}</span>}
+        </div>
       );
 
-  // sanitize phone helper — accept any input, return digits-only (max 10)
+  // sanitize phone helper — digits only, max 10
   const sanitizePhone = useCallback((raw: any) => {
     if (raw === undefined || raw === null) return "";
     const cleaned = String(raw).replace(/\D/g, "").slice(0, 10);
     return cleaned;
   }, []);
 
-  // Generic onToggle helper with debug
+  // toggle handler: stores "ON" / "OFF"
   const handleToggle = useCallback(
     (field: string, checked: boolean) => {
       const val = checked ? "ON" : "OFF";
-      // debug to confirm toggle event reached here
+      // debug log so you can inspect in console
       // eslint-disable-next-line no-console
       console.debug(`[ContactsTab] toggle ${field} => ${val}`);
       updateField(field, val);
@@ -86,14 +87,13 @@ export default function ContactsTab(props: CommonProps) {
   );
 
   return (
-    <div>
-      <h3 style={{ marginTop: 0 }}>Emails (max 2)</h3>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: 16, alignItems: "center" }}>
-        {/* Email 1 */}
+    <TabContainer title="Contacts — Emails (max 2) & WhatsApp (max 3)">
+      <div className="restro-grid">
+        {/* ----- Emails (max 2) ----- */}
         <div>
+          <label className="restro-label">Name 1</label>
           <Input
-            label="Name 1"
+            label=""
             value={local.EmailAddressName1 ?? ""}
             onChange={(v: any) => updateField("EmailAddressName1", v)}
             type="name"
@@ -102,27 +102,27 @@ export default function ContactsTab(props: CommonProps) {
         </div>
 
         <div>
+          <label className="restro-label">Email 1</label>
           <Input
-            label="Email 1"
+            label=""
             value={local.EmailsforOrdersReceiving1 ?? ""}
             onChange={(v: any) => updateField("EmailsforOrdersReceiving1", v)}
             type="email"
             placeholder="email1@example.com"
           />
+          <div style={{ marginTop: 8 }}>
+            <ToggleComp
+              checked={String(local.EmailsforOrdersStatus1 ?? "OFF") === "ON"}
+              onChange={(c: boolean) => handleToggle("EmailsforOrdersStatus1", !!c)}
+              label={String(local.EmailsforOrdersStatus1 ?? "OFF") === "ON" ? "ON" : "OFF"}
+            />
+          </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-start" }}>
-          <ToggleComp
-            checked={String(local.EmailsforOrdersStatus1 ?? "OFF") === "ON"}
-            onChange={(c: boolean) => handleToggle("EmailsforOrdersStatus1", c)}
-            label={String(local.EmailsforOrdersStatus1 ?? "OFF") === "ON" ? "ON" : "OFF"}
-          />
-        </div>
-
-        {/* Email 2 */}
         <div>
+          <label className="restro-label">Name 2</label>
           <Input
-            label="Name 2"
+            label=""
             value={local.EmailAddressName2 ?? ""}
             onChange={(v: any) => updateField("EmailAddressName2", v)}
             type="name"
@@ -131,120 +131,124 @@ export default function ContactsTab(props: CommonProps) {
         </div>
 
         <div>
+          <label className="restro-label">Email 2</label>
           <Input
-            label="Email 2"
+            label=""
             value={local.EmailsforOrdersReceiving2 ?? ""}
             onChange={(v: any) => updateField("EmailsforOrdersReceiving2", v)}
             type="email"
             placeholder="email2@example.com"
           />
+          <div style={{ marginTop: 8 }}>
+            <ToggleComp
+              checked={String(local.EmailsforOrdersStatus2 ?? "OFF") === "ON"}
+              onChange={(c: boolean) => handleToggle("EmailsforOrdersStatus2", !!c)}
+              label={String(local.EmailsforOrdersStatus2 ?? "OFF") === "ON" ? "ON" : "OFF"}
+            />
+          </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-start" }}>
-          <ToggleComp
-            checked={String(local.EmailsforOrdersStatus2 ?? "OFF") === "ON"}
-            onChange={(c: boolean) => handleToggle("EmailsforOrdersStatus2", c)}
-            label={String(local.EmailsforOrdersStatus2 ?? "OFF") === "ON" ? "ON" : "OFF"}
-          />
-        </div>
-      </div>
+        {/* separator row */}
+        <div className="restro-row-full" style={{ marginTop: 8 }} />
 
-      <hr style={{ margin: "18px 0" }} />
-
-      <h3>WhatsApp numbers (max 3)</h3>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: 16, alignItems: "center" }}>
-        {/* WA 1 */}
+        {/* ----- WhatsApp (max 3) ----- */}
         <div>
+          <label className="restro-label">Name 1</label>
           <Input
-            label="Name 1"
+            label=""
             value={local.WhatsappMobileNumberName1 ?? ""}
             onChange={(v: any) => updateField("WhatsappMobileNumberName1", v)}
+            type="text"
             placeholder="Name 1"
           />
         </div>
 
         <div>
+          <label className="restro-label">Mobile 1</label>
           <Input
-            label="Mobile 1"
+            label=""
             value={local.WhatsappMobileNumberforOrderDetails1 ?? ""}
             onChange={(v: any) => updateField("WhatsappMobileNumberforOrderDetails1", sanitizePhone(v))}
-            placeholder="10-digit mobile"
             type="phone"
+            placeholder="10-digit mobile"
             maxLength={10}
           />
+          <div style={{ marginTop: 8 }}>
+            <ToggleComp
+              checked={String(local.WhatsappMobileNumberStatus1 ?? "OFF") === "ON"}
+              onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus1", !!c)}
+              label={String(local.WhatsappMobileNumberStatus1 ?? "OFF") === "ON" ? "ON" : "OFF"}
+            />
+          </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-start" }}>
-          <ToggleComp
-            checked={String(local.WhatsappMobileNumberStatus1 ?? "OFF") === "ON"}
-            onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus1", c)}
-            label={String(local.WhatsappMobileNumberStatus1 ?? "OFF") === "ON" ? "ON" : "OFF"}
-          />
-        </div>
-
-        {/* WA 2 */}
         <div>
+          <label className="restro-label">Name 2</label>
           <Input
-            label="Name 2"
+            label=""
             value={local.WhatsappMobileNumberName2 ?? ""}
             onChange={(v: any) => updateField("WhatsappMobileNumberName2", v)}
+            type="text"
             placeholder="Name 2"
           />
         </div>
 
         <div>
+          <label className="restro-label">Mobile 2</label>
           <Input
-            label="Mobile 2"
+            label=""
             value={local.WhatsappMobileNumberforOrderDetails2 ?? ""}
             onChange={(v: any) => updateField("WhatsappMobileNumberforOrderDetails2", sanitizePhone(v))}
-            placeholder="10-digit mobile"
             type="phone"
+            placeholder="10-digit mobile"
             maxLength={10}
           />
+          <div style={{ marginTop: 8 }}>
+            <ToggleComp
+              checked={String(local.WhatsappMobileNumberStatus2 ?? "OFF") === "ON"}
+              onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus2", !!c)}
+              label={String(local.WhatsappMobileNumberStatus2 ?? "OFF") === "ON" ? "ON" : "OFF"}
+            />
+          </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-start" }}>
-          <ToggleComp
-            checked={String(local.WhatsappMobileNumberStatus2 ?? "OFF") === "ON"}
-            onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus2", c)}
-            label={String(local.WhatsappMobileNumberStatus2 ?? "OFF") === "ON" ? "ON" : "OFF"}
-          />
-        </div>
-
-        {/* WA 3 */}
         <div>
+          <label className="restro-label">Name 3</label>
           <Input
-            label="Name 3"
+            label=""
             value={local.WhatsappMobileNumberName3 ?? ""}
             onChange={(v: any) => updateField("WhatsappMobileNumberName3", v)}
+            type="text"
             placeholder="Name 3"
           />
         </div>
 
         <div>
+          <label className="restro-label">Mobile 3</label>
           <Input
-            label="Mobile 3"
+            label=""
             value={local.WhatsappMobileNumberforOrderDetails3 ?? ""}
             onChange={(v: any) => updateField("WhatsappMobileNumberforOrderDetails3", sanitizePhone(v))}
-            placeholder="10-digit mobile"
             type="phone"
+            placeholder="10-digit mobile"
             maxLength={10}
           />
+          <div style={{ marginTop: 8 }}>
+            <ToggleComp
+              checked={String(local.WhatsappMobileNumberStatus3 ?? "OFF") === "ON"}
+              onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus3", !!c)}
+              label={String(local.WhatsappMobileNumberStatus3 ?? "OFF") === "ON" ? "ON" : "OFF"}
+            />
+          </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-start" }}>
-          <ToggleComp
-            checked={String(local.WhatsappMobileNumberStatus3 ?? "OFF") === "ON"}
-            onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus3", c)}
-            label={String(local.WhatsappMobileNumberStatus3 ?? "OFF") === "ON" ? "ON" : "OFF"}
-          />
+        <div className="restro-row-full">
+          <div className="restro-note">
+            Tip: Only two email contacts (1–2) and three WhatsApp contacts (1–3) are supported.
+            Mobile numbers accept digits only and are truncated to 10 digits automatically.
+          </div>
         </div>
       </div>
-
-      <div style={{ marginTop: 18, color: "#666", fontSize: 13 }}>
-        Tip: click the ON/OFF control — it should immediately toggle and you'll see the change reflected in the form. Open DevTools console to see debug logs when toggles are clicked.
-      </div>
-    </div>
+    </TabContainer>
   );
 }
