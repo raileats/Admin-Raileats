@@ -1,79 +1,40 @@
-// components/TabContainer.tsx
 "use client";
 
 import React from "react";
 
-/**
- * TabContainer — सभी Restro Edit Tabs के लिए Common Wrapper
- * -----------------------------------------------------------
- * - हर tab का title समान font, size और margin में दिखेगा
- * - अंदर का content grid layout में auto adjust होगा
- * - consistent padding, border-radius और shadow के साथ
- */
+type TabItem = {
+  key: string; // unique string (eg. "Basic Information")
+  label: string;
+  icon?: React.ReactNode;
+};
 
-export default function TabContainer({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="tab-container">
-      <h2 className="tab-title">{title}</h2>
-      <div className="tab-content">{children}</div>
+type Props = {
+  tabs: TabItem[];
+  activeKey: string;
+  onChange: (key: string) => void;
+  // optional header text shown above children (centered)
+  header?: string | null;
+  // optional thin border under tabs
+  showDivider?: boolean;
+  // children -> current tab content
+  children?: React.ReactNode;
+};
 
-      <style jsx>{`
-        .tab-container {
-          background: #ffffff;
-          border-radius: 10px;
-          padding: 24px 28px;
-          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-          margin: 0 auto;
-          max-width: 1300px;
-          color: #222;
-          font-family: "Inter", "Segoe UI", sans-serif;
-        }
-
-        .tab-title {
-          font-size: 18px;
-          font-weight: 700;
-          text-align: center;
-          margin-bottom: 20px;
-          color: #1e293b;
-          text-transform: capitalize;
-        }
-
-        .tab-content {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-          gap: 20px 24px;
-          align-items: flex-start;
-        }
-
-        @media (max-width: 1024px) {
-          .tab-container {
-            padding: 20px;
-          }
-          .tab-content {
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 16px;
-          }
-        }
-
-        @media (max-width: 640px) {
-          .tab-container {
-            padding: 16px;
-          }
-          .tab-title {
-            font-size: 16px;
-          }
-          .tab-content {
-            grid-template-columns: 1fr;
-            gap: 12px;
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
+const IconSet = {
+  basic: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 2L3 6v6c0 5 3.8 9.2 9 10 5.2-.8 9-5 9-10V6l-9-4z" />
+    </svg>
+  ),
+  settings: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-1.9-3.3-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.4 3.1a7.6 7.6 0 0 0-1.7 1l-2.5-1L2 11.4l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 1.9 3.3 2.5-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.4-3.1a7.6 7.6 0 0 0 1.7-1l2.5 1 1.9-3.3L19.4 15z" />
+    </svg>
+  ),
+  docs: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    </svg>
+  ),
+  contacts: (
+    <svg width="1
