@@ -1,111 +1,105 @@
-// app/api/restros/[code]/contacts/route.ts
+// app/api/restros/[code]/route.ts
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { createClient } from "@supabase/supabase-js";
 
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!url) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL env var");
+}
+if (!serviceRoleKey) {
+  throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY env var (server only)");
+}
+
+const sb = createClient(url, serviceRoleKey);
+
+/**
+ * GET: return the restro row by RestroCode
+ */
 export async function GET(req: Request, { params }: { params: { code: string } }) {
   try {
-    const restroCode = params.code;
-    if (!restroCode) return NextResponse.json({ error: "Missing code" }, { status: 400 });
+    const code = String(params.code ?? "").trim();
+    if (!code) return NextResponse.json({ error: "Missing code" }, { status: 400 });
 
-    const { data: emails, error: e1 } = await supabaseServer
-      .from("restro_email")
+    const { data, error, status } = await sb
+      .from("RestroMaster")
       .select("*")
-      .eq("RestroCode", restroCode);
+      .eq("RestroCode", code)
+      .limit(1)
+      .maybeSingle();
 
-    const { data: whats, error: e2 } = await supabaseServer
-      .from("restro_whatsapp")
-      .select("*")
-      .eq("RestroCode", restroCode);
-
-    if (e1 || e2) {
-      console.error("supabase fetch errors", e1, e2);
-      return NextResponse.json({ error: (e1 || e2).message || "Supabase error" }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ ok: false, error }, { status: status || 500 });
     }
-
-    // normalize keys for client (optional)
-    const emailsNorm = (emails || []).map((r: any) => ({
-      id: r.id,
-      name: r.Name ?? "",
-      value: r.Email ?? "",
-      active: !!r.Active,
-    }));
-    const whatsNorm = (whats || []).map((r: any) => ({
-      id: r.id,
-      name: r.Name ?? "",
-      value: r.Mobile ?? "",
-      active: !!r.Active,
-    }));
-
-    return NextResponse.json({ emails: emailsNorm, whatsapps: whatsNorm });
+    if (!data) {
+      return NextResponse.json({ ok: false, error: "Not found", row: null }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, row: data }, { status: 200 });
   } catch (err: any) {
-    console.error("contacts GET unexpected:", err);
-    return NextResponse.json({ error: err?.message ?? "Unknown error" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err?.message ?? String(err) }, { status: 500 });
   }
 }
 
-export async function POST(req: Request, { params }: { params: { code: string } }) {
+/**
+ * PATCH: update allowed fields on RestroMaster by RestroCode
+ * IMPORTANT: server uses service_role key, so RLS will not block.
+ */
+export async function PATCH(req: Request, { params }: { params: { code: string } }) {
   try {
-    const restroCode = params.code;
-    const body = await req.json();
-    const emails: Array<{ name: string; value: string; active: boolean }> = body.emails || [];
-    const whatsapps: Array<{ name: string; value: string; active: boolean }> = body.whatsapps || [];
+    const code = String(params.code ?? "").trim();
+    if (!code) return NextResponse.json({ error: "Missing code" }, { status: 400 });
 
-    if (!restroCode) {
-      return NextResponse.json({ error: "Missing restro code" }, { status: 400 });
-    }
+    const body = await req.json().catch(() => ({}));
 
-    // delete existing rows for this restro (simple approach)
-    let { error: delE } = await supabaseServer.from("restro_email").delete().eq("RestroCode", restroCode);
-    if (delE) {
-      console.error("delete restro_email error:", delE);
-      return NextResponse.json({ error: delE.message }, { status: 500 });
-    }
+    // Whitelist allowed columns (EDIT this list to match your table exactly)
+    const allowed = [
+      // emails (2)
+      "EmailAddressName1", "EmailsforOrdersReceiving1", "EmailsforOrdersStatus1",
+      "EmailAddressName2", "EmailsforOrdersReceiving2", "EmailsforOrdersStatus2",
 
-    let { error: delW } = await supabaseServer.from("restro_whatsapp").delete().eq("RestroCode", restroCode);
-    if (delW) {
-      console.error("delete restro_whatsapp error:", delW);
-      return NextResponse.json({ error: delW.message }, { status: 500 });
-    }
+      // whatsapp (3)
+      "WhatsappMobileNumberName1", "WhatsappMobileNumberforOrderDetails1", "WhatsappMobileNumberStatus1",
+      "WhatsappMobileNumberName2", "WhatsappMobileNumberforOrderDetails2", "WhatsappMobileNumberStatus2",
+      "WhatsappMobileNumberName3", "WhatsappMobileNumberforOrderDetails3", "WhatsappMobileNumberStatus3",
 
-    const emailRows = emails
-      .filter((e) => (e.value || "").toString().trim() !== "")
-      .map((e) => ({
-        RestroCode: restroCode,
-        Name: e.name ?? "",
-        Email: e.value ?? "",
-        Active: e.active ? true : false,
-        CreatedAt: new Date().toISOString(),
-      }));
+      // common
+      "OwnerName","OwnerPhone","RestroEmail","RestroPhone","BrandName"
+    ];
 
-    if (emailRows.length > 0) {
-      const { error: insE } = await supabaseServer.from("restro_email").insert(emailRows);
-      if (insE) {
-        console.error("insert restro_email error:", insE);
-        return NextResponse.json({ error: insE.message }, { status: 500 });
+    const payload: any = {};
+    for (const k of allowed) {
+      if (Object.prototype.hasOwnProperty.call(body, k)) {
+        const v = body[k];
+        // skip null/empty string to avoid overwriting with blanks
+        if (v === undefined || v === null) continue;
+        if (typeof v === "string" && v.trim() === "") continue;
+        payload[k] = v;
       }
     }
 
-    const whatsappRows = whatsapps
-      .filter((w) => (w.value || "").toString().trim() !== "")
-      .map((w) => ({
-        RestroCode: restroCode,
-        Name: w.name ?? "",
-        Mobile: w.value ?? "",
-        Active: w.active ? true : false,
-        CreatedAt: new Date().toISOString(),
-      }));
-
-    if (whatsappRows.length > 0) {
-      const { error: insW } = await supabaseServer.from("restro_whatsapp").insert(whatsappRows);
-      if (insW) {
-        console.error("insert restro_whatsapp error:", insW);
-        return NextResponse.json({ error: insW.message }, { status: 500 });
-      }
+    if (Object.keys(payload).length === 0) {
+      return NextResponse.json({ ok: false, error: "Nothing to update (payload empty after whitelist)" }, { status: 400 });
     }
 
-    return NextResponse.json({ ok: true });
+    const { data, error, status } = await sb
+      .from("RestroMaster")
+      .update(payload)
+      .eq("RestroCode", code)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      return NextResponse.json({ ok: false, error }, { status: status || 400 });
+    }
+
+    if (!data) {
+      // No rows updated -> either no matching row or something else
+      return NextResponse.json({ ok: false, error: "No rows updated (possibly code mismatch)" }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, row: data }, { status: 200 });
   } catch (err: any) {
-    console.error("contacts POST unexpected:", err);
-    return NextResponse.json({ error: err?.message ?? "Unknown error" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err?.message ?? String(err) }, { status: 500 });
   }
 }
