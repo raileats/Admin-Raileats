@@ -1,8 +1,8 @@
-// Use the segment export for runtime (new style)
-export const runtime = "node";
+// Use segment export runtime value supported by this Next.js version
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer"; // ensure this exports a server-side Supabase client (service role)
+import { supabaseServer } from "@/lib/supabaseServer"; // ensure this is your server-side Supabase client (service role)
 import formidable from "formidable";
 import fs from "fs";
 import path from "path";
