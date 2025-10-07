@@ -1,0 +1,49 @@
+/* AdminLayoutFix.css */
+
+body {
+  font-family: "Inter", Arial, sans-serif;
+  background-color: #fafafa;
+  color: #222;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.admin-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.admin-table th,
+.admin-table td {
+  border: 1px solid #eaeaea;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.admin-table th {
+  background-color: #f7f7f7;
+  font-weight: 600;
+}
