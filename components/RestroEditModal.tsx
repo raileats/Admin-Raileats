@@ -1,9 +1,8 @@
-// components/RestroEditModal.tsx
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { supabase as supabaseBrowser } from "@/lib/supabaseBrowser"; // adjust import name to match your lib export
+import { supabase as supabaseBrowser } from "@/lib/supabaseBrowser"; // adjust if your export name diff
 
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
@@ -96,7 +95,7 @@ function validatePhoneString(s: string) {
   return true;
 }
 
-/* InputWithIcon */
+/* InputWithIcon (same as you had) */
 function InputWithIcon({
   name,
   label,
@@ -159,6 +158,41 @@ function InputWithIcon({
         </div>
       )}
     </div>
+  );
+}
+
+/* Toggle component passed down so ContactsTab aligns with parent layout */
+function Toggle({ checked, onChange }: { checked?: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+      <div
+        onClick={() => onChange(!checked)}
+        style={{
+          width: 44,
+          height: 24,
+          borderRadius: 14,
+          background: checked ? "#06b6d4" : "#e6e6e6",
+          position: "relative",
+          transition: "background .15s ease",
+          display: "inline-block",
+        }}
+      >
+        <div
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 9,
+            background: "#fff",
+            position: "absolute",
+            top: 3,
+            left: checked ? 23 : 3,
+            transition: "left .12s ease",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 13, color: "#333", minWidth: 28 }}>{checked ? "ON" : "OFF"}</span>
+    </label>
   );
 }
 
@@ -251,7 +285,7 @@ export default function RestroEditModal({
       RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
       RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
       // contacts-like fields
-      EmailAddressName1: restro?.EmailAddressName1 ?? restro?.EmailsforOrdersReceiving1 ?? restro?.EmailsforOrdersStatus1 ?? restro?.EmailAddressName1,
+      EmailAddressName1: restro?.EmailAddressName1 ?? "",
       EmailsforOrdersReceiving1: restro?.EmailsforOrdersReceiving1 ?? "",
       EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? 0,
       WhatsappMobileNumberName1: restro?.WhatsappMobileNumberName1 ?? "",
@@ -407,6 +441,7 @@ export default function RestroEditModal({
     loadingStations,
     restroCode,
     InputWithIcon,
+    Toggle,
     validators: {
       validateEmailString,
       validatePhoneString,
@@ -502,7 +537,7 @@ export default function RestroEditModal({
           </div>
 
           <div style={{ background: "#fafafa", borderBottom: "1px solid #eee" }}>
-            <div style={{ display: "flex", gap: 6, padding: "8px 12px", overflowX: "auto" }}>
+            <div style={{ display: "flex", gap: 6, padding: "8px 12px", overflowX: "auto", alignItems: "center" }}>
               {TAB_NAMES.map((t) => {
                 const active = activeTab === t;
                 return (
@@ -521,6 +556,7 @@ export default function RestroEditModal({
                       alignItems: "center",
                       gap: 6,
                       whiteSpace: "nowrap",
+                      borderRadius: 6,
                     }}
                   >
                     <span style={{ display: "inline-flex", alignItems: "center", color: active ? "#0ea5e9" : "#666" }}>{tabIcon(t)}</span>
@@ -547,7 +583,14 @@ export default function RestroEditModal({
           </div>
         )}
 
-        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>{renderTab()}</div>
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+          {/* centered section header for each tab */}
+          <div style={{ textAlign: "center", marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{activeTab}</h3>
+          </div>
+
+          <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>{renderTab()}</div>
+        </div>
 
         <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff" }}>
           <div />
@@ -564,7 +607,12 @@ export default function RestroEditModal({
       </div>
 
       <style jsx>{`
-        /* small shared styles */
+        /* shared small tweaks to make tabs/forms consistent */
+        h3 { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial; }
+        input[type="text"], input[type="number"], input[type="date"], input[type="time"], select, textarea {
+          font-size: 14px;
+          font-family: inherit;
+        }
       `}</style>
     </div>
   );
