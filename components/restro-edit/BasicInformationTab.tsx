@@ -3,15 +3,15 @@ import React from "react";
 import TabContainer from "@/components/TabContainer";
 
 type Props = {
-  local?: any;
+  local: any;
   updateField: (k: string, v: any) => void;
   stationDisplay?: string;
 };
 
 export default function BasicInformationTab({ local = {}, updateField, stationDisplay = "" }: Props) {
   return (
-    <TabContainer title="Basic Information" kicker="Basic Information">
-      <div className="form-grid">
+    <TabContainer title="Basic Information" kicker="">
+      <div className="form-grid" style={{ maxWidth: 1200, margin: "0 auto" }}>
         <div className="field">
           <div className="label">Station</div>
           <div className="readonly">{stationDisplay}</div>
@@ -102,22 +102,6 @@ export default function BasicInformationTab({ local = {}, updateField, stationDi
           <input className="input" type="date" value={local?.FSSAIExpiryDate ?? ""} onChange={(e) => updateField("FSSAIExpiryDate", e.target.value)} />
         </div>
       </div>
-
-      <style jsx>{`
-        .form-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 18px;
-        }
-        @media (max-width: 1100px) { .form-grid { grid-template-columns: repeat(2,1fr); } }
-        @media (max-width: 720px) { .form-grid { grid-template-columns: 1fr; } }
-
-        .field { display:flex; flex-direction:column; }
-        .label { font-size: 0.875rem; font-weight: 700; color: var(--muted, #6b7280); margin-bottom: 8px; }
-        .input { padding:10px 12px; height:44px; border-radius:8px; border:1px solid var(--border, #e6e6e6); font-size:1rem; }
-        .readonly { padding:10px 12px; border-radius:8px; background:var(--soft-bg,#fbfdff); border:1px solid #f3f3f3; }
-        .preview { height:80px; object-fit:cover; border-radius:6px; border:1px solid #eee; }
-      `}</style>
     </TabContainer>
   );
 }
