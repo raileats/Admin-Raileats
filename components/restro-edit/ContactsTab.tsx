@@ -1,131 +1,248 @@
 // components/restro-edit/ContactsTab.tsx
 "use client";
-import React from "react";
-import Toggle from "@/components/ui/Toggle";
 
-type Props = {
-  local?: any;
-  updateField?: (k: string, v: any) => void;
+import React, { useCallback } from "react";
+
+type CommonProps = {
+  local: any;
+  updateField: (k: string, v: any) => void;
+  stationDisplay?: string;
+  stations?: { label: string; value: string }[];
+  loadingStations?: boolean;
   restroCode?: string;
-  validators?: any;
   InputWithIcon?: any;
+  Toggle?: any;
+  validators?: {
+    validateEmailString?: (s: string) => boolean;
+    validatePhoneString?: (s: string) => boolean;
+  };
 };
 
-export default function ContactsTab({ local = {}, updateField = () => {}, InputWithIcon = null }: Props) {
-  const g = (k: string) => (local && local[k] !== undefined && local[k] !== null ? local[k] : "");
+export default function ContactsTab(props: CommonProps) {
+  const {
+    local = {},
+    updateField,
+    InputWithIcon,
+    Toggle,
+    validators = {},
+  } = props;
 
-  const emailFields = [
-    { nameKey: "EmailAddressName1", emailKey: "EmailsforOrdersReceiving1", enabledKey: "EmailsforOrdersReceiving1Enabled" },
-    { nameKey: "EmailAddressName2", emailKey: "EmailsforOrdersReceiving2", enabledKey: "EmailsforOrdersReceiving2Enabled" },
-    { nameKey: "EmailAddressName3", emailKey: "EmailsforOrdersReceiving3", enabledKey: "EmailsforOrdersReceiving3Enabled" },
-  ];
+  // Fallback InputWithIcon if parent didn't pass one
+  const Input = InputWithIcon
+    ? InputWithIcon
+    : ({ label, value, onChange, type = "text", placeholder = "", maxLength }: any) => (
+        <div style={{ marginBottom: 12 }}>
+          {label && <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{label}</div>}
+          <input
+            value={value ?? ""}
+            placeholder={placeholder ?? ""}
+            onChange={(e) => onChange(e.target.value)}
+            maxLength={maxLength}
+            inputMode={type === "phone" || type === "whatsapp" ? "numeric" : "text"}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              borderRadius: 6,
+              border: "1px solid #e6e6e6",
+              outline: "none",
+              fontSize: 14,
+            }}
+          />
+        </div>
+      );
 
-  const whatsappFields = [
-    { nameKey: "WhatsappMobileNumberName1", mobileKey: "WhatsappMobileNumberforOrderDetails1", enabledKey: "WhatsappMobileNumberStatus1" },
-    { nameKey: "WhatsappMobileNumberName2", mobileKey: "WhatsappMobileNumberforOrderDetails2", enabledKey: "WhatsappMobileNumberStatus2" },
-    { nameKey: "WhatsappMobileNumberName3", mobileKey: "WhatsappMobileNumberforOrderDetails3", enabledKey: "WhatsappMobileNumberStatus3" },
-  ];
+  // Fallback Toggle if parent didn't pass one (simple checkbox)
+  const ToggleComp = Toggle
+    ? Toggle
+    : ({ checked, onChange, label }: any) => (
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={!!checked}
+            onChange={(e) => onChange(e.target.checked)}
+            style={{ width: 20, height: 20 }}
+          />
+          {label && <span style={{ fontSize: 13 }}>{label}</span>}
+        </label>
+      );
+
+  // sanitize phone helper
+  const sanitizePhone = useCallback((raw: string) => {
+    if (!raw && raw !== 0) return "";
+    const cleaned = String(raw).replace(/\D/g, "").slice(0, 10);
+    return cleaned;
+  }, []);
+
+  // Generic onToggle helper with debug
+  const handleToggle = useCallback(
+    (field: string, checked: boolean) => {
+      // map boolean -> "ON"/"OFF" as your DB expects
+      const val = checked ? "ON" : "OFF";
+      console.debug(`[ContactsTab] toggle ${field} => ${val}`);
+      updateField(field, val);
+    },
+    [updateField]
+  );
 
   return (
-    <div style={{ maxWidth: 1100 }}>
-      <h3 style={{ marginBottom: 8 }}>Emails</h3>
-      <p style={{ marginTop: 0, marginBottom: 12, color: "#666", fontSize: 13 }}>Manage email contacts for order updates. Toggle ON to enable notifications.</p>
+    <div>
+      <h3 style={{ marginTop: 0 }}>Emails (max 2)</h3>
 
-      {emailFields.map((f, idx) => (
-        <div key={f.emailKey} style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-          <div style={{ flex: 1 }}>
-            {InputWithIcon ? (
-              <InputWithIcon
-                name={f.nameKey}
-                label={`Name ${idx + 1}`}
-                value={g(f.nameKey)}
-                onChange={(v: any) => updateField(f.nameKey, v)}
-                type="name"
-                placeholder={`Name ${idx + 1}`}
-              />
-            ) : (
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{`Name ${idx + 1}`}</div>
-                <input value={g(f.nameKey)} onChange={(e)=>updateField(f.nameKey, e.target.value)} placeholder={`Name ${idx+1}`} style={{ padding: 8, width: "100%", borderRadius: 6, border: "1px solid #e6e6e6"}}/>
-              </div>
-            )}
-          </div>
-
-          <div style={{ flex: 2 }}>
-            {InputWithIcon ? (
-              <InputWithIcon
-                name={f.emailKey}
-                label={`Email ${idx + 1}`}
-                value={g(f.emailKey)}
-                onChange={(v: any) => updateField(f.emailKey, v)}
-                type="email"
-                placeholder={`email${idx + 1}@example.com`}
-              />
-            ) : (
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{`Email ${idx + 1}`}</div>
-                <input value={g(f.emailKey)} onChange={(e)=>updateField(f.emailKey, e.target.value)} placeholder={`email${idx+1}@example.com`} style={{ padding: 8, width: "100%", borderRadius: 6, border: "1px solid #e6e6e6"}}/>
-              </div>
-            )}
-          </div>
-
-          <div style={{ width: 120, display: "flex", alignItems: "center", justifyContent: "flex-start" }}>
-            <Toggle value={Boolean(g(f.enabledKey))} onChange={(v:boolean) => updateField(f.enabledKey, v)} ariaLabel={`Enable email ${idx+1}`} />
-          </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: 16, alignItems: "center" }}>
+        {/* Email 1 */}
+        <div>
+          <Input
+            label="Name 1"
+            value={local.EmailAddressName1 ?? ""}
+            onChange={(v: any) => updateField("EmailAddressName1", v)}
+            type="name"
+            placeholder="Name 1"
+          />
         </div>
-      ))}
+
+        <div>
+          <Input
+            label="Email 1"
+            value={local.EmailsforOrdersReceiving1 ?? ""}
+            onChange={(v: any) => updateField("EmailsforOrdersReceiving1", v)}
+            type="email"
+            placeholder="email1@example.com"
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <ToggleComp
+            checked={String(local.EmailsforOrdersStatus1 ?? "OFF") === "ON"}
+            onChange={(c: boolean) => handleToggle("EmailsforOrdersStatus1", c)}
+            label={String(local.EmailsforOrdersStatus1 ?? "OFF") === "ON" ? "ON" : "OFF"}
+          />
+        </div>
+
+        {/* Email 2 */}
+        <div>
+          <Input
+            label="Name 2"
+            value={local.EmailAddressName2 ?? ""}
+            onChange={(v: any) => updateField("EmailAddressName2", v)}
+            type="name"
+            placeholder="Name 2"
+          />
+        </div>
+
+        <div>
+          <Input
+            label="Email 2"
+            value={local.EmailsforOrdersReceiving2 ?? ""}
+            onChange={(v: any) => updateField("EmailsforOrdersReceiving2", v)}
+            type="email"
+            placeholder="email2@example.com"
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <ToggleComp
+            checked={String(local.EmailsforOrdersStatus2 ?? "OFF") === "ON"}
+            onChange={(c: boolean) => handleToggle("EmailsforOrdersStatus2", c)}
+            label={String(local.EmailsforOrdersStatus2 ?? "OFF") === "ON" ? "ON" : "OFF"}
+          />
+        </div>
+      </div>
 
       <hr style={{ margin: "18px 0" }} />
 
-      <h3 style={{ marginBottom: 8 }}>WhatsApp numbers</h3>
-      <p style={{ marginTop: 0, marginBottom: 12, color: "#666", fontSize: 13 }}>Manage WhatsApp contacts for order updates. Toggle ON to enable notifications.</p>
+      <h3>WhatsApp numbers (max 3)</h3>
 
-      {whatsappFields.map((f, idx) => (
-        <div key={f.mobileKey} style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
-          <div style={{ flex: 1 }}>
-            {InputWithIcon ? (
-              <InputWithIcon
-                name={f.nameKey}
-                label={`Name ${idx + 1}`}
-                value={g(f.nameKey)}
-                onChange={(v: any) => updateField(f.nameKey, v)}
-                type="name"
-                placeholder={`Name ${idx + 1}`}
-              />
-            ) : (
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{`Name ${idx + 1}`}</div>
-                <input value={g(f.nameKey)} onChange={(e)=>updateField(f.nameKey, e.target.value)} placeholder={`Name ${idx+1}`} style={{ padding: 8, width: "100%", borderRadius: 6, border: "1px solid #e6e6e6"}}/>
-              </div>
-            )}
-          </div>
-
-          <div style={{ flex: 2 }}>
-            {InputWithIcon ? (
-              <InputWithIcon
-                name={f.mobileKey}
-                label={`Mobile ${idx + 1}`}
-                value={g(f.mobileKey)}
-                onChange={(v: any) => updateField(f.mobileKey, v)}
-                type="whatsapp"
-                placeholder={`10-digit number`}
-              />
-            ) : (
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{`Mobile ${idx + 1}`}</div>
-                <input value={g(f.mobileKey)} onChange={(e)=>updateField(f.mobileKey, e.target.value)} placeholder={`10-digit number`} style={{ padding: 8, width: "100%", borderRadius: 6, border: "1px solid #e6e6e6"}}/>
-              </div>
-            )}
-          </div>
-
-          <div style={{ width: 120, display: "flex", alignItems: "center", justifyContent: "flex-start" }}>
-            <Toggle value={Boolean(g(f.enabledKey))} onChange={(v:boolean) => updateField(f.enabledKey, v)} ariaLabel={`Enable whatsapp ${idx+1}`} />
-          </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: 16, alignItems: "center" }}>
+        {/* WA 1 */}
+        <div>
+          <Input
+            label="Name 1"
+            value={local.WhatsappMobileNumberName1 ?? ""}
+            onChange={(v: any) => updateField("WhatsappMobileNumberName1", v)}
+            placeholder="Name 1"
+          />
         </div>
-      ))}
 
-      <div style={{ marginTop: 6, color: "#666", fontSize: 13 }}>
-        Note: Only three Email and three WhatsApp contacts are supported (fields 1–3).
+        <div>
+          <Input
+            label="Mobile 1"
+            value={local.WhatsappMobileNumberforOrderDetails1 ?? ""}
+            onChange={(v: any) => updateField("WhatsappMobileNumberforOrderDetails1", sanitizePhone(v))}
+            placeholder="10-digit mobile"
+            type="phone"
+            maxLength={10}
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <ToggleComp
+            checked={String(local.WhatsappMobileNumberStatus1 ?? "OFF") === "ON"}
+            onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus1", c)}
+            label={String(local.WhatsappMobileNumberStatus1 ?? "OFF") === "ON" ? "ON" : "OFF"}
+          />
+        </div>
+
+        {/* WA 2 */}
+        <div>
+          <Input
+            label="Name 2"
+            value={local.WhatsappMobileNumberName2 ?? ""}
+            onChange={(v: any) => updateField("WhatsappMobileNumberName2", v)}
+            placeholder="Name 2"
+          />
+        </div>
+
+        <div>
+          <Input
+            label="Mobile 2"
+            value={local.WhatsappMobileNumberforOrderDetails2 ?? ""}
+            onChange={(v: any) => updateField("WhatsappMobileNumberforOrderDetails2", sanitizePhone(v))}
+            placeholder="10-digit mobile"
+            type="phone"
+            maxLength={10}
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <ToggleComp
+            checked={String(local.WhatsappMobileNumberStatus2 ?? "OFF") === "ON"}
+            onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus2", c)}
+            label={String(local.WhatsappMobileNumberStatus2 ?? "OFF") === "ON" ? "ON" : "OFF"}
+          />
+        </div>
+
+        {/* WA 3 */}
+        <div>
+          <Input
+            label="Name 3"
+            value={local.WhatsappMobileNumberName3 ?? ""}
+            onChange={(v: any) => updateField("WhatsappMobileNumberName3", v)}
+            placeholder="Name 3"
+          />
+        </div>
+
+        <div>
+          <Input
+            label="Mobile 3"
+            value={local.WhatsappMobileNumberforOrderDetails3 ?? ""}
+            onChange={(v: any) => updateField("WhatsappMobileNumberforOrderDetails3", sanitizePhone(v))}
+            placeholder="10-digit mobile"
+            type="phone"
+            maxLength={10}
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <ToggleComp
+            checked={String(local.WhatsappMobileNumberStatus3 ?? "OFF") === "ON"}
+            onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus3", c)}
+            label={String(local.WhatsappMobileNumberStatus3 ?? "OFF") === "ON" ? "ON" : "OFF"}
+          />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 18, color: "#666", fontSize: 13 }}>
+        Tip: click the ON/OFF control — it should immediately toggle and you'll see the change reflected in the form. Open DevTools console to see debug logs when toggles are clicked.
       </div>
     </div>
   );
