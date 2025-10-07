@@ -11,11 +11,22 @@ type Props = {
 
 export default function TabContainer({ title, subtitle, children, maxWidth = 1200 }: Props) {
   return (
-    <div style={{ padding: "18px 24px", maxWidth: typeof maxWidth === "number" ? `${maxWidth}px` : maxWidth, margin: "0 auto" }}>
+    <div
+      style={{
+        padding: "18px 24px",
+        maxWidth: typeof maxWidth === "number" ? `${maxWidth}px` : maxWidth,
+        margin: "0 auto",
+        // <-- Arial font for this container and all children
+        fontFamily: "Arial, sans-serif",
+        color: "#0f172a",
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
+      }}
+    >
       {/* header */}
       {title && (
         <div style={{ textAlign: "center", marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#0f172a" }}>{title}</h2>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{title}</h2>
           {subtitle && <div style={{ marginTop: 8, fontSize: 16, color: "#334155", fontWeight: 600 }}>{subtitle}</div>}
         </div>
       )}
