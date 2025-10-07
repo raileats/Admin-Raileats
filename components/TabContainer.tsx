@@ -1,48 +1,38 @@
 // components/TabContainer.tsx
 "use client";
+
 import React from "react";
 
 type Props = {
   title?: string;
-  subtitle?: string;
+  kicker?: string;
   children?: React.ReactNode;
   maxWidth?: number | string;
 };
 
-export default function TabContainer({ title, subtitle, children, maxWidth = 1200 }: Props) {
+export default function TabContainer({ title, kicker, children, maxWidth = 1200 }: Props) {
   return (
-    <div
-      style={{
-        padding: "18px 24px",
-        maxWidth: typeof maxWidth === "number" ? `${maxWidth}px` : maxWidth,
-        margin: "0 auto",
-        // <-- Arial font for this container and all children
-        fontFamily: "Arial, sans-serif",
-        color: "#0f172a",
-        WebkitFontSmoothing: "antialiased",
-        MozOsxFontSmoothing: "grayscale",
-      }}
-    >
-      {/* header */}
-      {title && (
-        <div style={{ textAlign: "center", marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{title}</h2>
-          {subtitle && <div style={{ marginTop: 8, fontSize: 16, color: "#334155", fontWeight: 600 }}>{subtitle}</div>}
-        </div>
-      )}
-
-      {/* card */}
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 10,
-          boxShadow: "0 6px 18px rgba(15,23,42,0.06)",
-          border: "1px solid #eef2f6",
-          padding: 20,
-        }}
-      >
-        {children}
+    <div className="tab-container" style={{ maxWidth }}>
+      <div className="tab-heading">
+        {kicker && <div className="kicker">{kicker}</div>}
+        {title && <div className="title">{title}</div>}
       </div>
+
+      <div>{children}</div>
+
+      <style jsx>{`
+        .tab-container {
+          padding: 28px;
+          background: var(--card-bg);
+          border-radius: var(--radius);
+          border: 1px solid #f3f3f3;
+          box-shadow: 0 6px 20px rgba(11, 15, 30, 0.03);
+          margin: 20px auto;
+        }
+        .tab-heading { text-align: center; margin-bottom: 18px; }
+        .tab-heading .kicker { font-weight:700; font-size: 1.05rem; color: var(--muted); margin-bottom:6px; }
+        .tab-heading .title { font-weight:800; font-size:1.25rem; color:var(--text); }
+      `}</style>
     </div>
   );
 }
