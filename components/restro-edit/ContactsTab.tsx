@@ -1,128 +1,276 @@
 // components/restro-edit/ContactsTab.tsx
 "use client";
 
-import React from "react";
+import React, { useCallback } from "react";
 
-type Props = {
+type CommonProps = {
   local: any;
   updateField: (k: string, v: any) => void;
-  InputWithIcon?: any;
-  Toggle?: any;
+  stationDisplay?: string;
+  stations?: { label: string; value: string }[];
+  loadingStations?: boolean;
+  restroCode?: string;
+  InputWithIcon?: any; // component
+  Toggle?: any; // component
+  validators?: {
+    validateEmailString?: (s: string) => boolean;
+    validatePhoneString?: (s: string) => boolean;
+  };
 };
 
-export default function ContactsTab({ local = {}, updateField, InputWithIcon, Toggle }: Props) {
-  // helper to read/wrap field names with fallbacks
-  const val = (k: string, fallback = "") => local?.[k] ?? fallback;
+export default function ContactsTab(props: CommonProps) {
+  const {
+    local = {},
+    updateField,
+    InputWithIcon,
+    Toggle,
+    validators = {},
+  } = props;
+
+  const validateEmailString = validators.validateEmailString ?? ((s: string) => {
+    if (!s) return false;
+    const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) return false;
+    const re = /^\S+@\S+\.\S+$/;
+    return parts.every((p) => re.test(p));
+  });
+
+  const validatePhoneString = validators.validatePhoneString ?? ((s: string) => {
+    if (!s) return false;
+    const parts = s.split(",").map((p) => p.replace(/\s+/g, "").trim()).filter(Boolean);
+    if (!parts.length) return false;
+    return parts.every((p) => /^\d{10}$/.test(p));
+  });
+
+  // fallback InputWithIcon component if parent didn't provide one
+  const Input = InputWithIcon
+    ? InputWithIcon
+    : ({ label, value, onChange, type = "text", placeholder = "", maxLength }: any) => (
+        <div style={{ marginBottom: 12 }}>
+          {label && <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{label}</div>}
+          <input
+            value={value ?? ""}
+            placeholder={placeholder ?? ""}
+            onChange={(e) => onChange(e.target.value)}
+            maxLength={maxLength}
+            inputMode={type === "phone" || type === "whatsapp" ? "numeric" : "text"}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              borderRadius: 6,
+              border: "1px solid #e6e6e6",
+              outline: "none",
+              fontSize: 14,
+            }}
+          />
+        </div>
+      );
+
+  // fallback Toggle component (simple pill) if parent didn't provide one
+  const ToggleComp = Toggle
+    ? Toggle
+    : ({ checked, onChange }: any) => (
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={!!checked}
+            onChange={(e) => onChange(e.target.checked)}
+            style={{ width: 20, height: 20 }}
+          />
+          <span style={{ fontSize: 13 }}>{checked ? "ON" : "OFF"}</span>
+        </label>
+      );
+
+  // helper: get local value with optional default
+  const val = useCallback((k: string, d: any = "") => {
+    if (!local) return d;
+    if (local[k] === undefined || local[k] === null) return d;
+    return local[k];
+  }, [local]);
+
+  // sanitize phone input: keep digits only and slice to 10
+  const sanitizePhone = useCallback((raw: any) => {
+    if (raw === undefined || raw === null) return "";
+    const cleaned = String(raw).replace(/\D/g, "").slice(0, 10);
+    return cleaned;
+  }, []);
+
+  // toggle handler: writes "ON"/"OFF" string for backward compatibility OR boolean if you prefer
+  // --> we will store boolean true/false (aligning with Toggle in RestroEditModal)
+  const handleToggle = useCallback(
+    (field: string, checked: boolean) => {
+      updateField(field, checked);
+    },
+    [updateField]
+  );
 
   return (
     <div>
-      {/* Use TabContainer inside each tab file (if you used TabContainer in project) */}
-      {/* If your TabContainer is available, wrap with it. Otherwise this will still render fine. */}
-      {/* We assume the child code already uses a TabContainer, but if not, just keep this wrapper. */}
-      <div className="form-wrapper">
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          {/* Kicker / subtitle row (left aligned small text above inputs) */}
-          <div style={{ marginBottom: 10, color: "#374151", fontWeight: 600 }}>Contacts — Emails (max 2) & WhatsApp (max 3)</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 16, fontWeight: 700 }}>Contacts</div>
+        <div style={{ color: "#6b7280", fontSize: 13 }}>Manage emails & WhatsApp numbers</div>
+      </div>
 
-          {/* Email rows (2) */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 18 }}>
-            <div>
-              <div style={{ fontSize: 13, color: "#4b5563", marginBottom: 6, fontWeight: 700 }}>Name 1</div>
-              {InputWithIcon ? (
-                <div className="input-with-icon">
-                  <span className="icon">👤</span>
-                  <input className="field-input" value={val("EmailAddressName1", "")} onChange={(e) => updateField("EmailAddressName1", e.target.value)} />
-                </div>
-              ) : (
-                <input className="field-input" value={val("EmailAddressName1", "")} onChange={(e) => updateField("EmailAddressName1", e.target.value)} />
-              )}
-            </div>
+      <h4 style={{ margin: "12px 0 6px 0", fontSize: 14, fontWeight: 700 }}>Emails (max 2)</h4>
 
-            <div>
-              <div style={{ fontSize: 13, color: "#4b5563", marginBottom: 6, fontWeight: 700 }}>Email 1</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <input
-                  className="field-input"
-                  value={val("EmailsforOrdersReceiving1", "")}
-                  onChange={(e) => updateField("EmailsforOrdersReceiving1", e.target.value)}
-                  placeholder="email@example.com"
-                />
-                {Toggle ? (
-                  <Toggle checked={!!val("EmailsforOrdersReceiving1Enabled", true)} onChange={(v: boolean) => updateField("EmailsforOrdersReceiving1Enabled", v)} />
-                ) : (
-                  <span style={{ color: "#6b7280" }}>{val("EmailsforOrdersReceiving1Enabled", true) ? "ON" : "OFF"}</span>
-                )}
-              </div>
-            </div>
-          </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: 16, alignItems: "center" }}>
+        {/* Email row 1 */}
+        <div>
+          <Input
+            label="Name 1"
+            value={val("EmailAddressName1", "")}
+            onChange={(v: any) => updateField("EmailAddressName1", v)}
+            type="name"
+            placeholder="Name 1"
+            maxLength={64}
+          />
+        </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 8 }}>
-            <div>
-              <div style={{ fontSize: 13, color: "#4b5563", marginBottom: 6, fontWeight: 700 }}>Name 2</div>
-              <input className="field-input" value={val("EmailAddressName2", "")} onChange={(e) => updateField("EmailAddressName2", e.target.value)} />
-            </div>
+        <div>
+          <Input
+            label="Email 1"
+            value={val("EmailsforOrdersReceiving1", "")}
+            onChange={(v: any) => updateField("EmailsforOrdersReceiving1", v)}
+            type="email"
+            placeholder="email1@example.com"
+            maxLength={256}
+          />
+        </div>
 
-            <div>
-              <div style={{ fontSize: 13, color: "#4b5563", marginBottom: 6, fontWeight: 700 }}>Email 2</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <input
-                  className="field-input"
-                  value={val("EmailsforOrdersReceiving2", "")}
-                  onChange={(e) => updateField("EmailsforOrdersReceiving2", e.target.value)}
-                  placeholder="email2@example.com"
-                />
-                {Toggle ? (
-                  <Toggle checked={!!val("EmailsforOrdersReceiving2Enabled", false)} onChange={(v: boolean) => updateField("EmailsforOrdersReceiving2Enabled", v)} />
-                ) : (
-                  <span style={{ color: "#6b7280" }}>{val("EmailsforOrdersReceiving2Enabled", false) ? "ON" : "OFF"}</span>
-                )}
-              </div>
-            </div>
-          </div>
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <ToggleComp
+            checked={Boolean(val("EmailsforOrdersReceiving1Enabled", val("EmailsforOrdersStatus1", false)))}
+            onChange={(c: boolean) => handleToggle("EmailsforOrdersReceiving1Enabled", c)}
+          />
+        </div>
 
-          <hr style={{ border: "none", borderTop: "1px solid #e6e6e6", margin: "18px 0" }} />
+        {/* Email row 2 */}
+        <div>
+          <Input
+            label="Name 2"
+            value={val("EmailAddressName2", "")}
+            onChange={(v: any) => updateField("EmailAddressName2", v)}
+            type="name"
+            placeholder="Name 2"
+            maxLength={64}
+          />
+        </div>
 
-          {/* WhatsApp / Mobile numbers (max 3) */}
-          <div style={{ marginBottom: 8, color: "#6b7280" }}>Tip: toggle ON to enable notifications.</div>
+        <div>
+          <Input
+            label="Email 2"
+            value={val("EmailsforOrdersReceiving2", "")}
+            onChange={(v: any) => updateField("EmailsforOrdersReceiving2", v)}
+            type="email"
+            placeholder="email2@example.com"
+            maxLength={256}
+          />
+        </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            {[1, 2, 3].map((i) => (
-              <div key={i} style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: "#4b5563", marginBottom: 6, fontWeight: 700 }}>{`Name ${i}`}</div>
-                  <input className="field-input" value={val(`WhatsappName${i}`, "")} onChange={(e) => updateField(`WhatsappName${i}`, e.target.value)} />
-                </div>
-
-                <div style={{ width: 320 }}>
-                  <div style={{ fontSize: 13, color: "#4b5563", marginBottom: 6, fontWeight: 700 }}>{`Mobile ${i}`}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <input className="field-input" value={val(`WhatsappMobile${i}`, "")} onChange={(e) => updateField(`WhatsappMobile${i}`, e.target.value)} />
-                    {Toggle ? (
-                      <Toggle checked={!!val(`WhatsappMobile${i}Enabled`, false)} onChange={(v: boolean) => updateField(`WhatsappMobile${i}Enabled`, v)} />
-                    ) : (
-                      <span style={{ color: "#6b7280" }}>{val(`WhatsappMobile${i}Enabled`, false) ? "ON" : "OFF"}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <ToggleComp
+            checked={Boolean(val("EmailsforOrdersReceiving2Enabled", val("EmailsforOrdersStatus2", false)))}
+            onChange={(c: boolean) => handleToggle("EmailsforOrdersReceiving2Enabled", c)}
+          />
         </div>
       </div>
 
-      <style jsx>{`
-        .field-input {
-          width: 100%;
-          padding: 10px 12px;
-          border: 1px solid #e6e6e6;
-          border-radius: 8px;
-          height: 42px;
-          font-size: 14px;
-          background: #fff;
-        }
-        .input-with-icon { display:flex; align-items:center; gap:10px; }
-        .input-with-icon .icon { font-size:18px; color: #6b21a8; }
-      `}</style>
+      <hr style={{ margin: "18px 0", border: "none", borderTop: "1px solid #f1f1f1" }} />
+
+      <h4 style={{ margin: "12px 0 6px 0", fontSize: 14, fontWeight: 700 }}>WhatsApp numbers (max 3)</h4>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: 16, alignItems: "center" }}>
+        {/* WA 1 */}
+        <div>
+          <Input
+            label="Name 1"
+            value={val("WhatsappMobileNumberName1", "")}
+            onChange={(v: any) => updateField("WhatsappMobileNumberName1", v)}
+            placeholder="Name 1"
+            maxLength={64}
+          />
+        </div>
+
+        <div>
+          <Input
+            label="Mobile 1"
+            value={val("WhatsappMobileNumberforOrderDetails1", "")}
+            onChange={(v: any) => updateField("WhatsappMobileNumberforOrderDetails1", sanitizePhone(v))}
+            placeholder="10-digit mobile"
+            type="phone"
+            maxLength={10}
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <ToggleComp
+            checked={Boolean(val("WhatsappMobileNumberStatus1", false))}
+            onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus1", c)}
+          />
+        </div>
+
+        {/* WA 2 */}
+        <div>
+          <Input
+            label="Name 2"
+            value={val("WhatsappMobileNumberName2", "")}
+            onChange={(v: any) => updateField("WhatsappMobileNumberName2", v)}
+            placeholder="Name 2"
+            maxLength={64}
+          />
+        </div>
+
+        <div>
+          <Input
+            label="Mobile 2"
+            value={val("WhatsappMobileNumberforOrderDetails2", "")}
+            onChange={(v: any) => updateField("WhatsappMobileNumberforOrderDetails2", sanitizePhone(v))}
+            placeholder="10-digit mobile"
+            type="phone"
+            maxLength={10}
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <ToggleComp
+            checked={Boolean(val("WhatsappMobileNumberStatus2", false))}
+            onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus2", c)}
+          />
+        </div>
+
+        {/* WA 3 */}
+        <div>
+          <Input
+            label="Name 3"
+            value={val("WhatsappMobileNumberName3", "")}
+            onChange={(v: any) => updateField("WhatsappMobileNumberName3", v)}
+            placeholder="Name 3"
+            maxLength={64}
+          />
+        </div>
+
+        <div>
+          <Input
+            label="Mobile 3"
+            value={val("WhatsappMobileNumberforOrderDetails3", "")}
+            onChange={(v: any) => updateField("WhatsappMobileNumberforOrderDetails3", sanitizePhone(v))}
+            placeholder="10-digit mobile"
+            type="phone"
+            maxLength={10}
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <ToggleComp
+            checked={Boolean(val("WhatsappMobileNumberStatus3", false))}
+            onChange={(c: boolean) => handleToggle("WhatsappMobileNumberStatus3", c)}
+          />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16, color: "#666", fontSize: 13 }}>
+        Tip: mobile fields accept only digits and are truncated to 10 digits. Toggle shows ON/OFF immediately.
+      </div>
     </div>
   );
 }
