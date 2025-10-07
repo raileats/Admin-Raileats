@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabaseBrowser"; // keep your existing client
+import { supabase as supabaseBrowser } from "@/lib/supabaseBrowser"; // adjust import name to match your lib export
 
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
@@ -32,7 +32,6 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ---------- inline SVG icons ---------- */
 const Icon = {
   basic: (
     <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
@@ -79,10 +78,8 @@ function safeGet(obj: any, ...keys: string[]) {
   return undefined;
 }
 
-/* ---------- validators ---------- */
-// email: require @ and basic tld part
+/* validators */
 const emailRegex = /^\S+@\S+\.\S+$/;
-// phone: exactly 10 digits (numeric)
 const tenDigitRegex = /^\d{10}$/;
 function validateEmailString(s: string) {
   if (!s) return false;
@@ -99,7 +96,7 @@ function validatePhoneString(s: string) {
   return true;
 }
 
-/* ---------- small reusable InputWithIcon (export if needed by children) ---------- */
+/* InputWithIcon */
 function InputWithIcon({
   name,
   label,
@@ -165,7 +162,7 @@ function InputWithIcon({
   );
 }
 
-/* ---------- RestroEditModal component ---------- */
+/* main component */
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
@@ -202,36 +199,6 @@ export default function RestroEditModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restro]);
 
-  // Fetch restro by URL if not provided
-  useEffect(() => {
-    async function fetchRestro(code: string) {
-      try {
-        const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`);
-        if (!res.ok) {
-          const txt = await res.text().catch(() => "");
-          throw new Error(txt || `Fetch failed (${res.status})`);
-        }
-        const json = await res.json().catch(() => null);
-        const row = json?.row ?? json ?? null;
-        if (row) setRestro(row);
-      } catch (err) {
-        console.warn("Restro fetch error", err);
-        setError("Failed to load outlet data.");
-      }
-    }
-
-    if (!restro) {
-      try {
-        const path = typeof window !== "undefined" ? window.location.pathname : "";
-        const match = path.match(/\/restros\/([^\/]+)\/edit/);
-        if (match && match[1]) fetchRestro(decodeURIComponent(match[1]));
-      } catch (e) {
-        // ignore
-      }
-    }
-  }, [restro]);
-
-  // Load stations
   useEffect(() => {
     if (stations && stations.length) return;
     (async () => {
@@ -257,7 +224,6 @@ export default function RestroEditModal({
     })();
   }, []);
 
-  // populate local
   useEffect(() => {
     if (!restro) return;
     setLocal({
@@ -308,17 +274,22 @@ export default function RestroEditModal({
       const code =
         restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? restro?.code ?? local?.RestroCode;
       if (!code) throw new Error("Missing RestroCode for update");
+
       const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
+      // read text safely
       let text = "";
       try {
         text = await res.text();
       } catch (e) {
         text = "";
       }
+
+      // try parse JSON if possible
       let json: any = null;
       try {
         json = JSON.parse(text);
@@ -326,9 +297,12 @@ export default function RestroEditModal({
         json = null;
       }
 
+      // compute human-friendly message using parentheses to avoid mixing ?? and ||
+      const possibleError = (json?.error?.message ?? json?.error ?? text);
       if (!res.ok) {
-        throw new Error(json?.error?.message ?? json?.error ?? text || `Update failed (${res.status})`);
+        throw new Error(possibleError || `Update failed (${res.status})`);
       }
+
       return { ok: true, row: json?.row ?? json?.data ?? json ?? null };
     } catch (err: any) {
       return { ok: false, error: err?.message ?? String(err) };
@@ -347,16 +321,13 @@ export default function RestroEditModal({
     }
   }
 
-  // human-friendly station display
   const stationDisplay = `${String(local.StationName ?? restro?.StationName ?? "")}${local.State ? " - " + local.State : ""}`;
 
-  // canonical restroCode
   const restroCode =
     (local && (local.RestroCode ?? local.restro_code ?? local.id ?? local.code)) ||
     (restro && (restro.RestroCode ?? restro.restro_code ?? restro.RestroId ?? restro.restro_id ?? restro.code)) ||
     "";
 
-  // validation
   function collectValidationErrors(obj: any) {
     const errs: string[] = [];
     for (const key of Object.keys(obj)) {
@@ -381,8 +352,8 @@ export default function RestroEditModal({
     return errs;
   }
 
-  // supabase client (browser)
-  const supabase = supabaseBrowser; // keep as export in your lib
+  // use the supabase instance exported from your lib
+  const supabase = supabaseBrowser;
 
   async function handleSave() {
     setNotification(null);
@@ -403,16 +374,13 @@ export default function RestroEditModal({
     try {
       const payload: any = { ...local };
 
-      // flatten: remove nested objects
+      // remove nested objects
       for (const k of Object.keys(payload)) {
         if (typeof payload[k] === "object" && payload[k] !== null) delete payload[k];
       }
 
-      // prefer server patching via API or direct supabase client
-      // using supabase client (browser)
-      // note: supabase.from(...).update(...).eq(...)
-      // If using supabaseBrowser export, ensure it's a Supabase client instance
-      const { error: supError, data } = await (supabase as any).from("RestroMaster").update(payload).eq("RestroCode", restroCode);
+      // update using supabase client
+      const { error: supError } = await (supabase as any).from("RestroMaster").update(payload).eq("RestroCode", restroCode);
 
       if (supError) throw supError;
 
@@ -431,7 +399,6 @@ export default function RestroEditModal({
     }
   }
 
-  // prepare common props to pass to each tab
   const common = {
     local,
     updateField,
@@ -504,7 +471,6 @@ export default function RestroEditModal({
       aria-modal="true"
     >
       <div style={{ background: "#fff", width: "98%", height: "98%", maxWidth: 1700, borderRadius: 8, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Header */}
         <div style={{ position: "sticky", top: 0, zIndex: 1200, background: "#fff", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px" }}>
             <div style={{ fontWeight: 700 }}>
@@ -535,7 +501,6 @@ export default function RestroEditModal({
             </div>
           </div>
 
-          {/* Tabs row */}
           <div style={{ background: "#fafafa", borderBottom: "1px solid #eee" }}>
             <div style={{ display: "flex", gap: 6, padding: "8px 12px", overflowX: "auto" }}>
               {TAB_NAMES.map((t) => {
@@ -567,7 +532,6 @@ export default function RestroEditModal({
           </div>
         </div>
 
-        {/* Notification */}
         {notification && (
           <div
             style={{
@@ -583,10 +547,8 @@ export default function RestroEditModal({
           </div>
         )}
 
-        {/* Content */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>{renderTab()}</div>
 
-        {/* Footer */}
         <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff" }}>
           <div />
           <div>
@@ -602,8 +564,7 @@ export default function RestroEditModal({
       </div>
 
       <style jsx>{`
-        /* minimal shared styles */
-        /* make active tab label bold & colored (already inline) */
+        /* small shared styles */
       `}</style>
     </div>
   );
