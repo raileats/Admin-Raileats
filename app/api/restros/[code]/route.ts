@@ -1,3 +1,4 @@
+// app/api/restros/[code]/route.ts
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -119,30 +120,37 @@ export async function POST(req: Request, { params }: { params: { code: string } 
       return { path, publicUrl };
     }
 
-    // fileLike can be a single File or a FileList-like; handle both
+    // fileLike can be a single File, a FileList-like, or an array; handle robustly
     const uploads: Array<{ path: string; publicUrl: string | null }> = [];
 
-    if (fileLike instanceof File) {
-      const res = await uploadFile(fileLike);
+    // If it's a single File instance
+    if (typeof (File) !== "undefined" && fileLike instanceof File) {
+      const res = await uploadFile(fileLike as File);
       uploads.push(res);
-    } else if (Array.isArray(fileLike) || (fileLike as any).length !== undefined) {
-      // FormData in some runtimes returns a FileList-like with length
+    } else if (Array.isArray(fileLike)) {
+      // an array of items (some runtimes may return an array)
+      for (const item of fileLike) {
+        if (typeof (File) !== "undefined" && item instanceof File) {
+          const res = await uploadFile(item as File);
+          uploads.push(res);
+        } else {
+          console.warn("Skipping non-File item in array form data", item);
+        }
+      }
+    } else if ((fileLike as any)?.length !== undefined && typeof (fileLike as any) !== "string") {
+      // FileList-like (has .length). Convert to array and check each entry.
       const list = Array.from(fileLike as any);
       for (const f of list) {
-        if (f instanceof File) {
-          const res = await uploadFile(f);
+        if (typeof (File) !== "undefined" && f instanceof File) {
+          const res = await uploadFile(f as File);
           uploads.push(res);
+        } else {
+          console.warn("Skipping non-File item in FileList-like form data", f);
         }
       }
     } else {
-      // fallback: try to treat it as File
-      try {
-        const f = fileLike as File;
-        const res = await uploadFile(f);
-        uploads.push(res);
-      } catch (e) {
-        // ignore
-      }
+      // Unknown shape (could be string or something else) — we won't cast blindly.
+      console.warn("Uploaded file field has unexpected shape; skipping. Value:", fileLike);
     }
 
     // Optionally: store metadata in `restro_docs` table or similar
