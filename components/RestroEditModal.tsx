@@ -1,39 +1,75 @@
+// components/RestroEditModal.tsx
 "use client";
 import React, { useEffect, useState } from "react";
 
-/**
- * components/RestroEditModal.tsx
- * Client component for editing a Restro inside a modal (updated).
- *
- * Usage:
- *  <RestroEditModal restroCode={code} isOpen={isOpen} onClose={()=>setIsOpen(false)} />
- */
-
 type Restro = any;
 
-export default function RestroEditModal({
-  restroCode,
-  isOpen,
-  onClose,
-}: {
-  restroCode: string;
-  isOpen: boolean;
-  onClose: () => void;
-}) {
-  const [activeTab, setActiveTab] = useState("basic");
+type SaveResult =
+  | { ok: true; row?: any }
+  | { ok: false; error: any };
+
+type Props =
+  | {
+      // legacy / existing usage
+      restroCode: string;
+      isOpen: boolean;
+      onClose: () => void;
+      // optional:
+      restro?: Restro;
+      initialTab?: string;
+      onSave?: (payload: any) => Promise<SaveResult>;
+    }
+  | {
+      // the call-site that caused error: passes restro directly
+      restro: Restro;
+      initialTab?: string;
+      onClose: () => void;
+      onSave: (payload: any) => Promise<SaveResult>;
+      // optional compatibility
+      restroCode?: string;
+      isOpen?: boolean;
+    };
+
+export default function RestroEditModal(props: Props) {
+  // normalize props so we can use same internals
+  const providedRestro = (props as any).restro ?? null;
+  const providedRestroCode = (props as any).restroCode ?? (providedRestro?.restro_code ?? providedRestro?.code ?? null);
+  const initialOpen = (props as any).isOpen ?? true;
+  const initialTab = (props as any).initialTab ?? "Basic Information";
+  const onClose = (props as any).onClose as () => void;
+  const callerOnSave = (props as any).onSave as ((payload: any) => Promise<SaveResult>) | undefined;
+
+  const [activeTab, setActiveTab] = useState<string>(initialTab === "Basic Information" ? "basic" : initialTab?.toLowerCase() ?? "basic");
   const [loading, setLoading] = useState(false);
-  const [restro, setRestro] = useState<Restro | null>(null);
+  const [restro, setRestro] = useState<Restro | null>(providedRestro);
   const [dirty, setDirty] = useState(false);
+  const [open, setOpen] = useState<boolean>(!!initialOpen);
 
   useEffect(() => {
-    if (!restroCode || !isOpen) return;
+    setOpen(initialOpen);
+  }, [initialOpen]);
+
+  // If no restro object provided, fetch using restroCode when modal opens
+  useEffect(() => {
+    if (providedRestro) return; // caller passed full object, don't refetch
+    if (!providedRestroCode || !open) return;
+
+    let mounted = true;
     setLoading(true);
-    fetch(`/api/restros/${restroCode}`)
+    fetch(`/api/restros/${providedRestroCode}`)
       .then((r) => r.json())
-      .then((data) => setRestro(data))
+      .then((data) => {
+        // API may return { ok: true, data } or raw row; handle both
+        const payload = data?.data ?? data;
+        if (mounted) setRestro(payload);
+      })
       .catch((e) => console.error(e))
-      .finally(() => setLoading(false));
-  }, [restroCode, isOpen]);
+      .finally(() => mounted && setLoading(false));
+
+    return () => {
+      mounted = false;
+    };
+  }, [providedRestroCode, providedRestro, open]);
 
   function onFieldChange(path: string, value: any) {
     setRestro((prev: any) => {
@@ -44,53 +80,81 @@ export default function RestroEditModal({
     setDirty(true);
   }
 
-  async function saveMain() {
-    if (!restroCode || !restro) return;
-    setLoading(true);
+  async function defaultSave(payload: any): Promise<SaveResult> {
+    // fallback save -> PATCH to API using restroCode (must exist)
+    const code = providedRestroCode ?? payload?.restro_code ?? payload?.code;
+    if (!code) return { ok: false, error: "missing_restro_code" };
+
     try {
-      const res = await fetch(`/api/restros/${restroCode}`, {
+      const res = await fetch(`/api/restros/${code}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(restro),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Save failed");
-      const updated = await res.json();
-      setRestro(updated);
-      setDirty(false);
-      alert("Saved successfully");
-      onClose();
+      if (!res.ok) {
+        const text = await res.text();
+        return { ok: false, error: text || "patch_failed" };
+      }
+      const json = await res.json();
+      return { ok: true, row: json };
+    } catch (err) {
+      return { ok: false, error: err };
+    }
+  }
+
+  async function handleSave() {
+    if (!restro && !providedRestro) return;
+    setLoading(true);
+    try {
+      const payload = { ...(restro ?? providedRestro) };
+      // prefer caller-supplied onSave if available
+      const saveFn = callerOnSave ?? defaultSave;
+      const result = await saveFn(payload);
+      if (result.ok) {
+        setDirty(false);
+        setOpen(false);
+        onClose();
+      } else {
+        console.error("save error", result.error);
+        alert("Save failed: " + String(result.error ?? "unknown"));
+      }
     } catch (err: any) {
       console.error(err);
-      alert("Save failed: " + err.message);
+      alert("Save failed: " + String(err?.message ?? err));
     } finally {
       setLoading(false);
     }
   }
 
-  if (!isOpen) return null;
+  function handleClose() {
+    setOpen(false);
+    onClose();
+  }
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white w-[95%] md:w-4/5 lg:w-3/4 xl:w-2/3 rounded shadow-lg p-4 max-h-[90vh] overflow-auto">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">Edit Restro — {restroCode}</h2>
+          <h2 className="text-lg font-semibold">Edit Restro — {providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode}</h2>
           <div className="flex items-center gap-2">
             <button
               className="px-3 py-1 rounded border"
               onClick={() => {
                 setRestro(null);
                 setDirty(false);
-                onClose();
+                handleClose();
               }}
             >
               Close
             </button>
             <button
               className="px-3 py-1 rounded bg-blue-600 text-white"
-              onClick={saveMain}
+              onClick={handleSave}
               disabled={!dirty || loading}
             >
-              Save
+              {loading ? "Saving..." : "Save"}
             </button>
           </div>
         </div>
@@ -125,15 +189,15 @@ export default function RestroEditModal({
         <div>
           {loading && <div className="mb-3 text-sm text-gray-500">Loading...</div>}
 
-          {activeTab === "basic" && <BasicInfoTab restro={restro} onChange={onFieldChange} />}
+          {activeTab === "basic" && <BasicInfoTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
 
-          {activeTab === "station" && <StationSettingsTab restro={restro} onChange={onFieldChange} />}
+          {activeTab === "station" && <StationSettingsTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
 
           {activeTab === "address" && (
-            <AddressDocsTab restro={restro} onChange={onFieldChange} restroCode={restroCode} />
+            <AddressDocsTab restro={restro ?? providedRestro} onChange={onFieldChange} restroCode={providedRestroCode ?? (restro ?? providedRestro)?.restro_code ?? (restro ?? providedRestro)?.RestroCode} />
           )}
 
-          {activeTab === "contact" && <ContactsTab restro={restro} onChange={onFieldChange} />}
+          {activeTab === "contact" && <ContactsTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
         </div>
       </div>
     </div>
@@ -141,6 +205,8 @@ export default function RestroEditModal({
 }
 
 /* ----------------- small subcomponents (kept inline for single-file) ----------------- */
+/* I re-used your original subcomponents exactly so visual/behavior stays same. */
+/* Replace the below definitions with your current ones if you prefer separate imports. */
 
 function TextRow({ label, value, onChange, placeholder, readOnly = false }: any) {
   return (
@@ -212,7 +278,7 @@ function StationSettingsTab({ restro, onChange }: { restro: any; onChange: (k: s
   );
 }
 
-/* ----------------- Address / Documents Tab (updated upload flow) ----------------- */
+/* ----------------- Address / Documents Tab (kept same) ----------------- */
 
 function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChange: (k: string, v: any) => void; restroCode: string }) {
   const [fssaiNumber, setFssaiNumber] = useState("");
@@ -397,7 +463,7 @@ function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChang
   );
 }
 
-/* ----------------- ContactsTab (unchanged) ----------------- */
+/* ----------------- ContactsTab (same) ----------------- */
 
 function ContactsTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
   function EmailRow({ idx }: { idx: number }) {
