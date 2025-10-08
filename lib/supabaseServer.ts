@@ -1,37 +1,20 @@
 // lib/supabaseServer.ts
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-/**
- * Safe factory for server-side Supabase client.
- * - getSupabaseServer() returns a SupabaseClient or null if envs missing/invalid.
- * - supabaseServer is a compatibility export (may be null) for older imports.
- */
-
-const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const SUPABASE_KEY =
+const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const serviceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ??
-  process.env.SUPABASE_ANON_KEY ??
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
   "";
 
-function isValidUrl(u: string) {
-  return typeof u === "string" && /^https?:\/\//i.test(u);
+if (!url || !serviceKey) {
+  // Throwing here ensures build fails early if envs missing.
+  throw new Error(
+    "Missing Supabase envs. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_ equivalents) in your hosting env."
+  );
 }
 
-export function getSupabaseServer(): SupabaseClient | null {
-  if (!isValidUrl(SUPABASE_URL) || !SUPABASE_KEY) return null;
-
-  const g = global as any;
-  if (g._supabaseServerClient) return g._supabaseServerClient as SupabaseClient;
-
-  const client = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
-  g._supabaseServerClient = client;
-  return client;
+// Export a function that returns a fresh supabase client (server-side)
+export function getSupabaseServer(): SupabaseClient {
+  return createClient(url, serviceKey);
 }
-
-/**
- * Compatibility named export.
- * Modules that still `import { supabaseServer }` will receive either the client or null.
- * IMPORTANT: consumers must check for null (or migrate to getSupabaseServer()).
- */
-export const supabaseServer = getSupabaseServer();
