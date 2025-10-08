@@ -1,46 +1,56 @@
 // app/api/restros/[code]/upload-file/route.ts
-export const runtime = "nodejs";
-
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer"; // server-side supabase client with service role
-import path from "path";
+import { supabaseServer } from "@/lib/supabaseServer";
 
-/**
- * Accepts raw binary body and stores into Supabase storage bucket `restro-docs`.
- * Client must send:
- *  - header "x-file-name": original filename
- *  - Content-Type header (mime)
- *  - body: raw ArrayBuffer (fetch with body = arrayBuffer)
- */
+export const runtime = "node"; // ensure Node runtime if Buffer is needed
+
 export async function POST(req: Request, { params }: { params: { code: string } }) {
-  const restroCode = params.code;
+  const { code } = params;
+
   try {
-    const filename = req.headers.get("x-file-name") || `upload_${Date.now()}`;
+    // Expect raw ArrayBuffer body and headers:
+    // - x-file-name: original filename
+    // - Content-Type: mime type
+    const filenameHeader = req.headers.get("x-file-name");
     const contentType = req.headers.get("content-type") || "application/octet-stream";
 
-    const buffer = Buffer.from(await req.arrayBuffer());
-    const ext = path.extname(filename) || "";
-    const destFileName = `fssai_${restroCode}_${Date.now()}${ext}`;
+    if (!filenameHeader) {
+      return NextResponse.json({ ok: false, error: "missing_x-file-name_header" }, { status: 400 });
+    }
 
+    const destFileName = filenameHeader.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+    const destPath = `restros/${code}/${Date.now()}_${destFileName}`;
+
+    // Read raw body
+    const arrayBuffer = await req.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Upload to Supabase storage
     const uploadRes = await supabaseServer.storage
       .from("restro-docs")
-      .upload(destFileName, buffer, { contentType, upsert: false });
+      .upload(destPath, buffer, {
+        contentType,
+        upsert: false,
+      });
 
-    if (uploadRes.error) {
-      console.error("Storage upload error:", uploadRes.error);
-      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    // uploadRes may be { data, error } depending on client version
+    if ((uploadRes as any)?.error) {
+      const err = (uploadRes as any).error;
+      console.error("Supabase upload error:", err);
+      return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
     }
 
-    // get public url (or you can create signed URL)
-    const { data: publicData, error: publicUrlErr } = supabaseServer.storage.from("restro-docs").getPublicUrl(destFileName);
-    let public_url: string | null = null;
-    if (!publicUrlErr && publicData?.publicUrl) {
-      public_url = publicData.publicUrl;
-    }
+    // getPublicUrl returns { data: { publicUrl: string } } (no error property in some client types)
+    const publicUrlResult = await supabaseServer.storage.from("restro-docs").getPublicUrl(destPath);
+    // safe access:
+    const publicUrl = (publicUrlResult as any)?.data?.publicUrl ?? null;
 
-    return NextResponse.json({ ok: true, file_url: public_url });
-  } catch (err: any) {
+    // If you need a signed URL instead (private bucket), use createSignedUrl
+    // const { data: signedData, error: signedErr } = await supabaseServer.storage.from("restro-docs").createSignedUrl(destPath, 60);
+
+    return NextResponse.json({ ok: true, file_url: publicUrl, path: destPath });
+  } catch (err) {
     console.error("upload-file route error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
   }
 }
