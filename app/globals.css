@@ -1,84 +1,37 @@
-/* restro-shared theme: paste into your global css file */
-.restro-modal-root {
-  --restro-font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --restro-accent: #0ea5e9;
-  --restro-border: #e9e9e9;
-  --restro-muted: #666;
-  --restro-radius: 8px;
-  font-family: var(--restro-font-family);
-  color: #222;
-  font-size: 14px;
-  line-height: 1.4;
+/* app/globals.css - Tailwind + custom tokens */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root{
+  --font-family: "Arial", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --accent: #0ea5e9;
+  --text: #0f1724;
+  --muted: #6b7280;
+  --border: #e6e6e6;
+  --card-bg: #ffffff;
+  --soft-bg: #fbfdff;
+  --label-weight: 600;
+  --radius: 10px;
+  --gap: 18px;
 }
 
-.restro-tab-container {
+html, body, #__next { height: 100%; }
+body {
+  font-family: var(--font-family);
+  font-size: 16px;
+  color: var(--text);
+  background: var(--soft-bg);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a { color: var(--accent); }
+button { font-family: inherit; }
+
+.container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 28px 24px;
-  box-sizing: border-box;
-}
-
-.restro-tab-heading {
-  text-align: center;
-  font-weight: 600;
-  font-size: 18px;
-  color: #1f2937;
-  margin-bottom: 24px;
-}
-
-.restro-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px 36px;
-  align-items: start;
-}
-
-.restro-row-full {
-  grid-column: 1 / -1;
-}
-
-.restro-label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
-  font-size: 13px;
-  color: #374151;
-}
-
-.restro-input,
-.restro-textarea,
-.restro-select {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: var(--restro-radius);
-  border: 1px solid var(--restro-border);
-  font-size: 14px;
-  background: #fff;
-  box-sizing: border-box;
-  outline: none;
-}
-.restro-textarea { min-height: 100px; resize: vertical; }
-
-.restro-note {
-  color: var(--restro-muted);
-  font-size: 13px;
-  margin-top: 8px;
-}
-
-.restro-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.restro-footer-save {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 12px 0 0;
-}
-
-@media (max-width: 900px) {
-  .restro-grid { grid-template-columns: 1fr; }
-  .restro-tab-container { padding: 20px; }
+  padding: 1rem;
 }
