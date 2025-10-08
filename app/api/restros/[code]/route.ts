@@ -1,12 +1,22 @@
 // app/api/restros/[code]/route.ts
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 
 export const revalidate = 0; // disable ISR for API
+
+function missingSupabaseResponse() {
+  return NextResponse.json(
+    { ok: false, error: "Missing SUPABASE_URL or SUPABASE key in environment" },
+    { status: 500 }
+  );
+}
 
 // Handler for GET -> fetch restro by code
 export async function GET(_req: Request, { params }: { params: { code: string } }) {
   const { code } = params;
+  const supabaseServer = getSupabaseServer();
+  if (!supabaseServer) return missingSupabaseResponse();
+
   try {
     const { data, error } = await supabaseServer
       .from("restros")
@@ -28,10 +38,12 @@ export async function GET(_req: Request, { params }: { params: { code: string } 
 // Handler for PATCH -> update restro fields (expects JSON body)
 export async function PATCH(req: Request, { params }: { params: { code: string } }) {
   const { code } = params;
+  const supabaseServer = getSupabaseServer();
+  if (!supabaseServer) return missingSupabaseResponse();
+
   try {
     const body = await req.json().catch(() => ({}));
 
-    // Filter allowed fields to avoid unwanted updates
     const allowed = [
       "RestroName",
       "RestroEmail",
@@ -46,7 +58,6 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
       "District",
       "Address",
       "Pincode",
-      // add more allowed fields as needed
     ];
 
     const payload: Record<string, any> = {};
@@ -75,9 +86,10 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
 }
 
 // Handler for POST -> handle multipart form uploads via Request.formData()
-// Expects form fields and files. File input name can be `file` or `files` (multiple).
 export async function POST(req: Request, { params }: { params: { code: string } }) {
   const { code } = params;
+  const supabaseServer = getSupabaseServer();
+  if (!supabaseServer) return missingSupabaseResponse();
 
   try {
     const contentType = req.headers.get("content-type") || "";
@@ -86,24 +98,14 @@ export async function POST(req: Request, { params }: { params: { code: string } 
     }
 
     const form = await req.formData();
-
-    // Example: other fields
-    const docType = form.get("docType")?.toString() ?? "unknown"; // e.g., 'fssai', 'gst', etc.
-
-    // Support single file input named 'file' or multiple named 'files'
+    const docType = form.get("docType")?.toString() ?? "unknown";
     const fileLike = form.get("file") ?? form.get("files");
+    if (!fileLike) return NextResponse.json({ ok: false, error: "no_file_uploaded" }, { status: 400 });
 
-    if (!fileLike) {
-      return NextResponse.json({ ok: false, error: "no_file_uploaded" }, { status: 400 });
-    }
-
-    // Helper to upload a single File object
     async function uploadFile(fileObj: File) {
-      // generate path: restros/<code>/<timestamp>_<originalName>
       const ts = Date.now();
       const safeName = (fileObj as any).name?.replace(/[^a-zA-Z0-9.\-_]/g, "_") ?? `upload_${ts}`;
       const path = `restros/${code}/${ts}_${safeName}`;
-
       const arrayBuffer = await (fileObj as any).arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
@@ -112,50 +114,27 @@ export async function POST(req: Request, { params }: { params: { code: string } 
         .upload(path, buffer, { contentType: (fileObj as any).type || "application/octet-stream", upsert: false });
 
       if (error) throw error;
-
-      // get public url (may depend on your bucket policy)
       const { data: urlData } = await supabaseServer.storage.from("restro-docs").getPublicUrl(path);
       const publicUrl = (urlData as any)?.publicUrl ?? null;
-
       return { path, publicUrl };
     }
 
-    // fileLike can be a single File, a FileList-like, or an array; handle robustly
     const uploads: Array<{ path: string; publicUrl: string | null }> = [];
 
-    // If it's a single File instance
     if (typeof (File) !== "undefined" && fileLike instanceof File) {
-      const res = await uploadFile(fileLike as File);
-      uploads.push(res);
+      uploads.push(await uploadFile(fileLike as File));
     } else if (Array.isArray(fileLike)) {
-      // an array of items (some runtimes may return an array)
       for (const item of fileLike) {
-        if (typeof (File) !== "undefined" && item instanceof File) {
-          const res = await uploadFile(item as File);
-          uploads.push(res);
-        } else {
-          console.warn("Skipping non-File item in array form data", item);
-        }
+        if (typeof (File) !== "undefined" && item instanceof File) uploads.push(await uploadFile(item as File));
       }
     } else if ((fileLike as any)?.length !== undefined && typeof (fileLike as any) !== "string") {
-      // FileList-like (has .length). Convert to array and check each entry.
       const list = Array.from(fileLike as any);
       for (const f of list) {
-        if (typeof (File) !== "undefined" && f instanceof File) {
-          const res = await uploadFile(f as File);
-          uploads.push(res);
-        } else {
-          console.warn("Skipping non-File item in FileList-like form data", f);
-        }
+        if (typeof (File) !== "undefined" && f instanceof File) uploads.push(await uploadFile(f as File));
       }
     } else {
-      // Unknown shape (could be string or something else) — we won't cast blindly.
       console.warn("Uploaded file field has unexpected shape; skipping. Value:", fileLike);
     }
-
-    // Optionally: store metadata in `restro_docs` table or similar
-    // Example (uncomment and adjust table/columns if you have one):
-    // await supabaseServer.from('restro_docs').insert(uploads.map(u=>({ restro_code: code, doc_type: docType, path: u.path, public_url: u.publicUrl })));
 
     return NextResponse.json({ ok: true, uploads });
   } catch (err) {
