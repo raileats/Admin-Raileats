@@ -1,4 +1,4 @@
-/* app/globals.css - Tailwind + custom tokens */
+/* app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -27,11 +27,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* small defaults */
 a { color: var(--accent); }
 button { font-family: inherit; }
-
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1rem;
-}
