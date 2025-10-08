@@ -1,34 +1,18 @@
-import { getSupabaseServer } from "@/lib/supabaseServer";
+// lib/supabaseServer.ts
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-export default async function ContactsPage({ params }: { params: { code: string } }) {
-  const code = params.code;
-  const supabase = getSupabaseServer();
+const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const serviceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  "";
 
-  const { data: emailsRaw } = await supabase
-    .from("restro_email")
-    .select("*")
-    .eq("RestroCode", code);
-
-  const { data: whatsRaw } = await supabase
-    .from("restro_whatsapp")
-    .select("*")
-    .eq("RestroCode", code);
-
-  const emails = (emailsRaw || []).map((r: any) => ({
-    name: r.Name,
-    email: r.Email,
-    status: !!r.Status,
-  }));
-
-  const whats = (whatsRaw || []).map((r: any) => ({
-    name: r.Name,
-    number: r.Number,
-    status: !!r.Status,
-  }));
-
-  return (
-    <div>
-      {/* आपका React / JSX render यहाँ — पहले जैसा रखें */}
-    </div>
+if (!url || !serviceKey) {
+  throw new Error(
+    "Missing Supabase envs. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_ equivalents) in your hosting env."
   );
+}
+
+export function getSupabaseServer(): SupabaseClient {
+  return createClient(url, serviceKey);
 }
