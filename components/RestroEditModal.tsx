@@ -122,8 +122,10 @@ export default function RestroEditModal(props: Props) {
         if (onCloseProp) onCloseProp();
         else router.back();
       } else {
-        console.error("save error", result.error);
-        alert("Save failed: " + String(result.error ?? "unknown"));
+        // SAFELY extract the error (TypeScript-safe)
+        const err = (result as { ok: false; error: any }).error ?? result;
+        console.error("save error", err);
+        alert("Save failed: " + String(err ?? "unknown"));
       }
     } catch (err: any) {
       console.error(err);
@@ -231,7 +233,13 @@ function TextRow({ label, value, onChange, placeholder, readOnly = false }: any)
     <div className="grid grid-cols-5 gap-3 items-center py-1">
       <div className="col-span-1 text-sm text-gray-700">{label}</div>
       <div className="col-span-4">
-        <input value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} readOnly={readOnly} className={`w-full border rounded px-2 py-1 ${readOnly ? "bg-gray-100" : ""}`} />
+        <input
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          readOnly={readOnly}
+          className={`w-full border rounded px-2 py-1 ${readOnly ? "bg-gray-100" : ""}`}
+        />
       </div>
     </div>
   );
@@ -244,7 +252,11 @@ function BasicInfoTab({ restro, onChange }: { restro: any; onChange: (k: string,
       <div className="grid grid-cols-2 gap-6">
         <div>
           <TextRow label="Restro Code" value={restro?.restro_code ?? restro?.RestroCode} onChange={(v: any) => onChange("restro_code", v)} />
-          <TextRow label="Station Code with Name" value={restro?.station_code_with_name ?? restro?.StationCodeWithName} onChange={(v: any) => onChange("station_code_with_name", v)} />
+          <TextRow
+            label="Station Code with Name"
+            value={restro?.station_code_with_name ?? restro?.StationCodeWithName}
+            onChange={(v: any) => onChange("station_code_with_name", v)}
+          />
           <TextRow label="Restro Name" value={restro?.restro_name ?? restro?.RestroName} onChange={(v: any) => onChange("restro_name", v)} />
           <TextRow label="Brand Name if Any" value={restro?.brand_name ?? restro?.BrandName} onChange={(v: any) => onChange("brand_name", v)} />
           <TextRow label="RailEats Status" value={restro?.raileats_status ?? restro?.RailEatsStatus} onChange={(v: any) => onChange("raileats_status", v)} />
@@ -429,7 +441,7 @@ function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChang
             <button
               className="px-3 py-1 rounded bg-blue-500 text-white"
               onClick={async () => {
-                const res = await fetch(`/api/restros/${restroCode}/docs`, {
+                const res = await fetch(`/api.restros/${restroCode}/docs`, {
                   method: "POST",
                   body: JSON.stringify({ type: "gst", gst_number: restro?.gst_number ?? restro?.GSTNumber }),
                   headers: { "Content-Type": "application/json" },
