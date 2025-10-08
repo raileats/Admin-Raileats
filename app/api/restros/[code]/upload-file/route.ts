@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
-export const runtime = "node"; // ensure Node runtime if Buffer is needed
+export const runtime = "nodejs"; // use the supported Node runtime name
 
 export async function POST(req: Request, { params }: { params: { code: string } }) {
   const { code } = params;
@@ -42,11 +42,7 @@ export async function POST(req: Request, { params }: { params: { code: string } 
 
     // getPublicUrl returns { data: { publicUrl: string } } (no error property in some client types)
     const publicUrlResult = await supabaseServer.storage.from("restro-docs").getPublicUrl(destPath);
-    // safe access:
     const publicUrl = (publicUrlResult as any)?.data?.publicUrl ?? null;
-
-    // If you need a signed URL instead (private bucket), use createSignedUrl
-    // const { data: signedData, error: signedErr } = await supabaseServer.storage.from("restro-docs").createSignedUrl(destPath, 60);
 
     return NextResponse.json({ ok: true, file_url: publicUrl, path: destPath });
   } catch (err) {
