@@ -1,3 +1,7 @@
+// add after imports at the top of components/RestroEditPageClient.tsx
+type SaveResult =
+  | { ok: true; row?: any }
+  | { ok: false; error: any };
 // replace the existing handleSave function with this
 async function handleSave(updatedFields: any): Promise<SaveResult> {
   try {
