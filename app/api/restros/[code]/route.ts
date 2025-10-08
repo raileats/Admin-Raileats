@@ -1,164 +1,157 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer"; // your server supabase client
-import formidable from "formidable";
-import fs from "fs";
-import path from "path";
+import { supabaseServer } from "@/lib/supabaseServer";
 
-/**
- * Helper to parse multipart form-data with formidable (server side)
- * returns { fields, files }
- */
-function parseForm(req: Request): Promise<{ fields: any; files: any }> {
-  return new Promise((resolve, reject) => {
-    const form = new formidable.IncomingForm({ multiples: false });
-    // @ts-ignore - adaptor to Node incoming message
-    form.parse(req as any, (err, fields, files) => {
-      if (err) return reject(err);
-      resolve({ fields, files });
-    });
-  });
+export const revalidate = 0; // disable ISR for API
+
+// Handler for GET -> fetch restro by code
+export async function GET(_req: Request, { params }: { params: { code: string } }) {
+  const { code } = params;
+  try {
+    const { data, error } = await supabaseServer
+      .from("restros")
+      .select("*")
+      .eq("code", code)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+
+    return NextResponse.json({ ok: true, data });
+  } catch (err) {
+    console.error("GET /api/restros/[code] error:", err);
+    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
+  }
 }
 
+// Handler for PATCH -> update restro fields (expects JSON body)
+export async function PATCH(req: Request, { params }: { params: { code: string } }) {
+  const { code } = params;
+  try {
+    const body = await req.json().catch(() => ({}));
+
+    // Filter allowed fields to avoid unwanted updates
+    const allowed = [
+      "RestroName",
+      "RestroEmail",
+      "RestroPhone",
+      "OwnerName",
+      "OwnerEmail",
+      "OwnerPhone",
+      "BrandName",
+      "StationCode",
+      "StationName",
+      "State",
+      "District",
+      "Address",
+      "Pincode",
+      // add more allowed fields as needed
+    ];
+
+    const payload: Record<string, any> = {};
+    for (const k of allowed) {
+      if (body[k] !== undefined) payload[k] = body[k];
+    }
+
+    if (Object.keys(payload).length === 0) {
+      return NextResponse.json({ ok: false, error: "no_valid_fields" }, { status: 400 });
+    }
+
+    const { data, error } = await supabaseServer
+      .from("restros")
+      .update(payload)
+      .eq("code", code)
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+
+    return NextResponse.json({ ok: true, data });
+  } catch (err) {
+    console.error("PATCH /api/restros/[code] error:", err);
+    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
+  }
+}
+
+// Handler for POST -> handle multipart form uploads via Request.formData()
+// Expects form fields and files. File input name can be `file` or `files` (multiple).
 export async function POST(req: Request, { params }: { params: { code: string } }) {
-  const restroCode = params.code;
-  const contentType = req.headers.get("content-type") ?? "";
+  const { code } = params;
 
   try {
-    // --- 1) Handle multipart/form-data (FSSAI with file) ---
-    if (contentType.includes("multipart/form-data")) {
-      const { fields, files } = await parseForm(req);
-      // expected fields: type=fssai, fssai_number, fssai_expiry
-      // expected file: fssai_file
-      const type = fields.type;
-      if (type !== "fssai") {
-        return NextResponse.json({ error: "Unsupported form type" }, { status: 400 });
-      }
+    const contentType = req.headers.get("content-type") || "";
+    if (!contentType.includes("multipart/form-data")) {
+      return NextResponse.json({ ok: false, error: "invalid_content_type" }, { status: 400 });
+    }
 
-      const fssai_number = fields.fssai_number;
-      const fssai_expiry = fields.fssai_expiry; // yyyy-mm-dd
-      const file = files.fssai_file;
+    const form = await req.formData();
 
-      // validate expiry at least 1 month ahead (server-side double-check)
-      const expiryDate = new Date(fssai_expiry);
-      const now = new Date();
-      const min = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
-      if (isNaN(expiryDate.getTime()) || expiryDate < min) {
-        return NextResponse.json({ error: "FSSAI expiry must be at least 1 month from today" }, { status: 400 });
-      }
+    // Example: other fields
+    const docType = form.get("docType")?.toString() ?? "unknown"; // e.g., 'fssai', 'gst', etc.
 
-      // If file provided, upload to supabase storage
-      let public_url: string | null = null;
-      if (file) {
-        // Formidable's file object path (temp file) location varies; ensure reading from .path
-        // @ts-ignore
-        const tmpPath = file.filepath ?? file.path ?? file.path;
-        const ext = path.extname(file.originalFilename ?? file.name ?? "doc.pdf");
-        const destFileName = `fssai_${restroCode}_${Date.now()}${ext}`;
+    // Support single file input named 'file' or multiple named 'files'
+    const fileLike = form.get("file") ?? form.get("files");
 
-        // read file buffer
-        const buffer = fs.readFileSync(tmpPath);
+    if (!fileLike) {
+      return NextResponse.json({ ok: false, error: "no_file_uploaded" }, { status: 400 });
+    }
 
-        // upload to supabase storage bucket 'restro-docs'
-        const uploadRes = await supabaseServer.storage
-          .from("restro-docs")
-          .upload(destFileName, buffer, { contentType: file.mimetype ?? "application/octet-stream", upsert: false });
+    // Helper to upload a single File object
+    async function uploadFile(fileObj: File) {
+      // generate path: restros/<code>/<timestamp>_<originalName>
+      const ts = Date.now();
+      const safeName = (fileObj as any).name?.replace(/[^a-zA-Z0-9.\-_]/g, "_") ?? `upload_${ts}`;
+      const path = `restros/${code}/${ts}_${safeName}`;
 
-        if (uploadRes.error) {
-          console.error("Storage upload error:", uploadRes.error);
-          return NextResponse.json({ error: "File upload failed" }, { status: 500 });
+      const arrayBuffer = await (fileObj as any).arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const { data, error } = await supabaseServer.storage
+        .from("restro-docs")
+        .upload(path, buffer, { contentType: (fileObj as any).type || "application/octet-stream", upsert: false });
+
+      if (error) throw error;
+
+      // get public url (may depend on your bucket policy)
+      const { data: urlData } = await supabaseServer.storage.from("restro-docs").getPublicUrl(path);
+      const publicUrl = (urlData as any)?.publicUrl ?? null;
+
+      return { path, publicUrl };
+    }
+
+    // fileLike can be a single File or a FileList-like; handle both
+    const uploads: Array<{ path: string; publicUrl: string | null }> = [];
+
+    if (fileLike instanceof File) {
+      const res = await uploadFile(fileLike);
+      uploads.push(res);
+    } else if (Array.isArray(fileLike) || (fileLike as any).length !== undefined) {
+      // FormData in some runtimes returns a FileList-like with length
+      const list = Array.from(fileLike as any);
+      for (const f of list) {
+        if (f instanceof File) {
+          const res = await uploadFile(f);
+          uploads.push(res);
         }
-
-        // get public url (if your bucket is public) OR create signed URL
-        // using createSignedUrl (set expiry) OR use public url
-        const { data: publicData, error: publicUrlErr } = supabaseServer.storage
-          .from("restro-docs")
-          .getPublicUrl(destFileName);
-
-        if (publicUrlErr) {
-          console.warn("Could not get public URL:", publicUrlErr);
-        } else {
-          public_url = publicData.publicUrl;
-        }
       }
-
-      // Call RPC add_fssai_atomic with required params.
-      // NOTE: adapt parameter names to your RPC signature.
-      const rpcRes = await supabaseServer.rpc("add_fssai_atomic", {
-        i_restro_code: restroCode,
-        i_fssai_number: fssai_number,
-        i_fssai_expiry: fssai_expiry,
-        i_file_url: public_url,
-      });
-
-      if (rpcRes.error) {
-        console.error("RPC error:", rpcRes.error);
-        return NextResponse.json({ error: "Failed to add FSSAI (RPC)" }, { status: 500 });
+    } else {
+      // fallback: try to treat it as File
+      try {
+        const f = fileLike as File;
+        const res = await uploadFile(f);
+        uploads.push(res);
+      } catch (e) {
+        // ignore
       }
-
-      // Optionally return the new history row or refreshed restro
-      // Fetch updated restro row
-      const { data: restroData, error: restroErr } = await supabaseServer
-        .from("restros")
-        .select("*")
-        .eq("restro_code", restroCode)
-        .single();
-
-      if (restroErr) {
-        return NextResponse.json({ ok: true, message: "FSSAI added, but failed to fetch restro" });
-      }
-
-      return NextResponse.json({ ok: true, restro: restroData });
     }
 
-    // --- 2) Handle JSON requests (GST / PAN) ---
-    const body = await req.json().catch(() => ({} as any));
-    const { type } = body;
+    // Optionally: store metadata in `restro_docs` table or similar
+    // Example (uncomment and adjust table/columns if you have one):
+    // await supabaseServer.from('restro_docs').insert(uploads.map(u=>({ restro_code: code, doc_type: docType, path: u.path, public_url: u.publicUrl })));
 
-    if (!type) {
-      return NextResponse.json({ error: "Missing type" }, { status: 400 });
-    }
-
-    if (type === "gst") {
-      // expected: gst_number, (optionally gst_file_url or file upload alternate flow)
-      const gst_number = body.gst_number;
-      if (!gst_number) return NextResponse.json({ error: "Missing gst_number" }, { status: 400 });
-
-      // call RPC
-      const rpc = await supabaseServer.rpc("add_gst_atomic", {
-        i_restro_code: restroCode,
-        i_gst_number: gst_number,
-      });
-
-      if (rpc.error) {
-        console.error("RPC add_gst_atomic error:", rpc.error);
-        return NextResponse.json({ error: "Failed to add GST" }, { status: 500 });
-      }
-
-      const { data: restroData } = await supabaseServer.from("restros").select("*").eq("restro_code", restroCode).single();
-      return NextResponse.json({ ok: true, restro: restroData });
-    }
-
-    if (type === "pan") {
-      const pan_number = body.pan_number;
-      if (!pan_number) return NextResponse.json({ error: "Missing pan_number" }, { status: 400 });
-
-      const rpc = await supabaseServer.rpc("add_pan_atomic", {
-        i_restro_code: restroCode,
-        i_pan_number: pan_number,
-      });
-
-      if (rpc.error) {
-        console.error("RPC add_pan_atomic error:", rpc.error);
-        return NextResponse.json({ error: "Failed to add PAN" }, { status: 500 });
-      }
-
-      const { data: restroData } = await supabaseServer.from("restros").select("*").eq("restro_code", restroCode).single();
-      return NextResponse.json({ ok: true, restro: restroData });
-    }
-
-    return NextResponse.json({ error: "Unsupported type" }, { status: 400 });
-  } catch (err: any) {
-    console.error("docs route error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ ok: true, uploads });
+  } catch (err) {
+    console.error("POST /api/restros/[code] upload error:", err);
+    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
   }
 }
