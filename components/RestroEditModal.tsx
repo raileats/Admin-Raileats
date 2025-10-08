@@ -1,6 +1,7 @@
 // components/RestroEditModal.tsx
 "use client";
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Restro = any;
 
@@ -10,50 +11,38 @@ type SaveResult =
 
 type StationsOption = { label: string; value: string };
 
-type Props =
-  | {
-      // legacy / existing usage
-      restroCode: string;
-      isOpen: boolean;
-      onClose: () => void;
-      // optional:
-      restro?: Restro;
-      initialTab?: string;
-      onSave?: (payload: any) => Promise<SaveResult>;
-      stationsOptions?: StationsOption[];
-    }
-  | {
-      // the call-site that passes restro directly
-      restro: Restro;
-      initialTab?: string;
-      onClose: () => void;
-      onSave: (payload: any) => Promise<SaveResult>;
-      // optional compatibility
-      restroCode?: string;
-      isOpen?: boolean;
-      stationsOptions?: StationsOption[];
-    };
+type Props = {
+  // either provide restroCode + isOpen OR restro directly (both are allowed)
+  restroCode?: string;
+  isOpen?: boolean;
+
+  restro?: Restro;
+
+  // UI
+  initialTab?: string;
+  stationsOptions?: StationsOption[];
+
+  // optional callbacks — *now optional* so pages that don't pass them still work
+  onClose?: () => void;
+  onSave?: (payload: any) => Promise<SaveResult>;
+};
 
 export default function RestroEditModal(props: Props) {
+  const router = useRouter();
+
   // normalize props
-  const providedRestro = (props as any).restro ?? null;
+  const providedRestro = props.restro ?? null;
   const providedRestroCode =
-    (props as any).restroCode ??
+    props.restroCode ??
     (providedRestro?.restro_code ?? providedRestro?.code ?? null);
-  const initialOpen = (props as any).isOpen ?? true;
-  const initialTab = (props as any).initialTab ?? "Basic Information";
-  const onClose = (props as any).onClose as () => void;
-  const callerOnSave = (props as any).onSave as
-    | ((payload: any) => Promise<SaveResult>)
-    | undefined;
-  const stationOptions = (props as any).stationsOptions as
-    | StationsOption[]
-    | undefined;
+  const initialOpen = props.isOpen ?? true;
+  const initialTab = props.initialTab ?? "Basic Information";
+  const onCloseProp = props.onClose;
+  const callerOnSave = props.onSave;
+  const stationOptions = props.stationsOptions;
 
   const [activeTab, setActiveTab] = useState<string>(
-    initialTab === "Basic Information"
-      ? "basic"
-      : (initialTab?.toLowerCase() ?? "basic")
+    initialTab === "Basic Information" ? "basic" : initialTab?.toLowerCase() ?? "basic"
   );
   const [loading, setLoading] = useState(false);
   const [restro, setRestro] = useState<Restro | null>(providedRestro);
@@ -64,7 +53,7 @@ export default function RestroEditModal(props: Props) {
     setOpen(initialOpen);
   }, [initialOpen]);
 
-  // fetch when only restroCode provided
+  // Fetch restro if only restroCode provided
   useEffect(() => {
     if (providedRestro) return;
     if (!providedRestroCode || !open) return;
@@ -95,8 +84,7 @@ export default function RestroEditModal(props: Props) {
   }
 
   async function defaultSave(payload: any): Promise<SaveResult> {
-    const code =
-      providedRestroCode ?? payload?.restro_code ?? payload?.code ?? null;
+    const code = providedRestroCode ?? payload?.restro_code ?? payload?.code ?? null;
     if (!code) return { ok: false, error: "missing_restro_code" };
 
     try {
@@ -117,7 +105,11 @@ export default function RestroEditModal(props: Props) {
   }
 
   async function handleSave() {
-    if (!restro && !providedRestro) return;
+    if (!restro && !providedRestro) {
+      alert("Nothing to save");
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = { ...(restro ?? providedRestro) };
@@ -126,7 +118,9 @@ export default function RestroEditModal(props: Props) {
       if (result.ok) {
         setDirty(false);
         setOpen(false);
-        onClose();
+        // call onClose fallback or provided
+        if (onCloseProp) onCloseProp();
+        else router.back();
       } else {
         console.error("save error", result.error);
         alert("Save failed: " + String(result.error ?? "unknown"));
@@ -141,7 +135,8 @@ export default function RestroEditModal(props: Props) {
 
   function handleClose() {
     setOpen(false);
-    onClose();
+    if (onCloseProp) onCloseProp();
+    else router.back();
   }
 
   if (!open) return null;
@@ -151,8 +146,7 @@ export default function RestroEditModal(props: Props) {
       <div className="bg-white w-[95%] md:w-4/5 lg:w-3/4 xl:w-2/3 rounded shadow-lg p-4 max-h-[90vh] overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">
-            Edit Restro —{" "}
-            {providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode}
+            Edit Restro — {providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode}
           </h2>
           <div className="flex items-center gap-2">
             <button
@@ -177,33 +171,25 @@ export default function RestroEditModal(props: Props) {
 
         <div className="flex gap-2 mb-4">
           <button
-            className={`px-3 py-1 rounded ${
-              activeTab === "basic" ? "bg-orange-200" : "bg-gray-100"
-            }`}
+            className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-orange-200" : "bg-gray-100"}`}
             onClick={() => setActiveTab("basic")}
           >
             Basic Information
           </button>
           <button
-            className={`px-3 py-1 rounded ${
-              activeTab === "station" ? "bg-orange-200" : "bg-gray-100"
-            }`}
+            className={`px-3 py-1 rounded ${activeTab === "station" ? "bg-orange-200" : "bg-gray-100"}`}
             onClick={() => setActiveTab("station")}
           >
             Station Settings
           </button>
           <button
-            className={`px-3 py-1 rounded ${
-              activeTab === "address" ? "bg-orange-200" : "bg-gray-100"
-            }`}
+            className={`px-3 py-1 rounded ${activeTab === "address" ? "bg-orange-200" : "bg-gray-100"}`}
             onClick={() => setActiveTab("address")}
           >
             Address & Documents
           </button>
           <button
-            className={`px-3 py-1 rounded ${
-              activeTab === "contact" ? "bg-orange-200" : "bg-gray-100"
-            }`}
+            className={`px-3 py-1 rounded ${activeTab === "contact" ? "bg-orange-200" : "bg-gray-100"}`}
             onClick={() => setActiveTab("contact")}
           >
             Contacts
@@ -211,20 +197,12 @@ export default function RestroEditModal(props: Props) {
         </div>
 
         <div>
-          {loading && (
-            <div className="mb-3 text-sm text-gray-500">Loading...</div>
-          )}
+          {loading && <div className="mb-3 text-sm text-gray-500">Loading...</div>}
 
-          {activeTab === "basic" && (
-            <BasicInfoTab restro={restro ?? providedRestro} onChange={onFieldChange} />
-          )}
+          {activeTab === "basic" && <BasicInfoTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
 
           {activeTab === "station" && (
-            <StationSettingsTab
-              restro={restro ?? providedRestro}
-              onChange={onFieldChange}
-              stationsOptions={stationOptions}
-            />
+            <StationSettingsTab restro={restro ?? providedRestro} onChange={onFieldChange} stationsOptions={stationOptions} />
           )}
 
           {activeTab === "address" && (
@@ -239,127 +217,53 @@ export default function RestroEditModal(props: Props) {
             />
           )}
 
-          {activeTab === "contact" && (
-            <ContactsTab restro={restro ?? providedRestro} onChange={onFieldChange} />
-          )}
+          {activeTab === "contact" && <ContactsTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
         </div>
       </div>
     </div>
   );
 }
 
-/* ----------------- small subcomponents (kept inline for single-file) ----------------- */
+/* ----------------- small subcomponents (same as before) ----------------- */
 
-function TextRow({
-  label,
-  value,
-  onChange,
-  placeholder,
-  readOnly = false,
-}: any) {
+function TextRow({ label, value, onChange, placeholder, readOnly = false }: any) {
   return (
     <div className="grid grid-cols-5 gap-3 items-center py-1">
       <div className="col-span-1 text-sm text-gray-700">{label}</div>
       <div className="col-span-4">
-        <input
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          readOnly={readOnly}
-          className={`w-full border rounded px-2 py-1 ${
-            readOnly ? "bg-gray-100" : ""
-          }`}
-        />
+        <input value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} readOnly={readOnly} className={`w-full border rounded px-2 py-1 ${readOnly ? "bg-gray-100" : ""}`} />
       </div>
     </div>
   );
 }
 
-function BasicInfoTab({
-  restro,
-  onChange,
-}: {
-  restro: any;
-  onChange: (k: string, v: any) => void;
-}) {
+function BasicInfoTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
   return (
     <div>
       <h3 className="font-semibold mb-2">Basic Information</h3>
       <div className="grid grid-cols-2 gap-6">
         <div>
-          <TextRow
-            label="Restro Code"
-            value={restro?.restro_code ?? restro?.RestroCode}
-            onChange={(v: any) => onChange("restro_code", v)}
-          />
-          <TextRow
-            label="Station Code with Name"
-            value={restro?.station_code_with_name ?? restro?.StationCodeWithName}
-            onChange={(v: any) => onChange("station_code_with_name", v)}
-          />
-          <TextRow
-            label="Restro Name"
-            value={restro?.restro_name ?? restro?.RestroName}
-            onChange={(v: any) => onChange("restro_name", v)}
-          />
-          <TextRow
-            label="Brand Name if Any"
-            value={restro?.brand_name ?? restro?.BrandName}
-            onChange={(v: any) => onChange("brand_name", v)}
-          />
-          <TextRow
-            label="RailEats Status"
-            value={restro?.raileats_status ?? restro?.RailEatsStatus}
-            onChange={(v: any) => onChange("raileats_status", v)}
-          />
-          <TextRow
-            label="Is Irctc Approved"
-            value={restro?.is_irctc_approved ?? restro?.IsIrctcApproved}
-            onChange={(v: any) => onChange("is_irctc_approved", v)}
-          />
+          <TextRow label="Restro Code" value={restro?.restro_code ?? restro?.RestroCode} onChange={(v: any) => onChange("restro_code", v)} />
+          <TextRow label="Station Code with Name" value={restro?.station_code_with_name ?? restro?.StationCodeWithName} onChange={(v: any) => onChange("station_code_with_name", v)} />
+          <TextRow label="Restro Name" value={restro?.restro_name ?? restro?.RestroName} onChange={(v: any) => onChange("restro_name", v)} />
+          <TextRow label="Brand Name if Any" value={restro?.brand_name ?? restro?.BrandName} onChange={(v: any) => onChange("brand_name", v)} />
+          <TextRow label="RailEats Status" value={restro?.raileats_status ?? restro?.RailEatsStatus} onChange={(v: any) => onChange("raileats_status", v)} />
+          <TextRow label="Is Irctc Approved" value={restro?.is_irctc_approved ?? restro?.IsIrctcApproved} onChange={(v: any) => onChange("is_irctc_approved", v)} />
         </div>
 
         <div>
-          <TextRow
-            label="Owner Name"
-            value={restro?.owner_name ?? restro?.OwnerName}
-            onChange={(v: any) => onChange("owner_name", v)}
-          />
-          <TextRow
-            label="Owner Email"
-            value={restro?.owner_email ?? restro?.OwnerEmail}
-            onChange={(v: any) => onChange("owner_email", v)}
-          />
-          <TextRow
-            label="Owner Phone"
-            value={restro?.owner_phone ?? restro?.OwnerPhone}
-            onChange={(v: any) => onChange("owner_phone", v)}
-          />
-          <TextRow
-            label="Restro Email"
-            value={restro?.restro_email ?? restro?.RestroEmail}
-            onChange={(v: any) => onChange("restro_email", v)}
-          />
-          <TextRow
-            label="Restro Phone"
-            value={restro?.restro_phone ?? restro?.RestroPhone}
-            onChange={(v: any) => onChange("restro_phone", v)}
-          />
+          <TextRow label="Owner Name" value={restro?.owner_name ?? restro?.OwnerName} onChange={(v: any) => onChange("owner_name", v)} />
+          <TextRow label="Owner Email" value={restro?.owner_email ?? restro?.OwnerEmail} onChange={(v: any) => onChange("owner_email", v)} />
+          <TextRow label="Owner Phone" value={restro?.owner_phone ?? restro?.OwnerPhone} onChange={(v: any) => onChange("owner_phone", v)} />
+          <TextRow label="Restro Email" value={restro?.restro_email ?? restro?.RestroEmail} onChange={(v: any) => onChange("restro_email", v)} />
+          <TextRow label="Restro Phone" value={restro?.restro_phone ?? restro?.RestroPhone} onChange={(v: any) => onChange("restro_phone", v)} />
         </div>
       </div>
     </div>
   );
 }
 
-function StationSettingsTab({
-  restro,
-  onChange,
-  stationsOptions,
-}: {
-  restro: any;
-  onChange: (k: string, v: any) => void;
-  stationsOptions?: StationsOption[];
-}) {
+function StationSettingsTab({ restro, onChange, stationsOptions }: { restro: any; onChange: (k: string, v: any) => void; stationsOptions?: StationsOption[] }) {
   return (
     <div>
       <h3 className="font-semibold mb-2">Station Settings</h3>
@@ -367,11 +271,7 @@ function StationSettingsTab({
       {stationsOptions && stationsOptions.length > 0 && (
         <div className="mb-3">
           <label className="block text-sm">Select Station</label>
-          <select
-            value={restro?.station_code ?? restro?.StationCode ?? ""}
-            onChange={(e) => onChange("station_code", e.target.value)}
-            className="mt-1 w-full border rounded px-2 py-1"
-          >
+          <select value={restro?.station_code ?? restro?.StationCode ?? ""} onChange={(e) => onChange("station_code", e.target.value)} className="mt-1 w-full border rounded px-2 py-1">
             <option value="">— select —</option>
             {stationsOptions.map((s) => (
               <option key={s.value} value={s.value}>
@@ -384,66 +284,24 @@ function StationSettingsTab({
 
       <div className="grid grid-cols-2 gap-6">
         <div>
-          <TextRow
-            label="Fix from Basic Information (NGP)"
-            value={restro?.fix_from_basic_info ?? restro?.FixFromBasicInfo}
-            onChange={(v: any) => onChange("fix_from_basic_info", v)}
-          />
-          <TextRow
-            label="Station Category"
-            value={restro?.station_category ?? restro?.StationCategory}
-            onChange={(v: any) => onChange("station_category", v)}
-          />
-          <TextRow
-            label="Open Time"
-            value={restro?.open_time ?? restro?.OpenTime}
-            onChange={(v: any) => onChange("open_time", v)}
-          />
-          <TextRow
-            label="Close Time"
-            value={restro?.close_time ?? restro?.CloseTime}
-            onChange={(v: any) => onChange("close_time", v)}
-          />
+          <TextRow label="Fix from Basic Information (NGP)" value={restro?.fix_from_basic_info ?? restro?.FixFromBasicInfo} onChange={(v: any) => onChange("fix_from_basic_info", v)} />
+          <TextRow label="Station Category" value={restro?.station_category ?? restro?.StationCategory} onChange={(v: any) => onChange("station_category", v)} />
+          <TextRow label="Open Time" value={restro?.open_time ?? restro?.OpenTime} onChange={(v: any) => onChange("open_time", v)} />
+          <TextRow label="Close Time" value={restro?.close_time ?? restro?.CloseTime} onChange={(v: any) => onChange("close_time", v)} />
         </div>
 
         <div>
-          <TextRow
-            label="Weekly Off"
-            value={restro?.weekly_off ?? restro?.WeeklyOff}
-            onChange={(v: any) => onChange("weekly_off", v)}
-          />
-          <TextRow
-            label="Minimum Order Value"
-            value={restro?.minimum_order_value ?? restro?.MinimumOrderValue}
-            onChange={(v: any) => onChange("minimum_order_value", v)}
-          />
-          <TextRow
-            label="Cut Off Time"
-            value={restro?.cut_off_time ?? restro?.CutOffTime}
-            onChange={(v: any) => onChange("cut_off_time", v)}
-          />
-          <TextRow
-            label="RailEats Customer Delivery Charge"
-            value={restro?.customer_delivery_charge ?? restro?.CustomerDeliveryCharge}
-            onChange={(v: any) => onChange("customer_delivery_charge", v)}
-          />
+          <TextRow label="Weekly Off" value={restro?.weekly_off ?? restro?.WeeklyOff} onChange={(v: any) => onChange("weekly_off", v)} />
+          <TextRow label="Minimum Order Value" value={restro?.minimum_order_value ?? restro?.MinimumOrderValue} onChange={(v: any) => onChange("minimum_order_value", v)} />
+          <TextRow label="Cut Off Time" value={restro?.cut_off_time ?? restro?.CutOffTime} onChange={(v: any) => onChange("cut_off_time", v)} />
+          <TextRow label="RailEats Customer Delivery Charge" value={restro?.customer_delivery_charge ?? restro?.CustomerDeliveryCharge} onChange={(v: any) => onChange("customer_delivery_charge", v)} />
         </div>
       </div>
     </div>
   );
 }
 
-/* ----------------- Address / Documents Tab (kept same) ----------------- */
-
-function AddressDocsTab({
-  restro,
-  onChange,
-  restroCode,
-}: {
-  restro: any;
-  onChange: (k: string, v: any) => void;
-  restroCode: string;
-}) {
+function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChange: (k: string, v: any) => void; restroCode: string }) {
   const [fssaiNumber, setFssaiNumber] = useState("");
   const [fssaiExpiry, setFssaiExpiry] = useState("");
   const [fssaiFile, setFssaiFile] = useState<File | null>(null);
@@ -623,8 +481,6 @@ function AddressDocsTab({
     </div>
   );
 }
-
-/* ----------------- ContactsTab (same) ----------------- */
 
 function ContactsTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
   function EmailRow({ idx }: { idx: number }) {
