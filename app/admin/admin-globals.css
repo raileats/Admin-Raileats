@@ -1,4 +1,11 @@
-/* update your existing global css - change font-family to Arial */
+/* styles/globals.css */
+
+/* 1) Tailwind directives MUST be at the top */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2) Your design tokens (kept from your original file) */
 :root{
   --font-family: "Arial", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --accent: #0ea5e9;
@@ -12,5 +19,32 @@
   --gap: 18px;
 }
 
-/* base */
-body { font-family: var(--font-family); font-size:16px; color:var(--text); }
+/* 3) Base overrides */
+html, body, #__next {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: 16px;
+  color: var(--text);
+  background: var(--soft-bg);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 4) Small utility overrides so default elements look nicer without extra classes */
+a { color: var(--accent); }
+button { font-family: inherit; }
+
+/* 5) Optional: small container / layout helpers you can use */
+.container {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* Add any other custom global styles below */
