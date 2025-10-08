@@ -12,17 +12,11 @@ type SaveResult =
 type StationsOption = { label: string; value: string };
 
 type Props = {
-  // either provide restroCode + isOpen OR restro directly (both are allowed)
   restroCode?: string;
   isOpen?: boolean;
-
   restro?: Restro;
-
-  // UI
   initialTab?: string;
   stationsOptions?: StationsOption[];
-
-  // optional callbacks — *now optional* so pages that don't pass them still work
   onClose?: () => void;
   onSave?: (payload: any) => Promise<SaveResult>;
 };
@@ -30,11 +24,9 @@ type Props = {
 export default function RestroEditModal(props: Props) {
   const router = useRouter();
 
-  // normalize props
   const providedRestro = props.restro ?? null;
   const providedRestroCode =
-    props.restroCode ??
-    (providedRestro?.restro_code ?? providedRestro?.code ?? null);
+    props.restroCode ?? (providedRestro?.restro_code ?? providedRestro?.code ?? null);
   const initialOpen = props.isOpen ?? true;
   const initialTab = props.initialTab ?? "Basic Information";
   const onCloseProp = props.onClose;
@@ -53,7 +45,6 @@ export default function RestroEditModal(props: Props) {
     setOpen(initialOpen);
   }, [initialOpen]);
 
-  // Fetch restro if only restroCode provided
   useEffect(() => {
     if (providedRestro) return;
     if (!providedRestroCode || !open) return;
@@ -118,11 +109,9 @@ export default function RestroEditModal(props: Props) {
       if (result.ok) {
         setDirty(false);
         setOpen(false);
-        // call onClose fallback or provided
         if (onCloseProp) onCloseProp();
         else router.back();
       } else {
-        // SAFELY extract the error (TypeScript-safe)
         const err = (result as { ok: false; error: any }).error ?? result;
         console.error("save error", err);
         alert("Save failed: " + String(err ?? "unknown"));
@@ -144,8 +133,20 @@ export default function RestroEditModal(props: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white w-[95%] md:w-4/5 lg:w-3/4 xl:w-2/3 rounded shadow-lg p-4 max-h-[90vh] overflow-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div
+        className="
+          bg-white rounded-lg shadow-2xl
+          w-[95vw] md:w-[90vw]
+          max-w-[1400px]
+          h-auto md:h-[90vh]
+          overflow-auto
+          p-6
+          ring-1 ring-black/5
+        "
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">
             Edit Restro — {providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode}
@@ -173,25 +174,25 @@ export default function RestroEditModal(props: Props) {
 
         <div className="flex gap-2 mb-4">
           <button
-            className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-orange-200" : "bg-gray-100"}`}
+            className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-amber-100" : "bg-gray-100"}`}
             onClick={() => setActiveTab("basic")}
           >
             Basic Information
           </button>
           <button
-            className={`px-3 py-1 rounded ${activeTab === "station" ? "bg-orange-200" : "bg-gray-100"}`}
+            className={`px-3 py-1 rounded ${activeTab === "station" ? "bg-amber-100" : "bg-gray-100"}`}
             onClick={() => setActiveTab("station")}
           >
             Station Settings
           </button>
           <button
-            className={`px-3 py-1 rounded ${activeTab === "address" ? "bg-orange-200" : "bg-gray-100"}`}
+            className={`px-3 py-1 rounded ${activeTab === "address" ? "bg-amber-100" : "bg-gray-100"}`}
             onClick={() => setActiveTab("address")}
           >
             Address & Documents
           </button>
           <button
-            className={`px-3 py-1 rounded ${activeTab === "contact" ? "bg-orange-200" : "bg-gray-100"}`}
+            className={`px-3 py-1 rounded ${activeTab === "contact" ? "bg-amber-100" : "bg-gray-100"}`}
             onClick={() => setActiveTab("contact")}
           >
             Contacts
@@ -416,146 +417,4 @@ function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChang
               <input value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} className="w-full border rounded px-2 py-1" />
             </div>
             <div className="col-span-2">
-              <input type="date" value={fssaiExpiry} onChange={(e) => setFssaiExpiry(e.target.value)} className="w-full border rounded px-2 py-1" />
-            </div>
-            <div className="col-span-1">
-              <input type="file" onChange={(e: any) => setFssaiFile(e.target.files?.[0] ?? null)} />
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <button className="px-3 py-1 rounded bg-green-500 text-white" onClick={addNewFssaiEntry} disabled={uploading}>
-              {uploading ? "Uploading..." : "Add New FSSAI Entry"}
-            </button>
-          </div>
-        </div>
-
-        <div className="col-span-3">
-          <div className="grid grid-cols-6 gap-2 items-center mt-4">
-            <div className="col-span-1 text-sm">GST Number</div>
-            <div className="col-span-5">
-              <input value={restro?.gst_number ?? restro?.GSTNumber ?? ""} onChange={(e) => onChange("gst_number", e.target.value)} className="w-full border rounded px-2 py-1" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <button
-              className="px-3 py-1 rounded bg-blue-500 text-white"
-              onClick={async () => {
-                const res = await fetch(`/api.restros/${restroCode}/docs`, {
-                  method: "POST",
-                  body: JSON.stringify({ type: "gst", gst_number: restro?.gst_number ?? restro?.GSTNumber }),
-                  headers: { "Content-Type": "application/json" },
-                });
-                if (!res.ok) {
-                  const text = await res.text();
-                  alert("Failed to add GST: " + text);
-                  return;
-                }
-                alert("GST added");
-                window.location.reload();
-              }}
-            >
-              Add New GST Entry
-            </button>
-          </div>
-        </div>
-
-        <div className="col-span-3">
-          <div className="grid grid-cols-6 gap-2 items-center mt-4">
-            <div className="col-span-1 text-sm">PAN Number</div>
-            <div className="col-span-5">
-              <input value={restro?.pan_number ?? restro?.PANNumber ?? ""} onChange={(e) => onChange("pan_number", e.target.value)} className="w-full border rounded px-2 py-1" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <button
-              className="px-3 py-1 rounded bg-amber-600 text-white"
-              onClick={async () => {
-                const res = await fetch(`/api/restros/${restroCode}/docs`, {
-                  method: "POST",
-                  body: JSON.stringify({ type: "pan", pan_number: restro?.pan_number ?? restro?.PANNumber }),
-                  headers: { "Content-Type": "application/json" },
-                });
-                if (!res.ok) {
-                  const text = await res.text();
-                  alert("Failed to add PAN: " + text);
-                  return;
-                }
-                alert("PAN added");
-                window.location.reload();
-              }}
-            >
-              Add New PAN Entry
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ContactsTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
-  function EmailRow({ idx }: { idx: number }) {
-    const nameKey = `email_name_${idx}`;
-    const emailKey = `email_for_orders_${idx}`;
-    const statusKey = `email_status_${idx}`;
-    return (
-      <div className="grid grid-cols-6 gap-2 items-center py-1">
-        <div className="col-span-1 text-sm">Name</div>
-        <div className="col-span-1">
-          <input value={restro?.[nameKey] ?? restro?.[`EmailAddressName${idx}`] ?? ""} onChange={(e) => onChange(nameKey, e.target.value)} className="w-full border rounded px-2 py-1" />
-        </div>
-        <div className="col-span-2">
-          <input value={restro?.[emailKey] ?? restro?.[`EmailsforOrdersReceiving${idx}`] ?? ""} onChange={(e) => onChange(emailKey, e.target.value)} className="w-full border rounded px-2 py-1" />
-        </div>
-        <div className="col-span-1">
-          <label className="flex items-center">
-            <input type="checkbox" checked={!!restro?.[statusKey] ?? !!restro?.[`EmailAddressStatus${idx}`]} onChange={(e) => onChange(statusKey, e.target.checked)} className="mr-2" />
-            Status
-          </label>
-        </div>
-        <div className="col-span-1"></div>
-      </div>
-    );
-  }
-
-  function WpRow({ idx }: { idx: number }) {
-    const nameKey = `wp_name_${idx}`;
-    const numKey = `wp_num_${idx}`;
-    const statusKey = `wp_status_${idx}`;
-    return (
-      <div className="grid grid-cols-6 gap-2 items-center py-1">
-        <div className="col-span-1 text-sm">Name</div>
-        <div className="col-span-1">
-          <input value={restro?.[nameKey] ?? restro?.[`WhatsappMobileNumberName${idx}`] ?? ""} onChange={(e) => onChange(nameKey, e.target.value)} className="w-full border rounded px-2 py-1" />
-        </div>
-        <div className="col-span-2">
-          <input value={restro?.[numKey] ?? restro?.[`WhatsappMobileNumberforOrderDetails${idx}`] ?? ""} onChange={(e) => onChange(numKey, e.target.value)} className="w-full border rounded px-2 py-1" />
-        </div>
-        <div className="col-span-1">
-          <label className="flex items-center">
-            <input type="checkbox" checked={!!restro?.[statusKey] ?? !!restro?.[`WhatsappMobileNumberStatus${idx}`]} onChange={(e) => onChange(statusKey, e.target.checked)} className="mr-2" />
-            Status
-          </label>
-        </div>
-        <div className="col-span-1"></div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h3 className="font-semibold mb-2">Contact</h3>
-      <div>
-        <h4 className="font-medium mt-2">Emails</h4>
-        <EmailRow idx={1} />
-        <EmailRow idx={2} />
-      </div>
-      <div>
-        <h4 className="font-medium mt-2">WhatsApp Mobiles</h4>
-        <WpRow idx={1} />
-        <WpRow idx={2} />
-      </div>
-    </div>
-  );
-}
+              <input type="date" value={fssaiExpiry} onChange={(e) => setFssaiExpiry(e.target.value)} className="
