@@ -1,7 +1,7 @@
 // app/api/debug/restro/[code]/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 
 const PUB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const PUB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -12,7 +12,7 @@ export async function GET(req: Request, { params }: { params: { code: string } }
 
   const out: any = {};
 
-  // Public client
+  // Public client (uses anon/public keys)
   try {
     if (!PUB_URL || !PUB_KEY) {
       out.public = { error: "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY" };
@@ -27,12 +27,17 @@ export async function GET(req: Request, { params }: { params: { code: string } }
     out.public = { error: String(e) };
   }
 
-  // Server client
+  // Server client (service role)
   try {
-    let q2: any = supabaseServer.from("RestroMaster").select("*");
-    q2 = !Number.isNaN(numeric) ? q2.eq("RestroCode", numeric) : q2.eq("RestroCode", code);
-    const { data, error } = await q2.limit(1);
-    out.server = { data: data ?? null, error: error ? String(error) : null };
+    const supabase = getSupabaseServer();
+    if (!supabase) {
+      out.server = { error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY (server client not initialized)" };
+    } else {
+      let q2: any = supabase.from("RestroMaster").select("*");
+      q2 = !Number.isNaN(numeric) ? q2.eq("RestroCode", numeric) : q2.eq("RestroCode", code);
+      const { data, error } = await q2.limit(1);
+      out.server = { data: data ?? null, error: error ? String(error) : null };
+    }
   } catch (e: any) {
     out.server = { error: String(e) };
   }
