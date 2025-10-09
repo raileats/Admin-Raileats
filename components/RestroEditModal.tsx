@@ -1,4 +1,3 @@
-// components/RestroEditModal.tsx
 "use client";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -134,21 +133,26 @@ export default function RestroEditModal(props: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      aria-hidden={false}
+    >
+      {/* Container sized to ~90% of viewport (both width and height) */}
       <div
-        className="
-          bg-white rounded-lg shadow-2xl
-          w-[95vw] md:w-[90vw]
-          max-w-[1400px]
-          h-auto md:h-[90vh]
-          overflow-auto
-          p-6
-          ring-1 ring-black/5
-        "
         role="dialog"
         aria-modal="true"
+        className="
+          bg-white rounded-lg shadow-2xl
+          w-[90vw] h-[90vh]
+          max-w-none
+          overflow-hidden
+          p-6
+          ring-1 ring-black/5
+          flex flex-col
+        "
       >
-        <div className="flex justify-between items-center mb-4">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-4 shrink-0">
           <h2 className="text-lg font-semibold">
             Edit Restro — {providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode}
           </h2>
@@ -164,7 +168,7 @@ export default function RestroEditModal(props: Props) {
               Close
             </button>
             <button
-              className="px-3 py-1 rounded bg-blue-600 text-white"
+              className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-60"
               onClick={handleSave}
               disabled={!dirty || loading}
             >
@@ -173,7 +177,8 @@ export default function RestroEditModal(props: Props) {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        {/* Tabs */}
+        <div className="flex gap-2 mb-4 shrink-0">
           <button
             className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-amber-100" : "bg-gray-100"}`}
             onClick={() => setActiveTab("basic")}
@@ -200,7 +205,8 @@ export default function RestroEditModal(props: Props) {
           </button>
         </div>
 
-        <div>
+        {/* Content area: scrollable */}
+        <div className="overflow-auto grow">
           {loading && <div className="mb-3 text-sm text-gray-500">Loading...</div>}
 
           {activeTab === "basic" && <BasicInfoTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
