@@ -1,34 +1,437 @@
 // components/RestroEditModal.tsx
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Restro = any;
-type SaveResult = { ok: true; row?: any } | { ok: false; error: any };
+type Restro = Record<string, any>;
+
+type SaveResult =
+  | { ok: true; row?: any }
+  | { ok: false; error: any };
+
 type StationsOption = { label: string; value: string };
 
 type Props = {
   restroCode?: string;
   isOpen?: boolean;
-  restro?: Restro;
+  restro?: Restro | null;
   initialTab?: string;
   stationsOptions?: StationsOption[] | null;
   onClose?: () => void;
   onSave?: (payload: any) => Promise<SaveResult>;
 };
 
+/* ------------ helper UI components & small tabs (defined BEFORE export to avoid TS issues) ------------ */
+
+function TextRow({
+  label,
+  value,
+  onChange,
+  placeholder,
+  readOnly = false,
+  error,
+  inputProps,
+}: {
+  label: string;
+  value: any;
+  onChange: (v: any) => void;
+  placeholder?: string;
+  readOnly?: boolean;
+  error?: string | null;
+  inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
+}) {
+  return (
+    <div className="grid grid-cols-5 gap-3 items-start py-2">
+      <div className="col-span-1 text-sm text-gray-700">{label}</div>
+      <div className="col-span-4">
+        <input
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          readOnly={readOnly}
+          className={`w-full border rounded px-2 py-2 ${readOnly ? "bg-gray-100" : ""} ${error ? "border-red-500" : ""}`}
+          {...inputProps}
+        />
+        {error && <div className="text-sm text-red-600 mt-1">{error}</div>}
+      </div>
+    </div>
+  );
+}
+
+function BasicInfoTab({ restro, onChange, validationErrors }: { restro: any; onChange: (k: string, v: any) => void; validationErrors: Record<string, string | null> }) {
+  return (
+    <div>
+      <h3 className="font-semibold mb-2">Basic Information</h3>
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <TextRow label="Restro Code" value={restro?.restro_code ?? restro?.RestroCode} onChange={(v: any) => onChange("restro_code", v)} readOnly />
+          <TextRow
+            label="Station Code with Name"
+            value={restro?.station_code_with_name ?? restro?.StationCodeWithName ?? restro?.station_code_display ?? ""}
+            onChange={() => {}}
+            readOnly
+            placeholder="(read-only)"
+          />
+          <TextRow label="Restro Name" value={restro?.restro_name ?? restro?.RestroName} onChange={(v: any) => onChange("restro_name", v)} />
+          <TextRow label="Brand Name if Any" value={restro?.brand_name ?? restro?.BrandName} onChange={(v: any) => onChange("brand_name", v)} />
+          <div className="mt-3">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={!!(restro?.raileats_status ?? restro?.RailEatsStatus)}
+                onChange={(e) => onChange("raileats_status", e.target.checked ? 1 : 0)}
+              />
+              <span className="text-sm">RailEats Status (on/off)</span>
+            </label>
+          </div>
+          <div className="mt-3">
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={!!(restro?.is_irctc_approved ?? restro?.IsIrctcApproved)}
+                onChange={(e) => onChange("is_irctc_approved", e.target.checked ? 1 : 0)}
+              />
+              <span className="text-sm">Is IRCTC Approved</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <TextRow label="Owner Name" value={restro?.owner_name ?? restro?.OwnerName} onChange={(v: any) => onChange("owner_name", v)} />
+          <TextRow
+            label="Owner Email"
+            value={restro?.owner_email ?? restro?.OwnerEmail}
+            onChange={(v: any) => onChange("owner_email", v)}
+            error={validationErrors.owner_email ?? null}
+          />
+          <TextRow
+            label="Owner Phone"
+            value={restro?.owner_phone ?? restro?.OwnerPhone}
+            onChange={(v: any) => onChange("owner_phone", v)}
+            inputProps={{ maxLength: 10 }}
+            error={validationErrors.owner_phone ?? null}
+          />
+          <TextRow
+            label="Restro Email"
+            value={restro?.restro_email ?? restro?.RestroEmail}
+            onChange={(v: any) => onChange("restro_email", v)}
+            error={validationErrors.restro_email ?? null}
+          />
+          <TextRow
+            label="Restro Phone"
+            value={restro?.restro_phone ?? restro?.RestroPhone}
+            onChange={(v: any) => onChange("restro_phone", v)}
+            inputProps={{ maxLength: 10 }}
+            error={validationErrors.restro_phone ?? null}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StationSettingsTab({ restro, onChange, stationsOptions }: { restro: any; onChange: (k: string, v: any) => void; stationsOptions?: StationsOption[] | null }) {
+  const opts = stationsOptions ?? [];
+  const readOnlyValue = restro?.station_code_with_name ?? restro?.StationCodeWithName ?? (restro?.StationCode ? `${restro.StationCode} / ${restro.StationName ?? ""} - ${restro.State ?? ""}` : "");
+
+  return (
+    <div>
+      <h3 className="font-semibold mb-2">Station Settings</h3>
+
+      {opts.length > 0 && (
+        <div className="mb-3">
+          <label className="block text-sm">Select Station</label>
+          <select value={restro?.station_code ?? restro?.StationCode ?? ""} onChange={(e) => onChange("station_code", e.target.value)} className="mt-1 w-full border rounded px-2 py-1">
+            <option value="">— select —</option>
+            {opts.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <TextRow label="Fix from Basic Information (NGP)" value={restro?.fix_from_basic_info ?? restro?.FixFromBasicInfo} onChange={(v: any) => onChange("fix_from_basic_info", v)} />
+          <TextRow label="Station Category" value={restro?.station_category ?? restro?.StationCategory} onChange={(v: any) => onChange("station_category", v)} />
+          <TextRow label="Open Time" value={restro?.open_time ?? restro?.OpenTime} onChange={(v: any) => onChange("open_time", v)} />
+          <TextRow label="Close Time" value={restro?.close_time ?? restro?.CloseTime} onChange={(v: any) => onChange("close_time", v)} />
+        </div>
+
+        <div>
+          <TextRow label="Weekly Off" value={restro?.weekly_off ?? restro?.WeeklyOff} onChange={(v: any) => onChange("weekly_off", v)} />
+          <TextRow label="Minimum Order Value" value={restro?.minimum_order_value ?? restro?.MinimumOrderValue} onChange={(v: any) => onChange("minimum_order_value", v)} />
+          <TextRow label="Cut Off Time" value={restro?.cut_off_time ?? restro?.CutOffTime} onChange={(v: any) => onChange("cut_off_time", v)} />
+          <TextRow label="RailEats Customer Delivery Charge" value={restro?.customer_delivery_charge ?? restro?.CustomerDeliveryCharge} onChange={(v: any) => onChange("customer_delivery_charge", v)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChange: (k: string, v: any) => void; restroCode: string }) {
+  const [fssaiNumber, setFssaiNumber] = useState("");
+  const [fssaiExpiry, setFssaiExpiry] = useState("");
+  const [fssaiFile, setFssaiFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (!restro) return;
+    setFssaiNumber(restro?.fssai_number ?? restro?.FSSAINumber ?? "");
+    setFssaiExpiry(restro?.fssai_expiry ?? restro?.FSSAIExpiry ?? "");
+  }, [restro]);
+
+  function validateFssaiExpiry(dateStr: string) {
+    if (!dateStr) return false;
+    const d = new Date(dateStr + "T00:00:00");
+    const now = new Date();
+    const min = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()); // at least 1 month
+    return d >= min;
+  }
+
+  async function uploadFileToServer(file: File) {
+    const filename = file.name || `upload_${Date.now()}`;
+    const contentType = file.type || "application/octet-stream";
+    const arrayBuffer = await file.arrayBuffer();
+
+    const res = await fetch(`/api/restros/${restroCode}/upload-file`, {
+      method: "POST",
+      headers: {
+        "Content-Type": contentType,
+        "x-file-name": filename,
+      },
+      body: arrayBuffer,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error("Upload failed: " + text);
+    }
+    const data = await res.json();
+    return data.file_url as string;
+  }
+
+  async function addNewFssaiEntry() {
+    if (!validateFssaiExpiry(fssaiExpiry)) {
+      alert("FSSAI expiry must be at least 1 month from today");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      let file_url: string | null = null;
+      if (fssaiFile) {
+        file_url = await uploadFileToServer(fssaiFile);
+      }
+
+      const body = { type: "fssai", fssai_number: fssaiNumber, fssai_expiry: fssaiExpiry, file_url };
+      const res = await fetch(`/api/restros/${restroCode}/docs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "Failed to add FSSAI");
+      }
+
+      alert("FSSAI added");
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      alert("Error: " + (err.message ?? String(err)));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div>
+      <h3 className="font-semibold mb-2">Address</h3>
+      <div className="grid grid-cols-2 gap-6 mb-4">
+        <div>
+          <TextRow label="Restro Address" value={restro?.restro_address ?? restro?.RestroAddress} onChange={(v: any) => onChange("restro_address", v)} />
+          <TextRow label="City / Village" value={restro?.city ?? restro?.City} onChange={(v: any) => onChange("city", v)} />
+          <TextRow label="Pin Code" value={restro?.pin_code ?? restro?.PinCode} onChange={(v: any) => onChange("pin_code", v)} />
+          <TextRow label="Restro Latitude" value={restro?.restro_latitude ?? restro?.RestroLatitude} onChange={(v: any) => onChange("restro_latitude", v)} />
+        </div>
+        <div>
+          <TextRow label="State (non-editable)" value={restro?.state ?? restro?.State} onChange={() => {}} readOnly />
+          <TextRow label="District (non-editable)" value={restro?.district ?? restro?.District} onChange={() => {}} readOnly />
+          <TextRow label="Restro Longitude" value={restro?.restro_longitude ?? restro?.RestroLongitude} onChange={(v: any) => onChange("restro_longitude", v)} />
+        </div>
+      </div>
+
+      <h3 className="font-semibold mb-2">Documents</h3>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="col-span-3">
+          <div className="grid grid-cols-6 gap-2 items-center">
+            <div className="col-span-1 text-sm">FSSAI Number</div>
+            <div className="col-span-2">
+              <input value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div className="col-span-2">
+              <input type="date" value={fssaiExpiry} onChange={(e) => setFssaiExpiry(e.target.value)} className="w-full border rounded px-2 py-1" />
+            </div>
+            <div className="col-span-1">
+              <input type="file" onChange={(e: any) => setFssaiFile(e.target.files?.[0] ?? null)} />
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <button className="px-3 py-1 rounded bg-green-500 text-white" onClick={addNewFssaiEntry} disabled={uploading}>
+              {uploading ? "Uploading..." : "Add New FSSAI Entry"}
+            </button>
+          </div>
+        </div>
+
+        {/* GST */}
+        <div className="col-span-3">
+          <div className="grid grid-cols-6 gap-2 items-center mt-4">
+            <div className="col-span-1 text-sm">GST Number</div>
+            <div className="col-span-5">
+              <input value={restro?.gst_number ?? restro?.GSTNumber ?? ""} onChange={(e) => onChange("gst_number", e.target.value)} className="w-full border rounded px-2 py-1" />
+            </div>
+          </div>
+          <div className="mt-2">
+            <button
+              className="px-3 py-1 rounded bg-blue-500 text-white"
+              onClick={async () => {
+                const res = await fetch(`/api/restros/${restroCode}/docs`, {
+                  method: "POST",
+                  body: JSON.stringify({ type: "gst", gst_number: restro?.gst_number ?? restro?.GSTNumber }),
+                  headers: { "Content-Type": "application/json" },
+                });
+                if (!res.ok) {
+                  const text = await res.text();
+                  alert("Failed to add GST: " + text);
+                  return;
+                }
+                alert("GST added");
+                window.location.reload();
+              }}
+            >
+              Add New GST Entry
+            </button>
+          </div>
+        </div>
+
+        {/* PAN */}
+        <div className="col-span-3">
+          <div className="grid grid-cols-6 gap-2 items-center mt-4">
+            <div className="col-span-1 text-sm">PAN Number</div>
+            <div className="col-span-5">
+              <input value={restro?.pan_number ?? restro?.PANNumber ?? ""} onChange={(e) => onChange("pan_number", e.target.value)} className="w-full border rounded px-2 py-1" />
+            </div>
+          </div>
+          <div className="mt-2">
+            <button
+              className="px-3 py-1 rounded bg-amber-600 text-white"
+              onClick={async () => {
+                const res = await fetch(`/api/restros/${restroCode}/docs`, {
+                  method: "POST",
+                  body: JSON.stringify({ type: "pan", pan_number: restro?.pan_number ?? restro?.PANNumber }),
+                  headers: { "Content-Type": "application/json" },
+                });
+                if (!res.ok) {
+                  const text = await res.text();
+                  alert("Failed to add PAN: " + text);
+                  return;
+                }
+                alert("PAN added");
+                window.location.reload();
+              }}
+            >
+              Add New PAN Entry
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactsTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
+  function EmailRow({ idx }: { idx: number }) {
+    const nameKey = `email_name_${idx}`;
+    const emailKey = `email_for_orders_${idx}`;
+    const statusKey = `email_status_${idx}`;
+    return (
+      <div className="grid grid-cols-6 gap-2 items-center py-1">
+        <div className="col-span-1 text-sm">Name</div>
+        <div className="col-span-1">
+          <input value={restro?.[nameKey] ?? restro?.[`EmailAddressName${idx}`] ?? ""} onChange={(e) => onChange(nameKey, e.target.value)} className="w-full border rounded px-2 py-1" />
+        </div>
+        <div className="col-span-2">
+          <input value={restro?.[emailKey] ?? restro?.[`EmailsforOrdersReceiving${idx}`] ?? ""} onChange={(e) => onChange(emailKey, e.target.value)} className="w-full border rounded px-2 py-1" />
+        </div>
+        <div className="col-span-1">
+          <label className="flex items-center">
+            <input type="checkbox" checked={!!restro?.[statusKey] ?? !!restro?.[`EmailAddressStatus${idx}`]} onChange={(e) => onChange(statusKey, e.target.checked)} className="mr-2" />
+            Status
+          </label>
+        </div>
+        <div className="col-span-1"></div>
+      </div>
+    );
+  }
+
+  function WpRow({ idx }: { idx: number }) {
+    const nameKey = `wp_name_${idx}`;
+    const numKey = `wp_num_${idx}`;
+    const statusKey = `wp_status_${idx}`;
+    return (
+      <div className="grid grid-cols-6 gap-2 items-center py-1">
+        <div className="col-span-1 text-sm">Name</div>
+        <div className="col-span-1">
+          <input value={restro?.[nameKey] ?? restro?.[`WhatsappMobileNumberName${idx}`] ?? ""} onChange={(e) => onChange(nameKey, e.target.value)} className="w-full border rounded px-2 py-1" />
+        </div>
+        <div className="col-span-2">
+          <input value={restro?.[numKey] ?? restro?.[`WhatsappMobileNumberforOrderDetails${idx}`] ?? ""} onChange={(e) => onChange(numKey, e.target.value)} className="w-full border rounded px-2 py-1" />
+        </div>
+        <div className="col-span-1">
+          <label className="flex items-center">
+            <input type="checkbox" checked={!!restro?.[statusKey] ?? !!restro?.[`WhatsappMobileNumberStatus${idx}`]} onChange={(e) => onChange(statusKey, e.target.checked)} className="mr-2" />
+            Status
+          </label>
+        </div>
+        <div className="col-span-1"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="font-semibold mb-2">Contact</h3>
+      <div>
+        <h4 className="font-medium mt-2">Emails</h4>
+        <EmailRow idx={1} />
+        <EmailRow idx={2} />
+      </div>
+      <div>
+        <h4 className="font-medium mt-2">WhatsApp Mobiles</h4>
+        <WpRow idx={1} />
+        <WpRow idx={2} />
+      </div>
+    </div>
+  );
+}
+
+/* ----------------- main modal component ----------------- */
+
 export default function RestroEditModal(props: Props) {
   const router = useRouter();
 
-  // Defensive defaults
   const providedRestro = props.restro ?? null;
-  const providedRestroCode =
-    props.restroCode ?? (providedRestro?.restro_code ?? providedRestro?.code ?? null);
+  const providedRestroCode = props.restroCode ?? (providedRestro?.restro_code ?? providedRestro?.code ?? null);
   const initialOpen = props.isOpen ?? true;
   const initialTab = props.initialTab ?? "Basic Information";
   const onCloseProp = props.onClose;
   const callerOnSave = props.onSave;
-  const stationOptions = props.stationsOptions ?? []; // <-- important: default to empty array
+  const stationOptions = props.stationsOptions ?? []; // default to empty array to avoid null issues
 
   const [activeTab, setActiveTab] = useState<string>(
     initialTab === "Basic Information" ? "basic" : initialTab?.toLowerCase() ?? "basic"
@@ -37,29 +440,11 @@ export default function RestroEditModal(props: Props) {
   const [restro, setRestro] = useState<Restro | null>(providedRestro);
   const [dirty, setDirty] = useState(false);
   const [open, setOpen] = useState<boolean>(!!initialOpen);
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string | null>>({});
 
-  // hide page-level header (one-time: only if page has .page-restro-header)
   useEffect(() => {
-    // toggle body scroll lock when modal open
-    if (open) {
-      document.body.style.overflow = "hidden";
-      document.querySelectorAll(".page-restro-header").forEach((el) => {
-        (el as HTMLElement).style.display = "none";
-      });
-    } else {
-      document.body.style.overflow = "";
-      document.querySelectorAll(".page-restro-header").forEach((el) => {
-        (el as HTMLElement).style.display = ""; // restore
-      });
-    }
-    return () => {
-      document.body.style.overflow = "";
-      document.querySelectorAll(".page-restro-header").forEach((el) => {
-        (el as HTMLElement).style.display = "";
-      });
-    };
-  }, [open]);
+    setOpen(initialOpen);
+  }, [initialOpen]);
 
   // Fetch restro if only restroCode provided
   useEffect(() => {
@@ -72,7 +457,11 @@ export default function RestroEditModal(props: Props) {
       .then((r) => r.json())
       .then((data) => {
         const payload = data?.data ?? data;
-        if (mounted) setRestro(payload);
+        // also prepare a human-readable station_code_with_name if possible
+        if (payload && mounted) {
+          payload.station_code_with_name = payload.station_code_with_name ?? (payload.StationCode ? `${payload.StationCode} / ${payload.StationName ?? ""} - ${payload.State ?? ""}` : "");
+        }
+        if (mounted) setRestro(payload ?? null);
       })
       .catch((e) => console.error(e))
       .finally(() => mounted && setLoading(false));
@@ -91,38 +480,37 @@ export default function RestroEditModal(props: Props) {
     setDirty(true);
   }
 
-  // simple validation example (email contains @ and ., phones max 10 digits)
-  function validate(payload: any) {
-    setValidationMessage(null);
-    const ownerEmail = payload?.owner_email ?? payload?.OwnerEmail ?? "";
-    const restroEmail = payload?.restro_email ?? payload?.RestroEmail ?? "";
-    const ownerPhone = (payload?.owner_phone ?? payload?.OwnerPhone ?? "") + "";
-    const restroPhone = (payload?.restro_phone ?? payload?.RestroPhone ?? "") + "";
-
-    if (ownerEmail && (!ownerEmail.includes("@") || !ownerEmail.includes("."))) {
-      setValidationMessage("Owner email looks invalid");
-      return false;
-    }
-    if (restroEmail && (!restroEmail.includes("@") || !restroEmail.includes("."))) {
-      setValidationMessage("Restro email looks invalid");
-      return false;
-    }
-    if (ownerPhone && ownerPhone.replace(/\D/g, "").length > 10) {
-      setValidationMessage("Owner phone must be at most 10 digits");
-      return false;
-    }
-    if (restroPhone && restroPhone.replace(/\D/g, "").length > 10) {
-      setValidationMessage("Restro phone must be at most 10 digits");
-      return false;
-    }
-    return true;
+  // simple validators
+  function validateEmail(email?: string) {
+    if (!email) return "Required";
+    if (!email.includes("@") || !email.includes(".")) return "Must be a valid email";
+    return null;
   }
+  function validatePhone(phone?: string) {
+    if (!phone) return null; // optional
+    const onlyDigits = /^\d+$/;
+    if (!onlyDigits.test(phone)) return "Only digits allowed";
+    if (phone.length > 10) return "Max 10 digits";
+    return null;
+  }
+
+  // compute validation state
+  useEffect(() => {
+    const errs: Record<string, string | null> = {};
+    errs.owner_email = validateEmail(restro?.owner_email ?? restro?.OwnerEmail);
+    errs.restro_email = validateEmail(restro?.restro_email ?? restro?.RestroEmail);
+    errs.owner_phone = validatePhone(restro?.owner_phone ?? restro?.OwnerPhone);
+    errs.restro_phone = validatePhone(restro?.restro_phone ?? restro?.RestroPhone);
+    setValidationErrors(errs);
+  }, [restro?.owner_email, restro?.restro_email, restro?.owner_phone, restro?.restro_phone, restro?.OwnerPhone, restro?.OwnerEmail, restro?.RestroEmail, restro?.RestroPhone]);
+
+  const hasValidationErrors = useMemo(() => {
+    return Object.values(validationErrors).some((v) => v !== null && v !== undefined);
+  }, [validationErrors]);
 
   async function defaultSave(payload: any): Promise<SaveResult> {
     const code = providedRestroCode ?? payload?.restro_code ?? payload?.code ?? null;
     if (!code) return { ok: false, error: "missing_restro_code" };
-
-    if (!validate(payload)) return { ok: false, error: validationMessage ?? "validation_failed" };
 
     try {
       const res = await fetch(`/api/restros/${code}`, {
@@ -142,9 +530,20 @@ export default function RestroEditModal(props: Props) {
   }
 
   async function handleSave() {
-    const payload = { ...(restro ?? providedRestro) };
+    // re-check validation before saving
+    if (hasValidationErrors) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    if (!restro && !providedRestro) {
+      alert("Nothing to save");
+      return;
+    }
+
     setLoading(true);
     try {
+      const payload = { ...(restro ?? providedRestro) };
       const saveFn = callerOnSave ?? defaultSave;
       const result = await saveFn(payload);
       if (result.ok) {
@@ -155,11 +554,11 @@ export default function RestroEditModal(props: Props) {
       } else {
         const err = (result as { ok: false; error: any }).error ?? result;
         console.error("save error", err);
-        setValidationMessage(String(err));
+        alert("Save failed: " + String(err ?? "unknown"));
       }
     } catch (err: any) {
       console.error(err);
-      setValidationMessage(String(err?.message ?? err));
+      alert("Save failed: " + String(err?.message ?? err));
     } finally {
       setLoading(false);
     }
@@ -173,191 +572,108 @@ export default function RestroEditModal(props: Props) {
 
   if (!open) return null;
 
+  const displayTitle = `${providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode ?? ""} / ${restro?.restro_name ?? restro?.RestroName ?? ""}`;
+  const displaySubtitle = restro?.station_code_with_name ?? restro?.StationCodeWithName ?? restro?.station_display_sub ?? "";
+
   return (
-    <div className="fixed inset-0 z-[1000] flex items-start justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-auto">
       <div
-        className="bg-white rounded-lg shadow-2xl w-[95vw] md:w-[90vw] max-w-[1400px] max-h-[94vh] overflow-hidden flex flex-col"
+        className="
+          bg-white rounded-lg shadow-2xl
+          w-[95vw] md:w-[90vw]
+          max-w-[1400px]
+          h-auto md:h-[90vh]
+          overflow-auto
+          p-0
+          ring-1 ring-black/5
+        "
         role="dialog"
         aria-modal="true"
       >
-        {/* Header (sticky inside modal) */}
-        <div className="sticky top-0 z-20 bg-white border-b px-6 py-4 flex items-center justify-between">
+        {/* Header inside modal (keeps it fixed to modal and avoids page-wide duplication) */}
+        <div className="flex items-start justify-between p-4 border-b sticky top-0 bg-white z-10">
           <div>
-            <div className="text-lg font-semibold">
-              {providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode}{" "}
-              <span className="text-base font-normal text-gray-600">/ {restro?.restro_name ?? restro?.RestroName}</span>
-            </div>
-            <div className="text-sm text-teal-600">{restro?.station_code_with_name ?? restro?.StationCodeWithName ?? ""}</div>
+            <div className="text-lg font-semibold">{displayTitle}</div>
+            {displaySubtitle && <div className="text-sm text-teal-600 mt-1">{displaySubtitle}</div>}
           </div>
-          <button
-            onClick={() => handleClose()}
-            className="ml-4 inline-flex items-center justify-center bg-red-500 text-white rounded p-2 hover:opacity-95"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+
+          <div>
+            <button
+              aria-label="Close"
+              title="Close"
+              onClick={handleClose}
+              className="bg-red-500 text-white p-2 rounded-md shadow"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
-        {/* Body (scrollable) */}
-        <div className="p-6 overflow-auto flex-1">
+        <div className="p-6">
           <div className="flex gap-2 mb-4">
-            <button className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("basic")}>
+            <button
+              className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-amber-100" : "bg-gray-100"}`}
+              onClick={() => setActiveTab("basic")}
+            >
               Basic Information
             </button>
-            <button className={`px-3 py-1 rounded ${activeTab === "station" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("station")}>
+            <button
+              className={`px-3 py-1 rounded ${activeTab === "station" ? "bg-amber-100" : "bg-gray-100"}`}
+              onClick={() => setActiveTab("station")}
+            >
               Station Settings
             </button>
-            <button className={`px-3 py-1 rounded ${activeTab === "address" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("address")}>
+            <button
+              className={`px-3 py-1 rounded ${activeTab === "address" ? "bg-amber-100" : "bg-gray-100"}`}
+              onClick={() => setActiveTab("address")}
+            >
               Address & Documents
             </button>
-            <button className={`px-3 py-1 rounded ${activeTab === "contact" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("contact")}>
+            <button
+              className={`px-3 py-1 rounded ${activeTab === "contact" ? "bg-amber-100" : "bg-gray-100"}`}
+              onClick={() => setActiveTab("contact")}
+            >
               Contacts
             </button>
           </div>
 
           {loading && <div className="mb-3 text-sm text-gray-500">Loading...</div>}
 
-          {activeTab === "basic" && <BasicInfoTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
+          {activeTab === "basic" && <BasicInfoTab restro={restro ?? providedRestro} onChange={onFieldChange} validationErrors={validationErrors} />}
+
           {activeTab === "station" && (
             <StationSettingsTab restro={restro ?? providedRestro} onChange={onFieldChange} stationsOptions={stationOptions} />
           )}
+
           {activeTab === "address" && (
             <AddressDocsTab
               restro={restro ?? providedRestro}
               onChange={onFieldChange}
               restroCode={
-                providedRestroCode ?? (restro ?? providedRestro)?.restro_code ?? (restro ?? providedRestro)?.RestroCode
+                providedRestroCode ??
+                (restro ?? providedRestro)?.restro_code ??
+                (restro ?? providedRestro)?.RestroCode ??
+                ""
               }
             />
           )}
-          {activeTab === "contact" && <ContactsTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
-        </div>
 
-        {/* Footer (sticky) */}
-        <div className="sticky bottom-0 z-20 bg-white border-t px-6 py-4 flex items-center justify-between">
-          <div className="text-sm text-red-600">{validationMessage}</div>
-          <div className="flex gap-3">
+          {activeTab === "contact" && <ContactsTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
+
+          {/* bottom action bar */}
+          <div className="mt-6 border-t pt-4 pb-6 flex justify-end gap-3 items-center">
+            {hasValidationErrors && <div className="text-sm text-red-600 mr-auto">Please fix validation errors above.</div>}
             <button className="px-4 py-2 rounded border" onClick={handleClose} disabled={loading}>
               Cancel
             </button>
-            <button className="px-4 py-2 rounded bg-blue-600 text-white" onClick={handleSave} disabled={!dirty || loading}>
+            <button
+              className={`px-4 py-2 rounded bg-blue-600 text-white ${(!dirty || hasValidationErrors || loading) ? "opacity-60 cursor-not-allowed" : ""}`}
+              onClick={handleSave}
+              disabled={!dirty || hasValidationErrors || loading}
+            >
               {loading ? "Saving..." : "Save"}
             </button>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ----------------- small subcomponents ----------------- */
-
-function TextRow({ label, value, onChange, placeholder, readOnly = false }: any) {
-  return (
-    <div className="grid grid-cols-5 gap-3 items-center py-1">
-      <div className="col-span-1 text-sm text-gray-700">{label}</div>
-      <div className="col-span-4">
-        <input
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          readOnly={readOnly}
-          className={`w-full border rounded px-2 py-1 ${readOnly ? "bg-gray-100" : ""}`}
-        />
-      </div>
-    </div>
-  );
-}
-
-function BasicInfoTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
-  return (
-    <div>
-      <h3 className="font-semibold mb-2">Basic Information</h3>
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <TextRow label="Restro Code" value={restro?.restro_code ?? restro?.RestroCode} onChange={(v: any) => onChange("restro_code", v)} />
-          <TextRow label="Station Code with Name" value={restro?.station_code_with_name ?? restro?.StationCodeWithName ?? "(read-only)"} onChange={() => {}} readOnly />
-          <TextRow label="Restro Name" value={restro?.restro_name ?? restro?.RestroName} onChange={(v: any) => onChange("restro_name", v)} />
-          <TextRow label="Brand Name if Any" value={restro?.brand_name ?? restro?.BrandName} onChange={(v: any) => onChange("brand_name", v)} />
-          <div className="flex items-center gap-4 py-2">
-            <label className="flex items-center gap-2"><input type="checkbox" onChange={(e)=>onChange("raileats_status", e.target.checked?1:0)} checked={!!(restro?.raileats_status ?? restro?.RailEatsStatus)} />RailEats Status (on/off)</label>
-          </div>
-          <div className="flex items-center gap-4 py-2">
-            <label className="flex items-center gap-2"><input type="checkbox" onChange={(e)=>onChange("is_irctc_approved", e.target.checked?1:0)} checked={!!(restro?.is_irctc_approved ?? restro?.IsIrctcApproved)} />Is IRCTC Approved</label>
-          </div>
-        </div>
-
-        <div>
-          <TextRow label="Owner Name" value={restro?.owner_name ?? restro?.OwnerName} onChange={(v: any) => onChange("owner_name", v)} />
-          <TextRow label="Owner Email" value={restro?.owner_email ?? restro?.OwnerEmail} onChange={(v: any) => onChange("owner_email", v)} />
-          <TextRow label="Owner Phone" value={restro?.owner_phone ?? restro?.OwnerPhone} onChange={(v: any) => onChange("owner_phone", v)} />
-          <TextRow label="Restro Email" value={restro?.restro_email ?? restro?.RestroEmail} onChange={(v: any) => onChange("restro_email", v)} />
-          <TextRow label="Restro Phone" value={restro?.restro_phone ?? restro?.RestroPhone} onChange={(v: any) => onChange("restro_phone", v)} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StationSettingsTab({ restro, onChange, stationsOptions }: { restro: any; onChange: (k: string, v: any) => void; stationsOptions?: StationsOption[] }) {
-  return (
-    <div>
-      <h3 className="font-semibold mb-2">Station Settings</h3>
-      {stationsOptions && stationsOptions.length > 0 && (
-        <div className="mb-3">
-          <label className="block text-sm">Select Station</label>
-          <select value={restro?.station_code ?? restro?.StationCode ?? ""} onChange={(e) => onChange("station_code", e.target.value)} className="mt-1 w-full border rounded px-2 py-1">
-            <option value="">— select —</option>
-            {stationsOptions.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      {/* other fields omitted for brevity — keep as in your original component */}
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <TextRow label="Fix from Basic Information (NGP)" value={restro?.fix_from_basic_info ?? restro?.FixFromBasicInfo} onChange={(v: any) => onChange("fix_from_basic_info", v)} />
-        </div>
-        <div>
-          <TextRow label="Minimum Order Value" value={restro?.minimum_order_value ?? restro?.MinimumOrderValue} onChange={(v: any) => onChange("minimum_order_value", v)} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChange: (k: string, v: any) => void; restroCode: string }) {
-  // keep existing logic from your file (omitted here for brevity)
-  return (
-    <div>
-      <h3 className="font-semibold mb-2">Address</h3>
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <TextRow label="Restro Address" value={restro?.restro_address ?? restro?.RestroAddress} onChange={(v: any) => onChange("restro_address", v)} />
-          <TextRow label="City / Village" value={restro?.city ?? restro?.City} onChange={(v: any) => onChange("city", v)} />
-        </div>
-        <div>
-          <TextRow label="State (non-editable)" value={restro?.state ?? restro?.State} onChange={() => {}} readOnly />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ContactsTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
-  // keep existing contact UI (omitted for brevity)
-  return (
-    <div>
-      <h3 className="font-semibold mb-2">Contact</h3>
-      <div className="grid grid-cols-6 gap-2">
-        <div className="col-span-2">
-          <input value={restro?.contact_name_1 ?? ""} onChange={(e) => onChange("contact_name_1", e.target.value)} className="w-full border rounded px-2 py-1" />
-        </div>
-        <div className="col-span-2">
-          <input value={restro?.contact_value_1 ?? ""} onChange={(e) => onChange("contact_value_1", e.target.value)} className="w-full border rounded px-2 py-1" />
         </div>
       </div>
     </div>
