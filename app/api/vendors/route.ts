@@ -1,50 +1,87 @@
-// app/api/vendors/route.ts
-import { NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabaseServer';
+// path: app/api/vendors/route.ts
+import { NextResponse } from "next/server";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 
-// Reuse same column set as restros
+/**
+ * Vendors (RestroMaster) list + optional create.
+ * Uses getSupabaseServer() so it won't crash the build if envs are missing.
+ */
+
 const COLUMNS = [
-  'RestroCode','RestroName','OwnerName','StationCode','StationName',
-  'OwnerPhone','OwnerEmail','FSSAINumber','FSSAIExpiryDate',
-  'IRCTCStatus','RaileatsStatus','IsIrctcApproved'
-].join(',');
+  "RestroCode",
+  "RestroName",
+  "OwnerName",
+  "StationCode",
+  "StationName",
+  "OwnerPhone",
+  "OwnerEmail",
+  "FSSAINumber",
+  "FSSAIExpiryDate",
+  "IRCTCStatus",
+  "RaileatsStatus",
+  "IsIrctcApproved",
+].join(",");
 
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url);
-    const q = url.searchParams.get('q') ?? '';
-    // Keep same filter style your frontend expects (adjust as needed)
-    let query = supabaseServer.from('RestroMaster').select(COLUMNS).order('RestroName', { ascending: true }).limit(1000);
-
-    if (q) {
-      // example: support a simple ilike OR across common fields
-      query = supabaseServer
-        .from('RestroMaster')
-        .select(COLUMNS)
-        .or(`RestroCode.ilike.%${q}%,RestroName.ilike.%${q}%,OwnerName.ilike.%${q}%,StationCode.ilike.%${q}%`)
-        .order('RestroName', { ascending: true })
-        .limit(1000);
+    const supabase = getSupabaseServer();
+    if (!supabase) {
+      console.error("Supabase server client not initialized — missing env vars");
+      return NextResponse.json({ error: "server_client_not_initialized" }, { status: 500 });
     }
 
-    const { data, error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const url = new URL(req.url);
+    const q = (url.searchParams.get("q") || "").trim();
+
+    let builder;
+    if (q) {
+      const pattern = `%${q}%`;
+      builder = supabase
+        .from("RestroMaster")
+        .select(COLUMNS)
+        .or(
+          `RestroCode.ilike.${pattern},RestroName.ilike.${pattern},OwnerName.ilike.${pattern},StationCode.ilike.${pattern}`
+        )
+        .order("RestroName", { ascending: true })
+        .limit(1000);
+    } else {
+      builder = supabase.from("RestroMaster").select(COLUMNS).order("RestroName", { ascending: true }).limit(1000);
+    }
+
+    const { data, error } = await builder;
+    if (error) {
+      console.error("GET /api/vendors supabase error:", error);
+      return NextResponse.json({ error: error.message ?? String(error) }, { status: 500 });
+    }
     return NextResponse.json(data ?? []);
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
+    console.error("GET /api/vendors unexpected error:", err);
+    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500 });
   }
 }
 
-// optional: if frontend sends POST to /api/vendors to create a vendor
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    if (!body.RestroCode || !body.RestroName) {
-      return NextResponse.json({ error: 'RestroCode and RestroName required' }, { status: 400 });
+    const supabase = getSupabaseServer();
+    if (!supabase) {
+      console.error("Supabase server client not initialized — missing env vars");
+      return NextResponse.json({ error: "server_client_not_initialized" }, { status: 500 });
     }
-    const { data, error } = await supabaseServer.from('RestroMaster').insert([body]).select().single();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const body = await req.json().catch(() => ({} as any));
+    if (!body.RestroCode || !body.RestroName) {
+      return NextResponse.json({ error: "RestroCode and RestroName required" }, { status: 400 });
+    }
+
+    const { data, error } = await supabase.from("RestroMaster").insert([body]).select().single();
+    if (error) {
+      console.error("POST /api/vendors supabase insert error:", error);
+      return NextResponse.json({ error: error.message ?? String(error) }, { status: 500 });
+    }
+
     return NextResponse.json(data, { status: 201 });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
+    console.error("POST /api/vendors unexpected error:", err);
+    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500 });
   }
 }
