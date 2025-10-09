@@ -1,6 +1,6 @@
 // path: app/api/restros/route.ts
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 
 /**
  * POST - create new RestroMaster row (minimal required fields).
@@ -8,6 +8,15 @@ import { supabaseServer } from "@/lib/supabaseServer";
  */
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabaseServer();
+    if (!supabase) {
+      console.error("Supabase server client not initialized. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY?");
+      return NextResponse.json(
+        { ok: false, error: "server_client_not_initialized" },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     // whitelist allowed fields for create
     const allowed = [
@@ -22,10 +31,10 @@ export async function POST(req: Request) {
     // set defaults for minimal create
     if (!row.RestroName) row.RestroName = body.RestroName ?? "New Restro";
     // attempt insert
-    const res = await supabaseServer.from("RestroMaster").insert(row).select().maybeSingle();
+    const res = await supabase.from("RestroMaster").insert(row).select().maybeSingle();
     if (res.error) {
       console.error("Insert error", res.error);
-      return NextResponse.json({ ok: false, error: res.error.message || res.error }, { status: 500 });
+      return NextResponse.json({ ok: false, error: res.error.message ?? String(res.error) }, { status: 500 });
     }
     return NextResponse.json({ ok: true, row: res.data });
   } catch (err: any) {
