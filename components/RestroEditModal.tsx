@@ -54,9 +54,13 @@ export default function RestroEditModal(props: Props) {
     fetch(`/api/restros/${providedRestroCode}`)
       .then((r) => r.json())
       .then((data) => {
-        // API might return { ok:true, data: {...} } or the row directly — try both
+        // normalize payload - backend might return { ok: true, data } or direct object
         const payload = data?.data ?? data;
-        if (mounted) setRestro(payload);
+        if (mounted) {
+          // normalize field names a bit (tolerate different casings)
+          const normalized = normalizeRestro(payload);
+          setRestro(normalized);
+        }
       })
       .catch((e) => console.error(e))
       .finally(() => mounted && setLoading(false));
@@ -65,6 +69,24 @@ export default function RestroEditModal(props: Props) {
       mounted = false;
     };
   }, [providedRestroCode, providedRestro, open]);
+
+  function normalizeRestro(raw: any) {
+    if (!raw) return raw;
+    const low = (k: string) => k?.toLowerCase?.();
+    const out: any = { ...raw };
+    // small mapping examples for common fields used in UI
+    if (raw.RestroCode && !raw.restro_code) out.restro_code = raw.RestroCode;
+    if (raw.RestroName && !raw.restro_name) out.restro_name = raw.RestroName;
+    if (raw.RestroEmail && !raw.restro_email) out.restro_email = raw.RestroEmail;
+    if (raw.RestroPhone && !raw.restro_phone) out.restro_phone = raw.RestroPhone;
+    if (raw.OwnerName && !raw.owner_name) out.owner_name = raw.OwnerName;
+    if (raw.OwnerEmail && !raw.owner_email) out.owner_email = raw.OwnerEmail;
+    if (raw.OwnerPhone && !raw.owner_phone) out.owner_phone = raw.OwnerPhone;
+    if (raw.StationCodeWithName && !raw.station_code_with_name) out.station_code_with_name = raw.StationCodeWithName;
+    if (raw.State && !raw.state) out.state = raw.State;
+    if (raw.District && !raw.district) out.district = raw.District;
+    return out;
+  }
 
   function onFieldChange(path: string, value: any) {
     setRestro((prev: any) => {
@@ -133,77 +155,48 @@ export default function RestroEditModal(props: Props) {
 
   if (!open) return null;
 
-  // header station display values (safely)
-  const headerTitle = `Edit Restro — ${providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode ?? ""}`;
-  const headerMain = restro?.restro_name ?? restro?.RestroName ?? "";
-  const headerSub = restro?.station_code_with_name ?? restro?.StationCodeWithName ?? "";
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      {/* Modal shell: vertical flex so header (sticky), content (scroll), footer (sticky) */}
-      <div
-        className="bg-white rounded-lg shadow-2xl w-[95vw] md:w-[90vw] max-w-[1400px] h-[90vh] flex flex-col overflow-hidden"
-        role="dialog"
-        aria-modal="true"
-      >
-        {/* STICKY HEADER */}
-        <div className="sticky top-0 bg-white z-20 border-b px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold">{headerTitle}</h2>
-            {/* center-left small tabs indicator (optional) */}
-            <div className="hidden md:block text-sm text-gray-600">{/* keep for spacing */}</div>
-          </div>
-
-          {/* Center area: station title (visible on larger screens) */}
-          <div className="absolute left-1/2 transform -translate-x-1/2 pointer-events-none">
-            <div className="text-center">
-              <div className="font-semibold text-sm">{headerMain}</div>
-              {headerSub && <div className="text-xs text-teal-600">{headerSub}</div>}
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+      {/* modal container: flex-col so header & footer can be sticky */}
+      <div className="bg-white rounded-lg shadow-2xl w-[95vw] md:w-[90vw] max-w-[1400px] h-[90vh] overflow-hidden flex flex-col" role="dialog" aria-modal="true">
+        {/* STICKY HEADER inside modal */}
+        <div className="sticky top-0 z-30 bg-white border-b px-6 py-4 flex items-center justify-between">
+          <div>
+            <div className="text-lg font-semibold text-slate-800">
+              {providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode ? (
+                `${providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode} / ${restro?.restro_name ?? restro?.RestroName ?? ""}`
+              ) : (
+                "Edit Restro"
+              )}
+            </div>
+            <div className="text-sm text-emerald-700 mt-1">
+              {restro?.station_code_with_name ?? restro?.StationCodeWithName ?? ""}
             </div>
           </div>
 
-          {/* RIGHT: single close (red X) */}
-          <div className="flex items-center gap-2">
+          <div>
             <button
-              onClick={handleClose}
               aria-label="Close"
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-red-500 text-white hover:bg-red-600 focus:outline-none"
-              title="Close"
+              onClick={handleClose}
+              className="w-10 h-10 flex items-center justify-center rounded-md bg-red-500 text-white hover:bg-red-600"
             >
-              ×
+              ✕
             </button>
           </div>
         </div>
 
-        {/* CONTENT (scrollable) */}
-        <div className="flex-1 overflow-auto p-6">
-          <div className="flex gap-2 mb-4">
-            <button
-              className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-amber-100" : "bg-gray-100"}`}
-              onClick={() => setActiveTab("basic")}
-            >
-              Basic Information
-            </button>
-            <button
-              className={`px-3 py-1 rounded ${activeTab === "station" ? "bg-amber-100" : "bg-gray-100"}`}
-              onClick={() => setActiveTab("station")}
-            >
-              Station Settings
-            </button>
-            <button
-              className={`px-3 py-1 rounded ${activeTab === "address" ? "bg-amber-100" : "bg-gray-100"}`}
-              onClick={() => setActiveTab("address")}
-            >
-              Address & Documents
-            </button>
-            <button
-              className={`px-3 py-1 rounded ${activeTab === "contact" ? "bg-amber-100" : "bg-gray-100"}`}
-              onClick={() => setActiveTab("contact")}
-            >
-              Contacts
-            </button>
+        {/* TAB BAR */}
+        <div className="px-6 py-3 border-b bg-white z-20">
+          <div className="flex gap-2">
+            <button className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("basic")}>Basic Information</button>
+            <button className={`px-3 py-1 rounded ${activeTab === "station" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("station")}>Station Settings</button>
+            <button className={`px-3 py-1 rounded ${activeTab === "address" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("address")}>Address & Documents</button>
+            <button className={`px-3 py-1 rounded ${activeTab === "contact" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("contact")}>Contacts</button>
           </div>
+        </div>
 
+        {/* CONTENT - scrollable */}
+        <div className="flex-1 overflow-auto px-6 py-6">
           {loading && <div className="mb-3 text-sm text-gray-500">Loading...</div>}
 
           {activeTab === "basic" && <BasicInfoTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
@@ -227,24 +220,10 @@ export default function RestroEditModal(props: Props) {
           {activeTab === "contact" && <ContactsTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
         </div>
 
-        {/* STICKY FOOTER (always visible) */}
-        <div className="sticky bottom-0 bg-white z-20 border-t px-6 py-3 flex justify-end gap-3">
-          <button
-            className="px-4 py-2 rounded border bg-white"
-            onClick={() => {
-              // discard changes (reset to providedRestro or fetched restro)
-              setRestro(providedRestro ?? restro ?? null);
-              setDirty(false);
-            }}
-            disabled={!dirty && !loading}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!dirty || loading}
-            className={`px-4 py-2 rounded text-white ${dirty && !loading ? "bg-blue-600 hover:bg-blue-700" : "bg-blue-300 cursor-not-allowed"}`}
-          >
+        {/* STICKY FOOTER ACTIONS */}
+        <div className="sticky bottom-0 z-30 bg-white border-t px-6 py-4 flex justify-end gap-3">
+          <button className="px-4 py-2 rounded border" onClick={() => { setDirty(false); handleClose(); }}>Cancel</button>
+          <button className="px-4 py-2 rounded bg-blue-600 text-white" onClick={handleSave} disabled={!dirty || loading}>
             {loading ? "Saving..." : "Save"}
           </button>
         </div>
@@ -253,11 +232,10 @@ export default function RestroEditModal(props: Props) {
   );
 }
 
-/* ----------------- subcomponents unchanged (kept same, minor spacing) ----------------- */
-
+/* ----------------- small subcomponents (same as before) ----------------- */
 function TextRow({ label, value, onChange, placeholder, readOnly = false }: any) {
   return (
-    <div className="grid grid-cols-5 gap-3 items-center py-2">
+    <div className="grid grid-cols-5 gap-3 items-center py-1">
       <div className="col-span-1 text-sm text-gray-700">{label}</div>
       <div className="col-span-4">
         <input
@@ -272,7 +250,6 @@ function TextRow({ label, value, onChange, placeholder, readOnly = false }: any)
   );
 }
 
-/* The small tab components (BasicInfoTab, StationSettingsTab, AddressDocsTab, ContactsTab)
-   keep the same implementation as before (you can copy them as in your existing file).
-   For brevity they are omitted here — but in your file keep them as in previous version. */
-
+// ... the rest of the small tab components (BasicInfoTab, StationSettingsTab, AddressDocsTab, ContactsTab)
+// You can keep the previously provided implementations for them unchanged.
+// For brevity in this snippet, reuse the same implementations you had earlier.
