@@ -1,35 +1,41 @@
 // path: app/api/restros/[code]/contacts/route.ts
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer"; // use your server-side supabase helper
+import { getSupabaseServer } from "@/lib/supabaseServer"; // use server-side helper
 
 export async function GET(request: Request, { params }: { params: { code: string } }) {
   const code = params?.code ?? "";
 
   if (!code) {
-    return NextResponse.json({ error: "Missing restro code" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Missing restro code" }, { status: 400 });
   }
 
   try {
+    const supabase = getSupabaseServer();
+    if (!supabase) {
+      console.error("Supabase server client not initialized. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY?");
+      return NextResponse.json({ ok: false, error: "server_client_not_initialized" }, { status: 500 });
+    }
+
     // Query emails
-    const { data: emails, error: errEmails } = await supabaseServer
+    const { data: emails, error: errEmails } = await supabase
       .from("restro_email")
       .select("*")
       .eq("RestroCode", code);
 
     if (errEmails) {
       console.error("Supabase emails error:", errEmails);
-      return NextResponse.json({ error: "Failed to query emails", details: errEmails }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "Failed to query emails", details: String(errEmails) }, { status: 500 });
     }
 
     // Query whatsapps
-    const { data: whats, error: errWhats } = await supabaseServer
+    const { data: whats, error: errWhats } = await supabase
       .from("restro_whatsapp")
       .select("*")
       .eq("RestroCode", code);
 
     if (errWhats) {
       console.error("Supabase whatsapps error:", errWhats);
-      return NextResponse.json({ error: "Failed to query whatsapps", details: errWhats }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "Failed to query whatsapps", details: String(errWhats) }, { status: 500 });
     }
 
     // Normalize shape for client
@@ -56,6 +62,6 @@ export async function GET(request: Request, { params }: { params: { code: string
     });
   } catch (err: any) {
     console.error("Contacts route unexpected error:", err);
-    return NextResponse.json({ error: "Unexpected error", details: String(err) }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "Unexpected error", details: String(err) }, { status: 500 });
   }
 }
