@@ -1,26 +1,255 @@
-// components/RestroEditModal.tsx
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
-type Restro = Record<string, any>;
-type SaveResult = { ok: true; row?: any } | { ok: false; error: any };
+type Restro = any;
+
+type SaveResult =
+  | { ok: true; row?: any }
+  | { ok: false; error: any };
+
 type StationsOption = { label: string; value: string };
 
 type Props = {
   restroCode?: string;
   isOpen?: boolean;
-  restro?: Restro | null;
+  restro?: Restro;
   initialTab?: string;
   stationsOptions?: StationsOption[] | null;
   onClose?: () => void;
   onSave?: (payload: any) => Promise<SaveResult>;
 };
 
-/* --- helper small components (same as before) --- */
-function TextRow({ label, value, onChange, placeholder, readOnly = false, error, inputProps }: any) {
+export default function RestroEditModal(props: Props) {
+  const router = useRouter();
+
+  const providedRestro = props.restro ?? null;
+  const providedRestroCode =
+    props.restroCode ?? (providedRestro?.restro_code ?? providedRestro?.code ?? null);
+  const initialOpen = props.isOpen ?? true;
+  const initialTab = props.initialTab ?? "Basic Information";
+  const onCloseProp = props.onClose;
+  const callerOnSave = props.onSave;
+  // default stationsOptions to empty array to avoid null errors
+  const stationOptions: StationsOption[] = props.stationsOptions ?? [];
+
+  const [activeTab, setActiveTab] = useState<string>(
+    initialTab === "Basic Information" ? "basic" : initialTab?.toLowerCase() ?? "basic"
+  );
+  const [loading, setLoading] = useState(false);
+  const [restro, setRestro] = useState<Restro | null>(providedRestro);
+  const [dirty, setDirty] = useState(false);
+  const [open, setOpen] = useState<boolean>(!!initialOpen);
+
+  useEffect(() => {
+    setOpen(initialOpen);
+  }, [initialOpen]);
+
+  // add/remove body class so parent page header can be hidden via CSS when modal open
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (open) document.body.classList.add("modal-open");
+    else document.body.classList.remove("modal-open");
+    return () => {
+      if (typeof document !== "undefined") document.body.classList.remove("modal-open");
+    };
+  }, [open]);
+
+  // Fetch restro if only restroCode provided
+  useEffect(() => {
+    if (providedRestro) return;
+    if (!providedRestroCode || !open) return;
+
+    let mounted = true;
+    setLoading(true);
+    fetch(`/api/restros/${providedRestroCode}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const payload = data?.data ?? data;
+        if (mounted) setRestro(payload);
+      })
+      .catch((e) => console.error(e))
+      .finally(() => mounted && setLoading(false));
+
+    return () => {
+      mounted = false;
+    };
+  }, [providedRestroCode, providedRestro, open]);
+
+  function onFieldChange(path: string, value: any) {
+    setRestro((prev: any) => {
+      const next = { ...(prev || {}) };
+      next[path] = value;
+      return next;
+    });
+    setDirty(true);
+  }
+
+  async function defaultSave(payload: any): Promise<SaveResult> {
+    const code = providedRestroCode ?? payload?.restro_code ?? payload?.code ?? null;
+    if (!code) return { ok: false, error: "missing_restro_code" };
+
+    try {
+      const res = await fetch(`/api/restros/${code}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        return { ok: false, error: text || "patch_failed" };
+      }
+      const json = await res.json();
+      return { ok: true, row: json };
+    } catch (err) {
+      return { ok: false, error: err };
+    }
+  }
+
+  async function handleSave() {
+    if (!restro && !providedRestro) {
+      alert("Nothing to save");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = { ...(restro ?? providedRestro) };
+      const saveFn = callerOnSave ?? defaultSave;
+      const result = await saveFn(payload);
+      if (result.ok) {
+        setDirty(false);
+        setOpen(false);
+        if (onCloseProp) onCloseProp();
+        else router.back();
+      } else {
+        const err = (result as { ok: false; error: any }).error ?? result;
+        console.error("save error", err);
+        alert("Save failed: " + String(err ?? "unknown"));
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Save failed: " + String(err?.message ?? err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleClose() {
+    setOpen(false);
+    if (onCloseProp) onCloseProp();
+    else router.back();
+  }
+
+  if (typeof document === "undefined") {
+    // SSR-safe: modal only mounts on client
+    return null;
+  }
+
+  // Modal markup (same structure as before) rendered into a portal to avoid layout overlap
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div
+        className="
+          bg-white rounded-lg shadow-2xl
+          w-[95vw] md:w-[90vw]
+          max-w-[1400px]
+          h-auto md:h-[90vh]
+          overflow-auto
+          p-6
+          ring-1 ring-black/5
+        "
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">
+            {/* Title inside modal - THIS is the authoritative title */}
+            {providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode} / {restro?.restro_name ?? restro?.RestroName}
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              className="px-3 py-1 rounded border"
+              onClick={() => {
+                setRestro(null);
+                setDirty(false);
+                handleClose();
+              }}
+            >
+              Close
+            </button>
+            <button
+              className="px-3 py-1 rounded bg-blue-600 text-white"
+              onClick={handleSave}
+              disabled={!dirty || loading}
+            >
+              {loading ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <button
+            className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-amber-100" : "bg-gray-100"}`}
+            onClick={() => setActiveTab("basic")}
+          >
+            Basic Information
+          </button>
+          <button
+            className={`px-3 py-1 rounded ${activeTab === "station" ? "bg-amber-100" : "bg-gray-100"}`}
+            onClick={() => setActiveTab("station")}
+          >
+            Station Settings
+          </button>
+          <button
+            className={`px-3 py-1 rounded ${activeTab === "address" ? "bg-amber-100" : "bg-gray-100"}`}
+            onClick={() => setActiveTab("address")}
+          >
+            Address & Documents
+          </button>
+          <button
+            className={`px-3 py-1 rounded ${activeTab === "contact" ? "bg-amber-100" : "bg-gray-100"}`}
+            onClick={() => setActiveTab("contact")}
+          >
+            Contacts
+          </button>
+        </div>
+
+        <div>
+          {loading && <div className="mb-3 text-sm text-gray-500">Loading...</div>}
+
+          {activeTab === "basic" && <BasicInfoTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
+
+          {activeTab === "station" && (
+            <StationSettingsTab restro={restro ?? providedRestro} onChange={onFieldChange} stationsOptions={stationOptions} />
+          )}
+
+          {activeTab === "address" && (
+            <AddressDocsTab
+              restro={restro ?? providedRestro}
+              onChange={onFieldChange}
+              restroCode={
+                providedRestroCode ??
+                (restro ?? providedRestro)?.restro_code ??
+                (restro ?? providedRestro)?.RestroCode
+              }
+            />
+          )}
+
+          {activeTab === "contact" && <ContactsTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ----------------- small subcomponents (same as before) ----------------- */
+
+function TextRow({ label, value, onChange, placeholder, readOnly = false }: any) {
   return (
-    <div className="grid grid-cols-5 gap-3 items-start py-2">
+    <div className="grid grid-cols-5 gap-3 items-center py-1">
       <div className="col-span-1 text-sm text-gray-700">{label}</div>
       <div className="col-span-4">
         <input
@@ -28,70 +257,63 @@ function TextRow({ label, value, onChange, placeholder, readOnly = false, error,
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           readOnly={readOnly}
-          className={`w-full border rounded px-2 py-2 ${readOnly ? "bg-gray-100" : ""} ${error ? "border-red-500" : ""}`}
-          {...inputProps}
+          className={`w-full border rounded px-2 py-1 ${readOnly ? "bg-gray-100" : ""}`}
         />
-        {error && <div className="text-sm text-red-600 mt-1">{error}</div>}
       </div>
     </div>
   );
 }
 
-/* BasicInfoTab, StationSettingsTab, AddressDocsTab, ContactsTab
-   (ke original behavior ko preserve kiya gaya hai) */
-function BasicInfoTab({ restro, onChange, validationErrors }: any) {
+function BasicInfoTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
   return (
     <div>
       <h3 className="font-semibold mb-2">Basic Information</h3>
       <div className="grid grid-cols-2 gap-6">
         <div>
-          <TextRow label="Restro Code" value={restro?.restro_code ?? restro?.RestroCode} onChange={(v: any) => onChange("restro_code", v)} readOnly />
+          <TextRow label="Restro Code" value={restro?.restro_code ?? restro?.RestroCode} onChange={(v: any) => onChange("restro_code", v)} />
           <TextRow
             label="Station Code with Name"
-            value={restro?.station_code_with_name ?? restro?.StationCodeWithName ?? restro?.station_code_display ?? ""}
-            onChange={() => {}}
+            value={restro?.station_code_with_name ?? restro?.StationCodeWithName ?? "(read-only)"}
+            onChange={(v: any) => onChange("station_code_with_name", v)}
             readOnly
-            placeholder="(read-only)"
           />
           <TextRow label="Restro Name" value={restro?.restro_name ?? restro?.RestroName} onChange={(v: any) => onChange("restro_name", v)} />
           <TextRow label="Brand Name if Any" value={restro?.brand_name ?? restro?.BrandName} onChange={(v: any) => onChange("brand_name", v)} />
-          <div className="mt-3">
-            <label className="flex items-center gap-3">
-              <input type="checkbox" checked={!!(restro?.raileats_status ?? restro?.RailEatsStatus)} onChange={(e) => onChange("raileats_status", e.target.checked ? 1 : 0)} />
-              <span className="text-sm">RailEats Status (on/off)</span>
+          <div className="flex items-center gap-4 mt-3">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={!!restro?.raileats_status ?? !!restro?.RailEatsStatus} onChange={(e) => onChange("raileats_status", e.target.checked ? 1 : 0)} />
+              RailEats Status (on/off)
             </label>
-          </div>
-          <div className="mt-3">
-            <label className="flex items-center gap-3">
-              <input type="checkbox" checked={!!(restro?.is_irctc_approved ?? restro?.IsIrctcApproved)} onChange={(e) => onChange("is_irctc_approved", e.target.checked ? 1 : 0)} />
-              <span className="text-sm">Is IRCTC Approved</span>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={!!restro?.is_irctc_approved ?? !!restro?.IsIrctcApproved} onChange={(e) => onChange("is_irctc_approved", e.target.checked ? 1 : 0)} />
+              Is IRCTC Approved
             </label>
           </div>
         </div>
 
         <div>
           <TextRow label="Owner Name" value={restro?.owner_name ?? restro?.OwnerName} onChange={(v: any) => onChange("owner_name", v)} />
-          <TextRow label="Owner Email" value={restro?.owner_email ?? restro?.OwnerEmail} onChange={(v: any) => onChange("owner_email", v)} error={validationErrors.owner_email ?? null} />
-          <TextRow label="Owner Phone" value={restro?.owner_phone ?? restro?.OwnerPhone} onChange={(v: any) => onChange("owner_phone", v)} inputProps={{ maxLength: 10 }} error={validationErrors.owner_phone ?? null} />
-          <TextRow label="Restro Email" value={restro?.restro_email ?? restro?.RestroEmail} onChange={(v: any) => onChange("restro_email", v)} error={validationErrors.restro_email ?? null} />
-          <TextRow label="Restro Phone" value={restro?.restro_phone ?? restro?.RestroPhone} onChange={(v: any) => onChange("restro_phone", v)} inputProps={{ maxLength: 10 }} error={validationErrors.restro_phone ?? null} />
+          <TextRow label="Owner Email" value={restro?.owner_email ?? restro?.OwnerEmail} onChange={(v: any) => onChange("owner_email", v)} />
+          <TextRow label="Owner Phone" value={restro?.owner_phone ?? restro?.OwnerPhone} onChange={(v: any) => onChange("owner_phone", v)} />
+          <TextRow label="Restro Email" value={restro?.restro_email ?? restro?.RestroEmail} onChange={(v: any) => onChange("restro_email", v)} />
+          <TextRow label="Restro Phone" value={restro?.restro_phone ?? restro?.RestroPhone} onChange={(v: any) => onChange("restro_phone", v)} />
         </div>
       </div>
     </div>
   );
 }
 
-function StationSettingsTab({ restro, onChange, stationsOptions }: any) {
-  const opts = stationsOptions ?? [];
+function StationSettingsTab({ restro, onChange, stationsOptions }: { restro: any; onChange: (k: string, v: any) => void; stationsOptions?: StationsOption[] }) {
   return (
     <div>
       <h3 className="font-semibold mb-2">Station Settings</h3>
-      {opts.length > 0 && (
+
+      {stationsOptions && stationsOptions.length > 0 && (
         <div className="mb-3">
           <label className="block text-sm">Select Station</label>
           <select value={restro?.station_code ?? restro?.StationCode ?? ""} onChange={(e) => onChange("station_code", e.target.value)} className="mt-1 w-full border rounded px-2 py-1">
             <option value="">— select —</option>
-            {opts.map((s: StationsOption) => (
+            {stationsOptions.map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
               </option>
@@ -119,7 +341,7 @@ function StationSettingsTab({ restro, onChange, stationsOptions }: any) {
   );
 }
 
-function AddressDocsTab({ restro, onChange, restroCode }: any) {
+function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChange: (k: string, v: any) => void; restroCode: string }) {
   const [fssaiNumber, setFssaiNumber] = useState("");
   const [fssaiExpiry, setFssaiExpiry] = useState("");
   const [fssaiFile, setFssaiFile] = useState<File | null>(null);
@@ -190,7 +412,7 @@ function AddressDocsTab({ restro, onChange, restroCode }: any) {
       window.location.reload();
     } catch (err: any) {
       console.error(err);
-      alert("Error: " + (err.message ?? String(err)));
+      alert("Error: " + err.message);
     } finally {
       setUploading(false);
     }
@@ -247,9 +469,18 @@ function AddressDocsTab({ restro, onChange, restroCode }: any) {
             <button
               className="px-3 py-1 rounded bg-blue-500 text-white"
               onClick={async () => {
-                const res = await fetch(`/api/restros/${restroCode}/docs`, { method: "POST", body: JSON.stringify({ type: "gst", gst_number: restro?.gst_number ?? restro?.GSTNumber }), headers: { "Content-Type": "application/json" } });
-                if (!res.ok) { const text = await res.text(); alert("Failed to add GST: " + text); return; }
-                alert("GST added"); window.location.reload();
+                const res = await fetch(`/api/restros/${restroCode}/docs`, {
+                  method: "POST",
+                  body: JSON.stringify({ type: "gst", gst_number: restro?.gst_number ?? restro?.GSTNumber }),
+                  headers: { "Content-Type": "application/json" },
+                });
+                if (!res.ok) {
+                  const text = await res.text();
+                  alert("Failed to add GST: " + text);
+                  return;
+                }
+                alert("GST added");
+                window.location.reload();
               }}
             >
               Add New GST Entry
@@ -268,9 +499,18 @@ function AddressDocsTab({ restro, onChange, restroCode }: any) {
             <button
               className="px-3 py-1 rounded bg-amber-600 text-white"
               onClick={async () => {
-                const res = await fetch(`/api/restros/${restroCode}/docs`, { method: "POST", body: JSON.stringify({ type: "pan", pan_number: restro?.pan_number ?? restro?.PANNumber }), headers: { "Content-Type": "application/json" } });
-                if (!res.ok) { const text = await res.text(); alert("Failed to add PAN: " + text); return; }
-                alert("PAN added"); window.location.reload();
+                const res = await fetch(`/api/restros/${restroCode}/docs`, {
+                  method: "POST",
+                  body: JSON.stringify({ type: "pan", pan_number: restro?.pan_number ?? restro?.PANNumber }),
+                  headers: { "Content-Type": "application/json" },
+                });
+                if (!res.ok) {
+                  const text = await res.text();
+                  alert("Failed to add PAN: " + text);
+                  return;
+                }
+                alert("PAN added");
+                window.location.reload();
               }}
             >
               Add New PAN Entry
@@ -282,7 +522,7 @@ function AddressDocsTab({ restro, onChange, restroCode }: any) {
   );
 }
 
-function ContactsTab({ restro, onChange }: any) {
+function ContactsTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
   function EmailRow({ idx }: { idx: number }) {
     const nameKey = `email_name_${idx}`;
     const emailKey = `email_for_orders_${idx}`;
@@ -343,141 +583,6 @@ function ContactsTab({ restro, onChange }: any) {
         <h4 className="font-medium mt-2">WhatsApp Mobiles</h4>
         <WpRow idx={1} />
         <WpRow idx={2} />
-      </div>
-    </div>
-  );
-}
-
-/* --- main modal --- */
-export default function RestroEditModal(props: Props) {
-  const router = useRouter();
-  const providedRestro = props.restro ?? null;
-  const providedRestroCode = props.restroCode ?? (providedRestro?.restro_code ?? providedRestro?.code ?? null);
-  const initialOpen = props.isOpen ?? true;
-  const initialTab = props.initialTab ?? "Basic Information";
-  const onCloseProp = props.onClose;
-  const callerOnSave = props.onSave;
-  const stationOptions = props.stationsOptions ?? [];
-
-  const [activeTab, setActiveTab] = useState<string>(initialTab === "Basic Information" ? "basic" : initialTab?.toLowerCase() ?? "basic");
-  const [loading, setLoading] = useState(false);
-  const [restro, setRestro] = useState<Restro | null>(providedRestro);
-  const [dirty, setDirty] = useState(false);
-  const [open, setOpen] = useState<boolean>(!!initialOpen);
-  const [validationErrors, setValidationErrors] = useState<Record<string, string | null>>({});
-
-  useEffect(() => setOpen(initialOpen), [initialOpen]);
-
-  useEffect(() => {
-    if (providedRestro) return;
-    if (!providedRestroCode || !open) return;
-    let mounted = true;
-    setLoading(true);
-    fetch(`/api/restros/${providedRestroCode}`).then((r) => r.json()).then((data) => {
-      const payload = data?.data ?? data;
-      if (payload && mounted) {
-        payload.station_code_with_name = payload.station_code_with_name ?? (payload.StationCode ? `${payload.StationCode} / ${payload.StationName ?? ""} - ${payload.State ?? ""}` : "");
-      }
-      if (mounted) setRestro(payload ?? null);
-    }).catch((e) => console.error(e)).finally(() => mounted && setLoading(false));
-    return () => { mounted = false; };
-  }, [providedRestroCode, providedRestro, open]);
-
-  function onFieldChange(path: string, value: any) { setRestro((prev: any) => { const next = { ...(prev || {}) }; next[path] = value; return next; }); setDirty(true); }
-
-  function validateEmail(email?: string) {
-    if (!email) return "Required";
-    if (!email.includes("@") || !email.includes(".")) return "Must be a valid email";
-    return null;
-  }
-  function validatePhone(phone?: string) {
-    if (!phone) return null;
-    const onlyDigits = /^\d+$/;
-    if (!onlyDigits.test(phone)) return "Only digits allowed";
-    if (phone.length > 10) return "Max 10 digits";
-    return null;
-  }
-
-  useEffect(() => {
-    const errs: Record<string, string | null> = {};
-    errs.owner_email = validateEmail(restro?.owner_email ?? restro?.OwnerEmail);
-    errs.restro_email = validateEmail(restro?.restro_email ?? restro?.RestroEmail);
-    errs.owner_phone = validatePhone(restro?.owner_phone ?? restro?.OwnerPhone);
-    errs.restro_phone = validatePhone(restro?.restro_phone ?? restro?.RestroPhone);
-    setValidationErrors(errs);
-  }, [restro?.owner_email, restro?.restro_email, restro?.owner_phone, restro?.restro_phone]);
-
-  const hasValidationErrors = useMemo(() => Object.values(validationErrors).some((v) => v !== null && v !== undefined), [validationErrors]);
-
-  async function defaultSave(payload: any): Promise<SaveResult> {
-    const code = providedRestroCode ?? payload?.restro_code ?? payload?.code ?? null;
-    if (!code) return { ok: false, error: "missing_restro_code" };
-    try {
-      const res = await fetch(`/api/restros/${code}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      if (!res.ok) { const text = await res.text(); return { ok: false, error: text || "patch_failed" }; }
-      const json = await res.json();
-      return { ok: true, row: json };
-    } catch (err) { return { ok: false, error: err }; }
-  }
-
-  async function handleSave() {
-    if (hasValidationErrors) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
-    if (!restro && !providedRestro) { alert("Nothing to save"); return; }
-    setLoading(true);
-    try {
-      const payload = { ...(restro ?? providedRestro) };
-      const saveFn = callerOnSave ?? defaultSave;
-      const result = await saveFn(payload);
-      if (result.ok) { setDirty(false); setOpen(false); if (onCloseProp) onCloseProp(); else router.back(); } else { const err = (result as any).error ?? result; console.error("save error", err); alert("Save failed: " + String(err ?? "unknown")); }
-    } catch (err: any) { console.error(err); alert("Save failed: " + String(err?.message ?? err)); } finally { setLoading(false); }
-  }
-
-  function handleClose() { setOpen(false); if (onCloseProp) onCloseProp(); else router.back(); }
-  if (!open) return null;
-
-  const displayTitle = `${providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode ?? ""} / ${restro?.restro_name ?? restro?.RestroName ?? ""}`;
-  const displaySubtitle = restro?.station_code_with_name ?? restro?.StationCodeWithName ?? restro?.station_display_sub ?? "";
-
-  /* --- IMPORTANT layout: make modal a column flex container.
-         The interior scrollable area is the middle div (flex-1 overflow-auto).
-         The header is sticky relative to that scrollable area. --- */
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-[95vw] md:w-[90vw] max-w-[1400px] h-[90vh] flex flex-col overflow-hidden ring-1 ring-black/5">
-        {/* header (sticky inside modal) */}
-        <div className="sticky top-0 z-20 border-b bg-white px-6 py-4 flex items-start justify-between">
-          <div>
-            <div className="text-lg font-semibold">{displayTitle}</div>
-            {displaySubtitle && <div className="text-sm text-teal-600 mt-1">{displaySubtitle}</div>}
-          </div>
-          <div>
-            <button aria-label="Close" title="Close" onClick={handleClose} className="bg-red-500 text-white p-2 rounded-md shadow">✕</button>
-          </div>
-        </div>
-
-        {/* content: scrollable area */}
-        <div className="flex-1 overflow-auto p-6">
-          <div className="flex gap-2 mb-4">
-            <button className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("basic")}>Basic Information</button>
-            <button className={`px-3 py-1 rounded ${activeTab === "station" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("station")}>Station Settings</button>
-            <button className={`px-3 py-1 rounded ${activeTab === "address" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("address")}>Address & Documents</button>
-            <button className={`px-3 py-1 rounded ${activeTab === "contact" ? "bg-amber-100" : "bg-gray-100"}`} onClick={() => setActiveTab("contact")}>Contacts</button>
-          </div>
-
-          {loading && <div className="mb-3 text-sm text-gray-500">Loading...</div>}
-
-          {activeTab === "basic" && <BasicInfoTab restro={restro ?? providedRestro} onChange={onFieldChange} validationErrors={validationErrors} />}
-          {activeTab === "station" && <StationSettingsTab restro={restro ?? providedRestro} onChange={onFieldChange} stationsOptions={stationOptions} />}
-          {activeTab === "address" && <AddressDocsTab restro={restro ?? providedRestro} onChange={onFieldChange} restroCode={providedRestroCode ?? (restro ?? providedRestro)?.restro_code ?? (restro ?? providedRestro)?.RestroCode ?? ""} />}
-          {activeTab === "contact" && <ContactsTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
-        </div>
-
-        {/* footer (fixed inside modal at bottom) */}
-        <div className="border-t p-4 flex justify-end gap-3 items-center">
-          {hasValidationErrors && <div className="text-sm text-red-600 mr-auto">Please fix validation errors above.</div>}
-          <button className="px-4 py-2 rounded border" onClick={handleClose} disabled={loading}>Cancel</button>
-          <button className={`px-4 py-2 rounded bg-blue-600 text-white ${(!dirty || hasValidationErrors || loading) ? "opacity-60 cursor-not-allowed" : ""}`} onClick={handleSave} disabled={!dirty || hasValidationErrors || loading}>{loading ? "Saving..." : "Save"}</button>
-        </div>
       </div>
     </div>
   );
