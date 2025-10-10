@@ -1,589 +1,619 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { supabase as supabaseBrowser } from "@/lib/supabaseBrowser"; // adjust if your export name diff
 
-type Restro = any;
-
-type SaveResult =
-  | { ok: true; row?: any }
-  | { ok: false; error: any };
-
-type StationsOption = { label: string; value: string };
+import BasicInformationTab from "./restro-edit/BasicInformationTab";
+import StationSettingsTab from "./restro-edit/StationSettingsTab";
+import AddressDocsClient from "@/components/tabs/AddressDocsClient";
+import ContactsTab from "./restro-edit/ContactsTab";
+import BankTab from "./restro-edit/BankTab";
+import FutureClosedTab from "./restro-edit/FutureClosedTab";
+import MenuTab from "./restro-edit/MenuTab";
 
 type Props = {
-  restroCode?: string;
-  isOpen?: boolean;
-  restro?: Restro;
-  initialTab?: string;
-  stationsOptions?: StationsOption[] | null;
+  restro?: any;
   onClose?: () => void;
-  onSave?: (payload: any) => Promise<SaveResult>;
+  onSave?: (payload: any) => Promise<{ ok: boolean; row?: any; error?: any }>;
+  saving?: boolean;
+  stationsOptions?: { label: string; value: string }[];
+  initialTab?: string;
 };
 
-export default function RestroEditModal(props: Props) {
+const TAB_NAMES = [
+  "Basic Information",
+  "Station Settings",
+  "Address & Documents",
+  "Contacts",
+  "Bank",
+  "Future Closed",
+  "Menu",
+];
+
+const Icon = {
+  basic: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 2L3 6v6c0 5 3.8 9.2 9 10 5.2-.8 9-5 9-10V6l-9-4z" />
+    </svg>
+  ),
+  settings: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zM19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2.1-1.6-1.9-3.3-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-6l-.4 3.1a7.6 7.6 0 0 0-1.7 1l-2.5-1L2 11.4l2.1 1.6a7.9 7.9 0 0 0 0 2l-2.1 1.6 1.9 3.3 2.5-1a7.6 7.6 0 0 0 1.7 1L9 21h6l.4-3.1a7.6 7.6 0 0 0 1.7-1l2.5 1 1.9-3.3L19.4 15z" />
+    </svg>
+  ),
+  docs: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    </svg>
+  ),
+  contacts: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 4.9V22h16v-3.1c0-2.7-3.6-4.9-8-4.9z" />
+    </svg>
+  ),
+  bank: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M12 2L1 6l11 4 11-4-11-4zm0 7v13" />
+    </svg>
+  ),
+  calendar: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M7 10h5v5H7zM3 4h18v18H3z" />
+    </svg>
+  ),
+  menu: (
+    <svg width="16" height="16" viewBox="0 0 24 24" style={{ verticalAlign: "middle", marginRight: 8 }}>
+      <path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" />
+    </svg>
+  ),
+};
+
+function safeGet(obj: any, ...keys: string[]) {
+  for (const k of keys) {
+    if (!obj) continue;
+    if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined && obj[k] !== null) return obj[k];
+  }
+  return undefined;
+}
+
+/* validators */
+const emailRegex = /^\S+@\S+\.\S+$/;
+const tenDigitRegex = /^\d{10}$/;
+function validateEmailString(s: string) {
+  if (!s) return false;
+  const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+  if (!parts.length) return false;
+  for (const p of parts) if (!emailRegex.test(p)) return false;
+  return true;
+}
+function validatePhoneString(s: string) {
+  if (!s) return false;
+  const parts = s.split(",").map((p) => p.replace(/\s+/g, "").trim()).filter(Boolean);
+  if (!parts.length) return false;
+  for (const p of parts) if (!tenDigitRegex.test(p)) return false;
+  return true;
+}
+
+/* InputWithIcon (same as you had) */
+function InputWithIcon({
+  name,
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder = "",
+  maxLength,
+}: {
+  name?: string;
+  label?: string;
+  value: any;
+  onChange: (v: any) => void;
+  type?: "text" | "email" | "phone" | "whatsapp" | "name";
+  placeholder?: string;
+  maxLength?: number;
+}) {
+  const [touched, setTouched] = useState(false);
+  const v = typeof value === "string" ? value : value ?? "";
+
+  let valid = true;
+  if (type === "email") valid = validateEmailString(String(v));
+  else if (type === "phone" || type === "whatsapp") valid = validatePhoneString(String(v));
+  else if (type === "name") valid = String(v).trim().length > 0;
+  else valid = true;
+
+  const showError = touched && !valid;
+  const icon = type === "phone" ? "📞" : type === "whatsapp" ? "🟢" : type === "email" ? "✉️" : "👤";
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {label && <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{label}</div>}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <input
+          aria-label={label ?? name}
+          name={name}
+          placeholder={placeholder}
+          value={v}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setTouched(true)}
+          onFocus={() => setTouched(true)}
+          maxLength={maxLength}
+          style={{
+            flex: 1,
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: showError ? "1px solid #ef4444" : "1px solid #e6e6e6",
+            outline: "none",
+            fontSize: 14,
+          }}
+        />
+      </div>
+      {showError && (
+        <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
+          {type === "email" && "Please enter a valid email (example: name@example.com)."}
+          {type === "phone" && "Enter a 10-digit numeric mobile number (no spaces)."}
+          {type === "whatsapp" && "Enter a 10-digit numeric WhatsApp number (no spaces)."}
+          {type === "name" && "Please enter a name."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Toggle component passed down so ContactsTab aligns with parent layout */
+function Toggle({ checked, onChange }: { checked?: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+      <div
+        onClick={() => onChange(!checked)}
+        style={{
+          width: 44,
+          height: 24,
+          borderRadius: 14,
+          background: checked ? "#06b6d4" : "#e6e6e6",
+          position: "relative",
+          transition: "background .15s ease",
+          display: "inline-block",
+        }}
+      >
+        <div
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 9,
+            background: "#fff",
+            position: "absolute",
+            top: 3,
+            left: checked ? 23 : 3,
+            transition: "left .12s ease",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 13, color: "#333", minWidth: 28 }}>{checked ? "ON" : "OFF"}</span>
+    </label>
+  );
+}
+
+/* main component */
+export default function RestroEditModal({
+  restro: restroProp,
+  onClose,
+  onSave,
+  saving: parentSaving,
+  stationsOptions = [],
+  initialTab,
+}: Props) {
   const router = useRouter();
 
-  const providedRestro = props.restro ?? null;
-  const providedRestroCode =
-    props.restroCode ?? (providedRestro?.restro_code ?? providedRestro?.code ?? null);
-  const initialOpen = props.isOpen ?? true;
-  const initialTab = props.initialTab ?? "Basic Information";
-  const onCloseProp = props.onClose;
-  const callerOnSave = props.onSave;
-  // default stationsOptions to empty array to avoid null errors
-  const stationOptions: StationsOption[] = props.stationsOptions ?? [];
-
-  const [activeTab, setActiveTab] = useState<string>(
-    initialTab === "Basic Information" ? "basic" : initialTab?.toLowerCase() ?? "basic"
-  );
-  const [loading, setLoading] = useState(false);
-  const [restro, setRestro] = useState<Restro | null>(providedRestro);
-  const [dirty, setDirty] = useState(false);
-  const [open, setOpen] = useState<boolean>(!!initialOpen);
+  const [activeTab, setActiveTab] = useState<string>(initialTab ?? TAB_NAMES[0]);
+  const [restro, setRestro] = useState<any | undefined>(restroProp);
+  const [local, setLocal] = useState<any>({});
+  const [stations, setStations] = useState<{ label: string; value: string }[]>(stationsOptions ?? []);
+  const [loadingStations, setLoadingStations] = useState(false);
+  const [savingInternal, setSavingInternal] = useState(false);
+  const [notification, setNotification] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setOpen(initialOpen);
-  }, [initialOpen]);
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
-  // add/remove body class so parent page header can be hidden via CSS when modal open
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (open) document.body.classList.add("modal-open");
-    else document.body.classList.remove("modal-open");
-    return () => {
-      if (typeof document !== "undefined") document.body.classList.remove("modal-open");
-    };
-  }, [open]);
+    if (restroProp) setRestro(restroProp);
+  }, [restroProp]);
 
-  // Fetch restro if only restroCode provided
   useEffect(() => {
-    if (providedRestro) return;
-    if (!providedRestroCode || !open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" || e.key === "Esc") doClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restro]);
 
-    let mounted = true;
-    setLoading(true);
-    fetch(`/api/restros/${providedRestroCode}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const payload = data?.data ?? data;
-        if (mounted) setRestro(payload);
-      })
-      .catch((e) => console.error(e))
-      .finally(() => mounted && setLoading(false));
+  useEffect(() => {
+    if (stations && stations.length) return;
+    (async () => {
+      setLoadingStations(true);
+      try {
+        const res = await fetch("/api/stations");
+        if (!res.ok) {
+          setLoadingStations(false);
+          return;
+        }
+        const json = await res.json().catch(() => null);
+        const rows = json?.rows ?? json?.data ?? json ?? [];
+        const opts = (rows || []).map((r: any) => {
+          const label = `${(r.StationName ?? r.station_name ?? r.name ?? "").toString().trim()} ${(r.StationCode ?? r.station_code) ? `(${r.StationCode ?? r.station_code})` : ""}${r.State ? ` - ${r.State}` : ""}`.trim();
+          return { label, value: (r.StationCode ?? r.station_code ?? "").toString() };
+        });
+        if (opts.length) setStations(opts);
+      } catch (err) {
+        console.warn("stations fetch failed", err);
+      } finally {
+        setLoadingStations(false);
+      }
+    })();
+  }, []);
 
-    return () => {
-      mounted = false;
-    };
-  }, [providedRestroCode, providedRestro, open]);
-
-  function onFieldChange(path: string, value: any) {
-    setRestro((prev: any) => {
-      const next = { ...(prev || {}) };
-      next[path] = value;
-      return next;
+  useEffect(() => {
+    if (!restro) return;
+    setLocal({
+      RestroName: safeGet(restro, "RestroName", "restro_name", "name") ?? "",
+      RestroCode: safeGet(restro, "RestroCode", "restro_code", "code", "RestroId", "restro_id") ?? "",
+      StationCode: safeGet(restro, "StationCode", "station_code", "Station_Code", "stationCode") ?? "",
+      StationName: safeGet(restro, "StationName", "station_name", "station") ?? "",
+      State: safeGet(restro, "State", "state", "state_name", "StateName") ?? "",
+      WeeklyOff: safeGet(restro, "WeeklyOff", "weekly_off") ?? "SUN",
+      OpenTime: safeGet(restro, "OpenTime", "open_time") ?? "10:00",
+      ClosedTime: safeGet(restro, "ClosedTime", "closed_time") ?? "23:00",
+      MinimumOrderValue: Number(safeGet(restro, "MinimumOrderValue", "minimum_order_value") ?? 0),
+      CutOffTime: Number(safeGet(restro, "CutOffTime", "cut_off_time") ?? 0),
+      RaileatsDeliveryCharge: Number(safeGet(restro, "RaileatsDeliveryCharge", "raileats_delivery_charge") ?? 0),
+      RaileatsDeliveryChargeGSTRate: Number(safeGet(restro, "RaileatsDeliveryChargeGSTRate", "raileats_delivery_charge_gst_rate") ?? 0),
+      RaileatsDeliveryChargeGST: Number(safeGet(restro, "RaileatsDeliveryChargeGST", "raileats_delivery_charge_gst") ?? 0),
+      RaileatsDeliveryChargeTotalInclGST: Number(safeGet(restro, "RaileatsDeliveryChargeTotalInclGST", "raileats_delivery_charge_total_incl_gst") ?? 0),
+      OrdersPaymentOptionForCustomer: safeGet(restro, "OrdersPaymentOptionForCustomer", "orders_payment_option_for_customer") ?? "BOTH",
+      IRCTCOrdersPaymentOptionForCustomer: safeGet(restro, "IRCTCOrdersPaymentOptionForCustomer", "irctc_orders_payment_option") ?? "BOTH",
+      RestroTypeOfDelivery: safeGet(restro, "RestroTypeOfDelivery", "restro_type_of_delivery") ?? "RAILEATS",
+      OwnerName: safeGet(restro, "OwnerName", "owner_name") ?? "",
+      OwnerPhone: safeGet(restro, "OwnerPhone", "owner_phone") ?? "",
+      RestroDisplayPhoto: safeGet(restro, "RestroDisplayPhoto", "restro_display_photo") ?? "",
+      BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
+      RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
+      RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
+      // contacts-like fields
+      EmailAddressName1: restro?.EmailAddressName1 ?? "",
+      EmailsforOrdersReceiving1: restro?.EmailsforOrdersReceiving1 ?? "",
+      EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? 0,
+      WhatsappMobileNumberName1: restro?.WhatsappMobileNumberName1 ?? "",
+      WhatsappMobileNumberforOrderDetails1: restro?.WhatsappMobileNumberforOrderDetails1 ?? "",
+      WhatsappMobileNumberStatus1: restro?.WhatsappMobileNumberStatus1 ?? 0,
+      ...restro,
     });
-    setDirty(true);
-  }
+  }, [restro]);
 
-  async function defaultSave(payload: any): Promise<SaveResult> {
-    const code = providedRestroCode ?? payload?.restro_code ?? payload?.code ?? null;
-    if (!code) return { ok: false, error: "missing_restro_code" };
+  const saving = parentSaving ?? savingInternal;
 
+  const updateField = useCallback((key: string, value: any) => {
+    setLocal((s: any) => ({ ...s, [key]: value }));
+    setError(null);
+    setNotification(null);
+  }, []);
+
+  async function defaultPatch(payload: any) {
     try {
-      const res = await fetch(`/api/restros/${code}`, {
+      const code =
+        restro?.RestroCode ?? restro?.restro_code ?? restro?.RestroId ?? restro?.restro_id ?? restro?.code ?? local?.RestroCode;
+      if (!code) throw new Error("Missing RestroCode for update");
+
+      const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) {
-        const text = await res.text();
-        return { ok: false, error: text || "patch_failed" };
+
+      // read text safely
+      let text = "";
+      try {
+        text = await res.text();
+      } catch (e) {
+        text = "";
       }
-      const json = await res.json();
-      return { ok: true, row: json };
-    } catch (err) {
-      return { ok: false, error: err };
+
+      // try parse JSON if possible
+      let json: any = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = null;
+      }
+
+      // compute human-friendly message using parentheses to avoid mixing ?? and ||
+      const possibleError = (json?.error?.message ?? json?.error ?? text);
+      if (!res.ok) {
+        throw new Error(possibleError || `Update failed (${res.status})`);
+      }
+
+      return { ok: true, row: json?.row ?? json?.data ?? json ?? null };
+    } catch (err: any) {
+      return { ok: false, error: err?.message ?? String(err) };
     }
   }
+
+  function doClose() {
+    if (onClose) {
+      try {
+        onClose();
+      } catch {
+        router.push("/admin/restros");
+      }
+    } else {
+      router.push("/admin/restros");
+    }
+  }
+
+  const stationDisplay = `${String(local.StationName ?? restro?.StationName ?? "")}${local.State ? " - " + local.State : ""}`;
+
+  const restroCode =
+    (local && (local.RestroCode ?? local.restro_code ?? local.id ?? local.code)) ||
+    (restro && (restro.RestroCode ?? restro.restro_code ?? restro.RestroId ?? restro.restro_id ?? restro.code)) ||
+    "";
+
+  function collectValidationErrors(obj: any) {
+    const errs: string[] = [];
+    for (const key of Object.keys(obj)) {
+      const low = key.toLowerCase();
+      const val = obj[key];
+      if (!val || (typeof val === "string" && val.trim() === "")) continue;
+
+      if (low.includes("email") || low.includes("emailsfor") || low.includes("emailaddress")) {
+        if (typeof val !== "string") errs.push(`${key}: expected text (email), got ${typeof val}`);
+        else if (!validateEmailString(String(val))) errs.push(`${key}: invalid email(s) => "${String(val)}"`);
+      }
+
+      if (low.includes("whatsapp") || low.includes("mobile") || low.includes("phone") || low.includes("contact")) {
+        const text = String(val).trim();
+        if (/\d/.test(text)) {
+          if (!validatePhoneString(text)) {
+            errs.push(`${key}: invalid phone number(s) => "${text}". Expect 10-digit numeric numbers.`);
+          }
+        }
+      }
+    }
+    return errs;
+  }
+
+  // use the supabase instance exported from your lib
+  const supabase = supabaseBrowser;
 
   async function handleSave() {
-    if (!restro && !providedRestro) {
-      alert("Nothing to save");
+    setNotification(null);
+    setError(null);
+
+    const validationErrors = collectValidationErrors(local);
+    if (validationErrors.length) {
+      setNotification({ type: "error", text: `Validation failed:\n• ${validationErrors.join("\n• ")}` });
       return;
     }
 
-    setLoading(true);
-    try {
-      const payload = { ...(restro ?? providedRestro) };
-      const saveFn = callerOnSave ?? defaultSave;
-      const result = await saveFn(payload);
-      if (result.ok) {
-        setDirty(false);
-        setOpen(false);
-        if (onCloseProp) onCloseProp();
-        else router.back();
-      } else {
-        const err = (result as { ok: false; error: any }).error ?? result;
-        console.error("save error", err);
-        alert("Save failed: " + String(err ?? "unknown"));
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert("Save failed: " + String(err?.message ?? err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleClose() {
-    setOpen(false);
-    if (onCloseProp) onCloseProp();
-    else router.back();
-  }
-
-  if (typeof document === "undefined") {
-    // SSR-safe: modal only mounts on client
-    return null;
-  }
-
-  // Modal markup (same structure as before) rendered into a portal to avoid layout overlap
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div
-        className="
-          bg-white rounded-lg shadow-2xl
-          w-[95vw] md:w-[90vw]
-          max-w-[1400px]
-          h-auto md:h-[90vh]
-          overflow-auto
-          p-6
-          ring-1 ring-black/5
-        "
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">
-            {/* Title inside modal - THIS is the authoritative title */}
-            {providedRestroCode ?? restro?.restro_code ?? restro?.RestroCode} / {restro?.restro_name ?? restro?.RestroName}
-          </h2>
-          <div className="flex items-center gap-2">
-            <button
-              className="px-3 py-1 rounded border"
-              onClick={() => {
-                setRestro(null);
-                setDirty(false);
-                handleClose();
-              }}
-            >
-              Close
-            </button>
-            <button
-              className="px-3 py-1 rounded bg-blue-600 text-white"
-              onClick={handleSave}
-              disabled={!dirty || loading}
-            >
-              {loading ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <button
-            className={`px-3 py-1 rounded ${activeTab === "basic" ? "bg-amber-100" : "bg-gray-100"}`}
-            onClick={() => setActiveTab("basic")}
-          >
-            Basic Information
-          </button>
-          <button
-            className={`px-3 py-1 rounded ${activeTab === "station" ? "bg-amber-100" : "bg-gray-100"}`}
-            onClick={() => setActiveTab("station")}
-          >
-            Station Settings
-          </button>
-          <button
-            className={`px-3 py-1 rounded ${activeTab === "address" ? "bg-amber-100" : "bg-gray-100"}`}
-            onClick={() => setActiveTab("address")}
-          >
-            Address & Documents
-          </button>
-          <button
-            className={`px-3 py-1 rounded ${activeTab === "contact" ? "bg-amber-100" : "bg-gray-100"}`}
-            onClick={() => setActiveTab("contact")}
-          >
-            Contacts
-          </button>
-        </div>
-
-        <div>
-          {loading && <div className="mb-3 text-sm text-gray-500">Loading...</div>}
-
-          {activeTab === "basic" && <BasicInfoTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
-
-          {activeTab === "station" && (
-            <StationSettingsTab restro={restro ?? providedRestro} onChange={onFieldChange} stationsOptions={stationOptions} />
-          )}
-
-          {activeTab === "address" && (
-            <AddressDocsTab
-              restro={restro ?? providedRestro}
-              onChange={onFieldChange}
-              restroCode={
-                providedRestroCode ??
-                (restro ?? providedRestro)?.restro_code ??
-                (restro ?? providedRestro)?.RestroCode
-              }
-            />
-          )}
-
-          {activeTab === "contact" && <ContactsTab restro={restro ?? providedRestro} onChange={onFieldChange} />}
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-/* ----------------- small subcomponents (same as before) ----------------- */
-
-function TextRow({ label, value, onChange, placeholder, readOnly = false }: any) {
-  return (
-    <div className="grid grid-cols-5 gap-3 items-center py-1">
-      <div className="col-span-1 text-sm text-gray-700">{label}</div>
-      <div className="col-span-4">
-        <input
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          readOnly={readOnly}
-          className={`w-full border rounded px-2 py-1 ${readOnly ? "bg-gray-100" : ""}`}
-        />
-      </div>
-    </div>
-  );
-}
-
-function BasicInfoTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
-  return (
-    <div>
-      <h3 className="font-semibold mb-2">Basic Information</h3>
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <TextRow label="Restro Code" value={restro?.restro_code ?? restro?.RestroCode} onChange={(v: any) => onChange("restro_code", v)} />
-          <TextRow
-            label="Station Code with Name"
-            value={restro?.station_code_with_name ?? restro?.StationCodeWithName ?? "(read-only)"}
-            onChange={(v: any) => onChange("station_code_with_name", v)}
-            readOnly
-          />
-          <TextRow label="Restro Name" value={restro?.restro_name ?? restro?.RestroName} onChange={(v: any) => onChange("restro_name", v)} />
-          <TextRow label="Brand Name if Any" value={restro?.brand_name ?? restro?.BrandName} onChange={(v: any) => onChange("brand_name", v)} />
-          <div className="flex items-center gap-4 mt-3">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={!!restro?.raileats_status ?? !!restro?.RailEatsStatus} onChange={(e) => onChange("raileats_status", e.target.checked ? 1 : 0)} />
-              RailEats Status (on/off)
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={!!restro?.is_irctc_approved ?? !!restro?.IsIrctcApproved} onChange={(e) => onChange("is_irctc_approved", e.target.checked ? 1 : 0)} />
-              Is IRCTC Approved
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <TextRow label="Owner Name" value={restro?.owner_name ?? restro?.OwnerName} onChange={(v: any) => onChange("owner_name", v)} />
-          <TextRow label="Owner Email" value={restro?.owner_email ?? restro?.OwnerEmail} onChange={(v: any) => onChange("owner_email", v)} />
-          <TextRow label="Owner Phone" value={restro?.owner_phone ?? restro?.OwnerPhone} onChange={(v: any) => onChange("owner_phone", v)} />
-          <TextRow label="Restro Email" value={restro?.restro_email ?? restro?.RestroEmail} onChange={(v: any) => onChange("restro_email", v)} />
-          <TextRow label="Restro Phone" value={restro?.restro_phone ?? restro?.RestroPhone} onChange={(v: any) => onChange("restro_phone", v)} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StationSettingsTab({ restro, onChange, stationsOptions }: { restro: any; onChange: (k: string, v: any) => void; stationsOptions?: StationsOption[] }) {
-  return (
-    <div>
-      <h3 className="font-semibold mb-2">Station Settings</h3>
-
-      {stationsOptions && stationsOptions.length > 0 && (
-        <div className="mb-3">
-          <label className="block text-sm">Select Station</label>
-          <select value={restro?.station_code ?? restro?.StationCode ?? ""} onChange={(e) => onChange("station_code", e.target.value)} className="mt-1 w-full border rounded px-2 py-1">
-            <option value="">— select —</option>
-            {stationsOptions.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <TextRow label="Fix from Basic Information (NGP)" value={restro?.fix_from_basic_info ?? restro?.FixFromBasicInfo} onChange={(v: any) => onChange("fix_from_basic_info", v)} />
-          <TextRow label="Station Category" value={restro?.station_category ?? restro?.StationCategory} onChange={(v: any) => onChange("station_category", v)} />
-          <TextRow label="Open Time" value={restro?.open_time ?? restro?.OpenTime} onChange={(v: any) => onChange("open_time", v)} />
-          <TextRow label="Close Time" value={restro?.close_time ?? restro?.CloseTime} onChange={(v: any) => onChange("close_time", v)} />
-        </div>
-
-        <div>
-          <TextRow label="Weekly Off" value={restro?.weekly_off ?? restro?.WeeklyOff} onChange={(v: any) => onChange("weekly_off", v)} />
-          <TextRow label="Minimum Order Value" value={restro?.minimum_order_value ?? restro?.MinimumOrderValue} onChange={(v: any) => onChange("minimum_order_value", v)} />
-          <TextRow label="Cut Off Time" value={restro?.cut_off_time ?? restro?.CutOffTime} onChange={(v: any) => onChange("cut_off_time", v)} />
-          <TextRow label="RailEats Customer Delivery Charge" value={restro?.customer_delivery_charge ?? restro?.CustomerDeliveryCharge} onChange={(v: any) => onChange("customer_delivery_charge", v)} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AddressDocsTab({ restro, onChange, restroCode }: { restro: any; onChange: (k: string, v: any) => void; restroCode: string }) {
-  const [fssaiNumber, setFssaiNumber] = useState("");
-  const [fssaiExpiry, setFssaiExpiry] = useState("");
-  const [fssaiFile, setFssaiFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-
-  useEffect(() => {
-    if (!restro) return;
-    setFssaiNumber(restro?.fssai_number ?? restro?.FSSAINumber ?? "");
-    setFssaiExpiry(restro?.fssai_expiry ?? restro?.FSSAIExpiry ?? "");
-  }, [restro]);
-
-  function validateFssaiExpiry(dateStr: string) {
-    if (!dateStr) return false;
-    const d = new Date(dateStr + "T00:00:00");
-    const now = new Date();
-    const min = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()); // at least 1 month
-    return d >= min;
-  }
-
-  async function uploadFileToServer(file: File) {
-    const filename = file.name || `upload_${Date.now()}`;
-    const contentType = file.type || "application/octet-stream";
-    const arrayBuffer = await file.arrayBuffer();
-
-    const res = await fetch(`/api/restros/${restroCode}/upload-file`, {
-      method: "POST",
-      headers: {
-        "Content-Type": contentType,
-        "x-file-name": filename,
-      },
-      body: arrayBuffer,
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error("Upload failed: " + text);
-    }
-    const data = await res.json();
-    return data.file_url as string;
-  }
-
-  async function addNewFssaiEntry() {
-    if (!validateFssaiExpiry(fssaiExpiry)) {
-      alert("FSSAI expiry must be at least 1 month from today");
+    if (!restroCode) {
+      setNotification({ type: "error", text: "Missing RestroCode — cannot save." });
       return;
     }
 
-    setUploading(true);
+    setSavingInternal(true);
     try {
-      let file_url: string | null = null;
-      if (fssaiFile) {
-        file_url = await uploadFileToServer(fssaiFile);
+      const payload: any = { ...local };
+
+      // remove nested objects
+      for (const k of Object.keys(payload)) {
+        if (typeof payload[k] === "object" && payload[k] !== null) delete payload[k];
       }
 
-      const body = { type: "fssai", fssai_number: fssaiNumber, fssai_expiry: fssaiExpiry, file_url };
-      const res = await fetch(`/api/restros/${restroCode}/docs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      // update using supabase client
+      const { error: supError } = await (supabase as any).from("RestroMaster").update(payload).eq("RestroCode", restroCode);
 
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "Failed to add FSSAI");
-      }
+      if (supError) throw supError;
 
-      alert("FSSAI added");
-      window.location.reload();
+      setNotification({ type: "success", text: "Changes saved successfully ✅" });
+
+      setTimeout(() => {
+        if ((router as any).refresh) router.refresh();
+        else window.location.reload();
+      }, 700);
     } catch (err: any) {
-      console.error(err);
-      alert("Error: " + err.message);
+      console.error("Save error:", err);
+      setNotification({ type: "error", text: `Save failed: ${err?.message ?? String(err)}` });
     } finally {
-      setUploading(false);
+      setSavingInternal(false);
+      setTimeout(() => setNotification(null), 6000);
     }
   }
 
-  return (
-    <div>
-      <h3 className="font-semibold mb-2">Address</h3>
-      <div className="grid grid-cols-2 gap-6 mb-4">
-        <div>
-          <TextRow label="Restro Address" value={restro?.restro_address ?? restro?.RestroAddress} onChange={(v: any) => onChange("restro_address", v)} />
-          <TextRow label="City / Village" value={restro?.city ?? restro?.City} onChange={(v: any) => onChange("city", v)} />
-          <TextRow label="Pin Code" value={restro?.pin_code ?? restro?.PinCode} onChange={(v: any) => onChange("pin_code", v)} />
-          <TextRow label="Restro Latitude" value={restro?.restro_latitude ?? restro?.RestroLatitude} onChange={(v: any) => onChange("restro_latitude", v)} />
-        </div>
-        <div>
-          <TextRow label="State (non-editable)" value={restro?.state ?? restro?.State} onChange={() => {}} readOnly />
-          <TextRow label="District (non-editable)" value={restro?.district ?? restro?.District} onChange={() => {}} readOnly />
-          <TextRow label="Restro Longitude" value={restro?.restro_longitude ?? restro?.RestroLongitude} onChange={(v: any) => onChange("restro_longitude", v)} />
-        </div>
-      </div>
+  const common = {
+    local,
+    updateField,
+    stationDisplay,
+    stations,
+    loadingStations,
+    restroCode,
+    InputWithIcon,
+    Toggle,
+    validators: {
+      validateEmailString,
+      validatePhoneString,
+    },
+  };
 
-      <h3 className="font-semibold mb-2">Documents</h3>
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-3">
-          <div className="grid grid-cols-6 gap-2 items-center">
-            <div className="col-span-1 text-sm">FSSAI Number</div>
-            <div className="col-span-2">
-              <input value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} className="w-full border rounded px-2 py-1" />
-            </div>
-            <div className="col-span-2">
-              <input type="date" value={fssaiExpiry} onChange={(e) => setFssaiExpiry(e.target.value)} className="w-full border rounded px-2 py-1" />
-            </div>
-            <div className="col-span-1">
-              <input type="file" onChange={(e: any) => setFssaiFile(e.target.files?.[0] ?? null)} />
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <button className="px-3 py-1 rounded bg-green-500 text-white" onClick={addNewFssaiEntry} disabled={uploading}>
-              {uploading ? "Uploading..." : "Add New FSSAI Entry"}
-            </button>
-          </div>
-        </div>
-
-        <div className="col-span-3">
-          <div className="grid grid-cols-6 gap-2 items-center mt-4">
-            <div className="col-span-1 text-sm">GST Number</div>
-            <div className="col-span-5">
-              <input value={restro?.gst_number ?? restro?.GSTNumber ?? ""} onChange={(e) => onChange("gst_number", e.target.value)} className="w-full border rounded px-2 py-1" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <button
-              className="px-3 py-1 rounded bg-blue-500 text-white"
-              onClick={async () => {
-                const res = await fetch(`/api/restros/${restroCode}/docs`, {
-                  method: "POST",
-                  body: JSON.stringify({ type: "gst", gst_number: restro?.gst_number ?? restro?.GSTNumber }),
-                  headers: { "Content-Type": "application/json" },
-                });
-                if (!res.ok) {
-                  const text = await res.text();
-                  alert("Failed to add GST: " + text);
-                  return;
-                }
-                alert("GST added");
-                window.location.reload();
-              }}
-            >
-              Add New GST Entry
-            </button>
-          </div>
-        </div>
-
-        <div className="col-span-3">
-          <div className="grid grid-cols-6 gap-2 items-center mt-4">
-            <div className="col-span-1 text-sm">PAN Number</div>
-            <div className="col-span-5">
-              <input value={restro?.pan_number ?? restro?.PANNumber ?? ""} onChange={(e) => onChange("pan_number", e.target.value)} className="w-full border rounded px-2 py-1" />
-            </div>
-          </div>
-          <div className="mt-2">
-            <button
-              className="px-3 py-1 rounded bg-amber-600 text-white"
-              onClick={async () => {
-                const res = await fetch(`/api/restros/${restroCode}/docs`, {
-                  method: "POST",
-                  body: JSON.stringify({ type: "pan", pan_number: restro?.pan_number ?? restro?.PANNumber }),
-                  headers: { "Content-Type": "application/json" },
-                });
-                if (!res.ok) {
-                  const text = await res.text();
-                  alert("Failed to add PAN: " + text);
-                  return;
-                }
-                alert("PAN added");
-                window.location.reload();
-              }}
-            >
-              Add New PAN Entry
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ContactsTab({ restro, onChange }: { restro: any; onChange: (k: string, v: any) => void }) {
-  function EmailRow({ idx }: { idx: number }) {
-    const nameKey = `email_name_${idx}`;
-    const emailKey = `email_for_orders_${idx}`;
-    const statusKey = `email_status_${idx}`;
-    return (
-      <div className="grid grid-cols-6 gap-2 items-center py-1">
-        <div className="col-span-1 text-sm">Name</div>
-        <div className="col-span-1">
-          <input value={restro?.[nameKey] ?? restro?.[`EmailAddressName${idx}`] ?? ""} onChange={(e) => onChange(nameKey, e.target.value)} className="w-full border rounded px-2 py-1" />
-        </div>
-        <div className="col-span-2">
-          <input value={restro?.[emailKey] ?? restro?.[`EmailsforOrdersReceiving${idx}`] ?? ""} onChange={(e) => onChange(emailKey, e.target.value)} className="w-full border rounded px-2 py-1" />
-        </div>
-        <div className="col-span-1">
-          <label className="flex items-center">
-            <input type="checkbox" checked={!!restro?.[statusKey] ?? !!restro?.[`EmailAddressStatus${idx}`]} onChange={(e) => onChange(statusKey, e.target.checked)} className="mr-2" />
-            Status
-          </label>
-        </div>
-        <div className="col-span-1"></div>
-      </div>
-    );
+  function tabIcon(t: string | undefined | null) {
+    switch (t) {
+      case "Basic Information":
+        return Icon.basic;
+      case "Station Settings":
+        return Icon.settings;
+      case "Address & Documents":
+        return Icon.docs;
+      case "Contacts":
+        return Icon.contacts;
+      case "Bank":
+        return Icon.bank;
+      case "Future Closed":
+        return Icon.calendar;
+      case "Menu":
+        return Icon.menu;
+      default:
+        return null;
+    }
   }
 
-  function WpRow({ idx }: { idx: number }) {
-    const nameKey = `wp_name_${idx}`;
-    const numKey = `wp_num_${idx}`;
-    const statusKey = `wp_status_${idx}`;
-    return (
-      <div className="grid grid-cols-6 gap-2 items-center py-1">
-        <div className="col-span-1 text-sm">Name</div>
-        <div className="col-span-1">
-          <input value={restro?.[nameKey] ?? restro?.[`WhatsappMobileNumberName${idx}`] ?? ""} onChange={(e) => onChange(nameKey, e.target.value)} className="w-full border rounded px-2 py-1" />
-        </div>
-        <div className="col-span-2">
-          <input value={restro?.[numKey] ?? restro?.[`WhatsappMobileNumberforOrderDetails${idx}`] ?? ""} onChange={(e) => onChange(numKey, e.target.value)} className="w-full border rounded px-2 py-1" />
-        </div>
-        <div className="col-span-1">
-          <label className="flex items-center">
-            <input type="checkbox" checked={!!restro?.[statusKey] ?? !!restro?.[`WhatsappMobileNumberStatus${idx}`]} onChange={(e) => onChange(statusKey, e.target.checked)} className="mr-2" />
-            Status
-          </label>
-        </div>
-        <div className="col-span-1"></div>
-      </div>
-    );
-  }
+  const renderTab = () => {
+    switch (activeTab) {
+      case "Basic Information":
+        return <BasicInformationTab {...common} />;
+      case "Station Settings":
+        return <StationSettingsTab {...common} />;
+      case "Address & Documents":
+        return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
+      case "Contacts":
+        return <ContactsTab {...common} />;
+      case "Bank":
+        return <BankTab {...common} />;
+      case "Future Closed":
+        return <FutureClosedTab {...common} />;
+      case "Menu":
+        return <MenuTab {...common} />;
+      default:
+        return <div>Unknown tab</div>;
+    }
+  };
 
   return (
-    <div>
-      <h3 className="font-semibold mb-2">Contact</h3>
-      <div>
-        <h4 className="font-medium mt-2">Emails</h4>
-        <EmailRow idx={1} />
-        <EmailRow idx={2} />
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 16,
+        zIndex: 1100,
+      }}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div style={{ background: "#fff", width: "98%", height: "98%", maxWidth: 1700, borderRadius: 8, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ position: "sticky", top: 0, zIndex: 1200, background: "#fff", borderBottom: "1px solid #e9e9e9" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px" }}>
+            <div style={{ fontWeight: 700 }}>
+              <div style={{ fontSize: 15 }}>
+                {String(local.RestroCode ?? restro?.RestroCode ?? "")}
+                {(local.RestroName ?? restro?.RestroName) ? " / " : ""}{local.RestroName ?? restro?.RestroName ?? ""}
+              </div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#0b7285", marginTop: 4 }}>{stationDisplay}</div>
+            </div>
+
+            <div>
+              <button
+                onClick={doClose}
+                aria-label="Close"
+                title="Close (Esc)"
+                style={{
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: 18,
+                  cursor: "pointer",
+                  padding: 8,
+                  borderRadius: 6,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div style={{ background: "#fafafa", borderBottom: "1px solid #eee" }}>
+            <div style={{ display: "flex", gap: 6, padding: "8px 12px", overflowX: "auto", alignItems: "center" }}>
+              {TAB_NAMES.map((t) => {
+                const active = activeTab === t;
+                return (
+                  <div
+                    key={t}
+                    onClick={() => setActiveTab(t)}
+                    role="button"
+                    aria-pressed={active}
+                    style={{
+                      padding: "10px 14px",
+                      cursor: "pointer",
+                      borderBottom: active ? "3px solid #0ea5e9" : "3px solid transparent",
+                      fontWeight: active ? 800 : 600,
+                      color: active ? "#0ea5e9" : "#333",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      whiteSpace: "nowrap",
+                      borderRadius: 6,
+                    }}
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center", color: active ? "#0ea5e9" : "#666" }}>{tabIcon(t)}</span>
+                    <span style={{ fontSize: 14 }}>{t}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {notification && (
+          <div
+            style={{
+              padding: 10,
+              textAlign: "center",
+              background: notification.type === "success" ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
+              color: notification.type === "success" ? "#065f46" : "#991b1b",
+              fontWeight: 600,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {notification.text}
+          </div>
+        )}
+
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+          {/* centered section header for each tab */}
+          <div style={{ textAlign: "center", marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{activeTab}</h3>
+          </div>
+
+          <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>{renderTab()}</div>
+        </div>
+
+        <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff" }}>
+          <div />
+          <div>
+            {error && <div style={{ color: "red", marginRight: 12, display: "inline-block" }}>{error}</div>}
+            <button onClick={doClose} style={{ background: "#fff", color: "#333", border: "1px solid #e3e3e3", padding: "8px 12px", borderRadius: 6, marginRight: 8 }}>
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={saving} style={{ background: saving ? "#7fcfe9" : "#0ea5e9", color: "#fff", padding: "8px 12px", borderRadius: 6, border: "none", cursor: saving ? "not-allowed" : "pointer", fontWeight: 700 }}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
       </div>
-      <div>
-        <h4 className="font-medium mt-2">WhatsApp Mobiles</h4>
-        <WpRow idx={1} />
-        <WpRow idx={2} />
-      </div>
+
+      <style jsx>{`
+        /* shared small tweaks to make tabs/forms consistent */
+        h3 { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial; }
+        input[type="text"], input[type="number"], input[type="date"], input[type="time"], select, textarea {
+          font-size: 14px;
+          font-family: inherit;
+        }
+      `}</style>
     </div>
   );
 }
