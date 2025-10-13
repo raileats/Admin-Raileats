@@ -1,8 +1,6 @@
-/** next.config.js */
+// next.config.js
+/** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  // Agar tumhe basePath, images, env vars ya other settings chahiye toh yahan add karo.
+  // basePath: '/admin',  // comment out or remove
 };
-
 module.exports = nextConfig;
