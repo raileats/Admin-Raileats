@@ -1,17 +1,33 @@
 // lib/supabaseBrowser.ts
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in environment"
-  );
+  // don't throw here (so client app can still boot) — log for debugging
+  // If you prefer stricter behavior, uncomment throw.
+  console.warn("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
 }
 
-// Export with the name your components expect:
-export const supabaseBrowser = createClient(supabaseUrl, supabaseAnonKey);
+// ensure single instance in dev/hot-reload
+declare global {
+  // eslint-disable-next-line no-var
+  var __supabase: SupabaseClient | undefined;
+}
 
-// (Optional) also keep a generic name if other files import `supabase`
+const getClient = () => {
+  if (!supabaseUrl || !supabaseAnonKey) return undefined as unknown as SupabaseClient;
+  // @ts-ignore global caching
+  if (typeof global !== "undefined" && (global as any).__supabase) {
+    // @ts-ignore
+    return (global as any).__supabase as SupabaseClient;
+  }
+  const client = createClient(supabaseUrl, supabaseAnonKey);
+  // @ts-ignore
+  if (typeof global !== "undefined") (global as any).__supabase = client;
+  return client;
+};
+
+export const supabaseBrowser = getClient();
 export const supabase = supabaseBrowser;
