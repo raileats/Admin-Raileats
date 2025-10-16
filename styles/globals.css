@@ -1,24 +1,36 @@
-/* Basic global styles */
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  background-color: #ffffff;
-  color: #212529;
+/* styles/globals.css - minimal layout styles */
+.ra-header {
+  height: 56px;
+  background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 
-a {
-  color: #0d6efd;
-  text-decoration: none;
-}
-a:hover {
-  text-decoration: underline;
+.ra-sidebar {
+  background: #fff;
+  border-right: 1px solid #e9ecef;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
 }
 
-/* Optional helper */
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1.5rem;
+.ra-sidebar .nav-link {
+  color: #333;
+  border-radius: 6px;
+}
+
+.ra-sidebar .nav-link.active,
+.ra-sidebar .nav-link:hover {
+  background: #f8f9fa;
+  color: #000;
+}
+
+.ra-brand { font-size: 1.15rem; }
+
+/* responsive: on small screens show top nav instead of sidebar */
+@media (max-width: 767px) {
+  .ra-shell { flex-direction: column; }
+  aside.d-none.d-md-block { display: none !important; }
+  .ra-header .ra-brand { margin-right: 1rem; }
 }
