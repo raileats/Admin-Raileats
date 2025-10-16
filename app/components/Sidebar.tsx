@@ -6,7 +6,6 @@ type Item = { href: string; label: string; icon: string };
 const menu: Item[] = [
   { href: '/admin', label: 'Dashboard', icon: 'fa-solid fa-chart-line' },
   { href: '/admin/orders', label: 'Orders', icon: 'fa-solid fa-receipt' },
-  { href: '/admin/outlets', label: 'Outlets', icon: 'fa-solid fa-store' },
   { href: '/admin/restros', label: 'Restro Master', icon: 'fa-solid fa-utensils' },
   { href: '/admin/menu', label: 'Menu', icon: 'fa-solid fa-book-open' },
   { href: '/admin/trains', label: 'Trains', icon: 'fa-solid fa-train' },
