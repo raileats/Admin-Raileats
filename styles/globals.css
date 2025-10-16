@@ -1,36 +1,80 @@
-/* styles/globals.css - minimal layout styles */
-.ra-header {
-  height: 56px;
+/* ========== GLOBAL THEME COLORS ========== */
+:root {
+  --yellow: #ffca00;
+  --black: #111;
+  --light-bg: #f8f9fa;
+  --border-color: #e2e2e2;
+}
+
+body {
+  background: var(--light-bg);
+  font-family: "Inter", system-ui, sans-serif;
+  color: #222;
+}
+
+/* ========== SHELL LAYOUT ========== */
+.admin-shell {
+  min-height: 100vh;
+}
+
+/* ========== SIDEBAR ========== */
+.admin-sidebar {
+  width: 240px;
   background: #fff;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+  border-right: 1px solid var(--border-color);
+}
+
+.admin-sidebar .nav-link {
+  color: #333;
+  font-weight: 500;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.admin-sidebar .nav-link:hover {
+  background: var(--yellow);
+  color: var(--black);
+}
+
+.admin-sidebar .bubble-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--yellow);
+  color: var(--black);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+/* ========== HEADER ========== */
+.admin-header {
+  background: #fff;
+  border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
-  z-index: 1000;
+  z-index: 100;
 }
 
-.ra-sidebar {
-  background: #fff;
-  border-right: 1px solid #e9ecef;
-  height: calc(100vh - 56px);
-  overflow-y: auto;
+.logout-link {
+  text-decoration: none;
+  color: #d63384;
 }
 
-.ra-sidebar .nav-link {
-  color: #333;
-  border-radius: 6px;
+.logout-link:hover {
+  text-decoration: underline;
 }
 
-.ra-sidebar .nav-link.active,
-.ra-sidebar .nav-link:hover {
-  background: #f8f9fa;
-  color: #000;
+/* ========== MAIN CONTENT ========== */
+.main-content {
+  background: var(--light-bg);
+  flex-grow: 1;
 }
 
-.ra-brand { font-size: 1.15rem; }
-
-/* responsive: on small screens show top nav instead of sidebar */
-@media (max-width: 767px) {
-  .ra-shell { flex-direction: column; }
-  aside.d-none.d-md-block { display: none !important; }
-  .ra-header .ra-brand { margin-right: 1rem; }
+/* ========== TABLE ========== */
+.table th {
+  background: var(--yellow);
+  color: var(--black);
 }
