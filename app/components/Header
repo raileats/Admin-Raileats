@@ -1,0 +1,20 @@
+// app/components/Header.tsx
+'use client';
+import React from 'react';
+
+export default function Header({ userName = 'Admin Name' }: { userName?: string }) {
+  return (
+    <header className="ra-header d-flex align-items-center px-3 py-2 border-bottom">
+      <div className="ra-brand me-3">
+        <strong>R</strong> {/* या logo */}
+      </div>
+
+      <div className="ms-auto d-flex align-items-center gap-3">
+        <div className="d-none d-md-block text-muted small">
+          {userName}
+          <div><a href="/admin/logout" className="text-decoration-none">Logout</a></div>
+        </div>
+      </div>
+    </header>
+  );
+}
