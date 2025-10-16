@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import Modal from "react-modal";
+import { useRouter } from "next/navigation";
 
 type User = {
   id: string;
@@ -14,6 +15,7 @@ type User = {
 };
 
 export default function UsersPage() {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -21,15 +23,13 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
 
-  // Safe setAppElement: run only on client after mount
+  // Safe react-modal init on client
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
-        // use body so element always exists in app dir
         Modal.setAppElement("body");
       } catch (err) {
-        // don't block rendering if something goes wrong
-        console.warn("Modal.setAppElement warning:", err);
+        console.warn("Modal.setAppElement failed:", err);
       }
     }
   }, []);
@@ -48,15 +48,15 @@ export default function UsersPage() {
       const res = await fetch(`/api/admin/users?${params.toString()}`);
       if (!res.ok) {
         const txt = await res.text();
-        throw new Error(`API ${res.status} ${txt}`);
+        throw new Error(`API ${res.status}: ${txt}`);
       }
       const json = await res.json();
       setUsers(json.users || []);
     } catch (err: any) {
       console.error("fetchUsers error:", err);
-      // show friendly message but don't throw
-      alert("Error loading users: " + (err.message || err));
       setUsers([]);
+      // friendly alert (optional)
+      // alert("Error loading users: " + (err.message || err));
     } finally {
       setLoading(false);
     }
@@ -80,21 +80,38 @@ export default function UsersPage() {
     }
   }
 
+  // logout helper that calls optional logout API then redirects to login
+  async function logout() {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" }).catch(() => {});
+    } finally {
+      router.push("/admin/login");
+    }
+  }
+
   return (
-    <div className="p-8">
+    <div className="p-8 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Users Management</h1>
-        <button
-          onClick={() => setIsAddOpen(true)}
-          className="bg-yellow-400 text-black px-4 py-2 rounded"
-        >
-          Add New User
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsAddOpen(true)}
+            className="bg-yellow-400 text-black px-4 py-2 rounded-md hover:shadow"
+          >
+            Add New User
+          </button>
+          <button
+            onClick={logout}
+            className="px-3 py-2 border rounded-md text-sm hover:bg-gray-50"
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
-      <div className="flex gap-3 mb-4">
+      <div className="flex gap-3 mb-6 items-center">
         <input
-          placeholder="Search by name or mobile..."
+          placeholder="Search by name or mobile"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="border p-2 rounded flex-1"
@@ -108,107 +125,114 @@ export default function UsersPage() {
           <option>Admin</option>
           <option>Support</option>
         </select>
-        <button onClick={() => fetchUsers()} className="px-4 border rounded">
+        <button
+          onClick={() => fetchUsers()}
+          className="px-4 py-2 border rounded hover:bg-gray-50"
+        >
           Search
         </button>
       </div>
 
-      <div className="bg-white rounded shadow overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="text-left">
-              <th className="p-3">User ID</th>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Mobile</th>
-              <th>Photo</th>
-              <th>Created</th>
-              <th>Updated</th>
-              <th>Password</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={10} className="p-6 text-center">
-                  Loading...
-                </td>
+      <div className="bg-white rounded-lg shadow ring-1 ring-gray-100">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y">
+            <thead className="bg-gray-50">
+              <tr className="text-left">
+                <th className="px-6 py-3 text-sm font-medium text-gray-600">User ID</th>
+                <th className="px-4 py-3 text-sm font-medium text-gray-600">Name</th>
+                <th className="px-4 py-3 text-sm font-medium text-gray-600">Type</th>
+                <th className="px-4 py-3 text-sm font-medium text-gray-600">Mobile</th>
+                <th className="px-4 py-3 text-sm font-medium text-gray-600">Photo</th>
+                <th className="px-4 py-3 text-sm font-medium text-gray-600">Created</th>
+                <th className="px-4 py-3 text-sm font-medium text-gray-600">Updated</th>
+                <th className="px-4 py-3 text-sm font-medium text-gray-600">Password</th>
+                <th className="px-4 py-3 text-sm font-medium text-gray-600">Status</th>
+                <th className="px-4 py-3 text-sm font-medium text-gray-600">Action</th>
               </tr>
-            ) : users.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="p-6 text-center">
-                  No users found
-                </td>
-              </tr>
-            ) : (
-              users.map((u) => (
-                <tr key={u.id} className="border-t">
-                  <td className="p-3 text-sm">{u.id}</td>
-                  <td>{u.name}</td>
-                  <td>{u.user_type}</td>
-                  <td>{u.mobile}</td>
-                  <td className="p-2">
-                    {u.photo_url ? (
-                      <img
-                        src={u.photo_url}
-                        alt="photo"
-                        className="w-10 h-10 rounded-full"
-                        onError={(e) => {
-                          // fallback to default avatar if resource 404s
-                          (e.currentTarget as HTMLImageElement).src = "/default-avatar.png";
-                        }}
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm">
-                        NA
-                      </div>
-                    )}
-                  </td>
-                  <td className="text-sm">
-                    {u.created_at ? new Date(u.created_at).toLocaleString() : ""}
-                  </td>
-                  <td className="text-sm">
-                    {u.updated_at ? new Date(u.updated_at).toLocaleString() : ""}
-                  </td>
-                  <td>
-                    <button
-                      onClick={() => setEditUser(u)}
-                      className="text-xs underline"
-                    >
-                      Edit/Password
-                    </button>
-                  </td>
-                  <td>
-                    <label className="inline-flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={u.status}
-                        onChange={() => toggleStatus(u)}
-                      />
-                      <span>{u.status ? "Active" : "Blocked"}</span>
-                    </label>
-                  </td>
-                  <td>
-                    <button
-                      className="px-2 py-1 bg-blue-600 text-white rounded"
-                      onClick={() => setEditUser(u)}
-                    >
-                      Edit
-                    </button>
+            </thead>
+
+            <tbody className="bg-white divide-y">
+              {loading ? (
+                <tr>
+                  <td colSpan={10} className="px-6 py-8 text-center text-sm text-gray-500">
+                    Loading...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : users.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-6 py-8 text-center text-sm text-gray-500">
+                    No users found
+                  </td>
+                </tr>
+              ) : (
+                users.map((u) => (
+                  <tr key={u.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm text-gray-700 break-all">{u.id}</td>
+                    <td className="px-4 py-4 text-sm">{u.name}</td>
+                    <td className="px-4 py-4 text-sm">{u.user_type}</td>
+                    <td className="px-4 py-4 text-sm">{u.mobile}</td>
+                    <td className="px-4 py-4">
+                      {u.photo_url ? (
+                        <img
+                          src={u.photo_url}
+                          alt="photo"
+                          className="w-10 h-10 rounded-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = "/default-avatar.png";
+                          }}
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-600">
+                          NA
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-sm">
+                      {u.created_at ? new Date(u.created_at).toLocaleString() : ""}
+                    </td>
+                    <td className="px-4 py-4 text-sm">
+                      {u.updated_at ? new Date(u.updated_at).toLocaleString() : ""}
+                    </td>
+                    <td className="px-4 py-4 text-sm">
+                      <button
+                        onClick={() => setEditUser(u)}
+                        className="text-xs underline text-blue-600"
+                      >
+                        Edit/Password
+                      </button>
+                    </td>
+                    <td className="px-4 py-4">
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={u.status}
+                          onChange={() => toggleStatus(u)}
+                        />
+                        <span className="text-sm">{u.status ? "Active" : "Blocked"}</span>
+                      </label>
+                    </td>
+                    <td className="px-4 py-4">
+                      <button
+                        className="px-3 py-1 bg-blue-600 text-white rounded-md"
+                        onClick={() => setEditUser(u)}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
+      {/* --- Modals --- */}
       <Modal
         isOpen={!!editUser}
         onRequestClose={() => setEditUser(null)}
         className="max-w-2xl mx-auto mt-20 bg-white p-6 rounded shadow"
+        overlayClassName="fixed inset-0 bg-black/30 z-40"
       >
         {editUser && (
           <EditUserForm
@@ -225,6 +249,7 @@ export default function UsersPage() {
         isOpen={isAddOpen}
         onRequestClose={() => setIsAddOpen(false)}
         className="max-w-xl mx-auto mt-20 bg-white p-6 rounded shadow"
+        overlayClassName="fixed inset-0 bg-black/30 z-40"
       >
         <AddUserForm
           onClose={(refresh) => {
@@ -319,17 +344,10 @@ function EditUserForm({
         </label>
       </div>
       <div className="flex justify-end gap-3 mt-4">
-        <button
-          className="px-4 py-2 bg-gray-300 rounded"
-          onClick={() => onClose(false)}
-        >
+        <button className="px-4 py-2 bg-gray-300 rounded" onClick={() => onClose(false)}>
           Cancel
         </button>
-        <button
-          className="px-4 py-2 bg-blue-600 text-white rounded"
-          disabled={saving}
-          onClick={handleSave}
-        >
+        <button className="px-4 py-2 bg-blue-600 text-white rounded" disabled={saving} onClick={handleSave}>
           {saving ? "Saving..." : "Save"}
         </button>
       </div>
@@ -376,47 +394,18 @@ function AddUserForm({ onClose }: { onClose: (refresh: boolean) => void }) {
     <div>
       <h2 className="text-xl font-semibold mb-4">Add New User</h2>
       <div className="flex flex-col gap-3">
-        <input
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="border p-2 rounded"
-          placeholder="Name"
-        />
-        <input
-          value={form.mobile}
-          onChange={(e) => setForm({ ...form, mobile: e.target.value })}
-          className="border p-2 rounded"
-          placeholder="Mobile"
-        />
-        <select
-          value={form.user_type}
-          onChange={(e) => setForm({ ...form, user_type: e.target.value })}
-          className="border p-2 rounded"
-        >
+        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="border p-2 rounded" placeholder="Name" />
+        <input value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} className="border p-2 rounded" placeholder="Mobile" />
+        <select value={form.user_type} onChange={(e) => setForm({ ...form, user_type: e.target.value })} className="border p-2 rounded">
           <option>Super Admin</option>
           <option>Admin</option>
           <option>Support</option>
         </select>
-        <input
-          type="password"
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-          className="border p-2 rounded"
-          placeholder="Password"
-        />
+        <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="border p-2 rounded" placeholder="Password" />
       </div>
       <div className="flex justify-end gap-3 mt-4">
-        <button
-          className="px-4 py-2 bg-gray-300 rounded"
-          onClick={() => onClose(false)}
-        >
-          Cancel
-        </button>
-        <button
-          className="px-4 py-2 bg-green-600 text-white rounded"
-          disabled={saving}
-          onClick={handleAdd}
-        >
+        <button className="px-4 py-2 bg-gray-300 rounded" onClick={() => onClose(false)}>Cancel</button>
+        <button className="px-4 py-2 bg-green-600 text-white rounded" disabled={saving} onClick={handleAdd}>
           {saving ? "Adding..." : "Add User"}
         </button>
       </div>
