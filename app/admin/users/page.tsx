@@ -2,8 +2,6 @@
 import React, { useEffect, useState } from "react";
 import Modal from "react-modal";
 
-Modal.setAppElement("#__next");
-
 type User = {
   id: string;
   user_type: string;
@@ -23,8 +21,22 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
 
+  // Safe setAppElement: run only on client after mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        // use body so element always exists in app dir
+        Modal.setAppElement("body");
+      } catch (err) {
+        // don't block rendering if something goes wrong
+        console.warn("Modal.setAppElement warning:", err);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType]);
 
   async function fetchUsers() {
@@ -34,12 +46,17 @@ export default function UsersPage() {
       if (query) params.set("q", query);
       if (filterType) params.set("user_type", filterType);
       const res = await fetch(`/api/admin/users?${params.toString()}`);
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`API ${res.status} ${txt}`);
+      }
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.message || "Failed");
       setUsers(json.users || []);
-    } catch (err) {
-      console.error(err);
-      alert("Error loading users");
+    } catch (err: any) {
+      console.error("fetchUsers error:", err);
+      // show friendly message but don't throw
+      alert("Error loading users: " + (err.message || err));
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -53,11 +70,12 @@ export default function UsersPage() {
         body: JSON.stringify({ status: !u.status }),
       });
       if (!res.ok) {
-        const j = await res.json();
-        throw new Error(j?.message || "Failed");
+        const j = await res.json().catch(() => null);
+        throw new Error(j?.message || `Status update failed (${res.status})`);
       }
       fetchUsers();
     } catch (err: any) {
+      console.error("toggleStatus error:", err);
       alert("Failed to change status: " + (err.message || err));
     }
   }
@@ -137,6 +155,10 @@ export default function UsersPage() {
                         src={u.photo_url}
                         alt="photo"
                         className="w-10 h-10 rounded-full"
+                        onError={(e) => {
+                          // fallback to default avatar if resource 404s
+                          (e.currentTarget as HTMLImageElement).src = "/default-avatar.png";
+                        }}
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm">
@@ -145,14 +167,10 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td className="text-sm">
-                    {u.created_at
-                      ? new Date(u.created_at).toLocaleString()
-                      : ""}
+                    {u.created_at ? new Date(u.created_at).toLocaleString() : ""}
                   </td>
                   <td className="text-sm">
-                    {u.updated_at
-                      ? new Date(u.updated_at).toLocaleString()
-                      : ""}
+                    {u.updated_at ? new Date(u.updated_at).toLocaleString() : ""}
                   </td>
                   <td>
                     <button
@@ -246,13 +264,14 @@ function EditUserForm({
         body: JSON.stringify(form),
       });
       if (!res.ok) {
-        const j = await res.json();
-        throw new Error(j.message || "Failed");
+        const j = await res.json().catch(() => null);
+        throw new Error(j?.message || `Failed (${res.status})`);
       }
       alert("User updated!");
       onClose(true);
     } catch (err: any) {
-      alert("Error: " + err.message);
+      console.error("EditUserForm.handleSave error:", err);
+      alert("Error: " + (err.message || err));
     } finally {
       setSaving(false);
     }
@@ -340,13 +359,14 @@ function AddUserForm({ onClose }: { onClose: (refresh: boolean) => void }) {
         body: JSON.stringify(form),
       });
       if (!res.ok) {
-        const j = await res.json();
-        throw new Error(j.message || "Failed");
+        const j = await res.json().catch(() => null);
+        throw new Error(j?.message || `Failed (${res.status})`);
       }
       alert("User added!");
       onClose(true);
     } catch (err: any) {
-      alert("Error: " + err.message);
+      console.error("AddUserForm.handleAdd error:", err);
+      alert("Error: " + (err.message || err));
     } finally {
       setSaving(false);
     }
