@@ -1,4 +1,3 @@
-// app/admin/login/page.tsx
 "use client";
 
 import React, { useState } from "react";
@@ -21,62 +20,63 @@ export default function AdminLogin() {
       });
 
       if (res.ok) {
-        // server should set cookie/session — then redirect
         router.replace("/admin/home");
       } else {
         const j = await res.json().catch(() => ({}));
-        alert(j?.message || "Login failed — check credentials");
+        alert(j?.message || "Login failed");
       }
     } catch (err) {
-      console.error("Login error:", err);
-      alert("Network or server error");
+      console.error(err);
+      alert("Network error");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-md bg-white p-8 rounded-lg shadow-md"
-        aria-label="Admin login form"
-      >
-        <h2 className="text-2xl font-semibold mb-6 text-center">Admin Login</h2>
-
-        <label className="block text-sm text-gray-700 mb-1">User ID (mobile)</label>
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          required
-          inputMode="numeric"
-          className="w-full border rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-yellow-300"
-          placeholder="e.g. 8888888888"
-        />
-
-        <label className="block text-sm text-gray-700 mb-1">Password</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className="w-full border rounded px-3 py-2 mb-6 focus:outline-none focus:ring-2 focus:ring-yellow-300"
-          placeholder="Enter password"
-        />
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-yellow-400 text-black font-medium py-2 rounded hover:shadow disabled:opacity-60"
-        >
-          {loading ? "Logging in..." : "Log in"}
-        </button>
-
-        <div className="mt-4 text-center text-sm text-gray-500">
-          {/* helpful for debug */}
-          <div>Need help? contact ops@raileats.in</div>
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-gray-50">
+      <div className="w-full max-w-md bg-white p-8 rounded shadow">
+        <div className="flex items-center gap-3 mb-6">
+          <img src="/logo.png" alt="logo" className="w-12 h-12" />
+          <div>
+            <h1 className="text-xl font-bold">RailEats Admin</h1>
+            <p className="text-sm text-gray-500">Sign in to your admin account</p>
+          </div>
         </div>
-      </form>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-600">User ID (mobile)</label>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+              className="w-full mt-1 p-3 border rounded"
+              placeholder="Enter mobile"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full mt-1 p-3 border rounded"
+              placeholder="Enter password"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full p-3 bg-yellow-400 rounded text-black font-medium"
+          >
+            {loading ? "Logging..." : "Log in"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
