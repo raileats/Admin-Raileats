@@ -1,84 +1,119 @@
-// app/api/admin/users/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer";
-import bcrypt from "bcryptjs";
+// app/admin/users/page.tsx
+"use client";
+import React, { useEffect, useState } from "react";
+import Modal from "react-modal";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
-/**
- * GET -> /api/admin/users?q=...&user_type=...
- * POST -> create user (JSON body: { name, user_type, mobile, password })
- */
+Modal.setAppElement("#__next");
 
-// GET
-export async function GET(req: NextRequest) {
-  try {
-    const url = new URL(req.url);
-    const q = url.searchParams.get("q") || "";
-    const user_type = url.searchParams.get("user_type") || "Super Admin";
+type User = {
+  id: string;
+  user_type: string;
+  name: string;
+  mobile: string;
+  photo_url?: string | null;
+  status: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
 
-    let query = supabaseServer
-      .from("users")
-      .select("id,user_type,name,mobile,photo_url,status,created_at,updated_at")
-      .eq("user_type", user_type);
+export default function UsersPage() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [filterType, setFilterType] = useState("Super Admin");
+  const [editUser, setEditUser] = useState<User | null>(null);
+  const [isAddOpen, setIsAddOpen] = useState(false);
 
-    if (q) {
-      // search name or mobile (case-insensitive)
-      query = query.or(`name.ilike.%${q}%,mobile.ilike.%${q}%`);
+  useEffect(() => {
+    fetchUsers();
+  }, [filterType]);
+
+  async function fetchUsers() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (filterType) params.set("user_type", filterType);
+      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Failed");
+      setUsers(json.users || []);
+    } catch (err) {
+      console.error(err);
+      alert("Error loading users");
+    } finally {
+      setLoading(false);
     }
-
-    const { data, error } = await query.order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Supabase GET users error:", error);
-      return NextResponse.json({ message: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ users: data }, { status: 200 });
-  } catch (err: any) {
-    console.error("GET /api/admin/users failed:", err);
-    return NextResponse.json({ message: err.message || "Server error" }, { status: 500 });
   }
-}
 
-// POST
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { name, user_type = "Super Admin", mobile = "", password } = body ?? {};
-
-    if (!name || !password) {
-      return NextResponse.json({ message: "Name and password are required" }, { status: 400 });
-    }
-
-    // hash password
-    const salt = bcrypt.genSaltSync(10);
-    const password_hash = bcrypt.hashSync(String(password), salt);
-
-    const { data, error } = await supabaseServer
-      .from("users")
-      .insert([{ user_type, name, mobile, password_hash, status: true }])
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Supabase INSERT user error:", error);
-      return NextResponse.json({ message: error.message }, { status: 500 });
-    }
-
-    // return safe user object (no password_hash)
-    const safeUser = {
-      id: data.id,
-      user_type: data.user_type,
-      name: data.name,
-      mobile: data.mobile,
-      photo_url: data.photo_url,
-      status: data.status,
-      created_at: data.created_at,
-      updated_at: data.updated_at,
-    };
-
-    return NextResponse.json({ user: safeUser }, { status: 201 });
-  } catch (err: any) {
-    console.error("POST /api/admin/users failed:", err);
-    return NextResponse.json({ message: err.message || "Server error" }, { status: 500 });
+  function openEdit(u: User) {
+    setEditUser(u);
   }
-}
+  function closeEdit(refresh = false) {
+    setEditUser(null);
+    if (refresh) fetchUsers();
+  }
+
+  async function toggleStatus(u: User) {
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: !u.status }),
+      });
+      if (!res.ok) {
+        const j = await res.json();
+        throw new Error(j?.message || "Failed");
+      }
+      fetchUsers();
+    } catch (err:any) {
+      alert("Failed to change status: " + (err.message || err));
+    }
+  }
+
+  return (
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Users Management</h1>
+        <div>
+          <button
+            onClick={() => setIsAddOpen(true)}
+            className="bg-yellow-400 text-black px-4 py-2 rounded"
+          >
+            Add New User
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-3 mb-4">
+        <input
+          placeholder="Search by name or mobile..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="border p-2 rounded flex-1"
+        />
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option>Super Admin</option>
+          <option>Admin</option>
+          <option>Support</option>
+        </select>
+        <button onClick={() => fetchUsers()} className="px-4 border rounded">
+          Search
+        </button>
+      </div>
+
+      <div className="bg-white rounded shadow overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="text-left">
+              <th className="p-3">User ID</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Mobile</th>
+              <th>Photo</th>
+              <th>C
