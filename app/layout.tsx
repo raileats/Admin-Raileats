@@ -1,32 +1,37 @@
 // app/layout.tsx
-import '../styles/globals.css';
-import Header from './components/Header';
-import Sidebar from './components/Sidebar';
-import { Metadata } from 'next';
+import "../styles/globals.css";
+import { Metadata } from "next";
+import Sidebar from "./components/Sidebar";
+import Header from "./components/Header";
 
 export const metadata: Metadata = {
-  title: 'Raileats Admin',
+  title: "RailEats Admin",
+  description: "RailEats Admin Panel",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head />
+      <head>
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+        />
+        <link
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+          rel="stylesheet"
+        />
+      </head>
       <body>
-        {/* header on top */}
-        <Header userName="ops@raileats.in" />
-
-        <div className="ra-shell d-flex" style={{ minHeight: 'calc(100vh - 56px)' }}>
-          {/* sidebar */}
-          <aside className="d-none d-md-block" style={{ width: 240 }}>
-            <Sidebar />
-          </aside>
-
-          {/* main content */}
-          <main className="flex-grow-1 p-4">
-            {children}
-          </main>
+        <div className="admin-shell d-flex">
+          <Sidebar />
+          <div className="main-content flex-grow-1">
+            <Header />
+            <div className="p-4">{children}</div>
+          </div>
         </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
       </body>
     </html>
   );
