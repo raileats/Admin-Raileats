@@ -1,0 +1,41 @@
+// app/components/Sidebar.tsx
+'use client';
+import Link from 'next/link';
+import React from 'react';
+
+const items = [
+  { href: '/admin', label: 'Dashboard', icon: '🏠' },
+  { href: '/admin/orders', label: 'Orders', icon: '🧾' },
+  { href: '/admin/outlets', label: 'Outlets', icon: '🏬' },
+  { href: '/admin/restros', label: 'Restro Master', icon: '🍽️' },
+  { href: '/admin/menu', label: 'Menu', icon: '📋' },
+  { href: '/admin/trains', label: 'Trains', icon: '🚆' },
+  { href: '/admin/stations', label: 'Stations', icon: '📍' },
+  { href: '/admin/users', label: 'Users', icon: '👥' },
+];
+
+export default function Sidebar() {
+  return (
+    <nav className="ra-sidebar d-flex flex-column p-3">
+      <div className="mb-4">
+        <div className="ra-sidebar-logo fs-4 fw-bold">Raileats</div>
+        <div className="text-muted small">Orders & Operations</div>
+      </div>
+
+      <ul className="nav nav-pills flex-column">
+        {items.map((it) => (
+          <li key={it.href} className="nav-item mb-1">
+            <Link href={it.href} className="nav-link d-flex align-items-center">
+              <span className="me-2">{it.icon}</span>
+              <span>{it.label}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-auto">
+        <Link href="/admin/logout" className="btn btn-sm btn-outline-secondary w-100">Logout</Link>
+      </div>
+    </nav>
+  );
+}
