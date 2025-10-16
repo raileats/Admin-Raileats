@@ -1,51 +1,83 @@
-// app/api/admin/users/route.ts
+// app/api/admin/users/route.ts (Next.js route handlers)
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import bcrypt from "bcryptjs";
 
-export async function GET(req: Request) {
+export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const userType = searchParams.get("user_type");
-    const q = searchParams.get("q");
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q") || "";
+    const user_type = url.searchParams.get("user_type") || "";
 
-    let builder = supabaseServer.from("users").select("*").order("created_at", { ascending: false });
+    let query = supabaseServer.from("users").select("*").order("seq", { ascending: true });
 
-    if (userType) builder = builder.eq("user_type", userType);
     if (q) {
-      // simple ilike search on name or mobile
-      builder = builder.or(`name.ilike.%${q}%,mobile.ilike.%${q}%`);
+      // search by name or mobile
+      query = query.ilike("name", `%${q}%`).or(`mobile.ilike.%${q}%`);
+      // Note: supabase-js chaining with OR may require rpc or filter combination; using simple approach:
+      const { data, error } = await supabaseServer
+        .from("users")
+        .select("*")
+        .or(`name.ilike.%${q}%,mobile.ilike.%${q}%`)
+        .order("seq", { ascending: true })
+        .limit(500);
+      if (error) throw error;
+      const filtered = user_type ? data?.filter((r:any)=>r.user_type===user_type) : data;
+      return NextResponse.json({ users: filtered || [] });
     }
 
-    const { data, error } = await builder;
-    if (error) return NextResponse.json({ message: error.message }, { status: 500 });
+    if (user_type) {
+      const { data, error } = await supabaseServer.from("users").select("*").eq("user_type", user_type).order("seq", { ascending: true }).limit(500);
+      if (error) throw error;
+      return NextResponse.json({ users: data || [] });
+    }
 
-    return NextResponse.json({ users: data ?? [] }, { status: 200 });
-  } catch (err: any) {
-    return NextResponse.json({ message: err.message || "Unknown error" }, { status: 500 });
+    const { data, error } = await supabaseServer.from("users").select("*").order("seq", { ascending: true }).limit(500);
+    if (error) throw error;
+    return NextResponse.json({ users: data || [] });
+  } catch (err:any) {
+    console.error("GET /api/admin/users error:", err);
+    return NextResponse.json({ message: err.message || String(err) }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const body = await req.json();
-    const { name, mobile, password, user_type, photo_url } = body;
-
+    const body = await request.json();
+    const { name, user_type, mobile, password } = body;
     if (!name || !password) {
       return NextResponse.json({ message: "name and password required" }, { status: 400 });
     }
 
+    // 1) find current max seq
+    const { data: maxRow, error: maxError } = await supabaseServer
+      .rpc("max_users_seq"); // we'll add a simple rpc or fallback below
+
+    // fallback if rpc not available: simple select max(seq)
+    let nextSeq = 1;
+    try {
+      const { data: rows, error } = await supabaseServer.from("users").select("seq").order("seq", { ascending: false }).limit(1);
+      if (!error && rows && rows.length>0 && rows[0].seq) {
+        nextSeq = Number(rows[0].seq) + 1;
+      }
+    } catch(e){ /* ignore */ }
+
     const hashed = await bcrypt.hash(password, 10);
 
-    const { data, error } = await supabaseServer
-      .from("users")
-      .insert([{ name, mobile, password: hashed, user_type: user_type ?? "Admin", photo_url, status: true }])
-      .select();
+    const insertObj = {
+      name, user_type, mobile,
+      password_hash: hashed,
+      status: true,
+      seq: nextSeq,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
 
+    const { data, error } = await supabaseServer.from("users").insert([insertObj]).select().single();
     if (error) throw error;
-
-    return NextResponse.json({ user: data?.[0] ?? null }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ message: err.message || "Failed to create user" }, { status: 500 });
+    return NextResponse.json({ user: data }, { status: 201 });
+  } catch (err:any) {
+    console.error("POST /api/admin/users error:", err);
+    return NextResponse.json({ message: err.message || String(err) }, { status: 500 });
   }
 }
