@@ -1,20 +1,29 @@
 // app/components/Header.tsx
-'use client';
-import React from 'react';
+"use client";
+import React from "react";
 
-export default function Header({ userName = 'Admin Name' }: { userName?: string }) {
+export default function Header() {
   return (
-    <header className="ra-header d-flex align-items-center px-3 py-2 border-bottom">
-      <div className="ra-brand me-3">
-        <strong>R</strong> {/* या logo */}
+    <nav className="admin-header d-flex align-items-center justify-content-between px-4 py-2">
+      <div className="d-flex align-items-center gap-2">
+        <img src="/logo.png" alt="RailEats" height={40} />
+        <h5 className="m-0 fw-bold text-dark">RailEats Admin</h5>
       </div>
-
-      <div className="ms-auto d-flex align-items-center gap-3">
-        <div className="d-none d-md-block text-muted small">
-          {userName}
-          <div><a href="/admin/logout" className="text-decoration-none">Logout</a></div>
+      <div className="d-flex align-items-center gap-3">
+        <div className="text-end small">
+          <div className="fw-semibold">ops@raileats.in</div>
+          <a href="/admin/logout" className="logout-link">
+            Logout
+          </a>
         </div>
+        <img
+          src="/default-avatar.png"
+          alt="Admin"
+          className="rounded-circle border"
+          width={40}
+          height={40}
+        />
       </div>
-    </header>
+    </nav>
   );
 }
