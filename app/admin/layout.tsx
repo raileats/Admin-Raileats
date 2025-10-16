@@ -24,15 +24,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-gray-50">
       <header className="flex items-center justify-between px-6 py-3 bg-white shadow-sm">
         <div className="flex items-center gap-3">
-          <Link href="/admin">
-            <div className="flex items-center gap-2 cursor-pointer">
-              <img src="/logo.png" alt="Raileats" className="w-10 h-10" />
-              <span className="font-semibold">RailEats Admin</span>
-            </div>
+          <Link href="/admin" className="flex items-center gap-2">
+            {/* Constrain logo size strictly so it never grows huge */}
+            <img
+              src="/logo.png"
+              alt="Raileats"
+              style={{ width: 40, height: 40, objectFit: "contain" }}
+              className="w-10 h-10"
+            />
+            <span className="font-semibold hidden sm:inline">RailEats Admin</span>
           </Link>
         </div>
 
-        {/* top-right small area (show user email & logout only when not login page) */}
         <div>
           {!isLoginPage && (
             <div className="flex items-center gap-3">
@@ -50,7 +53,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </header>
 
       <div className="flex">
-        {/* Sidebar only when NOT on login page */}
         {!isLoginPage && (
           <aside className="w-56 bg-white border-r min-h-[calc(100vh-64px)] p-4">
             <nav className="space-y-3">
@@ -66,7 +68,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </aside>
         )}
 
-        {/* main content */}
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
