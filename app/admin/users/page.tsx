@@ -1,10 +1,6 @@
-// app/admin/users/page.tsx
 "use client";
 import React, { useEffect, useState } from "react";
 import Modal from "react-modal";
-import { useRouter } from "next/navigation";
-
-Modal.setAppElement("#__next");
 
 type User = {
   id: string;
@@ -15,6 +11,8 @@ type User = {
   status: boolean;
   created_at: string | null;
   updated_at: string | null;
+  // optional numeric seq if backend provides
+  seq?: number;
 };
 
 export default function UsersPage() {
@@ -24,7 +22,18 @@ export default function UsersPage() {
   const [filterType, setFilterType] = useState("Super Admin");
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const router = useRouter();
+
+  // setAppElement only client-side to avoid SSR error
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      const el = document.getElementById("__next") || undefined;
+      try {
+        Modal.setAppElement(el || undefined);
+      } catch (e) {
+        // ignore if fails in some env
+      }
+    }
+  }, []);
 
   useEffect(() => {
     fetchUsers();
@@ -39,9 +48,13 @@ export default function UsersPage() {
       const res = await fetch(`/api/admin/users?${params.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "Failed");
-      setUsers(json.users || []);
+      // ensure stable order
+      const data = (json.users || []).map((u: User, idx: number) => ({
+        ...u,
+      }));
+      setUsers(data);
     } catch (err) {
-      console.error("fetchUsers error", err);
+      console.error("fetchUsers error:", err);
       alert("Error loading users");
     } finally {
       setLoading(false);
@@ -49,29 +62,25 @@ export default function UsersPage() {
   }
 
   async function toggleStatus(u: User) {
-    // optimistic UI: update locally and then call API
-    const newStatus = !u.status;
-    setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, status: newStatus } : x)));
     try {
       const res = await fetch(`/api/admin/users/${u.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: !u.status }),
       });
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j?.message || "Failed to update status");
+        const j = await res.json().catch(()=>({}));
+        throw new Error(j?.message || "Failed");
       }
+      fetchUsers();
     } catch (err: any) {
-      alert("Failed to change status: " + (err?.message || err));
-      // rollback on failure
-      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, status: u.status } : x)));
+      alert("Failed to change status: " + (err.message || err));
     }
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Users Management</h1>
         <button
           onClick={() => setIsAddOpen(true)}
@@ -81,7 +90,7 @@ export default function UsersPage() {
         </button>
       </div>
 
-      <div className="flex gap-3 mb-4 items-center">
+      <div className="flex gap-3 mb-4">
         <input
           placeholder="Search by name or mobile..."
           value={query}
@@ -103,10 +112,10 @@ export default function UsersPage() {
       </div>
 
       <div className="bg-white rounded shadow overflow-hidden">
-        <table className="w-full min-w-[900px]">
+        <table className="w-full">
           <thead>
-            <tr className="text-left bg-gray-50">
-              <th className="p-3 w-12">#</th>
+            <tr className="text-left">
+              <th className="p-3">#</th>
               <th className="p-3">User ID</th>
               <th>Name</th>
               <th>Type</th>
@@ -114,8 +123,8 @@ export default function UsersPage() {
               <th>Photo</th>
               <th>Created</th>
               <th>Updated</th>
-              <th className="text-center">Status</th>
-              <th className="text-center">Action</th>
+              <th>Status</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -132,58 +141,51 @@ export default function UsersPage() {
                 </td>
               </tr>
             ) : (
-              users.map((u, idx) => (
+              users.map((u, i) => (
                 <tr key={u.id} className="border-t">
-                  <td className="p-3 text-sm align-top">{idx + 1}</td>
-                  <td className="p-3 text-sm align-top break-all">{u.id}</td>
-                  <td className="align-top p-3">{u.name}</td>
-                  <td className="align-top p-3">{u.user_type}</td>
-                  <td className="align-top p-3">{u.mobile}</td>
-                  <td className="p-2 align-top">
+                  <td className="p-3 text-sm">{u.seq ?? i + 1}</td>
+                  <td className="p-3 text-sm">{u.id}</td>
+                  <td>{u.name}</td>
+                  <td>{u.user_type}</td>
+                  <td>{u.mobile}</td>
+                  <td className="p-2">
                     {u.photo_url ? (
-                      <img src={u.photo_url} alt="photo" className="w-10 h-10 rounded-full object-cover" />
+                      <img
+                        src={u.photo_url}
+                        alt="photo"
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm">
                         NA
                       </div>
                     )}
                   </td>
-                  <td className="text-sm p-3 align-top">
+                  <td className="text-sm">
                     {u.created_at ? new Date(u.created_at).toLocaleString() : ""}
                   </td>
-                  <td className="text-sm p-3 align-top">
+                  <td className="text-sm">
                     {u.updated_at ? new Date(u.updated_at).toLocaleString() : ""}
                   </td>
-
-                  <td className="p-3 align-top text-center">
-                    {/* Toggle slider */}
-                    <label className="inline-flex relative items-center cursor-pointer">
+                  <td>
+                    <label className="inline-flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={u.status}
                         onChange={() => toggleStatus(u)}
-                        className="sr-only peer"
-                        aria-label={`Set ${u.name} active`}
+                        className="toggle-checkbox"
+                        aria-label="toggle status"
                       />
-                      <div className="w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-green-500 peer-focus:ring-2 peer-focus:ring-green-300 transition-colors"></div>
-                      <div
-                        className={`absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transform transition-transform peer-checked:translate-x-5`}
-                        aria-hidden
-                      />
+                      <span>{u.status ? "Active" : "Blocked"}</span>
                     </label>
-                    <div className="text-xs mt-1">{u.status ? "Active" : "Blocked"}</div>
                   </td>
-
-                  <td className="p-3 align-top text-center">
-                    {/* Pencil icon button */}
+                  <td>
                     <button
-                      title="Edit"
+                      className="p-2 rounded border"
                       onClick={() => setEditUser(u)}
-                      className="inline-flex items-center justify-center w-9 h-9 bg-white border rounded shadow-sm hover:bg-gray-50"
+                      title="Edit"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-700" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M17.414 2.586a2 2 0 010 2.828l-9.193 9.193a1 1 0 01-.45.263l-4 1a1 1 0 01-1.213-1.213l1-4a1 1 0 01.263-.45L13.586 2.586a2 2 0 012.828 0z" />
-                      </svg>
+                      ✏️
                     </button>
                   </td>
                 </tr>
@@ -197,8 +199,16 @@ export default function UsersPage() {
       <Modal
         isOpen={!!editUser}
         onRequestClose={() => setEditUser(null)}
-        overlayClassName="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-        className="bg-white rounded max-w-2xl w-full mx-4 p-6 outline-none"
+        style={{
+          content: {
+            maxWidth: "720px",
+            margin: "auto",
+            inset: "20% auto auto auto",
+            padding: "20px",
+            borderRadius: "8px",
+          },
+          overlay: { backgroundColor: "rgba(0,0,0,0.4)", zIndex: 2000 },
+        }}
       >
         {editUser && (
           <EditUserForm
@@ -215,16 +225,56 @@ export default function UsersPage() {
       <Modal
         isOpen={isAddOpen}
         onRequestClose={() => setIsAddOpen(false)}
-        overlayClassName="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-        className="bg-white rounded max-w-xl w-full mx-4 p-6 outline-none"
+        style={{
+          content: {
+            maxWidth: "560px",
+            margin: "auto",
+            inset: "20% auto auto auto",
+            padding: "20px",
+            borderRadius: "8px",
+          },
+          overlay: { backgroundColor: "rgba(0,0,0,0.4)", zIndex: 2000 },
+        }}
       >
         <AddUserForm
           onClose={(refresh) => {
             setIsAddOpen(false);
             if (refresh) fetchUsers();
           }}
+          existingCount={users.length}
         />
       </Modal>
+
+      <style jsx>{`
+        /* simple toggle slider look */
+        .toggle-checkbox {
+          width: 36px;
+          height: 18px;
+          appearance: none;
+          background: #ddd;
+          border-radius: 999px;
+          position: relative;
+          outline: none;
+          cursor: pointer;
+        }
+        .toggle-checkbox:checked {
+          background: #34d399;
+        }
+        .toggle-checkbox::after {
+          content: "";
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          width: 14px;
+          height: 14px;
+          background: #fff;
+          border-radius: 50%;
+          transition: transform 0.15s ease;
+        }
+        .toggle-checkbox:checked::after {
+          transform: translateX(18px);
+        }
+      `}</style>
     </div>
   );
 }
@@ -250,21 +300,19 @@ function EditUserForm({
   async function handleSave() {
     setSaving(true);
     try {
-      const payload: any = { ...form };
-      if (!form.password) delete payload.password;
       const res = await fetch(`/api/admin/users/${user.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(form),
       });
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
+        const j = await res.json().catch(()=>({}));
         throw new Error(j.message || "Failed");
       }
       alert("User updated!");
       onClose(true);
     } catch (err: any) {
-      alert("Error: " + (err.message || err));
+      alert("Error: " + err.message);
     } finally {
       setSaving(false);
     }
@@ -312,11 +360,14 @@ function EditUserForm({
         </label>
       </div>
       <div className="flex justify-end gap-3 mt-4">
-        <button className="px-4 py-2 bg-gray-300 rounded" onClick={() => onClose(false)}>
+        <button
+          className="px-4 py-2 bg-gray-300 rounded"
+          onClick={() => onClose(false)}
+        >
           Cancel
         </button>
         <button
-          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-60"
+          className="px-4 py-2 bg-blue-600 text-white rounded"
           disabled={saving}
           onClick={handleSave}
         >
@@ -327,7 +378,13 @@ function EditUserForm({
   );
 }
 
-function AddUserForm({ onClose }: { onClose: (refresh: boolean) => void }) {
+function AddUserForm({
+  onClose,
+  existingCount,
+}: {
+  onClose: (refresh: boolean) => void;
+  existingCount: number;
+}) {
   const [form, setForm] = useState({
     name: "",
     user_type: "Super Admin",
@@ -335,6 +392,26 @@ function AddUserForm({ onClose }: { onClose: (refresh: boolean) => void }) {
     password: "",
   });
   const [saving, setSaving] = useState(false);
+  const [nextIdLoading, setNextIdLoading] = useState(false);
+  const [suggestedSeq, setSuggestedSeq] = useState<number | null>(null);
+
+  useEffect(() => {
+    // try to fetch sequence from server if endpoint exists
+    (async () => {
+      setNextIdLoading(true);
+      try {
+        const res = await fetch("/api/admin/users/next-id");
+        if (!res.ok) throw new Error("no endpoint");
+        const j = await res.json();
+        if (j?.nextId) setSuggestedSeq(j.nextId);
+        else setSuggestedSeq(existingCount + 1);
+      } catch (e) {
+        setSuggestedSeq(existingCount + 1);
+      } finally {
+        setNextIdLoading(false);
+      }
+    })();
+  }, [existingCount]);
 
   async function handleAdd() {
     if (!form.name || !form.password) {
@@ -343,18 +420,21 @@ function AddUserForm({ onClose }: { onClose: (refresh: boolean) => void }) {
     }
     setSaving(true);
     try {
-      // If backend expects sequence id or checks last id, it should handle on server.
+      const payload: any = { ...form };
+      if (suggestedSeq) payload.seq = suggestedSeq; // optional - backend may ignore
       const res = await fetch(`/api/admin/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.message || "Failed");
+      if (!res.ok) {
+        const j = await res.json().catch(()=>({}));
+        throw new Error(j.message || "Failed");
+      }
       alert("User added!");
       onClose(true);
     } catch (err: any) {
-      alert("Error: " + (err.message || err));
+      alert("Error: " + err.message);
     } finally {
       setSaving(false);
     }
@@ -364,6 +444,10 @@ function AddUserForm({ onClose }: { onClose: (refresh: boolean) => void }) {
     <div>
       <h2 className="text-xl font-semibold mb-4">Add New User</h2>
       <div className="flex flex-col gap-3">
+        <div className="text-sm text-gray-600">
+          Suggested numeric id:{" "}
+          {nextIdLoading ? "..." : suggestedSeq ?? existingCount + 1}
+        </div>
         <input
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -394,11 +478,14 @@ function AddUserForm({ onClose }: { onClose: (refresh: boolean) => void }) {
         />
       </div>
       <div className="flex justify-end gap-3 mt-4">
-        <button className="px-4 py-2 bg-gray-300 rounded" onClick={() => onClose(false)}>
+        <button
+          className="px-4 py-2 bg-gray-300 rounded"
+          onClick={() => onClose(false)}
+        >
           Cancel
         </button>
         <button
-          className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-60"
+          className="px-4 py-2 bg-green-600 text-white rounded"
           disabled={saving}
           onClick={handleAdd}
         >
