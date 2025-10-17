@@ -1,75 +1,52 @@
-"use client";
-
+// app/admin/layout.tsx
 import React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import "./globals.css";
+
+export const metadata = {
+  title: "RailEats Admin",
+};
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const router = useRouter();
-
-  const isLoginPage = pathname === "/admin" || pathname === "/admin/login";
-
-  async function handleLogout() {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch (err) {
-      console.warn("Logout failed", err);
-    } finally {
-      router.replace("/admin");
-    }
-  }
-
+  // NOTE: This layout will wrap admin routes (except login)
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="flex items-center justify-between px-6 py-3 bg-white shadow-sm">
-        <div className="flex items-center gap-3">
-          <Link href="/admin" className="flex items-center gap-2">
-            {/* Constrain logo size strictly so it never grows huge */}
-            <img
-              src="/logo.png"
-              alt="Raileats"
-              style={{ width: 40, height: 40, objectFit: "contain" }}
-              className="w-10 h-10"
-            />
-            <span className="font-semibold hidden sm:inline">RailEats Admin</span>
+    <div className="flex min-h-screen">
+      <aside style={{ width:88, background:"#fff", borderRight:"1px solid #eee", paddingTop:20 }}>
+        <div style={{ textAlign:"center", marginBottom:18 }}>
+          <img src="/logo.png" alt="logo" style={{ width:44, height:44 }} />
+        </div>
+
+        <nav style={{ display:"flex", flexDirection:"column", gap:18, paddingLeft:12 }}>
+          <Link href="/admin/home"> <div style={{fontSize:14}}>Dashboard</div></Link>
+          <Link href="/admin/orders"> <div style={{fontSize:14}}>Orders</div></Link>
+          <Link href="/admin/restros"> <div style={{fontSize:14}}>Restro Master</div></Link>
+          <Link href="/admin/menu"> <div style={{fontSize:14}}>Menu</div></Link>
+          <Link href="/admin/trains"> <div style={{fontSize:14}}>Trains</div></Link>
+          <Link href="/admin/stations"> <div style={{fontSize:14}}>Stations</div></Link>
+          <Link href="/admin/users"> <div style={{fontSize:14}}>Users</div></Link>
+          <Link href="/api/auth/logout">
+            <button style={{ marginTop:20, padding:"6px 10px", borderRadius:6, border:"1px solid #ddd" }}>Logout</button>
           </Link>
-        </div>
+        </nav>
+      </aside>
 
-        <div>
-          {!isLoginPage && (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-700">ops@raileats.in</span>
-              <button
-                onClick={handleLogout}
-                className="text-sm underline text-blue-600"
-                title="Logout"
-              >
-                Logout
-              </button>
+      <main style={{ flex:1, background:"#fafafa", minHeight:"100vh" }}>
+        <header style={{ height:64, display:"flex", alignItems:"center", paddingLeft:20, gap:12 }}>
+          <img src="/logo.png" alt="logo small" style={{ width:32, height:32 }} />
+          <div style={{ fontWeight:700 }}>RailEats Admin</div>
+          <div style={{ marginLeft:"auto", paddingRight:24 }}>
+            {/* user email + logout link on top-right */}
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:13, color:"#111" }}>ops@raileats.in</div>
+              <Link href="/api/auth/logout"><small>Logout</small></Link>
             </div>
-          )}
-        </div>
-      </header>
+          </div>
+        </header>
 
-      <div className="flex">
-        {!isLoginPage && (
-          <aside className="w-56 bg-white border-r min-h-[calc(100vh-64px)] p-4">
-            <nav className="space-y-3">
-              <Link href="/admin/home" className="block p-2 rounded hover:bg-gray-100">Dashboard</Link>
-              <Link href="/admin/orders" className="block p-2 rounded hover:bg-gray-100">Orders</Link>
-              <Link href="/admin/restros" className="block p-2 rounded hover:bg-gray-100">Restro Master</Link>
-              <Link href="/admin/menu" className="block p-2 rounded hover:bg-gray-100">Menu</Link>
-              <Link href="/admin/trains" className="block p-2 rounded hover:bg-gray-100">Trains</Link>
-              <Link href="/admin/stations" className="block p-2 rounded hover:bg-gray-100">Stations</Link>
-              <Link href="/admin/users" className="block p-2 rounded hover:bg-gray-100">Users</Link>
-              <button onClick={handleLogout} className="w-full mt-4 p-2 border rounded text-left">Logout</button>
-            </nav>
-          </aside>
-        )}
-
-        <main className="flex-1 p-6">{children}</main>
-      </div>
+        <section style={{ padding:24 }}>
+          {children}
+        </section>
+      </main>
     </div>
   );
 }
