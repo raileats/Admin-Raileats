@@ -1,17 +1,20 @@
+// app/admin/users/page.tsx
 "use client";
-
 import React, { useEffect, useState } from "react";
 import Modal from "react-modal";
+import { useRouter } from "next/navigation";
+
+Modal.setAppElement("#__next");
 
 type User = {
-  id: string; // actual db uuid
+  id: string;
   user_type: string;
   name: string;
   mobile: string;
   photo_url?: string | null;
   status: boolean;
-  created_at?: string | null;
-  updated_at?: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export default function UsersPage() {
@@ -21,15 +24,11 @@ export default function UsersPage() {
   const [filterType, setFilterType] = useState("Super Admin");
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const router = useRouter();
 
-  // set app element client-side to avoid SSR issues
   useEffect(() => {
-    if (typeof document !== "undefined") {
-      Modal.setAppElement(document.body);
-    }
     fetchUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filterType]);
 
   async function fetchUsers() {
     setLoading(true);
@@ -40,44 +39,39 @@ export default function UsersPage() {
       const res = await fetch(`/api/admin/users?${params.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "Failed");
-      // ensure boolean for status
-      const rows: User[] = (json.users || []).map((u: any) => ({
-        ...u,
-        status: !!u.status,
-      }));
-      setUsers(rows);
+      setUsers(json.users || []);
     } catch (err) {
-      console.error("fetchUsers error:", err);
+      console.error("fetchUsers error", err);
       alert("Error loading users");
     } finally {
       setLoading(false);
     }
   }
 
-  // toggle status with PATCH
   async function toggleStatus(u: User) {
+    // optimistic UI: update locally and then call API
+    const newStatus = !u.status;
+    setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, status: newStatus } : x)));
     try {
       const res = await fetch(`/api/admin/users/${u.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: !u.status }),
+        body: JSON.stringify({ status: newStatus }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.message || "Failed");
+        throw new Error(j?.message || "Failed to update status");
       }
-      await fetchUsers();
     } catch (err: any) {
-      alert("Failed to change status: " + (err.message || err));
+      alert("Failed to change status: " + (err?.message || err));
+      // rollback on failure
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, status: u.status } : x)));
     }
   }
 
-  // compute next display id for UI (not modifying DB id)
-  const nextDisplayId = users.length > 0 ? users.length + 1 : 1;
-
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Users Management</h1>
         <button
           onClick={() => setIsAddOpen(true)}
@@ -87,7 +81,7 @@ export default function UsersPage() {
         </button>
       </div>
 
-      <div className="flex gap-3 mb-4">
+      <div className="flex gap-3 mb-4 items-center">
         <input
           placeholder="Search by name or mobile..."
           value={query}
@@ -109,22 +103,21 @@ export default function UsersPage() {
       </div>
 
       <div className="bg-white rounded shadow overflow-hidden">
-        <table className="w-full">
+        <table className="w-full min-w-[900px]">
           <thead>
-            <tr className="text-left">
-              <th className="p-3">#</th>
-              <th>User ID</th>
+            <tr className="text-left bg-gray-50">
+              <th className="p-3 w-12">#</th>
+              <th className="p-3">User ID</th>
               <th>Name</th>
               <th>Type</th>
               <th>Mobile</th>
               <th>Photo</th>
               <th>Created</th>
               <th>Updated</th>
-              <th>Status</th>
-              <th>Action</th>
+              <th className="text-center">Status</th>
+              <th className="text-center">Action</th>
             </tr>
           </thead>
-
           <tbody>
             {loading ? (
               <tr>
@@ -141,55 +134,56 @@ export default function UsersPage() {
             ) : (
               users.map((u, idx) => (
                 <tr key={u.id} className="border-t">
-                  {/* sequential display id */}
-                  <td className="p-3 text-sm">{idx + 1}</td>
-
-                  {/* actual DB id (uuid) */}
-                  <td className="p-3 text-sm truncate max-w-[200px]">{u.id}</td>
-
-                  <td className="p-3">{u.name}</td>
-                  <td className="p-3">{u.user_type}</td>
-                  <td className="p-3">{u.mobile}</td>
-
-                  <td className="p-3">
+                  <td className="p-3 text-sm align-top">{idx + 1}</td>
+                  <td className="p-3 text-sm align-top break-all">{u.id}</td>
+                  <td className="align-top p-3">{u.name}</td>
+                  <td className="align-top p-3">{u.user_type}</td>
+                  <td className="align-top p-3">{u.mobile}</td>
+                  <td className="p-2 align-top">
                     {u.photo_url ? (
-                      <img src={u.photo_url} alt="photo" className="w-10 h-10 rounded-full" />
+                      <img src={u.photo_url} alt="photo" className="w-10 h-10 rounded-full object-cover" />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm">
                         NA
                       </div>
                     )}
                   </td>
-
-                  <td className="p-3 text-sm">
+                  <td className="text-sm p-3 align-top">
                     {u.created_at ? new Date(u.created_at).toLocaleString() : ""}
                   </td>
-
-                  <td className="p-3 text-sm">
+                  <td className="text-sm p-3 align-top">
                     {u.updated_at ? new Date(u.updated_at).toLocaleString() : ""}
                   </td>
 
-                  <td className="p-3">
-                    {/* slider style toggle */}
-                    <label className="relative inline-flex items-center cursor-pointer">
+                  <td className="p-3 align-top text-center">
+                    {/* Toggle slider */}
+                    <label className="inline-flex relative items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={u.status}
                         onChange={() => toggleStatus(u)}
                         className="sr-only peer"
+                        aria-label={`Set ${u.name} active`}
                       />
-                      <div className="w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-green-500 peer-focus:ring-2 peer-focus:ring-offset-2 peer-focus:ring-green-300 transition-colors" />
-                      <span className="ml-2 text-sm">{u.status ? "Active" : "Blocked"}</span>
+                      <div className="w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-green-500 peer-focus:ring-2 peer-focus:ring-green-300 transition-colors"></div>
+                      <div
+                        className={`absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transform transition-transform peer-checked:translate-x-5`}
+                        aria-hidden
+                      />
                     </label>
+                    <div className="text-xs mt-1">{u.status ? "Active" : "Blocked"}</div>
                   </td>
 
-                  <td className="p-3">
+                  <td className="p-3 align-top text-center">
+                    {/* Pencil icon button */}
                     <button
-                      onClick={() => setEditUser(u)}
                       title="Edit"
-                      className="p-2 border rounded bg-white hover:bg-gray-50"
+                      onClick={() => setEditUser(u)}
+                      className="inline-flex items-center justify-center w-9 h-9 bg-white border rounded shadow-sm hover:bg-gray-50"
                     >
-                      <span role="img" aria-label="edit">✏️</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-700" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M17.414 2.586a2 2 0 010 2.828l-9.193 9.193a1 1 0 01-.45.263l-4 1a1 1 0 01-1.213-1.213l1-4a1 1 0 01.263-.45L13.586 2.586a2 2 0 012.828 0z" />
+                      </svg>
                     </button>
                   </td>
                 </tr>
@@ -203,8 +197,8 @@ export default function UsersPage() {
       <Modal
         isOpen={!!editUser}
         onRequestClose={() => setEditUser(null)}
-        className="max-w-2xl mx-auto mt-20 bg-white p-6 rounded shadow"
-        overlayClassName="fixed inset-0 bg-black/30 flex items-start justify-center z-50"
+        overlayClassName="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        className="bg-white rounded max-w-2xl w-full mx-4 p-6 outline-none"
       >
         {editUser && (
           <EditUserForm
@@ -221,11 +215,10 @@ export default function UsersPage() {
       <Modal
         isOpen={isAddOpen}
         onRequestClose={() => setIsAddOpen(false)}
-        className="max-w-xl mx-auto mt-20 bg-white p-6 rounded shadow"
-        overlayClassName="fixed inset-0 bg-black/30 flex items-start justify-center z-50"
+        overlayClassName="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        className="bg-white rounded max-w-xl w-full mx-4 p-6 outline-none"
       >
         <AddUserForm
-          nextDisplayId={nextDisplayId}
           onClose={(refresh) => {
             setIsAddOpen(false);
             if (refresh) fetchUsers();
@@ -258,7 +251,7 @@ function EditUserForm({
     setSaving(true);
     try {
       const payload: any = { ...form };
-      if (!payload.password) delete payload.password;
+      if (!form.password) delete payload.password;
       const res = await fetch(`/api/admin/users/${user.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -323,7 +316,7 @@ function EditUserForm({
           Cancel
         </button>
         <button
-          className="px-4 py-2 bg-blue-600 text-white rounded"
+          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-60"
           disabled={saving}
           onClick={handleSave}
         >
@@ -334,13 +327,7 @@ function EditUserForm({
   );
 }
 
-function AddUserForm({
-  nextDisplayId,
-  onClose,
-}: {
-  nextDisplayId: number;
-  onClose: (refresh: boolean) => void;
-}) {
+function AddUserForm({ onClose }: { onClose: (refresh: boolean) => void }) {
   const [form, setForm] = useState({
     name: "",
     user_type: "Super Admin",
@@ -356,20 +343,15 @@ function AddUserForm({
     }
     setSaving(true);
     try {
-      // You can pass any extra fields if backend supports them.
-      const payload = { ...form };
-
+      // If backend expects sequence id or checks last id, it should handle on server.
       const res = await fetch(`/api/admin/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(form),
       });
-
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.message || "Failed to add user");
-
-      // NOTE: server will decide and create actual id. For UI we show sequence as nextDisplayId.
-      alert(`User added! Display ID: ${nextDisplayId}`);
+      if (!res.ok) throw new Error(j?.message || "Failed");
+      alert("User added!");
       onClose(true);
     } catch (err: any) {
       alert("Error: " + (err.message || err));
@@ -381,7 +363,6 @@ function AddUserForm({
   return (
     <div>
       <h2 className="text-xl font-semibold mb-4">Add New User</h2>
-      <div className="mb-3 text-sm text-gray-600">Next User ID (display): <strong>{nextDisplayId}</strong></div>
       <div className="flex flex-col gap-3">
         <input
           value={form.name}
@@ -417,7 +398,7 @@ function AddUserForm({
           Cancel
         </button>
         <button
-          className="px-4 py-2 bg-green-600 text-white rounded"
+          className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-60"
           disabled={saving}
           onClick={handleAdd}
         >
