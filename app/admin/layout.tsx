@@ -1,88 +1,44 @@
 // app/admin/layout.tsx
 import React from "react";
 import Link from "next/link";
-/* <-- fix: correct path to globals.css (one level up from app/admin) */
-import "../globals.css";
-import { cookies } from "next/headers";
 
 export const metadata = {
   title: "RailEats Admin",
 };
 
-/**
- * IMPORTANT:
- * - Add your actual auth cookie name(s) to COOKIE_NAMES if your backend uses a custom name.
- * - Keep logo files in public/logo.png and public/logo-small.png
- */
-
-const COOKIE_NAMES = [
-  "auth_token",
-  "next-auth.session-token",
-  "sb:token",
-  "supabase-auth-token",
-  "raileats_auth",
-];
-
-function hasAuthCookie() {
-  const ck = cookies();
-  for (const name of COOKIE_NAMES) {
-    if (ck.get(name)) return true;
-  }
-  return false;
-}
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const loggedIn = hasAuthCookie();
-
   return (
     <div className="flex min-h-screen">
-      {loggedIn ? (
-        <aside
-          className="hidden md:block"
-          style={{
-            width: 88,
-            background: "#fff",
-            borderRight: "1px solid #eee",
-            paddingTop: 20,
-          }}
-        >
-          <div style={{ textAlign: "center", marginBottom: 18 }}>
-            <img src="/logo.png" alt="logo" style={{ width: 44, height: 44 }} />
+      <aside
+        style={{
+          width: 88,
+          background: "#fff",
+          borderRight: "1px solid #eee",
+          paddingTop: 20,
+        }}
+      >
+        <div style={{ textAlign: "center", marginBottom: 18 }}>
+          <img src="/logo.png" alt="logo" style={{ width: 44, height: 44 }} />
+        </div>
+
+        <nav style={{ display: "flex", flexDirection: "column", gap: 18, paddingLeft: 12 }}>
+          <Link href="/admin/home"><div style={{ fontSize: 14 }}>Dashboard</div></Link>
+          <Link href="/admin/orders"><div style={{ fontSize: 14 }}>Orders</div></Link>
+          <Link href="/admin/restros"><div style={{ fontSize: 14 }}>Restro Master</div></Link>
+          <Link href="/admin/menu"><div style={{ fontSize: 14 }}>Menu</div></Link>
+          <Link href="/admin/trains"><div style={{ fontSize: 14 }}>Trains</div></Link>
+          <Link href="/admin/stations"><div style={{ fontSize: 14 }}>Stations</div></Link>
+          <Link href="/admin/users"><div style={{ fontSize: 14 }}>Users</div></Link>
+
+          <div style={{ marginTop: 20 }}>
+            <Link href="/api/auth/logout">
+              <button style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd" }}>
+                Logout
+              </button>
+            </Link>
           </div>
-
-          <nav style={{ display: "flex", flexDirection: "column", gap: 18, paddingLeft: 12 }}>
-            <Link href="/admin/home">
-              <div style={{ fontSize: 14 }}>Dashboard</div>
-            </Link>
-            <Link href="/admin/orders">
-              <div style={{ fontSize: 14 }}>Orders</div>
-            </Link>
-            <Link href="/admin/restros">
-              <div style={{ fontSize: 14 }}>Restro Master</div>
-            </Link>
-            <Link href="/admin/menu">
-              <div style={{ fontSize: 14 }}>Menu</div>
-            </Link>
-            <Link href="/admin/trains">
-              <div style={{ fontSize: 14 }}>Trains</div>
-            </Link>
-            <Link href="/admin/stations">
-              <div style={{ fontSize: 14 }}>Stations</div>
-            </Link>
-            <Link href="/admin/users">
-              <div style={{ fontSize: 14 }}>Users</div>
-            </Link>
-
-            <div style={{ marginTop: 20 }}>
-              <Link href="/api/auth/logout">
-                <button style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd" }}>
-                  Logout
-                </button>
-              </Link>
-            </div>
-          </nav>
-        </aside>
-      ) : null}
+        </nav>
+      </aside>
 
       <main style={{ flex: 1, background: "#fafafa", minHeight: "100vh" }}>
         <header
@@ -98,24 +54,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         >
           <img src="/logo-small.png" alt="logo small" style={{ width: 32, height: 32 }} />
           <div style={{ fontWeight: 700 }}>RailEats Admin</div>
-
           <div style={{ marginLeft: "auto", paddingRight: 24, textAlign: "right" }}>
-            {loggedIn ? (
-              <>
-                <div style={{ fontSize: 13, color: "#111" }}>ops@raileats.in</div>
-                <Link href="/api/auth/logout">
-                  <small>Logout</small>
-                </Link>
-              </>
-            ) : (
-              <Link href="/" style={{ color: "#666" }}>
-                Back to public site
-              </Link>
-            )}
+            <div style={{ fontSize: 13, color: "#111" }}>ops@raileats.in</div>
+            <Link href="/api/auth/logout"><small>Logout</small></Link>
           </div>
         </header>
 
-        <section style={{ padding: 24 }}>{children}</section>
+        <section style={{ padding: 24 }}>
+          {children}
+        </section>
       </main>
     </div>
   );
