@@ -6,6 +6,15 @@ import Image from "next/image";
 
 type Props = { children: React.ReactNode };
 
+const navLinkBaseStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 14,
+  color: "#111",
+  textDecoration: "none",
+  padding: "6px 8px",
+  borderRadius: 6,
+};
+
 export default async function AdminLayout({ children }: Props) {
   // server-side: get supabase client that reads cookies
   let currentUser: any = null;
@@ -45,13 +54,13 @@ export default async function AdminLayout({ children }: Props) {
         </div>
 
         <nav style={{ display: "flex", flexDirection: "column", gap: 14, paddingLeft: 12 }}>
-          <Link href="/admin/home" className="admin-nav-link">Dashboard</Link>
-          <Link href="/admin/orders" className="admin-nav-link">Orders</Link>
-          <Link href="/admin/restros" className="admin-nav-link">Restro Master</Link>
-          <Link href="/admin/menu" className="admin-nav-link">Menu</Link>
-          <Link href="/admin/trains" className="admin-nav-link">Trains</Link>
-          <Link href="/admin/stations" className="admin-nav-link">Stations</Link>
-          <Link href="/admin/users" className="admin-nav-link">Users</Link>
+          <Link href="/admin/home" style={navLinkBaseStyle}>Dashboard</Link>
+          <Link href="/admin/orders" style={navLinkBaseStyle}>Orders</Link>
+          <Link href="/admin/restros" style={navLinkBaseStyle}>Restro Master</Link>
+          <Link href="/admin/menu" style={navLinkBaseStyle}>Menu</Link>
+          <Link href="/admin/trains" style={navLinkBaseStyle}>Trains</Link>
+          <Link href="/admin/stations" style={navLinkBaseStyle}>Stations</Link>
+          <Link href="/admin/users" style={navLinkBaseStyle}>Users</Link>
 
           <div style={{ marginTop: 20 }}>
             <form action="/api/auth/logout" method="post">
@@ -120,7 +129,6 @@ export default async function AdminLayout({ children }: Props) {
 
                 <div>
                   {currentUser.photo_url ? (
-                    // using regular <img> because Next Image in server component needs config — keep simple
                     <img
                       src={currentUser.photo_url}
                       alt="avatar"
@@ -136,7 +144,7 @@ export default async function AdminLayout({ children }: Props) {
             ) : (
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
-                <Link href="/admin/login" style={{ fontSize: 12, color: "#0070f3" }}>Login</Link>
+                <Link href="/admin/login" style={{ fontSize: 12, color: "#0070f3", textDecoration: "underline" }}>Login</Link>
               </div>
             )}
           </div>
@@ -145,20 +153,6 @@ export default async function AdminLayout({ children }: Props) {
         {/* Page content */}
         <section style={{ padding: 24, flex: 1 }}>{children}</section>
       </main>
-
-      <style jsx>{`
-        .admin-nav-link {
-          display: block;
-          font-size: 14px;
-          color: #111;
-          text-decoration: none;
-          padding: 4px 8px;
-        }
-        .admin-nav-link:hover {
-          background: #f5f5f5;
-          border-radius: 6px;
-        }
-      `}</style>
     </div>
   );
 }
