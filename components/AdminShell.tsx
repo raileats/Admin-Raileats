@@ -3,7 +3,6 @@
 
 import React from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 type User = {
@@ -18,7 +17,7 @@ type User = {
 
 type Props = {
   children: React.ReactNode;
-  currentUser?: User; // optional, passed from server layout
+  currentUser?: User;
 };
 
 export default function AdminShell({ children, currentUser }: Props) {
@@ -33,7 +32,6 @@ export default function AdminShell({ children, currentUser }: Props) {
     return <>{children}</>;
   }
 
-  // Otherwise show full admin shell
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#fafafa" }}>
       {/* Sidebar */}
