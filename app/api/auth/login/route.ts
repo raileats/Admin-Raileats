@@ -1,30 +1,37 @@
-// app/api/auth/login/route.ts
-import { NextResponse } from "next/server";
+// pages/api/auth/login.ts (or app/api/auth/login/route.ts)
+import { NextApiRequest, NextApiResponse } from "next";
+import bcrypt from "bcryptjs";
+import { createClient } from "@supabase/supabase-js";
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const phone = String(body.phone || "").trim();
-    const password = String(body.password || "").trim();
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-    // Hard-coded credentials (demo)
-    if (phone === "8799726485" && password === "admin123") {
-      const res = NextResponse.json({ ok: true });
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "POST") return res.status(405).end();
 
-      // Set httpOnly cookie so middleware can read it server-side on next requests.
-      res.cookies.set({
-        name: "admin_auth",
-        value: "demo-token",
-        httpOnly: true,
-        path: "/",
-        maxAge: 60 * 60 * 24 // 1 day
-      });
+  const { phone, password } = req.body || {};
+  if (!phone || !password) return res.status(400).json({ message: "phone and password required" });
 
-      return res;
-    }
+  // fetch user by phone/mobile
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, name, mobile, password, status, user_type")
+    .eq("mobile", phone)
+    .limit(1)
+    .single();
 
-    return NextResponse.json({ ok: false, message: "Invalid credentials" }, { status: 401 });
-  } catch (err) {
-    return NextResponse.json({ ok: false, message: "Bad request" }, { status: 400 });
+  if (error || !data) {
+    return res.status(401).json({ message: "Invalid credentials" });
   }
+
+  const user: any = data;
+  if (!user.status) return res.status(403).json({ message: "User blocked" });
+
+  const match = await bcrypt.compare(password, user.password || "");
+  if (!match) return res.status(401).json({ message: "Invalid credentials" });
+
+  // success — set cookie/session token as you do now
+  // example: create a signed cookie or jwt here
+  // res.setHeader('Set-Cookie', ...)
+
+  return res.status(200).json({ ok: true, user: { id: user.id, name: user.name, user_type: user.user_type } });
 }
