@@ -1,31 +1,27 @@
 // app/api/auth/login/route.ts
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { createClient } from "@supabase/supabase-js";
+import { serviceClient, getServerClient } from "@/lib/supabaseServer";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE) {
-  throw new Error("Missing SUPABASE env vars");
-}
-
-// service client for reading users table securely
-const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
-
-// anon client (can call signInWithPassword)
-const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+/**
+ * Login handler (uses Supabase auth-helpers)
+ * - Validates user credentials from `users` table (via service client)
+ * - Signs in with Supabase Auth (cookie-aware)
+ * - Sets cookies automatically using auth-helpers
+ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { email, password } = body;
 
-    if (!email || !password)
-      return NextResponse.json({ message: "Email and password required" }, { status: 400 });
+    if (!email || !password) {
+      return NextResponse.json(
+        { message: "Email and password required" },
+        { status: 400 }
+      );
+    }
 
-    // verify credentials against your users table using service client
+    // Step 1: Check user in your users table
     const { data: userRow, error } = await serviceClient
       .from("users")
       .select("*")
@@ -37,48 +33,40 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
+    // Step 2: Compare password hash
     const valid = await bcrypt.compare(password, userRow.password_hash);
     if (!valid) {
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
-    // sign in with anon client to obtain session tokens
-    const { data, error: signInErr } = await anonClient.auth.signInWithPassword({
+    // Step 3: Create a cookie-aware Supabase client
+    const supabase = getServerClient();
+
+    // Step 4: Sign in (auth-helpers will auto set cookies)
+    const { data: signInData, error: signErr } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (signInErr || !data?.session) {
-      console.error("signIn error:", signInErr);
+    if (signErr || !signInData?.session) {
+      console.error("Sign-in error:", signErr);
       return NextResponse.json({ message: "Failed to start session" }, { status: 500 });
     }
 
-    const session = data.session;
-
-    // create response and set sb cookies manually so browser sends them on later requests
-    const res = NextResponse.json({
+    // Step 5: Respond with user details (cookies are already set)
+    return NextResponse.json({
       message: "Login successful",
-      user: { name: userRow.name, email: userRow.email, photo_url: userRow.photo_url },
+      user: {
+        name: userRow.name,
+        email: userRow.email,
+        photo_url: userRow.photo_url,
+      },
     });
-
-    // set cookies (httpOnly) — adjust options as needed
-    res.cookies.set("sb-access-token", session.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      // set expiry same as session.expires_at if available
-    });
-    res.cookies.set("sb-refresh-token", session.refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-    });
-
-    return res;
   } catch (err: any) {
     console.error("POST /api/auth/login error:", err);
-    return NextResponse.json({ message: err.message || "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { message: err.message || "Server error" },
+      { status: 500 }
+    );
   }
 }
