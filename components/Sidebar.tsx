@@ -1,124 +1,75 @@
+// app/components/Sidebar.tsx
 'use client';
-import Link from "next/link";
-import Image from "next/image";
-import { usePathname } from "next/navigation";
-import React from "react";
+import React, { useState } from 'react';
+import Link from 'next/link';
 
-export default function Sidebar() {
-  const pathname = usePathname() || '';
+type Item = { href: string; label: string; icon: string };
+const menu: Item[] = [
+  { href: '/admin', label: 'Dashboard', icon: 'fa-solid fa-chart-line' },
+  { href: '/admin/orders', label: 'Orders', icon: 'fa-solid fa-receipt' },
+  { href: '/admin/restros', label: 'Restro Master', icon: 'fa-solid fa-utensils' },
+  { href: '/admin/menu', label: 'Menu', icon: 'fa-solid fa-book-open' },
+  { href: '/admin/trains', label: 'Trains', icon: 'fa-solid fa-train' },
+  { href: '/admin/stations', label: 'Stations', icon: 'fa-solid fa-location-dot' },
+  { href: '/admin/users', label: 'Users', icon: 'fa-solid fa-users' },
+];
 
-  const linkStyleBase: React.CSSProperties = {
-    color: "#000",
-    textDecoration: "none",
-    display: "block",
-    padding: "8px 6px",
-    borderRadius: 6,
+export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
+  const [keyboardExpanded, setKeyboardExpanded] = useState(false);
+
+  const handleFocusIn = () => setKeyboardExpanded(true);
+  const handleFocusOut = (e: React.FocusEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setKeyboardExpanded(false);
   };
 
-  const liStyle: React.CSSProperties = { marginBottom: 12 };
-
-  function isActive(href: string) {
-    // mark active when current path starts with the href (so /admin/restros/123 also highlights)
-    return pathname === href || pathname.startsWith(href + "/");
-  }
+  // collapsedEffective = true when parent forced collapsed OR not keyboardExpanded
+  const collapsedEffective = !!collapsed && !keyboardExpanded;
 
   return (
     <aside
-      style={{
-        width: 240,
-        padding: 20,
-        background: "#fff",
-        color: "#000",
-        minHeight: "100vh",
-        borderRight: "1px solid #e6e8eb",
-      }}
+      className="admin-sidebar"
+      onFocus={handleFocusIn}
+      onBlur={handleFocusOut}
+      data-keyboard-expanded={keyboardExpanded ? 'true' : 'false'}
+      data-collapsed={collapsedEffective ? 'true' : 'false'}
+      aria-label="Sidebar"
     >
-      {/* Logo + RailEats */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          marginBottom: "24px",
-        }}
-      >
-        <Image
-          src="/logo.png"
-          alt="RailEats"
-          width={40}
-          height={40}
-          style={{
-            borderRadius: "50%",
-            background: "#F6C800",
-            padding: "4px",
-          }}
-        />
-        <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "bold", lineHeight: 1 }}>
-          <span style={{ color: "#F6C800" }}>Rail</span>
-          <span style={{ color: "#000" }}>Eats</span>
-        </h3>
-      </div>
+      <div className="sidebar-inner">
+        <div className="logo-wrap">
+          <img src="/logo.png" alt="RailEats" />
+          <span className="sidebar-brand">RailEats Admin</span>
+        </div>
 
-      {/* Sidebar Menu */}
-      <nav>
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          <li style={liStyle}>
-            <Link href="/admin/home" style={{ ...linkStyleBase, background: isActive("/admin/home") ? "#f2f4f6" : "transparent" }}>
-              Home
-            </Link>
-          </li>
+        <ul className="nav flex-column">
+          {menu.map((m) => (
+            <li key={m.href} className="sidebar-item" >
+              <Link href={m.href} className={`nav-link ${collapsedEffective ? 'collapsed-link' : ''}`} title={m.label}>
+                <div className="bubble-icon" aria-hidden>
+                  <i className={m.icon} />
+                </div>
 
-          <li style={liStyle}>
-            <Link href="/admin/orders" style={{ ...linkStyleBase, background: isActive("/admin/orders") ? "#f2f4f6" : "transparent" }}>
-              Orders
-            </Link>
-          </li>
+                {/* inline label (visible when sidebar expanded) */}
+                <span className="sidebar-label">{m.label}</span>
 
-          {/* Outlets link */}
-          <li style={liStyle}>
-            <Link href="/admin/vendors" style={{ ...linkStyleBase, background: isActive("/admin/vendors") ? "#f2f4f6" : "transparent" }}>
-              Outlets
-            </Link>
-          </li>
-
-          {/* NEW: Restro Master — placed right below Outlets and above Menu */}
-          <li style={liStyle}>
-            <Link href="/admin/restros" style={{ ...linkStyleBase, background: isActive("/admin/restros") ? "#f2f4f6" : "transparent", fontWeight: 600 }}>
-              Restro Master
-            </Link>
-          </li>
-
-          <li style={liStyle}>
-            <Link href="/admin/menu" style={{ ...linkStyleBase, background: isActive("/admin/menu") ? "#f2f4f6" : "transparent" }}>
-              Menu
-            </Link>
-          </li>
-
-          <li style={liStyle}>
-            <Link href="/admin/trains" style={{ ...linkStyleBase, background: isActive("/admin/trains") ? "#f2f4f6" : "transparent" }}>
-              Trains
-            </Link>
-          </li>
-
-          <li style={liStyle}>
-            <Link href="/admin/stations" style={{ ...linkStyleBase, background: isActive("/admin/stations") ? "#f2f4f6" : "transparent" }}>
-              Stations
-            </Link>
-          </li>
-
-          <li style={liStyle}>
-            <Link href="/admin/users" style={{ ...linkStyleBase, background: isActive("/admin/users") ? "#f2f4f6" : "transparent" }}>
-              Users
-            </Link>
-          </li>
-
-          <li style={{ marginTop: 20 }}>
-            <Link href="/admin/logout" style={{ color: "red", fontWeight: "bold", textDecoration: "none" }}>
-              Logout
-            </Link>
-          </li>
+                {/* tooltip shown only when sidebar is collapsed and user hovers this item */}
+                <span className="sidebar-tooltip" aria-hidden>
+                  {m.label}
+                </span>
+              </Link>
+            </li>
+          ))}
         </ul>
-      </nav>
+
+        <div className="mt-auto">
+          <Link href="/admin/logout" className={`btn btn-sm btn-outline-secondary w-100 ${collapsedEffective ? 'text-center' : ''}`}>
+            <div className="bubble-icon" aria-hidden>
+              <i className="fa fa-sign-out-alt" />
+            </div>
+            <span className="sidebar-label">Logout</span>
+            <span className="sidebar-tooltip" aria-hidden>Logout</span>
+          </Link>
+        </div>
+      </div>
     </aside>
   );
 }
