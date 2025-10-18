@@ -355,6 +355,7 @@ function EditUserForm({
     return true;
   }
 
+  // <-- Fixed uploadPhotoIfAny for EditUserForm -->
   async function uploadPhotoIfAny() {
     if (!photoFile) return null;
     const filename = `user-photos/${Date.now()}_${Math.random().toString(36).slice(2)}_${photoFile.name}`;
@@ -362,7 +363,10 @@ function EditUserForm({
       .from("user-photos")
       .upload(filename, photoFile, { upsert: false });
     if (error) throw error;
-    const { publicUrl } = supabaseClient.storage.from("user-photos").getPublicUrl(data.path);
+
+    // getPublicUrl returns { data: { publicUrl: string } }
+    const publicRes = supabaseClient.storage.from("user-photos").getPublicUrl(data.path);
+    const publicUrl = (publicRes as any)?.data?.publicUrl ?? null;
     return publicUrl;
   }
 
@@ -593,6 +597,7 @@ function AddUserForm({
     return true;
   }
 
+  // <-- Fixed uploadPhotoIfAny for AddUserForm -->
   async function uploadPhotoIfAny(): Promise<string | null> {
     if (!photoFile) return null;
     const filename = `user-photos/${Date.now()}_${Math.random().toString(36).slice(2)}_${photoFile.name}`;
@@ -603,7 +608,9 @@ function AddUserForm({
       console.error("upload error", error);
       throw new Error("Photo upload failed");
     }
-    const { publicUrl } = supabaseClient.storage.from("user-photos").getPublicUrl(data.path);
+
+    const publicRes = supabaseClient.storage.from("user-photos").getPublicUrl(data.path);
+    const publicUrl = (publicRes as any)?.data?.publicUrl ?? null;
     return publicUrl;
   }
 
