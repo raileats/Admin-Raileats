@@ -4,11 +4,6 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 type Profile = {
   name?: string | null;
@@ -23,52 +18,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     let mounted = true;
-    async function fetchProfile() {
+
+    async function load() {
       setLoadingProfile(true);
       try {
-        // get auth user
-        const {
-          data: { user: authUser },
-        } = await supabase.auth.getUser();
-
-        if (!authUser) {
+        const res = await fetch("/api/admin/me");
+        if (!res.ok) {
+          // treat as not signed in (but keep silent)
           if (mounted) setProfile(null);
           return;
         }
-
-        // prefer reading from your users table (so admin name/photo stored there are used)
-        const email = authUser.email ?? null;
-        if (email) {
-          const { data, error } = await supabase
-            .from("users")
-            .select("name, photo_url, email")
-            .eq("email", email)
-            .limit(1)
-            .single();
-
-          if (!error && data) {
-            if (mounted) setProfile({ name: data.name ?? undefined, photo_url: data.photo_url ?? undefined, email: data.email ?? undefined });
-            return;
-          }
-        }
-
-        // fallback: try to use auth user's metadata if present
-        const fallbackName = (authUser.user_metadata && (authUser.user_metadata.name || authUser.user_metadata.full_name)) || authUser.email;
-        if (mounted) {
-          setProfile({
-            name: fallbackName ?? undefined,
-            photo_url: (authUser.user_metadata && authUser.user_metadata.avatar_url) ?? undefined,
-            email: authUser.email ?? undefined,
-          });
-        }
+        const j = await res.json().catch(() => ({}));
+        if (mounted) setProfile(j?.user ?? null);
       } catch (e) {
-        console.error("Failed to fetch profile:", e);
+        console.error("Failed to fetch /api/admin/me:", e);
         if (mounted) setProfile(null);
       } finally {
         if (mounted) setLoadingProfile(false);
       }
     }
-    fetchProfile();
+
+    load();
     return () => {
       mounted = false;
     };
@@ -150,7 +120,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
             {/* Profile area */}
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {/* photo or initial */}
               {loadingProfile ? (
                 <div style={{ width: 40, height: 40, borderRadius: 20, background: "#f0f0f0" }} />
               ) : profile ? (
