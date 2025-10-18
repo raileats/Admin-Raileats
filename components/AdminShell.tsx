@@ -6,9 +6,22 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 
-type Props = { children: React.ReactNode };
+type User = {
+  id?: string;
+  user_id?: string;
+  user_type?: string;
+  name?: string | null;
+  mobile?: string | null;
+  photo_url?: string | null;
+  email?: string | null;
+} | null;
 
-export default function AdminShell({ children }: Props) {
+type Props = {
+  children: React.ReactNode;
+  currentUser?: User; // optional, passed from server layout
+};
+
+export default function AdminShell({ children, currentUser }: Props) {
   const pathname = usePathname() || "";
 
   // Paths where we DON'T want to show admin chrome
@@ -98,14 +111,55 @@ export default function AdminShell({ children }: Props) {
         >
           <img src="/logo.png" alt="logo small" style={{ width: 28, height: 28 }} />
           <div style={{ fontWeight: 700, fontSize: 18 }}>RailEats Admin</div>
+
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-            {/* This client component doesn't fetch user server-side; keep minimal */}
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
-              <Link href="/admin/login" style={{ fontSize: 12, color: "#0070f3", textDecoration: "underline" }}>
-                Login
-              </Link>
-            </div>
+            {currentUser ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 13, color: "#111", fontWeight: 600 }}>
+                    {currentUser.name ?? currentUser.mobile ?? currentUser.email}
+                  </div>
+                  <div style={{ fontSize: 12 }}>
+                    <form action="/api/auth/logout" method="post" style={{ margin: 0 }}>
+                      <button
+                        type="submit"
+                        style={{
+                          fontSize: 12,
+                          color: "#0070f3",
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Logout
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                <div>
+                  {currentUser.photo_url ? (
+                    <img
+                      src={currentUser.photo_url}
+                      alt="avatar"
+                      style={{ width: 36, height: 36, borderRadius: 999, objectFit: "cover" }}
+                    />
+                  ) : (
+                    <div style={{ width: 36, height: 36, borderRadius: 999, background: "#eee", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 12 }}>{(currentUser.name || "U").charAt(0)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
+                <Link href="/admin/login" style={{ fontSize: 12, color: "#0070f3", textDecoration: "underline" }}>
+                  Login
+                </Link>
+              </div>
+            )}
           </div>
         </header>
 
