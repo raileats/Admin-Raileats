@@ -1,6 +1,17 @@
+// app/api/admin/users/route.ts
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import bcrypt from "bcryptjs";
+
+type ReqUserBody = {
+  name?: string;
+  user_type?: string;
+  mobile?: string;
+  password?: string;
+  email?: string | null;
+  dob?: string | null;
+  photo_url?: string | null;
+};
 
 // ✅ GET - list users
 export async function GET(request: Request) {
@@ -9,12 +20,13 @@ export async function GET(request: Request) {
     const q = url.searchParams.get("q") || "";
     const user_type = url.searchParams.get("user_type") || "";
 
-    let query = supabaseServer.from("users").select("*").order("seq", { ascending: true });
+    // base selection - pick required columns
+    const baseSelect = `id, seq, name, user_type, mobile, email, dob, photo_url, status, created_at, updated_at`;
 
     if (q) {
       const { data, error } = await supabaseServer
         .from("users")
-        .select("*")
+        .select(baseSelect)
         .or(`name.ilike.%${q}%,mobile.ilike.%${q}%`)
         .order("seq", { ascending: true })
         .limit(500);
@@ -26,7 +38,7 @@ export async function GET(request: Request) {
     if (user_type) {
       const { data, error } = await supabaseServer
         .from("users")
-        .select("*")
+        .select(baseSelect)
         .eq("user_type", user_type)
         .order("seq", { ascending: true })
         .limit(500);
@@ -36,7 +48,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseServer
       .from("users")
-      .select("*")
+      .select(baseSelect)
       .order("seq", { ascending: true })
       .limit(500);
     if (error) throw error;
@@ -47,11 +59,12 @@ export async function GET(request: Request) {
   }
 }
 
-// ✅ POST - add user (fixed password hash column)
+// ✅ POST - add user (server-side hash -> password_hash)
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { name, user_type, mobile, password } = body;
+    const body: ReqUserBody = await request.json();
+    const { name, user_type, mobile, password, email, dob, photo_url } = body;
+
     if (!name || !password) {
       return NextResponse.json(
         { message: "name and password required" },
@@ -59,39 +72,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // determine next seq
-    let nextSeq = 1;
-    try {
-      const { data: rows, error } = await supabaseServer
-        .from("users")
-        .select("seq")
-        .order("seq", { ascending: false })
-        .limit(1);
-      if (!error && rows && rows.length > 0 && rows[0].seq) {
-        nextSeq = Number(rows[0].seq) + 1;
-      }
-    } catch (e) {
-      console.warn("seq calc fallback:", e);
-    }
+    // hash password into password_hash column
+    const password_hash = await bcrypt.hash(password, 10);
 
-    // ✅ hash password into correct column
-    const hashed = await bcrypt.hash(password, 10);
-
-    const insertObj = {
+    // Build insert object — DO NOT set seq here. Let DB sequence/default handle it.
+    const insertObj: any = {
       name,
       user_type,
       mobile,
-      password: hashed, // ✅ fixed here
+      password_hash,   // <-- use password_hash (NOT `password`)
       status: true,
-      seq: nextSeq,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      email: email ?? null,
+      dob: dob ?? null,
+      photo_url: photo_url ?? null
     };
 
     const { data, error } = await supabaseServer
       .from("users")
       .insert([insertObj])
-      .select()
+      // request useful columns back, including seq assigned by DB
+      .select("id, seq, name, user_type, mobile, email, dob, photo_url, created_at")
       .single();
 
     if (error) throw error;
