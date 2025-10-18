@@ -32,6 +32,21 @@ export default function AdminShell({ children, currentUser }: Props) {
     return <>{children}</>;
   }
 
+  // Shared style for logout links to match previous button look
+  const logoutLinkStyle: React.CSSProperties = {
+    display: "inline-block",
+    width: "72px",
+    padding: "6px 8px",
+    borderRadius: 6,
+    border: "1px solid #ddd",
+    background: "#fff",
+    cursor: "pointer",
+    textDecoration: "none",
+    color: "#111",
+    textAlign: "center",
+    fontSize: 14,
+  };
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#fafafa" }}>
       {/* Sidebar */}
@@ -73,22 +88,10 @@ export default function AdminShell({ children, currentUser }: Props) {
           </Link>
 
           <div style={{ marginTop: 20 }}>
-            <form action="/api/auth/logout" method="post">
-              <button
-                type="submit"
-                aria-label="Logout"
-                style={{
-                  width: "72px",
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #ddd",
-                  background: "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                Logout
-              </button>
-            </form>
+            {/* Using a simple GET link for logout so browser follows redirect automatically */}
+            <a href="/api/auth/logout" style={logoutLinkStyle} aria-label="Logout">
+              Logout
+            </a>
           </div>
         </nav>
       </aside>
@@ -118,21 +121,10 @@ export default function AdminShell({ children, currentUser }: Props) {
                     {currentUser.name ?? currentUser.mobile ?? currentUser.email}
                   </div>
                   <div style={{ fontSize: 12 }}>
-                    <form action="/api/auth/logout" method="post" style={{ margin: 0 }}>
-                      <button
-                        type="submit"
-                        style={{
-                          fontSize: 12,
-                          color: "#0070f3",
-                          background: "transparent",
-                          border: "none",
-                          padding: 0,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Logout
-                      </button>
-                    </form>
+                    {/* Replace the form-based logout with a GET link for reliability */}
+                    <a href="/api/auth/logout" style={{ fontSize: 12, color: "#0070f3", textDecoration: "underline" }}>
+                      Logout
+                    </a>
                   </div>
                 </div>
 
