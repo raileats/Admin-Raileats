@@ -3,12 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 /**
- * Supabase utility for both service-role (admin) and cookie-aware (session) clients
- *
- * Exports:
- * - supabaseServer  → Service role client (bypass RLS)
- * - serviceClient   → Alias (for compatibility with older code)
- * - getServerClient → Cookie-based anon client (for logged-in user session)
+ * Supabase utilities
+ * - serviceClient: Admin (Service Role Key)
+ * - getServerClient(): Cookie-based session client (for server routes)
+ * - createAnonClient(): Public client for auth sign-in/out etc.
  */
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -21,17 +19,16 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
   );
 }
 
-/* 🟢 1. Admin-level client (service role key) */
-export const supabaseServer = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+/* 🟢 1. Admin-level client (Service Role) — bypasses RLS */
+export const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
-/* 🟢 2. Alias for backward compatibility */
-export const serviceClient = supabaseServer;
+/* 🟢 2. Alias for older code compatibility */
+export const supabaseServer = serviceClient;
 
-/* 🟢 3. Cookie-based anon client — for reading session cookies */
+/* 🟢 3. Create cookie-aware anon client for server-side session reads */
 export function getServerClient() {
-  // read cookies using Next.js headers
   const cookieStore = cookies();
 
   const access_token = cookieStore.get("sb-access-token")?.value;
@@ -39,18 +36,16 @@ export function getServerClient() {
 
   const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: {
-      headers: {
-        ...(access_token ? { Authorization: `Bearer ${access_token}` } : {}),
-      },
+      headers: access_token ? { Authorization: `Bearer ${access_token}` } : {},
     },
     auth: {
       persistSession: false,
-      detectSessionInUrl: false,
       autoRefreshToken: false,
+      detectSessionInUrl: false,
     },
   });
 
-  // manually restore session if cookie is present
+  // if cookies are present, restore manually
   if (access_token && refresh_token) {
     client.auth.setSession({
       access_token,
@@ -59,4 +54,11 @@ export function getServerClient() {
   }
 
   return client;
+}
+
+/* 🟢 4. Create simple anon client (used by login route) */
+export function createAnonClient() {
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false },
+  });
 }
