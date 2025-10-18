@@ -5,40 +5,49 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-type Profile = {
+/**
+ * Admin layout (client). Shows sidebar + header.
+ * Header now fetches /api/admin/me to display logged-in user's name & photo.
+ */
+
+type MeUser = {
+  id?: string;
+  user_id?: string | null;
   name?: string | null;
-  photo_url?: string | null;
   email?: string | null;
+  photo_url?: string | null;
+  user_type?: string | null;
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [me, setMe] = useState<MeUser | null>(null);
+  const [loadingMe, setLoadingMe] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-
-    async function load() {
-      setLoadingProfile(true);
+    async function loadMe() {
+      setLoadingMe(true);
       try {
         const res = await fetch("/api/admin/me");
         if (!res.ok) {
-          // treat as not signed in (but keep silent)
-          if (mounted) setProfile(null);
-          return;
+          // if 401, not signed in
+          if (res.status === 401) {
+            if (mounted) setMe(null);
+            return;
+          }
+          // otherwise try parse message
         }
         const j = await res.json().catch(() => ({}));
-        if (mounted) setProfile(j?.user ?? null);
-      } catch (e) {
-        console.error("Failed to fetch /api/admin/me:", e);
-        if (mounted) setProfile(null);
+        if (mounted) setMe(j?.user ?? null);
+      } catch (err) {
+        console.error("Failed to fetch /api/admin/me:", err);
+        if (mounted) setMe(null);
       } finally {
-        if (mounted) setLoadingProfile(false);
+        if (mounted) setLoadingMe(false);
       }
     }
-
-    load();
+    loadMe();
     return () => {
       mounted = false;
     };
@@ -46,10 +55,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   async function handleLogout() {
     try {
+      // call your logout API to clear cookies
       await fetch("/api/auth/logout", { method: "POST" });
-    } catch (err) {
-      console.error("Logout network error:", err);
+    } catch (e) {
+      console.warn("logout error", e);
     } finally {
+      // redirect to login
       router.replace("/admin/login");
     }
   }
@@ -118,58 +129,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div style={{ fontWeight: 700, fontSize: 18 }}>RailEats Admin</div>
 
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-            {/* Profile area */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {loadingProfile ? (
-                <div style={{ width: 40, height: 40, borderRadius: 20, background: "#f0f0f0" }} />
-              ) : profile ? (
-                <>
-                  {profile.photo_url ? (
-                    <img
-                      src={profile.photo_url}
-                      alt="profile"
-                      style={{ width: 40, height: 40, borderRadius: 999, objectFit: "cover" }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 999,
-                        background: "#e6e6e6",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: 600,
-                        color: "#333",
-                      }}
-                    >
-                      {(profile.name && profile.name[0]?.toUpperCase()) || "U"}
-                    </div>
-                  )}
-
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 13, color: "#111" }}>{profile.name ?? profile.email ?? "User"}</div>
-                    <button
-                      onClick={handleLogout}
-                      style={{
-                        fontSize: 12,
-                        color: "#0070f3",
-                        background: "transparent",
-                        border: "none",
-                        padding: 0,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Logout
-                    </button>
-                  </div>
-                </>
-              ) : (
+            {/* If still loading show placeholder */}
+            {loadingMe ? (
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 13, color: "#111" }}>Loading...</div>
+              </div>
+            ) : me ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
+                  <div style={{ fontSize: 13, color: "#111", fontWeight: 600 }}>
+                    {me.name ?? me.email}
+                  </div>
                   <button
-                    onClick={() => router.push("/admin/login")}
+                    onClick={handleLogout}
                     style={{
                       fontSize: 12,
                       color: "#0070f3",
@@ -179,11 +151,45 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       cursor: "pointer",
                     }}
                   >
-                    Login
+                    Logout
                   </button>
                 </div>
-              )}
-            </div>
+
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 999,
+                    overflow: "hidden",
+                    background: "#eee",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {me.photo_url ? (
+                    // show provided photo url
+                    // NOTE: if this is an object URL or requires CORS, ensure Supabase public URL is used
+                    <img
+                      src={me.photo_url}
+                      alt={me.name ?? "avatar"}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    <div style={{ fontSize: 12, color: "#666" }}>
+                      {me.name ? me.name.split(" ").map(s=>s[0]).slice(0,2).join("") : "U"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
+                <Link href="/admin/login" style={{ fontSize: 12, color: "#0070f3" }}>
+                  Login
+                </Link>
+              </div>
+            )}
           </div>
         </header>
 
