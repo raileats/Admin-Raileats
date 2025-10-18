@@ -1,114 +1,116 @@
+// components/AdminShell.tsx
 "use client";
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 
-type Props = {
-  children: React.ReactNode;
-};
+type Props = { children: React.ReactNode };
 
 export default function AdminShell({ children }: Props) {
   const pathname = usePathname() || "";
 
-  /**
-   * Routes (or prefixes) where we want to HIDE the admin chrome (sidebar/topbar).
-   * Add other public auth routes here if needed (e.g. "/admin/forgot", "/admin/reset", etc).
-   */
-  const hideAdminShellFor = ["/admin/login", "/admin/login/"];
-  const shouldHideShell = hideAdminShellFor.some((p) =>
-    pathname === p || pathname.startsWith(p)
-  );
+  // Paths where we DON'T want to show admin chrome
+  const hideFor = ["/admin/login", "/admin/login/"];
+  const hide = hideFor.some((p) => pathname === p || pathname.startsWith(p));
 
-  if (shouldHideShell) {
-    // Render children directly (no sidebar/topbar) for login route
+  if (hide) {
+    // On login page: render children only (no sidebar/topbar)
     return <>{children}</>;
   }
 
-  // Full admin shell (sidebar + topbar + content)
+  // Otherwise show full admin shell
   return (
-    <div className="min-h-screen flex bg-gray-50">
+    <div style={{ display: "flex", minHeight: "100vh", background: "#fafafa" }}>
       {/* Sidebar */}
-      <aside className="w-56 bg-white border-r shadow-sm">
-        <div className="p-4 flex items-center gap-3 border-b">
-          <div className="w-10 h-10 relative">
-            {/* Update src if your logo path differs */}
-            <Image src="/logo.png" alt="RailEats" fill sizes="40px" />
-          </div>
-          <div className="text-sm font-semibold">RailEats Admin</div>
+      <aside
+        aria-label="Admin sidebar"
+        style={{
+          width: 96,
+          background: "#ffffff",
+          borderRight: "1px solid #eee",
+          paddingTop: 20,
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ textAlign: "center", marginBottom: 18 }}>
+          <img src="/logo.png" alt="RailEats logo" style={{ width: 48, height: 48 }} />
         </div>
 
-        <nav className="p-3">
-          <ul className="flex flex-col gap-1 text-sm">
-            <li>
-              <Link href="/admin" className="block px-3 py-2 rounded hover:bg-gray-100">
-                Dashboard
-              </Link>
-            </li>
-            <li>
-              <Link href="/admin/orders" className="block px-3 py-2 rounded hover:bg-gray-100">
-                Orders
-              </Link>
-            </li>
-            <li>
-              <Link href="/admin/restros" className="block px-3 py-2 rounded hover:bg-gray-100">
-                Restro Master
-              </Link>
-            </li>
-            <li>
-              <Link href="/admin/menu" className="block px-3 py-2 rounded hover:bg-gray-100">
-                Menu
-              </Link>
-            </li>
-            <li>
-              <Link href="/admin/trains" className="block px-3 py-2 rounded hover:bg-gray-100">
-                Trains
-              </Link>
-            </li>
-            <li>
-              <Link href="/admin/stations" className="block px-3 py-2 rounded hover:bg-gray-100">
-                Stations
-              </Link>
-            </li>
-            <li>
-              <Link href="/admin/users" className="block px-3 py-2 rounded hover:bg-gray-100">
-                Users
-              </Link>
-            </li>
-          </ul>
+        <nav style={{ display: "flex", flexDirection: "column", gap: 14, paddingLeft: 12 }}>
+          <Link href="/admin/home" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
+            Dashboard
+          </Link>
+          <Link href="/admin/orders" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
+            Orders
+          </Link>
+          <Link href="/admin/restros" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
+            Restro Master
+          </Link>
+          <Link href="/admin/menu" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
+            Menu
+          </Link>
+          <Link href="/admin/trains" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
+            Trains
+          </Link>
+          <Link href="/admin/stations" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
+            Stations
+          </Link>
+          <Link href="/admin/users" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
+            Users
+          </Link>
+
+          <div style={{ marginTop: 20 }}>
+            <form action="/api/auth/logout" method="post">
+              <button
+                type="submit"
+                aria-label="Logout"
+                style={{
+                  width: "72px",
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                Logout
+              </button>
+            </form>
+          </div>
         </nav>
       </aside>
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-h-screen">
-        {/* Topbar */}
-        <header className="h-14 bg-white border-b px-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              aria-label="Toggle sidebar"
-              className="p-2 rounded hover:bg-gray-100 hidden"
-            >
-              {/* If you have a hamburger icon, put here */}
-              ☰
-            </button>
-            <div className="text-sm font-medium">RailEats Admin</div>
-          </div>
-
-          <div className="flex items-center gap-4 text-sm">
-            {/* Example right-side area: you probably render signed-in user here */}
-            <div>Not signed in</div>
-            <Link href="/admin/login" className="text-xs underline">
-              Login
-            </Link>
+      <main style={{ flex: 1, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        <header
+          style={{
+            height: 64,
+            display: "flex",
+            alignItems: "center",
+            paddingLeft: 20,
+            paddingRight: 24,
+            gap: 12,
+            borderBottom: "1px solid #f0f0f0",
+            background: "#fff",
+          }}
+        >
+          <img src="/logo.png" alt="logo small" style={{ width: 28, height: 28 }} />
+          <div style={{ fontWeight: 700, fontSize: 18 }}>RailEats Admin</div>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+            {/* This client component doesn't fetch user server-side; keep minimal */}
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
+              <Link href="/admin/login" style={{ fontSize: 12, color: "#0070f3", textDecoration: "underline" }}>
+                Login
+              </Link>
+            </div>
           </div>
         </header>
 
-        {/* Content */}
-        <main className="flex-1 overflow-auto p-6 bg-gray-50">
-          {children}
-        </main>
-      </div>
+        <section style={{ padding: 24, flex: 1 }}>{children}</section>
+      </main>
     </div>
   );
 }
