@@ -1,1 +1,0 @@
-export default function Trains() { return <h1>Trains Management</h1>; }
