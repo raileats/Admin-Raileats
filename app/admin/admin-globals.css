@@ -134,4 +134,28 @@
 .admin-sidebar .nav-link:hover,
 .admin-sidebar .nav-link:focus {
   background: rgba(15,23,42,0.03);
-  col
+  color: #111827;
+}
+
+/* Active link class (if you set .active from JS) */
+.admin-sidebar .nav-link.active {
+  background: rgba(99,102,241,0.08);
+  color: #4f46e5;
+}
+
+/* Small screens: sidebar stays collapsed and fixed (overlay behavior optional) */
+@media (max-width: 768px) {
+  .admin-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 64px; /* slightly smaller on mobile */
+    min-width: 64px;
+    z-index: 40;
+  }
+  .admin-sidebar:hover,
+  .admin-sidebar[data-keyboard-expanded="true"] {
+    width: 220px;
+  }
+}
