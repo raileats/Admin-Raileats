@@ -1,41 +1,56 @@
 // app/api/admin/me/route.ts
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { getServerClient } from "@/lib/supabaseServer";
+
+/**
+ * GET /api/admin/me
+ * - Reads sb-access-token / sb-refresh-token cookies (via getServerClient())
+ * - Calls Supabase auth.getUser() to validate session
+ * - Looks up users table (by email) and returns public fields
+ *
+ * Response: { user: { id, user_id, name, email, photo_url, user_type, mobile, dob, status, created_at, updated_at, seq } }
+ */
 
 export async function GET() {
   try {
-    const {
-      data: { user: authUser },
-      error: getUserErr,
-    } = await supabaseServer.auth.getUser();
+    const client = getServerClient();
 
-    if (getUserErr || !authUser || !authUser.email) {
-      return NextResponse.json({ user: null }, { status: 200 });
+    // get authenticated user from supabase auth
+    const { data: authData, error: authErr } = await client.auth.getUser();
+
+    if (authErr || !authData?.user) {
+      return NextResponse.json({ user: null, message: "Not signed in" }, { status: 401 });
     }
 
-    const { data, error } = await supabaseServer
+    const email = authData.user.email;
+    if (!email) {
+      return NextResponse.json({ user: null, message: "No email on session" }, { status: 400 });
+    }
+
+    // lookup users table by email (only select public fields)
+    const { data: users, error } = await client
       .from("users")
-      .select("name,photo_url,email")
-      .eq("email", authUser.email)
+      .select("id, seq, user_id, name, user_type, mobile, email, dob, photo_url, status, created_at, updated_at")
+      .eq("email", email)
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (!error && data) {
-      return NextResponse.json({
-        user: { name: data.name ?? null, photo_url: data.photo_url ?? null, email: data.email },
-      });
+    if (error) {
+      console.error("me lookup error:", error);
+      return NextResponse.json({ user: null, message: "Lookup failed" }, { status: 500 });
     }
 
-    // fallback to auth metadata
-    return NextResponse.json({
-      user: {
-        name: (authUser.user_metadata && (authUser.user_metadata.name || authUser.user_metadata.full_name)) ?? authUser.email,
-        photo_url: (authUser.user_metadata && authUser.user_metadata.avatar_url) ?? null,
-        email: authUser.email,
-      },
-    });
+    // If users table doesn't have the row, still return auth basic info
+    const resultUser = users ?? {
+      id: authData.user.id,
+      name: authData.user.user_metadata?.full_name ?? authData.user.email,
+      email: authData.user.email,
+      photo_url: authData.user.user_metadata?.avatar_url ?? null,
+    };
+
+    return NextResponse.json({ user: resultUser });
   } catch (err: any) {
-    console.error("/api/admin/me error:", err);
-    return NextResponse.json({ user: null, message: err.message || String(err) }, { status: 500 });
+    console.error("GET /api/admin/me error:", err);
+    return NextResponse.json({ user: null, message: err.message || "Server error" }, { status: 500 });
   }
 }
