@@ -1,24 +1,37 @@
 /* app/globals.css
-   Root global css — this gets imported by app/layout.tsx
-   Here we import the admin-specific css that already exists.
+   Root global CSS for the Next.js app router.
+   This file uses Tailwind. If you want to disable Tailwind,
+   remove the three @tailwind lines and keep only the rest.
 */
 
-/* If you're using Tailwind, uncomment the lines below */
-// @tailwind base;
-// @tailwind components;
-// @tailwind utilities;
+/* Tailwind base, components and utilities (must NOT be commented with //) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* Import admin-specific styles (already present in repo) */
+/* Import existing admin-specific styles (keeps your previous admin styling) */
 @import "./admin/admin-globals.css";
 
-/* Some minimal fallback globals */
-html, body, #__next {
+/* Minimal fallback/global rules */
+html, body {
   height: 100%;
+  margin: 0;
 }
 body {
-  margin: 0;
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   background: #fafafa;
   color: #111;
-  -webkit-font-smoothing: antialiased;
+}
+#root, #__next {
+  height: 100%;
+}
+
+/* small helpers that might help layout visuals */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
