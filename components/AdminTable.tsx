@@ -16,6 +16,11 @@ type AdminTableProps<T> = {
   subtitle?: string;
   data: T[];
   columns: Column<T>[];
+  /** Optional placeholder kept for backward compatibility.
+   * Component currently doesn't render a built-in search input,
+   * but pages might pass this prop — keep it optional to avoid TS errors.
+   */
+  searchPlaceholder?: string;
   // removed built-in search input (use page-level filters instead)
   filters?: React.ReactNode;
   actions?: (row: T) => React.ReactNode;
@@ -47,6 +52,8 @@ export default function AdminTable<T extends { id?: string | number }>({
   subtitle,
   data,
   columns,
+  // searchPlaceholder is accepted but not rendered here (kept for compatibility)
+  searchPlaceholder,
   filters,
   actions,
   pageSize = 10,
