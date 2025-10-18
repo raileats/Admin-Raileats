@@ -20,37 +20,24 @@ export async function GET(request: Request) {
     const q = url.searchParams.get("q") || "";
     const user_type = url.searchParams.get("user_type") || "";
 
-    // base selection - pick required columns
-    const baseSelect = `id, seq, name, user_type, mobile, email, dob, photo_url, status, created_at, updated_at`;
+    const baseSelect = `id, seq, user_id, name, user_type, mobile, email, dob, photo_url, status, created_at, updated_at`;
+
+    let query = supabaseServer.from("users").select(baseSelect).order("seq", { ascending: true });
 
     if (q) {
-      const { data, error } = await supabaseServer
-        .from("users")
-        .select(baseSelect)
-        .or(`name.ilike.%${q}%,mobile.ilike.%${q}%`)
-        .order("seq", { ascending: true })
-        .limit(500);
+      const { data, error } = await query.or(`name.ilike.%${q}%,mobile.ilike.%${q}%`);
       if (error) throw error;
       const filtered = user_type ? data?.filter((r: any) => r.user_type === user_type) : data;
       return NextResponse.json({ users: filtered || [] });
     }
 
     if (user_type) {
-      const { data, error } = await supabaseServer
-        .from("users")
-        .select(baseSelect)
-        .eq("user_type", user_type)
-        .order("seq", { ascending: true })
-        .limit(500);
+      const { data, error } = await query.eq("user_type", user_type);
       if (error) throw error;
       return NextResponse.json({ users: data || [] });
     }
 
-    const { data, error } = await supabaseServer
-      .from("users")
-      .select(baseSelect)
-      .order("seq", { ascending: true })
-      .limit(500);
+    const { data, error } = await query;
     if (error) throw error;
     return NextResponse.json({ users: data || [] });
   } catch (err: any) {
@@ -59,7 +46,7 @@ export async function GET(request: Request) {
   }
 }
 
-// ✅ POST - add user (server-side hash -> password_hash)
+// ✅ POST - add user (server-side hash -> password_hash + auto user_id)
 export async function POST(request: Request) {
   try {
     const body: ReqUserBody = await request.json();
@@ -72,26 +59,40 @@ export async function POST(request: Request) {
       );
     }
 
-    // hash password into password_hash column
+    // 🔹 Step 1 — Generate next user_id
+    let nextUserId = 101; // default start
+    const { data: rows, error: userErr } = await supabaseServer
+      .from("users")
+      .select("user_id")
+      .order("user_id", { ascending: false })
+      .limit(1);
+
+    if (!userErr && rows && rows.length > 0 && rows[0].user_id) {
+      const last = parseInt(rows[0].user_id, 10);
+      if (!isNaN(last)) nextUserId = last + 1;
+    }
+
+    // 🔹 Step 2 — Hash password
     const password_hash = await bcrypt.hash(password, 10);
 
-    // Build insert object — DO NOT set seq here. Let DB sequence/default handle it.
+    // 🔹 Step 3 — Prepare insert object
     const insertObj: any = {
       name,
       user_type,
       mobile,
-      password_hash,   // <-- use password_hash (NOT `password`)
+      password_hash,
       status: true,
       email: email ?? null,
       dob: dob ?? null,
-      photo_url: photo_url ?? null
+      photo_url: photo_url ?? null,
+      user_id: nextUserId.toString(), // auto increment user_id
     };
 
+    // 🔹 Step 4 — Insert (let DB handle seq auto)
     const { data, error } = await supabaseServer
       .from("users")
       .insert([insertObj])
-      // request useful columns back, including seq assigned by DB
-      .select("id, seq, name, user_type, mobile, email, dob, photo_url, created_at")
+      .select("id, seq, user_id, name, user_type, mobile, email, dob, photo_url, created_at")
       .single();
 
     if (error) throw error;
