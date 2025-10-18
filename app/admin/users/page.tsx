@@ -2,10 +2,15 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import Modal from "react-modal";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 type User = {
   id: string;
-  user_id?: string | null; // numeric id stored as text in DB
+  user_id?: string | null;
   user_type: string;
   name: string;
   mobile: string;
@@ -15,7 +20,7 @@ type User = {
   status: boolean;
   created_at: string | null;
   updated_at: string | null;
-  seq?: number; // optional numeric sequence from backend
+  seq?: number;
 };
 
 export default function UsersPage() {
@@ -26,15 +31,12 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
 
-  // setAppElement only client-side to avoid SSR error
   useEffect(() => {
     if (typeof document !== "undefined") {
       const el = document.getElementById("__next") || undefined;
       try {
         Modal.setAppElement(el || undefined);
-      } catch (e) {
-        // ignore if fails in some env
-      }
+      } catch (e) {}
     }
   }, []);
 
@@ -52,7 +54,6 @@ export default function UsersPage() {
       const res = await fetch(`/api/admin/users?${params.toString()}`);
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || "Failed to fetch users");
-      // ensure we return array of objects with requested fields
       const data = (json.users || []).map((u: User) => ({ ...u }));
       setUsers(data);
     } catch (err) {
@@ -72,7 +73,6 @@ export default function UsersPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || "Failed to update status");
-      // refresh table
       fetchUsers();
     } catch (err: any) {
       alert("Failed to change status: " + (err.message || err));
@@ -147,10 +147,9 @@ export default function UsersPage() {
               users.map((u, i) => (
                 <tr key={u.id} className="border-t">
                   <td className="p-3 text-sm">{u.seq ?? i + 1}</td>
-
-                  {/* show numeric user_id if present, else seq, else uuid */}
-                  <td className="p-3 text-sm">{u.user_id ?? (u.seq != null ? String(u.seq) : u.id)}</td>
-
+                  <td className="p-3 text-sm">
+                    {u.user_id ?? (u.seq != null ? String(u.seq) : u.id)}
+                  </td>
                   <td className="p-3 text-sm">{u.user_type}</td>
                   <td className="p-3 text-sm">{u.name}</td>
                   <td className="p-3 text-sm">{u.mobile}</td>
@@ -181,8 +180,12 @@ export default function UsersPage() {
                       <span>{u.status ? "Active" : "Blocked"}</span>
                     </label>
                   </td>
-                  <td className="text-sm p-3">{u.created_at ? new Date(u.created_at).toLocaleString() : ""}</td>
-                  <td className="text-sm p-3">{u.updated_at ? new Date(u.updated_at).toLocaleString() : ""}</td>
+                  <td className="text-sm p-3">
+                    {u.created_at ? new Date(u.created_at).toLocaleString() : ""}
+                  </td>
+                  <td className="text-sm p-3">
+                    {u.updated_at ? new Date(u.updated_at).toLocaleString() : ""}
+                  </td>
                   <td className="p-3">
                     <button
                       className="p-2 rounded border"
@@ -190,9 +193,25 @@ export default function UsersPage() {
                       title="Edit"
                       aria-label={`Edit ${u.name}`}
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="#333" strokeWidth="0" fill="#333"/>
-                        <path d="M20.71 7.04a1.003 1.003 0 0 0 0-1.41l-2.34-2.34a1.003 1.003 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" stroke="#333" strokeWidth="0" fill="#333"/>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"
+                          stroke="#333"
+                          strokeWidth="0"
+                          fill="#333"
+                        />
+                        <path
+                          d="M20.71 7.04a1.003 1.003 0 0 0 0-1.41l-2.34-2.34a1.003 1.003 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                          stroke="#333"
+                          strokeWidth="0"
+                          fill="#333"
+                        />
                       </svg>
                     </button>
                   </td>
@@ -254,7 +273,6 @@ export default function UsersPage() {
       </Modal>
 
       <style jsx>{`
-        /* simple toggle slider look */
         .toggle-checkbox {
           width: 36px;
           height: 18px;
@@ -287,7 +305,7 @@ export default function UsersPage() {
   );
 }
 
-/* ---------------------- Sub Components ---------------------- */
+/* ---------------------- EditUserForm ---------------------- */
 
 function EditUserForm({
   user,
@@ -307,30 +325,77 @@ function EditUserForm({
   });
   const [saving, setSaving] = useState(false);
 
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(user.photo_url ?? null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (photoFile) {
+      const url = URL.createObjectURL(photoFile);
+      setPhotoPreview(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPhotoPreview(user.photo_url ?? null);
+    }
+  }, [photoFile, user.photo_url]);
+
+  function validate() {
+    if (!form.name || !/^[A-Za-z\s]+$/.test(form.name.trim())) {
+      alert("Name required and should contain only letters and spaces.");
+      return false;
+    }
+    if (!/^\d{10}$/.test(form.mobile)) {
+      alert("Mobile must be exactly 10 digits.");
+      return false;
+    }
+    if (!form.email || !(form.email.includes("@") && form.email.includes(".com"))) {
+      alert("Enter a valid email containing '@' and '.com'.");
+      return false;
+    }
+    return true;
+  }
+
+  async function uploadPhotoIfAny() {
+    if (!photoFile) return null;
+    const filename = `user-photos/${Date.now()}_${Math.random().toString(36).slice(2)}_${photoFile.name}`;
+    const { data, error } = await supabaseClient.storage
+      .from("user-photos")
+      .upload(filename, photoFile, { upsert: false });
+    if (error) throw error;
+    const { publicUrl } = supabaseClient.storage.from("user-photos").getPublicUrl(data.path);
+    return publicUrl;
+  }
+
   async function handleSave() {
+    if (!validate()) return;
     setSaving(true);
     try {
-      // build payload - only include password when provided
+      const photo_url = await uploadPhotoIfAny().catch((e) => {
+        throw e;
+      });
+
       const payload: any = {
-        name: form.name,
+        name: form.name.trim(),
         user_type: form.user_type,
         mobile: form.mobile,
         status: form.status,
-        email: form.email || null,
+        email: form.email.trim() || null,
         dob: form.dob || null,
       };
       if (form.password) payload.password = form.password;
+      if (photo_url) payload.photo_url = photo_url;
 
       const res = await fetch(`/api/admin/users/${user.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const j = await res.json().catch(()=>({}));
+      const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.message || "Failed");
       alert("User updated!");
       onClose(true);
     } catch (err: any) {
+      console.error(err);
       alert("Error: " + (err.message || err));
     } finally {
       setSaving(false);
@@ -349,9 +414,12 @@ function EditUserForm({
         />
         <input
           value={form.mobile}
-          onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+          onChange={(e) =>
+            setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })
+          }
           className="border p-2 rounded"
           placeholder="Mobile"
+          inputMode="numeric"
         />
         <select
           value={form.user_type}
@@ -369,6 +437,7 @@ function EditUserForm({
           onChange={(e) => setForm({ ...form, email: e.target.value })}
           className="border p-2 rounded"
           placeholder="Email"
+          autoComplete="off"
         />
 
         <input
@@ -379,13 +448,53 @@ function EditUserForm({
           placeholder="DOB"
         />
 
-        <input
-          type="password"
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-          className="border p-2 rounded"
-          placeholder="New Password (optional)"
-        />
+        <div className="relative">
+          <input
+            type={showPassword ? "text" : "password"}
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            className="border p-2 rounded w-full"
+            placeholder="New Password (optional)"
+            autoComplete="new-password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((s) => !s)}
+            aria-label="toggle password"
+            style={{ position: "absolute", right: 8, top: 8 }}
+            className="px-2"
+          >
+            {showPassword ? "🙈" : "👁️"}
+          </button>
+        </div>
+
+        <div>
+          <label className="block text-sm mb-1">Photo (optional)</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              if (f) setPhotoFile(f);
+            }}
+          />
+          {photoPreview ? (
+            <div className="mt-2">
+              <img src={photoPreview} alt="preview" className="w-20 h-20 object-cover rounded" />
+              <div>
+                <button
+                  className="text-sm text-red-600"
+                  onClick={() => {
+                    setPhotoFile(null);
+                    setPhotoPreview(null);
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <label className="flex items-center gap-2">
           <input
@@ -397,10 +506,7 @@ function EditUserForm({
         </label>
       </div>
       <div className="flex justify-end gap-3 mt-4">
-        <button
-          className="px-4 py-2 bg-gray-300 rounded"
-          onClick={() => onClose(false)}
-        >
+        <button className="px-4 py-2 bg-gray-300 rounded" onClick={() => onClose(false)}>
           Cancel
         </button>
         <button
@@ -414,6 +520,8 @@ function EditUserForm({
     </div>
   );
 }
+
+/* ---------------------- AddUserForm ---------------------- */
 
 function AddUserForm({
   onClose,
@@ -434,14 +542,27 @@ function AddUserForm({
   const [nextIdLoading, setNextIdLoading] = useState(false);
   const [suggestedSeq, setSuggestedSeq] = useState<number | null>(null);
 
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
   useEffect(() => {
-    // try to fetch sequence from server if endpoint exists
+    if (!photoFile) {
+      setPhotoPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(photoFile);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFile]);
+
+  useEffect(() => {
     (async () => {
       setNextIdLoading(true);
       try {
         const res = await fetch("/api/admin/users/next-id");
         if (!res.ok) throw new Error("no endpoint");
-        const j = await res.json().catch(()=>({}));
+        const j = await res.json().catch(() => ({}));
         if (j?.nextId) setSuggestedSeq(j.nextId);
         else setSuggestedSeq(existingCount + 1);
       } catch (e) {
@@ -452,21 +573,56 @@ function AddUserForm({
     })();
   }, [existingCount]);
 
-  async function handleAdd() {
-    if (!form.name || !form.password) {
-      alert("Name and Password required!");
-      return;
+  function validate() {
+    if (!form.name || !/^[A-Za-z\s]+$/.test(form.name.trim())) {
+      alert("Name required and should contain only letters and spaces.");
+      return false;
     }
+    if (!/^\d{10}$/.test(form.mobile)) {
+      alert("Mobile must be exactly 10 digits.");
+      return false;
+    }
+    if (!form.email || !(form.email.includes("@") && form.email.includes(".com"))) {
+      alert("Enter a valid email containing '@' and '.com'.");
+      return false;
+    }
+    if (!form.password) {
+      alert("Password required.");
+      return false;
+    }
+    return true;
+  }
+
+  async function uploadPhotoIfAny(): Promise<string | null> {
+    if (!photoFile) return null;
+    const filename = `user-photos/${Date.now()}_${Math.random().toString(36).slice(2)}_${photoFile.name}`;
+    const { data, error } = await supabaseClient.storage.from("user-photos").upload(filename, photoFile, {
+      upsert: false,
+    });
+    if (error) {
+      console.error("upload error", error);
+      throw new Error("Photo upload failed");
+    }
+    const { publicUrl } = supabaseClient.storage.from("user-photos").getPublicUrl(data.path);
+    return publicUrl;
+  }
+
+  async function handleAdd() {
+    if (!validate()) return;
     setSaving(true);
     try {
+      const photo_url = await uploadPhotoIfAny().catch((e) => {
+        throw e;
+      });
+
       const payload: any = {
-        name: form.name,
+        name: form.name.trim(),
         user_type: form.user_type,
         mobile: form.mobile,
         password: form.password,
-        email: form.email || null,
+        email: form.email.trim() || null,
         dob: form.dob || null,
-        // do not send seq unless you really want to - backend will ignore or handle it
+        photo_url: photo_url ?? null,
       };
 
       const res = await fetch(`/api/admin/users`, {
@@ -474,11 +630,12 @@ function AddUserForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const j = await res.json().catch(()=>({}));
+      const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.message || "Failed");
       alert("User added!");
       onClose(true);
     } catch (err: any) {
+      console.error(err);
       alert("Error: " + (err.message || err));
     } finally {
       setSaving(false);
@@ -490,21 +647,27 @@ function AddUserForm({
       <h2 className="text-xl font-semibold mb-4">Add New User</h2>
       <div className="flex flex-col gap-3">
         <div className="text-sm text-gray-600">
-          Suggested numeric id:{" "}
-          {nextIdLoading ? "..." : suggestedSeq ?? existingCount + 1}
+          Suggested numeric id: {nextIdLoading ? "..." : suggestedSeq ?? existingCount + 1}
         </div>
+
         <input
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           className="border p-2 rounded"
           placeholder="Name"
+          autoComplete="name"
         />
+
         <input
           value={form.mobile}
-          onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+          onChange={(e) =>
+            setForm({ ...form, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })
+          }
           className="border p-2 rounded"
-          placeholder="Mobile"
+          placeholder="Mobile (10 digits)"
+          inputMode="numeric"
         />
+
         <select
           value={form.user_type}
           onChange={(e) => setForm({ ...form, user_type: e.target.value })}
@@ -521,6 +684,7 @@ function AddUserForm({
           onChange={(e) => setForm({ ...form, email: e.target.value })}
           className="border p-2 rounded"
           placeholder="Email"
+          autoComplete="off"
         />
 
         <input
@@ -531,26 +695,60 @@ function AddUserForm({
           placeholder="DOB"
         />
 
-        <input
-          type="password"
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-          className="border p-2 rounded"
-          placeholder="Password"
-        />
+        <div className="relative">
+          <input
+            type={showPassword ? "text" : "password"}
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            className="border p-2 rounded w-full"
+            placeholder="Password"
+            autoComplete="new-password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((s) => !s)}
+            aria-label="toggle password"
+            style={{ position: "absolute", right: 8, top: 8 }}
+            className="px-2"
+          >
+            {showPassword ? "🙈" : "👁️"}
+          </button>
+        </div>
+
+        <div>
+          <label className="block text-sm mb-1">Photo (optional)</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              if (f) setPhotoFile(f);
+            }}
+          />
+          {photoPreview ? (
+            <div className="mt-2">
+              <img src={photoPreview} alt="preview" className="w-20 h-20 object-cover rounded" />
+              <div>
+                <button
+                  className="text-sm text-red-600"
+                  onClick={() => {
+                    setPhotoFile(null);
+                    setPhotoPreview(null);
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
+
       <div className="flex justify-end gap-3 mt-4">
-        <button
-          className="px-4 py-2 bg-gray-300 rounded"
-          onClick={() => onClose(false)}
-        >
+        <button className="px-4 py-2 bg-gray-300 rounded" onClick={() => onClose(false)}>
           Cancel
         </button>
-        <button
-          className="px-4 py-2 bg-green-600 text-white rounded"
-          disabled={saving}
-          onClick={handleAdd}
-        >
+        <button className="px-4 py-2 bg-green-600 text-white rounded" disabled={saving} onClick={handleAdd}>
           {saving ? "Adding..." : "Add User"}
         </button>
       </div>
