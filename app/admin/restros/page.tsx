@@ -194,13 +194,13 @@ export default function RestroMasterPage(): JSX.Element {
         {/* Search filters */}
         <form onSubmit={onSearchForm} className="bg-white rounded-xl shadow-sm p-4 mb-4">
           <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
-            <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} className="px-3 py-2 border rounded-lg" />
-            <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} className="px-3 py-2 border rounded-lg" />
-            <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} className="px-3 py-2 border rounded-lg" />
-            <input placeholder="Station Code" value={stationCode} onChange={(e) => setStationCode(e.target.value)} className="px-3 py-2 border rounded-lg" />
-            <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} className="px-3 py-2 border rounded-lg" />
-            <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} maxLength={10} className="px-3 py-2 border rounded-lg" />
-            <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} className="px-3 py-2 border rounded-lg" />
+            <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} className="search-pill-sm" />
+            <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} className="search-pill-sm" />
+            <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} className="search-pill-sm" />
+            <input placeholder="Station Code" value={stationCode} onChange={(e) => setStationCode(e.target.value)} className="search-pill-sm" />
+            <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} className="search-pill-sm" />
+            <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} maxLength={10} className="search-pill-sm" />
+            <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} className="search-pill-sm" />
           </div>
 
           <div className="flex justify-end gap-3 mt-3">
