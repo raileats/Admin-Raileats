@@ -1,78 +1,30 @@
 // app/admin/layout.tsx
-"use client";
-
-import React, { useEffect, useState } from "react";
+import React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { getServerClient, serviceClient } from "@/lib/supabaseServer";
+import Image from "next/image";
 
-/**
- * Client admin layout — wraps /admin routes.
- *
- * This version fetches /api/admin/me on mount to show:
- * - logged in user's name and photo at top-right
- * - Logout button which calls /api/auth/logout
- */
+type Props = { children: React.ReactNode };
 
-type MeUser = {
-  id?: string;
-  name?: string | null;
-  email?: string | null;
-  photo_url?: string | null;
-  mobile?: string | null;
-  user_type?: string | null;
-};
-
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const [me, setMe] = useState<MeUser | null>(null);
-  const [loadingMe, setLoadingMe] = useState(true);
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadMe() {
-      setLoadingMe(true);
-      try {
-        const res = await fetch("/api/admin/me", { cache: "no-store" });
-        if (!mounted) return;
-        if (!res.ok) {
-          setMe(null);
-        } else {
-          const j = await res.json().catch(() => ({}));
-          // Expecting API: { ok: true, user: {...} } or { user: {...} } or direct user
-          const user = j?.user ?? (j?.ok ? j?.data ?? null : null) ?? null;
-          setMe(user);
-        }
-      } catch (err) {
-        console.error("Failed to load /api/admin/me", err);
-        setMe(null);
-      } finally {
-        if (mounted) setLoadingMe(false);
-      }
+export default async function AdminLayout({ children }: Props) {
+  // server-side: get supabase client that reads cookies
+  let currentUser: any = null;
+  try {
+    const supa = getServerClient();
+    const { data: authData } = await supa.auth.getUser();
+    const email = authData?.user?.email ?? null;
+    if (email) {
+      const { data: row } = await serviceClient
+        .from("users")
+        .select("id, user_id, user_type, name, mobile, photo_url, email")
+        .eq("email", email)
+        .limit(1)
+        .single();
+      currentUser = row ?? null;
     }
-
-    loadMe();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      const res = await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      // ignore body, just redirect to login
-    } catch (err) {
-      console.error("Logout error", err);
-    } finally {
-      setLoggingOut(false);
-      // ensure client navigates to login page
-      router.replace("/admin/login");
-    }
+  } catch (e) {
+    console.error("AdminLayout get user error:", e);
+    currentUser = null;
   }
 
   return (
@@ -102,20 +54,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/admin/users" className="admin-nav-link">Users</Link>
 
           <div style={{ marginTop: 20 }}>
-            <button
-              onClick={handleLogout}
-              aria-label="Logout"
-              style={{
-                width: "72px",
-                padding: "6px 8px",
-                borderRadius: 6,
-                border: "1px solid #ddd",
-                background: "#fff",
-                cursor: "pointer",
-              }}
-            >
-              Logout
-            </button>
+            <form action="/api/auth/logout" method="post">
+              <button
+                type="submit"
+                aria-label="Logout"
+                style={{
+                  width: "72px",
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                Logout
+              </button>
+            </form>
           </div>
         </nav>
       </aside>
@@ -139,79 +93,52 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div style={{ fontWeight: 700, fontSize: 18 }}>RailEats Admin</div>
 
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-            {/* User area */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {/* show name + photo if logged in */}
-              {loadingMe ? (
-                <div style={{ fontSize: 13, color: "#666" }}>Loading…</div>
-              ) : me ? (
-                <>
-                  <div style={{ textAlign: "right", minWidth: 120 }}>
-                    <div style={{ fontSize: 13, color: "#111", fontWeight: 600 }}>
-                      {me.name ?? me.email ?? me.mobile ?? "User"}
-                    </div>
-                    <button
-                      onClick={handleLogout}
-                      disabled={loggingOut}
-                      style={{
-                        fontSize: 12,
-                        color: "#0070f3",
-                        background: "transparent",
-                        border: "none",
-                        padding: 0,
-                        cursor: "pointer",
-                        marginTop: 2,
-                      }}
-                    >
-                      {loggingOut ? "Logging out…" : "Logout"}
-                    </button>
-                  </div>
-
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "50%",
-                      overflow: "hidden",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: "#eee",
-                      border: "1px solid #f0f0f0",
-                    }}
-                    aria-hidden
-                  >
-                    {me.photo_url ? (
-                      <img
-                        src={me.photo_url}
-                        alt={me.name ?? "avatar"}
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      />
-                    ) : (
-                      <span style={{ fontWeight: 700, color: "#555" }}>
-                        {(me.name ?? me.email ?? "U").charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                </>
-              ) : (
-                // not signed in UI
+            {currentUser ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
-                  <Link
-                    href="/admin/login"
-                    style={{
-                      fontSize: 12,
-                      color: "#0070f3",
-                      textDecoration: "underline",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Login
-                  </Link>
+                  <div style={{ fontSize: 13, color: "#111", fontWeight: 600 }}>
+                    {currentUser.name ?? currentUser.mobile ?? currentUser.email}
+                  </div>
+                  <div style={{ fontSize: 12 }}>
+                    <form action="/api/auth/logout" method="post" style={{ margin: 0 }}>
+                      <button
+                        type="submit"
+                        style={{
+                          fontSize: 12,
+                          color: "#0070f3",
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Logout
+                      </button>
+                    </form>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <div>
+                  {currentUser.photo_url ? (
+                    // using regular <img> because Next Image in server component needs config — keep simple
+                    <img
+                      src={currentUser.photo_url}
+                      alt="avatar"
+                      style={{ width: 36, height: 36, borderRadius: 999, objectFit: "cover" }}
+                    />
+                  ) : (
+                    <div style={{ width: 36, height: 36, borderRadius: 999, background: "#eee", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 12 }}>{(currentUser.name || "U").charAt(0)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
+                <Link href="/admin/login" style={{ fontSize: 12, color: "#0070f3" }}>Login</Link>
+              </div>
+            )}
           </div>
         </header>
 
