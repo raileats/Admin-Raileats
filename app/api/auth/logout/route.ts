@@ -1,34 +1,22 @@
 // app/api/auth/logout/route.ts
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error("Missing Supabase environment variables");
-}
-
+/**
+ * Simple logout: clear sb cookies so browser no longer has session tokens.
+ * We intentionally avoid importing auth-helpers here to keep this route minimal
+ * and prevent build-time API mismatches.
+ */
 export async function POST() {
-  try {
-    // Create a cookie-aware Supabase client
-    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, { cookies });
-
-    // Sign out from Supabase (removes session server-side)
-    await supabase.auth.signOut();
-  } catch (err) {
-    console.warn("Logout error:", err);
-  }
-
-  // Explicitly clear cookies in browser
   const res = NextResponse.json({ success: true });
-  res.cookies.delete("sb-access-token", { path: "/" });
-  res.cookies.delete("sb-refresh-token", { path: "/" });
+
+  // Clear Supabase auth cookies set by your login route
+  res.cookies.set("sb-access-token", "", { path: "/", maxAge: 0 });
+  res.cookies.set("sb-refresh-token", "", { path: "/", maxAge: 0 });
+
   return res;
 }
 
-// Optional: Allow GET for direct logout via browser
+// Optional GET handler so visiting /api/auth/logout in browser also logs out
 export async function GET() {
-  return await POST();
+  return POST();
 }
