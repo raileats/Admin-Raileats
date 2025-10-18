@@ -4,7 +4,6 @@ import React from "react";
 
 export const metadata = {
   title: "RailEats Admin",
-  description: "Admin panel for RailEats platform",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
