@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import AdminTable, { Column } from "@/components/AdminTable";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -12,7 +13,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 }
 const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-type Restro = { [k: string]: any };
+type Restro = { [k: string]: any; id?: string | number };
 
 export default function RestroMasterPage(): JSX.Element {
   const router = useRouter();
@@ -68,7 +69,9 @@ export default function RestroMasterPage(): JSX.Element {
 
       const { data, error: e } = await query;
       if (e) throw e;
-      setResults((data ?? []) as Restro[]);
+      // ensure each row has a stable id for AdminTable
+      const normalized = (data ?? []).map((r: any, idx: number) => ({ id: r.RestroCode ?? r.RestroId ?? idx, ...r }));
+      setResults(normalized as Restro[]);
     } catch (err: any) {
       console.error("fetchRestros error:", err);
       setError(err?.message ?? String(err));
@@ -78,7 +81,7 @@ export default function RestroMasterPage(): JSX.Element {
     }
   }
 
-  function onSearch(e?: React.FormEvent) {
+  function onSearchForm(e?: React.FormEvent) {
     if (e) e.preventDefault();
     fetchRestros({
       restroCode,
@@ -159,6 +162,30 @@ export default function RestroMasterPage(): JSX.Element {
     router.push(`/admin/restros/${c}/edit`);
   }
 
+  // AdminTable columns
+  const columns: Column<Restro>[] = [
+    { key: "RestroCode", title: "Restro Code", width: "110px" },
+    { key: "RestroName", title: "Restro Name" },
+    { key: "StationCode", title: "Station Code", width: "100px" },
+    { key: "StationName", title: "Station Name" },
+    { key: "OwnerName", title: "Owner Name" },
+    { key: "OwnerPhone", title: "Owner Phone", width: "140px" },
+    { key: "FSSAINumber", title: "FSSAI Number" },
+    {
+      key: "IRCTC",
+      title: "IRCTC Status",
+      render: (r) => (r.IRCTC ? "On" : "Off"),
+      width: "100px",
+    },
+    {
+      key: "Raileats",
+      title: "Raileats Status",
+      render: (r) => (r.Raileats ? "On" : "Off"),
+      width: "110px",
+    },
+    { key: "FSSAIExpiryDate", title: "FSSAI Expiry Date", width: "140px" },
+  ];
+
   return (
     <main style={{ padding: 24 }}>
       {/* Header */}
@@ -184,7 +211,7 @@ export default function RestroMasterPage(): JSX.Element {
       </div>
 
       {/* Search Form */}
-      <form onSubmit={onSearch} style={{ background: "#fff", padding: 12, borderRadius: 8, marginBottom: 12 }}>
+      <form onSubmit={onSearchForm} style={{ background: "#fff", padding: 12, borderRadius: 8, marginBottom: 12 }}>
         <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr 120px 1fr 160px 1fr", gap: 12, marginBottom: 12 }}>
           <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} style={{ padding: 8 }} />
           <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
@@ -207,73 +234,27 @@ export default function RestroMasterPage(): JSX.Element {
 
       {error && <div style={{ color: "red", marginBottom: 12 }}>{error}</div>}
 
-      {/* Results Table */}
-      <div style={{ background: "#fff", borderRadius: 8, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
-              <th style={{ padding: 12 }}>Restro Code</th>
-              <th style={{ padding: 12 }}>Restro Name</th>
-              <th style={{ padding: 12 }}>Station Code</th>
-              <th style={{ padding: 12 }}>Station Name</th>
-              <th style={{ padding: 12 }}>Owner Name</th>
-              <th style={{ padding: 12 }}>Owner Phone</th>
-              <th style={{ padding: 12 }}>FSSAI Number</th>
-              <th style={{ padding: 12 }}>IRCTC Status</th>
-              <th style={{ padding: 12 }}>Raileats Status</th>
-              <th style={{ padding: 12 }}>FSSAI Expiry Date</th>
-              <th style={{ padding: 12 }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={11} style={{ padding: 20, textAlign: "center" }}>
-                  Loading...
-                </td>
-              </tr>
-            ) : results.length === 0 ? (
-              <tr>
-                <td colSpan={11} style={{ padding: 20, textAlign: "center", color: "#666" }}>
-                  No restros found
-                </td>
-              </tr>
-            ) : (
-              results.map((r) => {
-                const code = r.RestroCode ?? r.RestroId ?? "";
-                return (
-                  <tr key={String(code)} style={{ borderBottom: "1px solid #fafafa" }}>
-                    <td style={{ padding: 12 }}>{code}</td>
-                    <td style={{ padding: 12 }}>{r.RestroName}</td>
-                    <td style={{ padding: 12 }}>{r.StationCode}</td>
-                    <td style={{ padding: 12 }}>{r.StationName}</td>
-                    <td style={{ padding: 12 }}>{r.OwnerName}</td>
-                    <td style={{ padding: 12 }}>{r.OwnerPhone ?? "-"}</td>
-                    <td style={{ padding: 12 }}>{r.FSSAINumber ?? "-"}</td>
-                    <td style={{ padding: 12 }}>{r.IRCTC ? "On" : "Off"}</td>
-                    <td style={{ padding: 12 }}>{r.Raileats ? "On" : "Off"}</td>
-                    <td style={{ padding: 12 }}>{r.FSSAIExpiryDate ?? "-"}</td>
-                    <td style={{ padding: 12, display: "flex", gap: 8 }}>
-                      <button
-                        onClick={() => openEditRoute(code)}
-                        style={{
-                          background: "#f59e0b",
-                          color: "#000",
-                          padding: "6px 10px",
-                          borderRadius: 6,
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+      {/* AdminTable results (uses your shared AdminTable component) */}
+      <div style={{ marginTop: 8 }}>
+        <AdminTable
+          title=""
+          columns={columns}
+          data={results}
+          searchPlaceholder="Search restro..."
+          pageSize={10}
+          showAddButton={{ label: "+ Add New Restro", onClick: () => alert("Add restro") }}
+          // actions column -> Edit button
+          actions={(row: Restro) => (
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => openEditRoute(row.RestroCode ?? row.RestroId)}
+                style={{ background: "#f59e0b", color: "#000", padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}
+              >
+                Edit
+              </button>
+            </div>
+          )}
+        />
       </div>
     </main>
   );
