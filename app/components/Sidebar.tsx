@@ -2,6 +2,7 @@
 'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation'; // optional for active highlight
 
 type Item = { href: string; label: string; icon: string };
 const menu: Item[] = [
@@ -16,13 +17,14 @@ const menu: Item[] = [
 
 export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const [keyboardExpanded, setKeyboardExpanded] = useState(false);
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : ''; // light fallback
 
   const handleFocusIn = () => setKeyboardExpanded(true);
   const handleFocusOut = (e: React.FocusEvent) => {
     if (!e.currentTarget.contains(e.relatedTarget as Node)) setKeyboardExpanded(false);
   };
 
-  // collapsedEffective = true when parent forced collapsed OR not keyboardExpanded
+  // when parent forces collapsed, keep collapsedEffective true, else follow hover/focus
   const collapsedEffective = !!collapsed && !keyboardExpanded;
 
   return (
@@ -41,23 +43,24 @@ export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) 
         </div>
 
         <ul className="nav flex-column">
-          {menu.map((m) => (
-            <li key={m.href} className="sidebar-item" >
-              <Link href={m.href} className={`nav-link ${collapsedEffective ? 'collapsed-link' : ''}`} title={m.label}>
-                <div className="bubble-icon" aria-hidden>
-                  <i className={m.icon} />
-                </div>
+          {menu.map((m) => {
+            const isActive = pathname === m.href;
+            return (
+              <li key={m.href} className="sidebar-item">
+                <Link href={m.href} className={`nav-link ${collapsedEffective ? 'collapsed-link' : ''} ${isActive ? 'active' : ''}`} title={m.label}>
+                  <div className="bubble-icon" aria-hidden>
+                    <i className={m.icon} />
+                  </div>
 
-                {/* inline label (visible when sidebar expanded) */}
-                <span className="sidebar-label">{m.label}</span>
+                  <span className="sidebar-label">{m.label}</span>
 
-                {/* tooltip shown only when sidebar is collapsed and user hovers this item */}
-                <span className="sidebar-tooltip" aria-hidden>
-                  {m.label}
-                </span>
-              </Link>
-            </li>
-          ))}
+                  <span className="sidebar-tooltip" aria-hidden>
+                    {m.label}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
 
         <div className="mt-auto">
