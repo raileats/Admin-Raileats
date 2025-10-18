@@ -2,67 +2,87 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { serviceClient } from "@/lib/supabaseServer"; // adjust import if different
+import { serviceClient } from "@/lib/supabaseServer";
 
 const COOKIE_NAME = "admin_auth";
 const TOKEN_EXP_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
-export async function POST(request: Request) {
+function getJwtSecret() {
+  return (
+    process.env.ADMIN_JWT_SECRET ||
+    process.env.NEXTAUTH_SECRET ||
+    process.env.SUPABASE_JWT_SECRET ||
+    ""
+  );
+}
+
+async function parseBody(req: Request) {
+  // Try JSON first, then formData (for plain <form> submits)
   try {
-    const body = await request.json();
-    const identifier = (body.identifier ?? body.user_id ?? body.email ?? "").toString().trim();
+    const json = await req.json();
+    return json;
+  } catch (_) {
+    try {
+      const fd = await req.formData();
+      const obj: Record<string, any> = {};
+      for (const [k, v] of fd.entries()) {
+        obj[k] = typeof v === "string" ? v : v;
+      }
+      return obj;
+    } catch (_) {
+      return {};
+    }
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = (await parseBody(req)) || {};
+    const mobile = (body.mobile ?? body.identifier ?? body.user_id ?? "").toString().trim();
     const password = (body.password ?? "").toString();
 
-    if (!identifier || !password) {
-      return NextResponse.json({ error: "Missing credentials" }, { status: 400 });
+    if (!mobile || !password) {
+      return NextResponse.json({ message: "Mobile and password required" }, { status: 400 });
     }
 
-    // Find user by email OR mobile. Adjust column names as needed.
-    // If your DB stores password hash in a different column, update 'password_hash'.
-    const q = await serviceClient
+    // Find user by mobile
+    const { data: user, error } = await serviceClient
       .from("users")
-      .select("id, user_id, name, email, mobile, password_hash") // <-- ensure password_hash exists
-      .or(`email.eq.${identifier},mobile.eq.${identifier}`)
-      .limit(1)
+      .select("*")
+      .eq("mobile", String(mobile))
       .single();
 
-    if (q.error || !q.data) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    if (error || !user) {
+      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
-    const user = q.data as any;
-    const hash = user.password_hash ?? user.password; // try both common names
-
-    if (!hash) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    // Compare password hash
+    const hash = user.password_hash ?? user.password ?? "";
+    const isValid = await bcrypt.compare(password, hash);
+    if (!isValid) {
+      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
-    // Compare password
-    const ok = await bcrypt.compare(password, hash);
-    if (!ok) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-    }
+    // Build JWT payload (keep minimal)
+    const payload = {
+      uid: user.id,
+      user_id: user.user_id ?? null,
+      mobile: user.mobile ?? null,
+      email: user.email ?? null,
+      name: user.name ?? null,
+      iat: Math.floor(Date.now() / 1000),
+    };
 
-    // Create a signed token (JWT). Make sure ADMIN_JWT_SECRET set in env on Vercel.
-    const secret = process.env.ADMIN_JWT_SECRET ?? process.env.NEXTAUTH_SECRET ?? process.env.SUPABASE_JWT_SECRET;
+    const secret = getJwtSecret();
     if (!secret) {
-      console.error("Missing ADMIN_JWT_SECRET env var");
-      return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+      console.error("Missing JWT secret env var. Set ADMIN_JWT_SECRET or NEXTAUTH_SECRET.");
+      return NextResponse.json({ message: "Server misconfiguration" }, { status: 500 });
     }
 
-    const token = jwt.sign(
-      {
-        uid: user.id,
-        email: user.email,
-        name: user.name,
-        user_id: user.user_id,
-      },
-      secret,
-      { expiresIn: `${TOKEN_EXP_SECONDS}s` }
-    );
+    const token = jwt.sign(payload, secret, { expiresIn: TOKEN_EXP_SECONDS });
 
-    // Return redirect and set cookie
-    const res = NextResponse.redirect(new URL("/admin", request.url));
+    // Set cookie and redirect to /admin
+    const res = NextResponse.redirect(new URL("/admin", req.url));
     res.cookies.set({
       name: COOKIE_NAME,
       value: token,
@@ -74,8 +94,8 @@ export async function POST(request: Request) {
     });
 
     return res;
-  } catch (err) {
-    console.error("Login error:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  } catch (err: any) {
+    console.error("POST /api/auth/login error:", err);
+    return NextResponse.json({ message: err?.message || "Server error" }, { status: 500 });
   }
 }
