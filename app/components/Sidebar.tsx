@@ -19,50 +19,54 @@ export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) 
 
   const handleFocusIn = () => setKeyboardExpanded(true);
   const handleFocusOut = (e: React.FocusEvent) => {
-    // collapse only when focus leaves entire sidebar
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setKeyboardExpanded(false);
-    }
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) setKeyboardExpanded(false);
   };
 
-  // effective collapsed: if parent says collapsed OR not interactive focus/hover
-  const effectiveCollapsed = collapsed ? true : false;
+  // collapsedEffective = true when parent forced collapsed OR not keyboardExpanded
+  const collapsedEffective = !!collapsed && !keyboardExpanded;
 
   return (
-    // data-keyboard-expanded used by CSS to force expanded state for keyboard users
     <aside
-      className={`admin-sidebar`}
+      className="admin-sidebar"
       onFocus={handleFocusIn}
       onBlur={handleFocusOut}
       data-keyboard-expanded={keyboardExpanded ? 'true' : 'false'}
-      data-collapsed={effectiveCollapsed ? 'true' : 'false'}
+      data-collapsed={collapsedEffective ? 'true' : 'false'}
       aria-label="Sidebar"
     >
       <div className="sidebar-inner">
-        <div className="sidebar-logo text-center mb-3">
-          <img src="/logo.png" alt="RailEats" className="sidebar-logo-img" />
+        <div className="logo-wrap">
+          <img src="/logo.png" alt="RailEats" />
           <span className="sidebar-brand">RailEats Admin</span>
         </div>
 
-        <ul className="sidebar-nav">
+        <ul className="nav flex-column">
           {menu.map((m) => (
-            <li key={m.href} className="sidebar-item">
-              <Link href={m.href} className="sidebar-link" title={m.label}>
+            <li key={m.href} className="sidebar-item" >
+              <Link href={m.href} className={`nav-link ${collapsedEffective ? 'collapsed-link' : ''}`} title={m.label}>
                 <div className="bubble-icon" aria-hidden>
                   <i className={m.icon} />
                 </div>
+
+                {/* inline label (visible when sidebar expanded) */}
                 <span className="sidebar-label">{m.label}</span>
+
+                {/* tooltip shown only when sidebar is collapsed and user hovers this item */}
+                <span className="sidebar-tooltip" aria-hidden>
+                  {m.label}
+                </span>
               </Link>
             </li>
           ))}
         </ul>
 
-        <div className="sidebar-footer mt-auto">
-          <Link href="/admin/logout" className="btn-logout" title="Logout">
+        <div className="mt-auto">
+          <Link href="/admin/logout" className={`btn btn-sm btn-outline-secondary w-100 ${collapsedEffective ? 'text-center' : ''}`}>
             <div className="bubble-icon" aria-hidden>
               <i className="fa fa-sign-out-alt" />
             </div>
             <span className="sidebar-label">Logout</span>
+            <span className="sidebar-tooltip" aria-hidden>Logout</span>
           </Link>
         </div>
       </div>
