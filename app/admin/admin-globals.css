@@ -1,118 +1,137 @@
-/* app/admin/admin-globals.css
-   Admin-specific styles for RailEats admin UI.
-   No // JavaScript-style comments — only valid CSS.
-*/
+/* ===== Sidebar: collapsed -> expand on hover & keyboard ===== */
 
-/* If you use Tailwind, prefer utility classes.
-   Add small admin-only overrides here. */
-
-/* Basic layout for admin sidebar + header */
-.admin-shell {
-  display: flex;
-  min-height: 100vh;
-  background: #fafafa;
-}
-
-/* Sidebar */
+/* base collapsed sidebar (keeps your 88px but with smooth transition) */
 .admin-sidebar {
-  width: 88px;
+  width: 88px;             /* collapsed width (your current value) */
+  min-width: 88px;
+  max-width: 88px;
   background: #fff;
   border-right: 1px solid #eee;
   padding-top: 20px;
   box-sizing: border-box;
+  height: 100vh;
+  position: relative;
+  transition: width 200ms ease, box-shadow 200ms ease;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  z-index: 30;
 }
+
+/* inner container so content can animate independently */
+.admin-sidebar .sidebar-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+}
+
+/* Logo area adjustments */
 .admin-sidebar .logo-wrap {
   text-align: center;
   margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
 }
 .admin-sidebar img {
-  width: 44px;
+  width: 44px;   /* your existing */
   height: 44px;
   object-fit: contain;
-}
-
-/* Main area */
-.admin-main {
-  flex: 1;
-  min-height: 100vh;
-  background: #fafafa;
-}
-.admin-header {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  padding-left: 20px;
-  gap: 12px;
-  box-sizing: border-box;
-  background: transparent;
-}
-.admin-header .brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-}
-
-/* Top-right user area */
-.admin-user {
-  margin-left: auto;
-  padding-right: 24px;
-  text-align: right;
-  font-size: 13px;
-}
-
-/* Container for page content */
-.admin-content {
-  padding: 24px;
-  box-sizing: border-box;
-}
-
-/* Card-like table wrapper */
-.admin-card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(13,18,25,0.06);
-  padding: 16px;
-  overflow: hidden;
-}
-
-/* Modal fixes: center the modal in admin layout */
-.ReactModal__Overlay {
-  display: flex;
-  align-items: flex-start; /* so top margin works on small screens */
-  justify-content: center;
-  background: rgba(0,0,0,0.3) !important;
-  z-index: 9999;
-}
-.ReactModal__Content {
-  position: relative;
-  margin-top: 4rem;
-  border-radius: 8px;
-  max-width: 720px;
-  width: calc(100% - 48px);
-  max-height: calc(100vh - 160px);
-  overflow: auto;
-  padding: 20px;
-  box-sizing: border-box;
-  outline: none;
-}
-
-/* Small helpers */
-.btn {
-  display: inline-block;
-  padding: 8px 12px;
   border-radius: 6px;
-  border: 1px solid #ddd;
-  background: #fff;
-  cursor: pointer;
-}
-.btn-primary {
-  background: #10b981;
-  color: #fff;
-  border-color: transparent;
+  transition: width 160ms ease, height 160ms ease, transform 160ms ease;
 }
 
-/* Hide any accidental extra big logo insertion */
-.admin-hero-logo {
-  display: none !important;
+/* brand text hidden when collapsed */
+.admin-sidebar .sidebar-brand {
+  display: inline-block;
+  margin-left: 8px;
+  font-weight: 700;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  white-space: nowrap;
 }
+
+/* nav list */
+.admin-sidebar .nav {
+  padding: 6px 4px;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+}
+
+/* link / item */
+.admin-sidebar .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 8px;
+  color: #374151;
+  text-decoration: none;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+/* icon bubble */
+.admin-sidebar .bubble-icon {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: transparent;
+  color: #374151;
+  font-size: 16px;
+}
+
+/* label hidden when collapsed (keeps layout tight) */
+.admin-sidebar .collapsed-link > span,
+.admin-sidebar .nav-link > span {
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* logout/footer */
+.admin-sidebar .mt-auto {
+  padding: 8px 4px;
+}
+
+/* ---- Expand on hover OR keyboard focus ---- */
+/* Expanded width when hovered OR when data-keyboard-expanded is true */
+.admin-sidebar:hover,
+.admin-sidebar[data-keyboard-expanded="true"] {
+  width: 240px;
+  min-width: 240px;
+  max-width: 240px;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06);
+}
+
+/* Show brand and labels when expanded */
+.admin-sidebar:hover .sidebar-brand,
+.admin-sidebar[data-keyboard-expanded="true"] .sidebar-brand {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Show labels when expanded: target span inside nav-link */
+.admin-sidebar:hover .nav-link > span,
+.admin-sidebar[data-keyboard-expanded="true"] .nav-link > span {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* Hover / focus visual on link */
+.admin-sidebar .nav-link:hover,
+.admin-sidebar .nav-link:focus {
+  background: rgba(15,23,42,0.03);
+  col
