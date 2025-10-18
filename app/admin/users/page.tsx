@@ -27,7 +27,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
-  const [filterType, setFilterType] = useState("Super Admin");
+  const [filterType, setFilterType] = useState("All");
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
 
@@ -103,6 +103,7 @@ export default function UsersPage() {
           onChange={(e) => setFilterType(e.target.value)}
           className="border p-2 rounded"
         >
+          <option>All</option>
           <option>Super Admin</option>
           <option>Admin</option>
           <option>Support</option>
