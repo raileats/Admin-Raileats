@@ -4,48 +4,130 @@ This file uses Tailwind. If you want to disable Tailwind,
 remove the three @tailwind lines and keep only the rest.
 */
 
-
 /* Tailwind base, components and utilities (must NOT be commented with //) */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-
 /* Import existing admin-specific styles (keeps your previous admin styling) */
 @import "./admin/admin-globals.css";
 
+/* ---------- Custom global helpers & brand styles ---------- */
 
-/* Minimal fallback/global rules */
+/* Brand yellow (used for search pill & focus) */
+:root{
+  --brand-yellow: #F59E0B;
+  --brand-yellow-100: #FFF6E6; /* very light */
+  --brand-yellow-50: #FFF9F2;
+  --brand-yellow-border: #FDE9B8; /* light border */
+}
+
+/* Search pill (primary) - large rounded search box like your screenshot */
+.search-pill {
+  border-radius: 9999px;                 /* pill */
+  border: 2px solid var(--brand-yellow-border); /* light yellow border */
+  padding: 10px 20px;                   /* roomy padding */
+  width: 28rem;                         /* default width, overrideable */
+  max-width: 100%;
+  outline: none;
+  transition: box-shadow .18s ease, border-color .12s ease, transform .08s ease;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* placeholder color */
+.search-pill::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+/* Focus / keyboard-visible focus: stronger yellow border + soft glow */
+.search-pill:focus,
+.search-pill:focus-visible {
+  border-color: var(--brand-yellow);
+  box-shadow: 0 8px 28px rgba(245, 158, 11, 0.08);
+  transform: translateY(-0.5px);
+}
+
+/* Slight hover lift (mouse) */
+.search-pill:hover {
+  box-shadow: 0 4px 14px rgba(0,0,0,0.03);
+}
+
+/* Smaller pill for compact filter inputs (top search filters) */
+.search-pill-sm {
+  border-radius: 9999px;
+  border: 1.5px solid rgba(250, 204, 21, 0.15);
+  padding: 8px 14px;
+  width: 100%;
+  max-width: 100%;
+  outline: none;
+  transition: box-shadow .14s ease, border-color .1s ease;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+}
+
+/* focus for small pill */
+.search-pill-sm:focus,
+.search-pill-sm:focus-visible {
+  border-color: var(--brand-yellow);
+  box-shadow: 0 6px 20px rgba(245,158,11,0.06);
+}
+
+/* If you want a rounded search with internal icon alignment helper */
+.search-pill-container {
+  position: relative;
+  display: inline-block;
+}
+.search-pill-container svg {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #94a3b8;
+}
+
+/* small helper to truncate long table cells */
+.truncate-max {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Existing minimal fallback/global rules ---------- */
 html, body {
-height: 100%;
-margin: 0;
+  height: 100%;
+  margin: 0;
 }
 body {
-font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
--webkit-font-smoothing: antialiased;
--moz-osx-font-smoothing: grayscale;
-background: #fafafa;
-color: #111;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #fafafa;
+  color: #111;
 }
 #root, #__next {
-height: 100%;
+  height: 100%;
 }
-
 
 /* small helpers that might help layout visuals */
 .container {
-max-width: 1200px;
-margin: 0 auto;
-padding-left: 1rem;
-padding-right: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
-
 
 .ReactModal__Overlay {
-z-index: 9000;
-background: rgba(0,0,0,0.45) !important;
+  z-index: 9000;
+  background: rgba(0,0,0,0.45) !important;
 }
-
 
 /* simple responsive helpers */
 img { max-width: 100%; height: auto; }
