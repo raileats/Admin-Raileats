@@ -6,16 +6,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 /**
- * Admin layout (client). Shows sidebar + header.
- * Header now fetches /api/admin/me to display logged-in user's name & photo.
+ * Client admin layout — wraps /admin routes.
+ *
+ * This version fetches /api/admin/me on mount to show:
+ * - logged in user's name and photo at top-right
+ * - Logout button which calls /api/auth/logout
  */
 
 type MeUser = {
   id?: string;
-  user_id?: string | null;
   name?: string | null;
   email?: string | null;
   photo_url?: string | null;
+  mobile?: string | null;
   user_type?: string | null;
 };
 
@@ -23,30 +26,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [me, setMe] = useState<MeUser | null>(null);
   const [loadingMe, setLoadingMe] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+
     async function loadMe() {
       setLoadingMe(true);
       try {
-        const res = await fetch("/api/admin/me");
+        const res = await fetch("/api/admin/me", { cache: "no-store" });
+        if (!mounted) return;
         if (!res.ok) {
-          // if 401, not signed in
-          if (res.status === 401) {
-            if (mounted) setMe(null);
-            return;
-          }
-          // otherwise try parse message
+          setMe(null);
+        } else {
+          const j = await res.json().catch(() => ({}));
+          // Expecting API: { ok: true, user: {...} } or { user: {...} } or direct user
+          const user = j?.user ?? (j?.ok ? j?.data ?? null : null) ?? null;
+          setMe(user);
         }
-        const j = await res.json().catch(() => ({}));
-        if (mounted) setMe(j?.user ?? null);
       } catch (err) {
-        console.error("Failed to fetch /api/admin/me:", err);
-        if (mounted) setMe(null);
+        console.error("Failed to load /api/admin/me", err);
+        setMe(null);
       } finally {
         if (mounted) setLoadingMe(false);
       }
     }
+
     loadMe();
     return () => {
       mounted = false;
@@ -54,13 +59,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, []);
 
   async function handleLogout() {
+    setLoggingOut(true);
     try {
-      // call your logout API to clear cookies
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch (e) {
-      console.warn("logout error", e);
+      const res = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      // ignore body, just redirect to login
+    } catch (err) {
+      console.error("Logout error", err);
     } finally {
-      // redirect to login
+      setLoggingOut(false);
+      // ensure client navigates to login page
       router.replace("/admin/login");
     }
   }
@@ -129,67 +139,79 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div style={{ fontWeight: 700, fontSize: 18 }}>RailEats Admin</div>
 
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-            {/* If still loading show placeholder */}
-            {loadingMe ? (
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 13, color: "#111" }}>Loading...</div>
-              </div>
-            ) : me ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 13, color: "#111", fontWeight: 600 }}>
-                    {me.name ?? me.email}
+            {/* User area */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* show name + photo if logged in */}
+              {loadingMe ? (
+                <div style={{ fontSize: 13, color: "#666" }}>Loading…</div>
+              ) : me ? (
+                <>
+                  <div style={{ textAlign: "right", minWidth: 120 }}>
+                    <div style={{ fontSize: 13, color: "#111", fontWeight: 600 }}>
+                      {me.name ?? me.email ?? me.mobile ?? "User"}
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      disabled={loggingOut}
+                      style={{
+                        fontSize: 12,
+                        color: "#0070f3",
+                        background: "transparent",
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+                        marginTop: 2,
+                      }}
+                    >
+                      {loggingOut ? "Logging out…" : "Logout"}
+                    </button>
                   </div>
-                  <button
-                    onClick={handleLogout}
+
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: "50%",
+                      overflow: "hidden",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "#eee",
+                      border: "1px solid #f0f0f0",
+                    }}
+                    aria-hidden
+                  >
+                    {me.photo_url ? (
+                      <img
+                        src={me.photo_url}
+                        alt={me.name ?? "avatar"}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <span style={{ fontWeight: 700, color: "#555" }}>
+                        {(me.name ?? me.email ?? "U").charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                // not signed in UI
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
+                  <Link
+                    href="/admin/login"
                     style={{
                       fontSize: 12,
                       color: "#0070f3",
-                      background: "transparent",
-                      border: "none",
-                      padding: 0,
+                      textDecoration: "underline",
                       cursor: "pointer",
                     }}
                   >
-                    Logout
-                  </button>
+                    Login
+                  </Link>
                 </div>
-
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 999,
-                    overflow: "hidden",
-                    background: "#eee",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {me.photo_url ? (
-                    // show provided photo url
-                    // NOTE: if this is an object URL or requires CORS, ensure Supabase public URL is used
-                    <img
-                      src={me.photo_url}
-                      alt={me.name ?? "avatar"}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  ) : (
-                    <div style={{ fontSize: 12, color: "#666" }}>
-                      {me.name ? me.name.split(" ").map(s=>s[0]).slice(0,2).join("") : "U"}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
-                <Link href="/admin/login" style={{ fontSize: 12, color: "#0070f3" }}>
-                  Login
-                </Link>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </header>
 
