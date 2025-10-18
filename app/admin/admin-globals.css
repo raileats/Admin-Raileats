@@ -1,109 +1,62 @@
-/* ===== tooltip-on-icon + expand-on-sidebar-hover behavior ===== */
-
-/* ensure base collapsed width as before */
+/* tooltip + expand behavior for admin sidebar */
 .admin-sidebar {
   width: 88px;
   min-width: 88px;
-  max-width: 88px;
   transition: width 190ms ease, box-shadow 190ms ease;
   overflow: visible;
   height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-  border-right: 1px solid #eee;
-  z-index: 30;
+  display:flex;
+  flex-direction:column;
+  background:#fff;
+  border-right:1px solid #eee;
+  z-index:30;
+}
+.admin-sidebar .sidebar-inner { padding:12px; display:flex; flex-direction:column; height:100%; }
+.logo-wrap { display:flex; align-items:center; gap:8px; justify-content:center; margin-bottom:12px; }
+.logo-wrap img { width:44px; height:44px; border-radius:6px; }
+.sidebar-brand { margin-left:8px; font-weight:700; opacity:0; transform:translateX(-6px); transition:opacity 150ms, transform 150ms; white-space:nowrap; }
+
+.nav { display:flex; flex-direction:column; gap:6px; padding:6px 4px; overflow:auto; }
+.sidebar-item { position:relative; }
+.nav-link { display:flex; align-items:center; gap:12px; padding:8px; border-radius:8px; color:#374151; text-decoration:none; transition:background 120ms, color 120ms; position:relative; }
+.bubble-icon { width:36px; height:36px; min-width:36px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; font-size:16px; color:#374151; }
+
+/* inline label hidden initially */
+.sidebar-label { opacity:0; transform:translateX(-8px); transition:opacity 160ms, transform 160ms; white-space:nowrap; pointer-events:none; }
+
+/* tooltip - floating label right of collapsed sidebar */
+.sidebar-tooltip {
+  position:absolute; left:88px; top:50%; transform:translateY(-50%) translateX(-8px);
+  background:#111827; color:#fff; padding:6px 10px; border-radius:8px; font-size:13px; white-space:nowrap;
+  box-shadow:0 6px 20px rgba(15,23,42,0.12); opacity:0; pointer-events:none; transition:opacity 160ms, transform 160ms; z-index:40;
 }
 
-/* inner */
-.admin-sidebar .sidebar-inner { padding: 12px; display:flex; flex-direction:column; height:100%; }
-
-/* logo */
-.admin-sidebar .logo-wrap { display:flex; align-items:center; gap:8px; justify-content:center; margin-bottom:12px; }
-.admin-sidebar .logo-wrap img { width:44px; height:44px; border-radius:6px; }
-
-/* inline brand (hidden when collapsed) */
-.admin-sidebar .sidebar-brand { margin-left:8px; font-weight:700; opacity:0; transform:translateX(-6px); transition:opacity 150ms, transform 150ms; white-space:nowrap; }
-
-/* nav items */
-.admin-sidebar .nav { display:flex; flex-direction:column; gap:6px; padding:6px 4px; overflow:auto; }
-.admin-sidebar .sidebar-item { position: relative; } /* for tooltip positioning */
-
-/* link & icon */
-.admin-sidebar .nav-link { display:flex; align-items:center; gap:12px; padding:8px; border-radius:8px; color:#374151; text-decoration:none; transition:background 120ms, color 120ms; position:relative; }
-.admin-sidebar .bubble-icon { width:36px; height:36px; min-width:36px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; font-size:16px; color:#374151; }
-
-/* inline label: visible only when expanded */
-.admin-sidebar .sidebar-label { opacity:0; transform:translateX(-8px); transition:opacity 160ms ease, transform 160ms ease; white-space:nowrap; pointer-events:none; }
-
-/* tooltip (floating) visible when sidebar is collapsed and item hovered */
-.admin-sidebar .sidebar-tooltip {
-  position: absolute;
-  left: 88px; /* just to the right of collapsed sidebar */
-  top: 50%;
-  transform: translateY(-50%) translateX(-8px);
-  background: #111827; color: #fff;
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  white-space: nowrap;
-  box-shadow: 0 6px 20px rgba(15,23,42,0.12);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 160ms ease, transform 160ms ease;
-  z-index: 40;
-}
-
-/* show tooltip when item hovered but only if sidebar not expanded */
+/* show tooltip when item hovered and sidebar not expanded */
 .admin-sidebar[data-keyboard-expanded="false"]:not(:hover) .sidebar-item:hover .sidebar-tooltip,
 .admin-sidebar[data-keyboard-expanded="false"]:not(:hover) .sidebar-item:focus-within .sidebar-tooltip {
-  opacity: 1;
-  transform: translateY(-50%) translateX(0);
-  pointer-events: auto;
+  opacity:1; transform:translateY(-50%) translateX(0); pointer-events:auto;
 }
 
-/* if whole sidebar hovered/expanded: expand width and show inline labels; hide tooltip */
+/* expand full sidebar on hover or keyboard focus */
 .admin-sidebar:hover,
 .admin-sidebar[data-keyboard-expanded="true"] {
-  width: 240px;
-  min-width: 240px;
-  max-width: 240px;
-  box-shadow: 0 6px 24px rgba(15,23,42,0.06);
+  width:240px; min-width:240px; box-shadow:0 6px 24px rgba(15,23,42,0.06);
 }
 
-/* when expanded, show brand & inline labels */
+/* when expanded, show inline labels and brand, hide tooltips */
 .admin-sidebar:hover .sidebar-brand,
-.admin-sidebar[data-keyboard-expanded="true"] .sidebar-brand {
-  opacity: 1;
-  transform: translateX(0);
-}
+.admin-sidebar[data-keyboard-expanded="true"] .sidebar-brand { opacity:1; transform:translateX(0); }
 .admin-sidebar:hover .sidebar-label,
-.admin-sidebar[data-keyboard-expanded="true"] .sidebar-label {
-  opacity: 1;
-  transform: translateX(0);
-  pointer-events: auto;
-}
-
-/* hide tooltip when expanded */
+.admin-sidebar[data-keyboard-expanded="true"] .sidebar-label { opacity:1; transform:translateX(0); pointer-events:auto; }
 .admin-sidebar:hover .sidebar-tooltip,
-.admin-sidebar[data-keyboard-expanded="true"] .sidebar-tooltip {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-50%) translateX(-8px);
-}
+.admin-sidebar[data-keyboard-expanded="true"] .sidebar-tooltip { opacity:0; pointer-events:none; transform:translateY(-50%) translateX(-8px); }
 
-/* link hover visual */
-.admin-sidebar .nav-link:hover,
-.admin-sidebar .nav-link:focus {
-  background: rgba(15,23,42,0.03);
-  color: #111827;
-}
+/* hover/focus visuals */
+.nav-link:hover, .nav-link:focus { background: rgba(15,23,42,0.03); color:#111827; }
+.nav-link.active { background: rgba(99,102,241,0.08); color:#4f46e5; }
 
-/* footer spacing */
-.admin-sidebar .mt-auto { padding:8px 4px; }
-
-/* responsive small screens */
-@media (max-width: 768px) {
-  .admin-sidebar { position: fixed; left:0; top:0; bottom:0; width:64px; min-width:64px; z-index:40; }
+/* mobile */
+@media (max-width:768px) {
+  .admin-sidebar { position:fixed; left:0; top:0; bottom:0; width:64px; min-width:64px; z-index:40; }
   .admin-sidebar:hover, .admin-sidebar[data-keyboard-expanded="true"] { width:220px; }
 }
