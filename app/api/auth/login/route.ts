@@ -1,5 +1,6 @@
 // app/api/auth/login/route.ts
 import { NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabaseServer";
 import bcrypt from "bcryptjs";
 import { createClient } from "@supabase/supabase-js";
 
@@ -8,52 +9,67 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// POST /api/auth/login
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { phone, password } = body;
+    const { email, password } = body;
 
-    if (!phone || !password) {
-      return NextResponse.json(
-        { message: "phone and password required" },
-        { status: 400 }
-      );
-    }
+    if (!email || !password)
+      return NextResponse.json({ message: "Email and password required" }, { status: 400 });
 
-    // fetch stored password_hash (not "password")
-    const { data: user, error } = await supabase
+    // check user in DB
+    const { data: userRow, error } = await supabase
       .from("users")
-      .select("id, name, mobile, password_hash, status, user_type")
-      .eq("mobile", phone)
+      .select("*")
+      .eq("email", email)
+      .limit(1)
       .single();
 
-    if (error || !user) {
-      // do not reveal whether user exists
+    if (error || !userRow)
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
-    }
 
-    if (user.status === false) {
-      return NextResponse.json({ message: "User blocked. Contact Admin." }, { status: 403 });
-    }
-
-    // Compare password with stored hash
-    const match = await bcrypt.compare(password, user.password_hash || "");
-    if (!match) {
+    const valid = await bcrypt.compare(password, userRow.password_hash);
+    if (!valid)
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+
+    // now use supabaseServer to set auth cookie
+    const {
+      data: { session },
+      error: signInError,
+    } = await supabaseServer.auth.signInWithPassword({ email, password });
+
+    if (signInError || !session) {
+      console.error("SignIn error:", signInError);
+      return NextResponse.json({ message: "Failed to start session" }, { status: 500 });
     }
 
-    // Login success — create cookie/session/JWT here if you need
-    return NextResponse.json({
-      ok: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        user_type: user.user_type,
-      },
+    // set auth cookie
+    const res = NextResponse.json({
+      message: "Login successful",
+      user: { name: userRow.name, email: userRow.email, photo_url: userRow.photo_url },
     });
-  } catch (err) {
-    console.error("login error:", err);
-    return NextResponse.json({ message: "Server error", error: String(err) }, { status: 500 });
+
+    const access_token = session.access_token;
+    const refresh_token = session.refresh_token;
+    res.cookies.set("sb-access-token", access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+    });
+    res.cookies.set("sb-refresh-token", refresh_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+    });
+
+    return res;
+  } catch (err: any) {
+    console.error("POST /api/auth/login error:", err);
+    return NextResponse.json(
+      { message: err.message || "Server error" },
+      { status: 500 }
+    );
   }
 }
