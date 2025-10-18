@@ -69,8 +69,10 @@ export default function RestroMasterPage(): JSX.Element {
 
       const { data, error: e } = await query;
       if (e) throw e;
-      // ensure each row has a stable id for AdminTable
-      const normalized = (data ?? []).map((r: any, idx: number) => ({ id: r.RestroCode ?? r.RestroId ?? idx, ...r }));
+      const normalized = (data ?? []).map((r: any, idx: number) => ({
+        id: r.RestroCode ?? r.RestroId ?? idx,
+        ...r,
+      }));
       setResults(normalized as Restro[]);
     } catch (err: any) {
       console.error("fetchRestros error:", err);
@@ -105,7 +107,6 @@ export default function RestroMasterPage(): JSX.Element {
     fetchRestros();
   }
 
-  // CSV helpers
   const escapeCsv = (val: any) => {
     if (val === null || val === undefined) return "";
     const s = String(val);
@@ -156,13 +157,11 @@ export default function RestroMasterPage(): JSX.Element {
     }
   }
 
-  // navigate to route-based edit page (so URL changes to /admin/restros/<code>/edit)
   function openEditRoute(code: string | number) {
     const c = encodeURIComponent(String(code));
     router.push(`/admin/restros/${c}/edit`);
   }
 
-  // AdminTable columns
   const columns: Column<Restro>[] = [
     { key: "RestroCode", title: "Restro Code", width: "110px" },
     { key: "RestroName", title: "Restro Name" },
@@ -187,72 +186,58 @@ export default function RestroMasterPage(): JSX.Element {
   ];
 
   return (
-    <main style={{ padding: 24 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <h1 style={{ margin: 0 }}>Restro Master</h1>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={handleExportAll}
-            disabled={exporting}
-            style={{ background: "#0ea5e9", color: "white", padding: "8px 12px", borderRadius: 6, border: "none", cursor: exporting ? "not-allowed" : "pointer" }}
-            title="Download Restro Master CSV"
-          >
+    <main className="mx-6 my-4 max-w-full">
+      <div className="w-full">
+        {/* Page header area */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-gray-800">Restro Master</h2>
+        </div>
+
+        {/* Search / actions form (kept above table for clarity) */}
+        <form onSubmit={onSearchForm} className="bg-white rounded-xl shadow-sm p-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+            <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} className="px-3 py-2 border rounded-lg" />
+            <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} className="px-3 py-2 border rounded-lg" />
+            <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} className="px-3 py-2 border rounded-lg" />
+            <input placeholder="Station Code" value={stationCode} onChange={(e) => setStationCode(e.target.value)} className="px-3 py-2 border rounded-lg" />
+            <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} className="px-3 py-2 border rounded-lg" />
+            <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} maxLength={10} className="px-3 py-2 border rounded-lg" />
+            <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} className="px-3 py-2 border rounded-lg" />
+          </div>
+
+          <div className="flex justify-end gap-3 mt-3">
+            <button type="button" onClick={onClear} className="px-3 py-2 border rounded-lg bg-white">Clear</button>
+            <button type="submit" className="px-4 py-2 bg-sky-500 text-white rounded-lg">Search</button>
+          </div>
+        </form>
+
+        {/* error */}
+        {error && <div className="text-red-600 mb-4">{error}</div>}
+
+        {/* Actions row (Export + Add) */}
+        <div className="flex items-center justify-end gap-3 mb-3">
+          <button onClick={handleExportAll} disabled={exporting} className="px-4 py-2 bg-sky-500 text-white rounded-lg">
             {exporting ? "Exporting..." : "Download Restro Master"}
           </button>
-
-          <button
-            onClick={() => alert("New Restro route not implemented")}
-            style={{ background: "#10b981", color: "white", padding: "8px 12px", borderRadius: 6, border: "none", cursor: "pointer" }}
-          >
+          <button onClick={() => alert("Add Restro not implemented")} className="px-4 py-2 bg-green-600 text-white rounded-lg">
             + Add New Restro
           </button>
         </div>
-      </div>
 
-      {/* Search Form */}
-      <form onSubmit={onSearchForm} style={{ background: "#fff", padding: 12, borderRadius: 8, marginBottom: 12 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr 120px 1fr 160px 1fr", gap: 12, marginBottom: 12 }}>
-          <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} style={{ padding: 8 }} />
-          <input placeholder="Restro Name" value={restroName} onChange={(e) => setRestroName(e.target.value)} style={{ padding: 8 }} />
-          <input placeholder="Owner Name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} style={{ padding: 8 }} />
-          <input placeholder="Station Code" value={stationCode} onChange={(e) => setStationCode(e.target.value)} style={{ padding: 8 }} />
-          <input placeholder="Station Name" value={stationName} onChange={(e) => setStationName(e.target.value)} style={{ padding: 8 }} />
-          <input placeholder="Owner Phone" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} style={{ padding: 8 }} maxLength={10} />
-          <input placeholder="FSSAI Number" value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value)} style={{ padding: 8 }} />
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" onClick={onClear} style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}>
-            Clear
-          </button>
-          <button type="submit" style={{ padding: "8px 12px", borderRadius: 6, border: "none", background: "#0ea5e9", color: "#fff", minWidth: 90 }}>
-            Search
-          </button>
-        </div>
-      </form>
-
-      {error && <div style={{ color: "red", marginBottom: 12 }}>{error}</div>}
-
-      {/* AdminTable results (uses your shared AdminTable component) */}
-      <div style={{ marginTop: 8 }}>
+        {/* AdminTable (fills width) */}
         <AdminTable
           title=""
+          subtitle=""
           columns={columns}
           data={results}
-          searchPlaceholder="Search restro..."
+          loading={loading}
           pageSize={10}
+          searchPlaceholder="Search restro..."
           showAddButton={{ label: "+ Add New Restro", onClick: () => alert("Add restro") }}
-          // actions column -> Edit button
-          actions={(row: Restro) => (
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => openEditRoute(row.RestroCode ?? row.RestroId)}
-                style={{ background: "#f59e0b", color: "#000", padding: "6px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}
-              >
-                Edit
-              </button>
-            </div>
+          actions={(row) => (
+            <button onClick={() => openEditRoute(row.RestroCode ?? row.RestroId)} className="px-3 py-1 rounded-md bg-amber-400 text-black">
+              Edit
+            </button>
           )}
         />
       </div>
