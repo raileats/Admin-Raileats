@@ -1,37 +1,71 @@
-// pages/api/auth/login.ts (or app/api/auth/login/route.ts)
-import { NextApiRequest, NextApiResponse } from "next";
+// app/api/auth/login/route.ts
+import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return res.status(405).end();
+// POST /api/auth/login
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { phone, password } = body;
 
-  const { phone, password } = req.body || {};
-  if (!phone || !password) return res.status(400).json({ message: "phone and password required" });
+    if (!phone || !password) {
+      return NextResponse.json(
+        { message: "phone and password required" },
+        { status: 400 }
+      );
+    }
 
-  // fetch user by phone/mobile
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, name, mobile, password, status, user_type")
-    .eq("mobile", phone)
-    .limit(1)
-    .single();
+    // Fetch user record from 'users' table by mobile
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("id, name, mobile, password, status, user_type")
+      .eq("mobile", phone)
+      .single();
 
-  if (error || !data) {
-    return res.status(401).json({ message: "Invalid credentials" });
+    if (error || !user) {
+      return NextResponse.json(
+        { message: "Invalid credentials" },
+        { status: 401 }
+      );
+    }
+
+    if (!user.status) {
+      return NextResponse.json(
+        { message: "User blocked. Contact Admin." },
+        { status: 403 }
+      );
+    }
+
+    // Compare password with stored hash
+    const match = await bcrypt.compare(password, user.password || "");
+    if (!match) {
+      return NextResponse.json(
+        { message: "Invalid credentials" },
+        { status: 401 }
+      );
+    }
+
+    // ✅ Login success: you can create cookie/session/JWT here if needed
+    // For now, just send success JSON
+    return NextResponse.json({
+      ok: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        user_type: user.user_type,
+      },
+    });
+  } catch (err) {
+    console.error("login error:", err);
+    return NextResponse.json(
+      { message: "Server error", error: String(err) },
+      { status: 500 }
+    );
   }
-
-  const user: any = data;
-  if (!user.status) return res.status(403).json({ message: "User blocked" });
-
-  const match = await bcrypt.compare(password, user.password || "");
-  if (!match) return res.status(401).json({ message: "Invalid credentials" });
-
-  // success — set cookie/session token as you do now
-  // example: create a signed cookie or jwt here
-  // res.setHeader('Set-Cookie', ...)
-
-  return res.status(200).json({ ok: true, user: { id: user.id, name: user.name, user_type: user.user_type } });
 }
