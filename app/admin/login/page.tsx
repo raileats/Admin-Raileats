@@ -1,60 +1,149 @@
+// app/admin/login/page.tsx
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+
+import React, { useState } from "react";
 
 export default function AdminLogin() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     setLoading(true);
+
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, password })
+        // ensure cookies are handled for same-origin
+        credentials: "same-origin",
+        body: JSON.stringify({ phone, password }),
       });
 
-      const j = await res.json().catch(()=>({}));
-      if (res.ok) {
-        // server should set auth cookie; redirect to admin home
-        router.replace("/admin/home");
-      } else {
-        alert(j?.message || "Login failed");
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(json?.message || "Login failed");
+        return;
       }
+
+      // Important: do a full page navigation so the cookie/session
+      // set by the login endpoint is sent to the server on the next request.
+      // This avoids the 'blank until refresh' problem.
+      window.location.replace("/admin/home");
     } catch (err) {
-      console.error(err);
-      alert("Network error");
+      console.error("Login error", err);
+      setError("Network error, please try again");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f3f4f6" }}>
-      <div style={{ width: 360, padding: 28, background: "#fff", borderRadius: 10, boxShadow: "0 6px 20px rgba(0,0,0,0.08)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-          <img src="/logo-small.png" alt="RailEats" style={{ width: 44, height: 44 }} />
-          <div style={{ fontWeight: 700 }}>RailEats Admin</div>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f6f7fb",
+        padding: 24,
+      }}
+    >
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          width: 380,
+          padding: 28,
+          background: "#fff",
+          borderRadius: 8,
+          boxShadow: "0 6px 20px rgba(10,10,25,0.06)",
+          border: "1px solid rgba(0,0,0,0.04)",
+        }}
+        aria-label="Admin login form"
+      >
+        <div style={{ textAlign: "center", marginBottom: 14 }}>
+          <img src="/logo.png" alt="RailEats" style={{ width: 56, height: 56 }} />
+          <h2 style={{ margin: "8px 0 0" }}>RailEats Admin</h2>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>User ID (mobile)</label>
-          <input value={phone} onChange={(e)=>setPhone(e.target.value)} required style={{ width:"100%", padding:10, marginBottom:12, borderRadius:6, border:"1px solid #ddd" }} />
-          <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Password</label>
-          <input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required style={{ width:"100%", padding:10, marginBottom:16, borderRadius:6, border:"1px solid #ddd" }} />
-          <button type="submit" disabled={loading} style={{ width:"100%", padding:10, borderRadius:6, background:"#f5c400", border:"none", fontWeight:600 }}>
-            {loading ? "Logging..." : "Log in"}
-          </button>
-        </form>
+        {error && (
+          <div
+            role="alert"
+            style={{
+              background: "#fff2f0",
+              color: "#9b1c1c",
+              border: "1px solid #ffdede",
+              padding: "8px 10px",
+              borderRadius: 6,
+              marginBottom: 12,
+              fontSize: 13,
+            }}
+          >
+            {error}
+          </div>
+        )}
 
-        <div style={{ textAlign:"center", marginTop:12 }}>
-          <a href="/" style={{ fontSize:12, color:"#666" }}>Back to public site</a>
+        <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
+          User ID (mobile)
+        </label>
+        <input
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          required
+          style={{
+            width: "100%",
+            padding: 10,
+            marginBottom: 12,
+            borderRadius: 6,
+            border: "1px solid #e6e6e6",
+            boxSizing: "border-box",
+          }}
+          placeholder="eg. 8888888888"
+        />
+
+        <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
+          Password
+        </label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          style={{
+            width: "100%",
+            padding: 10,
+            marginBottom: 14,
+            borderRadius: 6,
+            border: "1px solid #e6e6e6",
+            boxSizing: "border-box",
+          }}
+        />
+
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            width: "100%",
+            padding: 10,
+            borderRadius: 6,
+            background: "#f6b900",
+            color: "#111",
+            border: "none",
+            fontWeight: 600,
+            cursor: loading ? "default" : "pointer",
+          }}
+        >
+          {loading ? "Logging in…" : "Log in"}
+        </button>
+
+        <div style={{ marginTop: 12, fontSize: 12, textAlign: "center", color: "#777" }}>
+          Please use your admin credentials.
         </div>
-      </div>
+      </form>
     </div>
   );
 }
