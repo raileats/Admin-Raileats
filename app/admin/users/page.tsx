@@ -50,7 +50,12 @@ export default function UsersPage() {
     try {
       const params = new URLSearchParams();
       if (query) params.set("q", query);
-      if (filterType) params.set("user_type", filterType);
+
+      // <-- only set user_type when a real filter is selected (not "All")
+      if (filterType && filterType !== "All") {
+        params.set("user_type", filterType);
+      }
+
       const res = await fetch(`/api/admin/users?${params.toString()}`);
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || "Failed to fetch users");
