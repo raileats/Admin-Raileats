@@ -1,25 +1,15 @@
 // app/api/auth/login/route.ts
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { serviceClient } from "@/lib/supabaseServer"; // ensure this is exported from your lib
-import { createClient } from "@supabase/supabase-js";
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error("Missing SUPABASE env vars");
-}
-
-// anon client used only to call auth.signInWithPassword
-const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+import { serviceClient, createAnonClient } from "@/lib/supabaseServer";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    let { email, mobile, password } = body || {};
+    const body = await req.json().catch(() => ({}));
+    // Accept email OR mobile OR phone (phone used by your client)
+    let { email, mobile, phone, password } = body || {};
+    mobile = mobile ?? phone;
 
-    // require password and one of email/mobile
     if (!password || (!email && !mobile)) {
       return NextResponse.json(
         { message: "Email (or mobile) and password required" },
@@ -27,58 +17,66 @@ export async function POST(req: Request) {
       );
     }
 
-    // If user provided mobile instead of email, look up the user row by mobile
+    // 1) Find user row (by mobile OR email)
     let userRow: any = null;
-    if (!email && mobile) {
-      const { data: rowByMobile, error: errMobile } = await serviceClient
+    if (mobile && !email) {
+      const { data: row, error } = await serviceClient
         .from("users")
         .select("*")
         .eq("mobile", String(mobile))
         .limit(1)
         .single();
-
-      if (errMobile || !rowByMobile) {
+      if (error || !row) {
         return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
       }
-      userRow = rowByMobile;
-      // if users table doesn't have an email, we still need an email for supabase auth sign-in
-      // if email missing, we will still attempt sign-in using stored email field (should exist)
-      email = rowByMobile.email;
+      userRow = row;
+      email = row.email; // ensure we have email for Supabase sign-in
     } else {
-      // we have email -> fetch user row by email
-      const { data: rowByEmail, error: errEmail } = await serviceClient
+      const { data: row, error } = await serviceClient
         .from("users")
         .select("*")
         .eq("email", String(email))
         .limit(1)
         .single();
-
-      if (errEmail || !rowByEmail) {
+      if (error || !row) {
         return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
       }
-      userRow = rowByEmail;
+      userRow = row;
     }
 
-    // password hash compare (users table should have password_hash)
+    // 2) Compare password against stored hash
+    if (!userRow.password_hash) {
+      return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
+    }
     const valid = await bcrypt.compare(password, userRow.password_hash);
     if (!valid) {
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
-    // Sign in via anon client to obtain session tokens
-    const { data: signInData, error: signErr } = await anonClient.auth.signInWithPassword({
+    // 3) Sign in with Supabase (anon client) to get session tokens
+    const anonClient = createAnonClient();
+    const { data: signInData, error: signInErr } = await anonClient.auth.signInWithPassword({
       email: String(email),
       password,
     });
 
-    if (signErr || !signInData?.session) {
-      console.error("signIn error:", signErr);
+    if (signInErr) {
+      console.error("Supabase signIn error:", signInErr);
+      // if credentials wrong at supabase side, return 401
+      return NextResponse.json(
+        { message: signInErr.message || "Failed to start session" },
+        { status: signInErr.status ?? 401 }
+      );
+    }
+
+    if (!signInData?.session) {
+      console.error("No session from Supabase signIn:", signInData);
       return NextResponse.json({ message: "Failed to start session" }, { status: 500 });
     }
 
     const session = signInData.session;
 
-    // Create response and set httpOnly cookies so browser will send them on later requests
+    // 4) Send response and set httpOnly cookies for session tokens
     const res = NextResponse.json({
       message: "Login successful",
       user: {
@@ -89,13 +87,11 @@ export async function POST(req: Request) {
     });
 
     const secure = process.env.NODE_ENV === "production";
-    // set access token and refresh token as httpOnly cookies
     res.cookies.set("sb-access-token", session.access_token, {
       httpOnly: true,
       secure,
       sameSite: "lax",
       path: "/",
-      // optionally set maxAge using `expires_at` if available
     });
     res.cookies.set("sb-refresh-token", session.refresh_token, {
       httpOnly: true,
@@ -108,7 +104,7 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error("POST /api/auth/login error:", err);
     return NextResponse.json(
-      { message: err.message || "Server error" },
+      { message: err?.message || "Server error" },
       { status: 500 }
     );
   }
