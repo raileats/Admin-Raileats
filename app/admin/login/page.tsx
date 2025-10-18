@@ -4,38 +4,49 @@
 import React, { useState } from "react";
 
 export default function AdminLogin() {
-  const [phone, setPhone] = useState("");
+  const [identifier, setIdentifier] = useState(""); // mobile or email
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!identifier || !password) {
+      setError("Please enter mobile/email and password");
+      return;
+    }
     setLoading(true);
 
     try {
+      // Build payload: send mobile OR email depending on input
+      const payload: any = { password };
+      if (identifier.includes("@")) payload.email = identifier.trim();
+      else payload.mobile = identifier.trim();
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ensure cookies are handled for same-origin
-        credentials: "same-origin",
-        body: JSON.stringify({ phone, password }),
+        body: JSON.stringify(payload),
+        credentials: "include", // <-- important so cookies set by server are stored
       });
 
+      // debug logs (will appear in browser console)
+      console.log("Login response status:", res.status, "ok:", res.ok);
+
       const json = await res.json().catch(() => ({}));
+      console.log("Login response json:", json);
 
       if (!res.ok) {
         setError(json?.message || "Login failed");
         return;
       }
 
-      // Important: do a full page navigation so the cookie/session
-      // set by the login endpoint is sent to the server on the next request.
-      // This avoids the 'blank until refresh' problem.
+      // Success: full navigation so cookies are attached for subsequent server requests
       window.location.replace("/admin/home");
-    } catch (err) {
-      console.error("Login error", err);
+    } catch (err: any) {
+      console.error("Login network error:", err);
       setError("Network error, please try again");
     } finally {
       setLoading(false);
@@ -88,11 +99,11 @@ export default function AdminLogin() {
         )}
 
         <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
-          User ID (mobile)
+          User ID (mobile or email)
         </label>
         <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           required
           style={{
             width: "100%",
@@ -102,26 +113,45 @@ export default function AdminLogin() {
             border: "1px solid #e6e6e6",
             boxSizing: "border-box",
           }}
-          placeholder="eg. 8888888888"
+          placeholder="eg. 8888888888 or name@example.com"
         />
 
-        <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
-          Password
-        </label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          style={{
-            width: "100%",
-            padding: 10,
-            marginBottom: 14,
-            borderRadius: 6,
-            border: "1px solid #e6e6e6",
-            boxSizing: "border-box",
-          }}
-        />
+        <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Password</label>
+        <div style={{ position: "relative" }}>
+          <input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            style={{
+              width: "100%",
+              padding: "10px 40px 10px 10px",
+              marginBottom: 14,
+              borderRadius: 6,
+              border: "1px solid #e6e6e6",
+              boxSizing: "border-box",
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((s) => !s)}
+            aria-label="Toggle password visibility"
+            style={{
+              position: "absolute",
+              right: 8,
+              top: 8,
+              height: 32,
+              width: 32,
+              borderRadius: 6,
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+            }}
+            title={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? "🙈" : "👁️"}
+          </button>
+        </div>
 
         <button
           type="submit"
