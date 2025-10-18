@@ -6,35 +6,32 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 /**
- * Admin layout (client) — wraps /admin routes (except login).
- * Root app/layout.tsx should still import app/globals.css.
+ * Client admin layout — wraps /admin routes (except the login page).
  *
- * Important:
- * - Remove any duplicate header/navigation from individual admin pages.
- * - Ensure your API handler /api/auth/logout accepts POST (or GET) and clears auth cookie/session.
+ * Notes:
+ * - Don't export `metadata` from a client component (causes Next.js build error).
+ * - Root app/layout.tsx should import globals.css (keep that as-is).
+ * - /api/auth/logout should accept POST and clear auth cookie/session.
  */
-
-export const metadata = {
-  title: "RailEats Admin - Admin Area",
-};
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   async function handleLogout() {
     try {
-      // Prefer POST for logout. Adjust if your API expects GET.
+      // call API route to clear session/cookies
+      // prefer POST for logout
       const res = await fetch("/api/auth/logout", { method: "POST" });
-      // if API returns JSON with {ok: true} or status 200
+      // you can examine res.ok or returned JSON if needed
       if (!res.ok) {
-        console.error("Logout failed", await res.text());
-        // still try to redirect to login to avoid locking user out of UI
+        console.warn("Logout API responded with non-OK status:", res.status);
       }
     } catch (err) {
-      console.error("Logout network error", err);
+      console.error("Logout network error:", err);
     } finally {
-      // Always redirect to login page after logout attempt
-      router.replace("/admin");
+      // redirect to login page after logout attempt
+      // (use /admin/login to show the admin login screen)
+      router.replace("/admin/login");
     }
   }
 
@@ -56,27 +53,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <nav style={{ display: "flex", flexDirection: "column", gap: 14, paddingLeft: 12 }}>
-          <Link href="/admin/home">
-            <a style={{ fontSize: 14, color: "#111", textDecoration: "none" }}>Dashboard</a>
-          </Link>
-          <Link href="/admin/orders">
-            <a style={{ fontSize: 14, color: "#111", textDecoration: "none" }}>Orders</a>
-          </Link>
-          <Link href="/admin/restros">
-            <a style={{ fontSize: 14, color: "#111", textDecoration: "none" }}>Restro Master</a>
-          </Link>
-          <Link href="/admin/menu">
-            <a style={{ fontSize: 14, color: "#111", textDecoration: "none" }}>Menu</a>
-          </Link>
-          <Link href="/admin/trains">
-            <a style={{ fontSize: 14, color: "#111", textDecoration: "none" }}>Trains</a>
-          </Link>
-          <Link href="/admin/stations">
-            <a style={{ fontSize: 14, color: "#111", textDecoration: "none" }}>Stations</a>
-          </Link>
-          <Link href="/admin/users">
-            <a style={{ fontSize: 14, color: "#111", textDecoration: "none" }}>Users</a>
-          </Link>
+          <Link href="/admin/home" className="admin-nav-link">Dashboard</Link>
+          <Link href="/admin/orders" className="admin-nav-link">Orders</Link>
+          <Link href="/admin/restros" className="admin-nav-link">Restro Master</Link>
+          <Link href="/admin/menu" className="admin-nav-link">Menu</Link>
+          <Link href="/admin/trains" className="admin-nav-link">Trains</Link>
+          <Link href="/admin/stations" className="admin-nav-link">Stations</Link>
+          <Link href="/admin/users" className="admin-nav-link">Users</Link>
 
           <div style={{ marginTop: 20 }}>
             <button
@@ -116,7 +99,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div style={{ fontWeight: 700, fontSize: 18 }}>RailEats Admin</div>
 
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-            {/* show admin email (replace with real user data if available) */}
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 13, color: "#111" }}>ops@raileats.in</div>
               <button
@@ -139,6 +121,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Page content */}
         <section style={{ padding: 24, flex: 1 }}>{children}</section>
       </main>
+
+      <style jsx>{`
+        .admin-nav-link {
+          display: block;
+          font-size: 14px;
+          color: #111;
+          text-decoration: none;
+          padding: 4px 8px;
+        }
+        .admin-nav-link:hover {
+          background: #f5f5f5;
+          border-radius: 6px;
+        }
+      `}</style>
     </div>
   );
 }
