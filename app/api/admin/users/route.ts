@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   }
 }
 
-// ✅ POST - add user (server-side hash -> password_hash + auto user_id)
+// ✅ POST - add user (server-side hash -> password_hash + auto user_id using seq fallback)
 export async function POST(request: Request) {
   try {
     const body: ReqUserBody = await request.json();
@@ -59,23 +59,50 @@ export async function POST(request: Request) {
       );
     }
 
-    // 🔹 Step 1 — Generate next user_id
-    let nextUserId = 101; // default start
-    const { data: rows, error: userErr } = await supabaseServer
-      .from("users")
-      .select("user_id")
-      .order("user_id", { ascending: false })
-      .limit(1);
+    // ---------------------------
+    //  Determine next user_id (numeric):
+    //  Prefer numeric max of seq; fallback: numeric parse of user_id column.
+    // ---------------------------
+    let nextUserIdNum = 101; // default start
 
-    if (!userErr && rows && rows.length > 0 && rows[0].user_id) {
-      const last = parseInt(rows[0].user_id, 10);
-      if (!isNaN(last)) nextUserId = last + 1;
+    try {
+      // try max seq first (numeric)
+      const { data: seqRows, error: seqErr } = await supabaseServer
+        .from("users")
+        .select("seq")
+        .order("seq", { ascending: false })
+        .limit(1);
+
+      if (!seqErr && seqRows && seqRows.length > 0 && seqRows[0].seq != null) {
+        const maxSeq = Number(seqRows[0].seq);
+        if (!Number.isNaN(maxSeq)) {
+          nextUserIdNum = maxSeq + 1;
+        }
+      } else {
+        // fallback - read user_id values and compute numeric max
+        const { data: uids, error: uidErr } = await supabaseServer
+          .from("users")
+          .select("user_id")
+          .not("user_id", "is", null)
+          .limit(2000); // increase if you have >2k users
+
+        if (!uidErr && Array.isArray(uids) && uids.length > 0) {
+          let max = 0;
+          for (const r of uids) {
+            const v = r.user_id;
+            const n = Number(String(v).trim());
+            if (!Number.isNaN(n) && n > max) max = n;
+          }
+          if (max > 0) nextUserIdNum = max + 1;
+        }
+      }
+    } catch (e) {
+      console.warn("next user id calc failed, using default", e);
     }
 
-    // 🔹 Step 2 — Hash password
+    // Hash password
     const password_hash = await bcrypt.hash(password, 10);
 
-    // 🔹 Step 3 — Prepare insert object
     const insertObj: any = {
       name,
       user_type,
@@ -85,10 +112,10 @@ export async function POST(request: Request) {
       email: email ?? null,
       dob: dob ?? null,
       photo_url: photo_url ?? null,
-      user_id: nextUserId.toString(), // auto increment user_id
+      user_id: String(nextUserIdNum),
+      // do NOT set seq here — DB should handle seq via sequence/default
     };
 
-    // 🔹 Step 4 — Insert (let DB handle seq auto)
     const { data, error } = await supabaseServer
       .from("users")
       .insert([insertObj])
