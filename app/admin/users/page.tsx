@@ -180,12 +180,8 @@ export default function UsersPage() {
                       <span>{u.status ? "Active" : "Blocked"}</span>
                     </label>
                   </td>
-                  <td className="text-sm p-3">
-                    {u.created_at ? new Date(u.created_at).toLocaleString() : ""}
-                  </td>
-                  <td className="text-sm p-3">
-                    {u.updated_at ? new Date(u.updated_at).toLocaleString() : ""}
-                  </td>
+                  <td className="text-sm p-3">{u.created_at ? new Date(u.created_at).toLocaleString() : ""}</td>
+                  <td className="text-sm p-3">{u.updated_at ? new Date(u.updated_at).toLocaleString() : ""}</td>
                   <td className="p-3">
                     <button
                       className="p-2 rounded border"
@@ -200,18 +196,8 @@ export default function UsersPage() {
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
                       >
-                        <path
-                          d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"
-                          stroke="#333"
-                          strokeWidth="0"
-                          fill="#333"
-                        />
-                        <path
-                          d="M20.71 7.04a1.003 1.003 0 0 0 0-1.41l-2.34-2.34a1.003 1.003 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-                          stroke="#333"
-                          strokeWidth="0"
-                          fill="#333"
-                        />
+                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="#333" strokeWidth="0" fill="#333"/>
+                        <path d="M20.71 7.04a1.003 1.003 0 0 0 0-1.41l-2.34-2.34a1.003 1.003 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" stroke="#333" strokeWidth="0" fill="#333"/>
                       </svg>
                     </button>
                   </td>
@@ -355,19 +341,15 @@ function EditUserForm({
     return true;
   }
 
-  // <-- Fixed uploadPhotoIfAny for EditUserForm -->
-  async function uploadPhotoIfAny() {
+  // ===== server upload version (Edit) =====
+  async function uploadPhotoIfAny(): Promise<string | null> {
     if (!photoFile) return null;
-    const filename = `user-photos/${Date.now()}_${Math.random().toString(36).slice(2)}_${photoFile.name}`;
-    const { data, error } = await supabaseClient.storage
-      .from("user-photos")
-      .upload(filename, photoFile, { upsert: false });
-    if (error) throw error;
-
-    // getPublicUrl returns { data: { publicUrl: string } }
-    const publicRes = supabaseClient.storage.from("user-photos").getPublicUrl(data.path);
-    const publicUrl = (publicRes as any)?.data?.publicUrl ?? null;
-    return publicUrl;
+    const fd = new FormData();
+    fd.append("file", photoFile);
+    const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.message || "Photo upload failed");
+    return j.url ?? null;
   }
 
   async function handleSave() {
@@ -597,21 +579,15 @@ function AddUserForm({
     return true;
   }
 
-  // <-- Fixed uploadPhotoIfAny for AddUserForm -->
+  // ===== server upload version (Add) =====
   async function uploadPhotoIfAny(): Promise<string | null> {
     if (!photoFile) return null;
-    const filename = `user-photos/${Date.now()}_${Math.random().toString(36).slice(2)}_${photoFile.name}`;
-    const { data, error } = await supabaseClient.storage.from("user-photos").upload(filename, photoFile, {
-      upsert: false,
-    });
-    if (error) {
-      console.error("upload error", error);
-      throw new Error("Photo upload failed");
-    }
-
-    const publicRes = supabaseClient.storage.from("user-photos").getPublicUrl(data.path);
-    const publicUrl = (publicRes as any)?.data?.publicUrl ?? null;
-    return publicUrl;
+    const fd = new FormData();
+    fd.append("file", photoFile);
+    const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.message || "Photo upload failed");
+    return j.url ?? null;
   }
 
   async function handleAdd() {
