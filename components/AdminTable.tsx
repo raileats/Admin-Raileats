@@ -24,9 +24,8 @@ type AdminTableProps<T> = {
   showAddButton?: { label?: string; onClick?: () => void };
   loading?: boolean;
   compact?: boolean;
-  /** visual tweaks */
-  highlightStriped?: boolean; // zebra style
-  rowHoverShadow?: boolean; // subtle elevation on hover
+  highlightStriped?: boolean;
+  rowHoverShadow?: boolean;
 };
 
 function StatusPill({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "success" | "info" | "danger" | "warning" }) {
@@ -87,7 +86,6 @@ export default function AdminTable<T extends { id?: string | number }>({
     if (onSearch) onSearch(v);
   }
 
-  // small helper to render avatar cluster (if column render not provided but data has avatars array)
   const renderAvatarCluster = (row: any) => {
     const avatars: string[] = row?.avatars ?? row?.members ?? [];
     if (!avatars || !avatars.length) return null;
@@ -112,10 +110,10 @@ export default function AdminTable<T extends { id?: string | number }>({
   };
 
   return (
-    <section className="p-6 bg-white rounded-2xl shadow-sm">
+    <section className="w-full max-w-full bg-white rounded-2xl shadow-sm">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
-        <div>
+      <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="min-w-0">
           {title && <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 leading-tight">{title}</h1>}
           {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
 
@@ -128,7 +126,7 @@ export default function AdminTable<T extends { id?: string | number }>({
                 value={query}
                 onChange={handleSearchChange}
                 placeholder={searchPlaceholder}
-                className="border border-gray-200 rounded-full px-4 py-2 w-72 pr-10 focus:outline-none focus:ring-2 focus:ring-yellow-300 placeholder:text-gray-400"
+                className="border border-gray-200 rounded-full px-4 py-2 w-56 sm:w-72 md:w-96 max-w-full pr-10 focus:outline-none focus:ring-2 focus:ring-yellow-300 placeholder:text-gray-400"
               />
               <svg className="w-4 h-4 text-gray-400 absolute right-3 top-2.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -140,7 +138,7 @@ export default function AdminTable<T extends { id?: string | number }>({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 ml-auto">
+        <div className="flex items-center gap-3 ml-auto pr-6">
           {showAddButton && (
             <button
               onClick={() => showAddButton.onClick?.()}
@@ -153,8 +151,8 @@ export default function AdminTable<T extends { id?: string | number }>({
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto border border-gray-100 rounded-lg">
-        <table className="min-w-full table-fixed">
+      <div className="overflow-x-auto border-t border-gray-100">
+        <table className="min-w-full w-full table-fixed">
           <thead className="bg-white">
             <tr className="text-left text-xs sm:text-sm text-gray-500">
               {columns.map((col) => (
@@ -179,7 +177,6 @@ export default function AdminTable<T extends { id?: string | number }>({
           </thead>
 
           <tbody>
-            {/* loading */}
             {loading ? (
               <tr>
                 <td colSpan={columns.length + (actions ? 1 : 0)} className="py-8 px-4 text-center text-gray-500">
@@ -209,15 +206,12 @@ export default function AdminTable<T extends { id?: string | number }>({
                         style={col.width ? ({ width: col.width } as React.CSSProperties) : undefined}
                       >
                         <div className="flex items-center gap-3">
-                          {/* If the column render is provided use it; else try simple heuristics */}
                           {col.render ? (
                             col.render(row)
                           ) : (
                             (() => {
                               const v = (row as any)[col.key];
-                              // small heuristics: if value is boolean and column key contains 'status' show a pill
                               if ((typeof v === "boolean" || col.key.toLowerCase().includes("status")) && (typeof v === "boolean" || typeof v === "string")) {
-                                // determine tone
                                 let tone: any = "muted";
                                 const sval = typeof v === "boolean" ? (v ? "on" : "off") : String(v).toLowerCase();
                                 if (sval.includes("on") || sval.includes("active") || sval.includes("done") || sval.includes("delivered")) tone = "success";
@@ -226,13 +220,11 @@ export default function AdminTable<T extends { id?: string | number }>({
                                 else tone = "muted";
                                 return <StatusPill tone={tone}>{typeof v === "boolean" ? (v ? "On" : "Off") : v ?? "-"}</StatusPill>;
                               }
-                              // if column name suggests avatars or members render cluster
                               if (col.key.toLowerCase().includes("member") || col.key.toLowerCase().includes("avatar") || col.key.toLowerCase().includes("owner")) {
                                 const av = renderAvatarCluster(row);
                                 if (av) return av;
                               }
-                              // default render
-                              return <span className="truncate block max-w-[28rem]">{v ?? "-"}</span>;
+                              return <span className="truncate block max-w-[48rem]">{v ?? "-"}</span>;
                             })()
                           )}
                         </div>
@@ -240,9 +232,7 @@ export default function AdminTable<T extends { id?: string | number }>({
                     ))}
                     {actions && (
                       <td className={`py-${compact ? "2" : "4"} px-4 align-middle`}>
-                        <div className="flex items-center gap-2">
-                          {actions(row)}
-                        </div>
+                        <div className="flex items-center gap-2">{actions(row)}</div>
                       </td>
                     )}
                   </tr>
@@ -254,47 +244,17 @@ export default function AdminTable<T extends { id?: string | number }>({
       </div>
 
       {/* footer / pagination */}
-      <div className="flex items-center justify-between gap-3 mt-4">
+      <div className="px-6 py-3 flex items-center justify-between gap-3 mt-2">
         <div className="text-sm text-gray-600">
           Showing {(page - 1) * pageSize + (total === 0 ? 0 : 1)} - {Math.min(page * pageSize, total)} of {total}
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setPage(1)}
-            disabled={page === 1}
-            aria-label="First page"
-            className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50"
-          >
-            «
-          </button>
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            aria-label="Previous page"
-            className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50"
-          >
-            Prev
-          </button>
-
+          <button onClick={() => setPage(1)} disabled={page === 1} className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50">«</button>
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50">Prev</button>
           <div className="px-3 py-1 border rounded-full bg-white text-sm">{page}</div>
-
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            aria-label="Next page"
-            className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50"
-          >
-            Next
-          </button>
-          <button
-            onClick={() => setPage(totalPages)}
-            disabled={page === totalPages}
-            aria-label="Last page"
-            className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50"
-          >
-            »
-          </button>
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50">Next</button>
+          <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50">»</button>
         </div>
       </div>
     </section>
