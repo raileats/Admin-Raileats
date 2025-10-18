@@ -16,8 +16,7 @@ type AdminTableProps<T> = {
   subtitle?: string;
   data: T[];
   columns: Column<T>[];
-  searchPlaceholder?: string;
-  onSearch?: (q: string) => void;
+  // removed built-in search input (use page-level filters instead)
   filters?: React.ReactNode;
   actions?: (row: T) => React.ReactNode;
   pageSize?: number;
@@ -48,8 +47,6 @@ export default function AdminTable<T extends { id?: string | number }>({
   subtitle,
   data,
   columns,
-  searchPlaceholder = "Search...",
-  onSearch,
   filters,
   actions,
   pageSize = 10,
@@ -59,32 +56,15 @@ export default function AdminTable<T extends { id?: string | number }>({
   highlightStriped = true,
   rowHoverShadow = true,
 }: AdminTableProps<T>) {
-  const [query, setQuery] = useState("");
+  // NO built-in search state here — page-level filters should control data
   const [page, setPage] = useState(1);
 
-  const filtered = useMemo(() => {
-    if (onSearch) return data;
-    const q = query.trim().toLowerCase();
-    if (!q) return data;
-    return data.filter((row) =>
-      Object.values(row)
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [data, query, onSearch]);
+  // data is assumed already filtered by page
+  const filtered = useMemo(() => data, [data]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const pageData = filtered.slice((page - 1) * pageSize, page * pageSize);
-
-  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const v = e.target.value;
-    setQuery(v);
-    setPage(1);
-    if (onSearch) onSearch(v);
-  }
 
   const renderAvatarCluster = (row: any) => {
     const avatars: string[] = row?.avatars ?? row?.members ?? [];
@@ -93,12 +73,7 @@ export default function AdminTable<T extends { id?: string | number }>({
     return (
       <div className="flex items-center -space-x-2">
         {toShow.map((src, i) => (
-          <img
-            key={i}
-            src={src}
-            alt={`a${i}`}
-            className="w-7 h-7 rounded-full border-2 border-white shadow-sm object-cover"
-          />
+          <img key={i} src={src} alt={`a${i}`} className="w-7 h-7 rounded-full border-2 border-white shadow-sm object-cover" />
         ))}
         {avatars.length > 3 && (
           <div className="w-7 h-7 rounded-full bg-gray-100 border-2 border-white text-xs flex items-center justify-center text-gray-600 font-medium">
@@ -111,39 +86,17 @@ export default function AdminTable<T extends { id?: string | number }>({
 
   return (
     <section className="w-full max-w-full bg-white rounded-2xl shadow-sm">
-      {/* Header */}
+      {/* Header: title/subtitle and optional filters (no built-in search) */}
       <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="min-w-0">
           {title && <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 leading-tight">{title}</h1>}
           {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
-
-          <div className="mt-3 flex items-center gap-3">
-            <label htmlFor="admintable-search" className="sr-only">Search</label>
-            <div className="relative">
-              <input
-                id="admintable-search"
-                aria-label="Search table"
-                value={query}
-                onChange={handleSearchChange}
-                placeholder={searchPlaceholder}
-                className="border border-gray-200 rounded-full px-4 py-2 w-56 sm:w-72 md:w-96 max-w-full pr-10 focus:outline-none focus:ring-2 focus:ring-yellow-300 placeholder:text-gray-400"
-              />
-              <svg className="w-4 h-4 text-gray-400 absolute right-3 top-2.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-
-            {filters}
-          </div>
+          <div className="mt-3">{filters}</div>
         </div>
 
         <div className="flex items-center gap-3 ml-auto pr-6">
           {showAddButton && (
-            <button
-              onClick={() => showAddButton.onClick?.()}
-              className="inline-flex items-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-yellow-200"
-            >
+            <button onClick={() => showAddButton.onClick?.()} className="inline-flex items-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-full shadow-sm">
               {showAddButton.label ?? "+ Add"}
             </button>
           )}
@@ -156,11 +109,7 @@ export default function AdminTable<T extends { id?: string | number }>({
           <thead className="bg-white">
             <tr className="text-left text-xs sm:text-sm text-gray-500">
               {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className={`py-3 px-4 font-medium tracking-wide ${col.className ?? ""}`}
-                  style={col.width ? ({ width: col.width } as React.CSSProperties) : undefined}
-                >
+                <th key={col.key} className={`py-3 px-4 font-medium tracking-wide ${col.className ?? ""}`} style={col.width ? ({ width: col.width } as React.CSSProperties) : undefined}>
                   <div className="flex items-center gap-2">
                     <span>{col.title}</span>
                     {col.sortable && (
@@ -195,16 +144,9 @@ export default function AdminTable<T extends { id?: string | number }>({
                 const zebra = highlightStriped ? (globalIndex % 2 === 0 ? "bg-white" : "bg-gray-50") : "bg-white";
                 const hoverClass = rowHoverShadow ? "hover:shadow-sm hover:bg-white" : "hover:bg-gray-100";
                 return (
-                  <tr
-                    key={(row.id ?? globalIndex).toString()}
-                    className={`align-top transition-colors ${zebra} ${hoverClass}`}
-                  >
+                  <tr key={(row.id ?? globalIndex).toString()} className={`align-top transition-colors ${zebra} ${hoverClass}`}>
                     {columns.map((col) => (
-                      <td
-                        key={col.key}
-                        className={`py-${compact ? "2" : "4"} px-4 align-middle text-sm text-gray-700`}
-                        style={col.width ? ({ width: col.width } as React.CSSProperties) : undefined}
-                      >
+                      <td key={col.key} className={`py-${compact ? "2" : "4"} px-4 align-middle text-sm text-gray-700`} style={col.width ? ({ width: col.width } as React.CSSProperties) : undefined}>
                         <div className="flex items-center gap-3">
                           {col.render ? (
                             col.render(row)
