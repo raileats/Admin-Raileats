@@ -1,3 +1,4 @@
+// app/admin/users/page.tsx
 "use client";
 import React, { useEffect, useState } from "react";
 import Modal from "react-modal";
@@ -11,8 +12,7 @@ type User = {
   status: boolean;
   created_at: string | null;
   updated_at: string | null;
-  // optional numeric seq if backend provides
-  seq?: number;
+  seq?: number; // optional numeric sequence from backend
 };
 
 export default function UsersPage() {
@@ -37,6 +37,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType]);
 
   async function fetchUsers() {
@@ -46,12 +47,9 @@ export default function UsersPage() {
       if (query) params.set("q", query);
       if (filterType) params.set("user_type", filterType);
       const res = await fetch(`/api/admin/users?${params.toString()}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.message || "Failed");
-      // ensure stable order
-      const data = (json.users || []).map((u: User, idx: number) => ({
-        ...u,
-      }));
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.message || "Failed to fetch users");
+      const data = (json.users || []).map((u: User, idx: number) => ({ ...u }));
       setUsers(data);
     } catch (err) {
       console.error("fetchUsers error:", err);
@@ -68,10 +66,9 @@ export default function UsersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: !u.status }),
       });
-      if (!res.ok) {
-        const j = await res.json().catch(()=>({}));
-        throw new Error(j?.message || "Failed");
-      }
+      const json = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(json?.message || "Failed to update status");
+      // refresh table
       fetchUsers();
     } catch (err: any) {
       alert("Failed to change status: " + (err.message || err));
@@ -184,8 +181,13 @@ export default function UsersPage() {
                       className="p-2 rounded border"
                       onClick={() => setEditUser(u)}
                       title="Edit"
+                      aria-label={`Edit ${u.name}`}
                     >
-                      ✏️
+                      {/* Simple SVG pencil icon */}
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" stroke="#333" strokeWidth="0" fill="#333"/>
+                        <path d="M20.71 7.04a1.003 1.003 0 0 0 0-1.41l-2.34-2.34a1.003 1.003 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" stroke="#333" strokeWidth="0" fill="#333"/>
+                      </svg>
                     </button>
                   </td>
                 </tr>
@@ -305,14 +307,12 @@ function EditUserForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      if (!res.ok) {
-        const j = await res.json().catch(()=>({}));
-        throw new Error(j.message || "Failed");
-      }
+      const j = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(j.message || "Failed");
       alert("User updated!");
       onClose(true);
     } catch (err: any) {
-      alert("Error: " + err.message);
+      alert("Error: " + (err.message || err));
     } finally {
       setSaving(false);
     }
@@ -402,7 +402,7 @@ function AddUserForm({
       try {
         const res = await fetch("/api/admin/users/next-id");
         if (!res.ok) throw new Error("no endpoint");
-        const j = await res.json();
+        const j = await res.json().catch(()=>({}));
         if (j?.nextId) setSuggestedSeq(j.nextId);
         else setSuggestedSeq(existingCount + 1);
       } catch (e) {
@@ -427,14 +427,13 @@ function AddUserForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) {
-        const j = await res.json().catch(()=>({}));
-        throw new Error(j.message || "Failed");
-      }
+      const j = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(j.message || "Failed");
       alert("User added!");
+      // refresh list in parent
       onClose(true);
     } catch (err: any) {
-      alert("Error: " + err.message);
+      alert("Error: " + (err.message || err));
     } finally {
       setSaving(false);
     }
