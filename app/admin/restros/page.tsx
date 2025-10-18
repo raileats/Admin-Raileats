@@ -1,4 +1,3 @@
-// app/admin/restros/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -35,7 +34,6 @@ export default function RestroMasterPage(): JSX.Element {
 
   useEffect(() => {
     fetchRestros();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchRestros(filters?: { [k: string]: any }) {
@@ -144,7 +142,7 @@ export default function RestroMasterPage(): JSX.Element {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `restro_master_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`;
+      a.download = `restro_master_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -188,12 +186,12 @@ export default function RestroMasterPage(): JSX.Element {
   return (
     <main className="mx-6 my-4 max-w-full">
       <div className="w-full">
-        {/* Page header area */}
+        {/* Page header */}
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-gray-800">Restro Master</h2>
         </div>
 
-        {/* Search / actions form (kept above table for clarity) */}
+        {/* Search filters */}
         <form onSubmit={onSearchForm} className="bg-white rounded-xl shadow-sm p-4 mb-4">
           <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
             <input placeholder="Restro Code" value={restroCode} onChange={(e) => setRestroCode(e.target.value)} className="px-3 py-2 border rounded-lg" />
@@ -206,15 +204,19 @@ export default function RestroMasterPage(): JSX.Element {
           </div>
 
           <div className="flex justify-end gap-3 mt-3">
-            <button type="button" onClick={onClear} className="px-3 py-2 border rounded-lg bg-white">Clear</button>
-            <button type="submit" className="px-4 py-2 bg-sky-500 text-white rounded-lg">Search</button>
+            <button type="button" onClick={onClear} className="px-3 py-2 border rounded-lg bg-white">
+              Clear
+            </button>
+            <button type="submit" className="px-4 py-2 bg-sky-500 text-white rounded-lg">
+              Search
+            </button>
           </div>
         </form>
 
         {/* error */}
         {error && <div className="text-red-600 mb-4">{error}</div>}
 
-        {/* Actions row (Export + Add) */}
+        {/* Export & Add buttons (top of table) */}
         <div className="flex items-center justify-end gap-3 mb-3">
           <button onClick={handleExportAll} disabled={exporting} className="px-4 py-2 bg-sky-500 text-white rounded-lg">
             {exporting ? "Exporting..." : "Download Restro Master"}
@@ -224,7 +226,7 @@ export default function RestroMasterPage(): JSX.Element {
           </button>
         </div>
 
-        {/* AdminTable (fills width) */}
+        {/* AdminTable (yellow add removed) */}
         <AdminTable
           title=""
           subtitle=""
@@ -233,7 +235,6 @@ export default function RestroMasterPage(): JSX.Element {
           loading={loading}
           pageSize={10}
           searchPlaceholder="Search restro..."
-          showAddButton={{ label: "+ Add New Restro", onClick: () => alert("Add restro") }}
           actions={(row) => (
             <button onClick={() => openEditRoute(row.RestroCode ?? row.RestroId)} className="px-3 py-1 rounded-md bg-amber-400 text-black">
               Edit
