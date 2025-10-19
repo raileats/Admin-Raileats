@@ -22,7 +22,7 @@ export default function BasicInformationTab({ local, updateField, stationDisplay
       </h3>
 
       <div style={{ marginTop: 12 }}>
-        <FormRow cols={3} gap={16}>
+        <FormRow cols={3} gap={16} className="basic-info-row">
           <FormField label="Station">
             <div style={{ padding: 8, borderRadius: 6, background: "#fafafa", border: "1px solid #f0f0f0" }}>
               {stationDisplay || "—"}
@@ -58,7 +58,6 @@ export default function BasicInformationTab({ local, updateField, stationDisplay
           </FormField>
 
           <FormField label="Raileats Status">
-            {/* Toggle slider for On / Off */}
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <Toggle
                 checked={!!local?.Raileats}
@@ -71,7 +70,7 @@ export default function BasicInformationTab({ local, updateField, stationDisplay
           <FormField label="Is IRCTC Approved">
             <Select
               value={local?.IsIrctcApproved ? "1" : "0"}
-              onChange={(v) => updateField("IsIrctcApproved", String(v) === "1")}
+              onChange={(v: string) => updateField("IsIrctcApproved", v === "1")}
               options={[
                 { label: "Yes", value: "1" },
                 { label: "No", value: "0" },
@@ -157,16 +156,7 @@ export default function BasicInformationTab({ local, updateField, stationDisplay
             />
           </FormField>
 
-          <FormField label="FSSAI Number" style={{ display: "none" }}>
-            {/* kept hidden in case you want to restore later */}
-            <input
-              value={local?.FSSAINumber ?? ""}
-              onChange={(e) => updateField("FSSAINumber", e.target.value)}
-              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
-            />
-          </FormField>
-
-          {/* NOTE: FSSAI Expiry Date intentionally removed as requested */}
+          {/* FSSAI fields removed per your request */}
         </FormRow>
       </div>
     </div>
