@@ -39,10 +39,13 @@ export default async function AdminLayout({ children }: Props) {
   }
 
   // Render client-side AdminShell (ssr: false) and pass currentUser
+  // Also pass `requireAuth` so AdminShell (client) can use it to mount AuthGuard if available.
   return (
     <html lang="en">
       <body>
-        <AdminShell currentUser={currentUser}>{children}</AdminShell>
+        <AdminShell currentUser={currentUser} requireAuth={true}>
+          {children}
+        </AdminShell>
       </body>
     </html>
   );
