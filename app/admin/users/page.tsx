@@ -45,18 +45,33 @@ export default function UsersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType]);
 
+  // helper: redirect to login using replace so back-button can't restore protected page
+  function redirectToLogin() {
+    try {
+      window.location.replace("/admin/login");
+    } catch {
+      window.location.href = "/admin/login";
+    }
+  }
+
   async function fetchUsers() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (query) params.set("q", query);
 
-      // <-- only set user_type when a real filter is selected (not "All")
+      // only set user_type when a real filter is selected (not "All")
       if (filterType && filterType !== "All") {
         params.set("user_type", filterType);
       }
 
-      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      const res = await fetch(`/api/admin/users?${params.toString()}`, {
+        credentials: "include",
+      });
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || "Failed to fetch users");
       const data = (json.users || []).map((u: User) => ({ ...u }));
@@ -74,8 +89,13 @@ export default function UsersPage() {
       const res = await fetch(`/api/admin/users/${u.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ status: !u.status }),
       });
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.message || "Failed to update status");
       fetchUsers();
@@ -352,7 +372,7 @@ function EditUserForm({
     if (!photoFile) return null;
     const fd = new FormData();
     fd.append("file", photoFile);
-    const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+    const res = await fetch("/api/admin/upload", { method: "POST", body: fd, credentials: "include" });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.message || "Photo upload failed");
     return j.url ?? null;
@@ -380,8 +400,17 @@ function EditUserForm({
       const res = await fetch(`/api/admin/users/${user.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
+      if (res.status === 401) {
+        try {
+          window.location.replace("/admin/login");
+        } catch {
+          window.location.href = "/admin/login";
+        }
+        return;
+      }
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.message || "Failed");
       alert("User updated!");
@@ -552,7 +581,15 @@ function AddUserForm({
     (async () => {
       setNextIdLoading(true);
       try {
-        const res = await fetch("/api/admin/users/next-id");
+        const res = await fetch("/api/admin/users/next-id", { credentials: "include" });
+        if (res.status === 401) {
+          try {
+            window.location.replace("/admin/login");
+          } catch {
+            window.location.href = "/admin/login";
+          }
+          return;
+        }
         if (!res.ok) throw new Error("no endpoint");
         const j = await res.json().catch(() => ({}));
         if (j?.nextId) setSuggestedSeq(j.nextId);
@@ -590,7 +627,7 @@ function AddUserForm({
     if (!photoFile) return null;
     const fd = new FormData();
     fd.append("file", photoFile);
-    const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+    const res = await fetch("/api/admin/upload", { method: "POST", body: fd, credentials: "include" });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.message || "Photo upload failed");
     return j.url ?? null;
@@ -617,8 +654,17 @@ function AddUserForm({
       const res = await fetch(`/api/admin/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
+      if (res.status === 401) {
+        try {
+          window.location.replace("/admin/login");
+        } catch {
+          window.location.href = "/admin/login";
+        }
+        return;
+      }
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.message || "Failed");
       alert("User added!");
