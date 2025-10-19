@@ -4,6 +4,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import AuthGuard from "@/components/admin/AuthGuard";
 
 type User = {
   id?: string;
@@ -18,19 +19,15 @@ type User = {
 type Props = {
   children: React.ReactNode;
   currentUser?: User;
+  requireAuth?: boolean; // optional prop passed from layout
 };
 
-export default function AdminShell({ children, currentUser }: Props) {
+export default function AdminShell({ children, currentUser, requireAuth = true }: Props) {
   const pathname = usePathname() || "";
 
   // Paths where we DON'T want to show admin chrome
   const hideFor = ["/admin/login", "/admin/login/"];
   const hide = hideFor.some((p) => pathname === p || pathname.startsWith(p));
-
-  if (hide) {
-    // On login page: render children only (no sidebar/topbar)
-    return <>{children}</>;
-  }
 
   // Shared style for logout links to match previous button look
   const logoutLinkStyle: React.CSSProperties = {
@@ -47,7 +44,29 @@ export default function AdminShell({ children, currentUser }: Props) {
     fontSize: 14,
   };
 
-  return (
+  // Use POST logout so cookie clearing happens and we can replace history
+  const handleLogout = async (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch (err) {
+      console.error("Logout failed", err);
+    } finally {
+      // replace to avoid back-button reopening protected page
+      try {
+        window.location.replace("/admin/login");
+      } catch {
+        window.location.href = "/admin/login";
+      }
+    }
+  };
+
+  if (hide) {
+    // On login page: render children only (no sidebar/topbar)
+    return <>{children}</>;
+  }
+
+  const shell = (
     <div style={{ display: "flex", minHeight: "100vh", background: "#fafafa" }}>
       {/* Sidebar */}
       <aside
@@ -88,8 +107,14 @@ export default function AdminShell({ children, currentUser }: Props) {
           </Link>
 
           <div style={{ marginTop: 20 }}>
-            {/* Using a simple GET link for logout so browser follows redirect automatically */}
-            <a href="/api/auth/logout" style={logoutLinkStyle} aria-label="Logout">
+            {/* Use a button-like element that calls POST logout */}
+            <a
+              href="#logout"
+              onClick={handleLogout}
+              style={logoutLinkStyle}
+              role="button"
+              aria-label="Logout"
+            >
               Logout
             </a>
           </div>
@@ -121,8 +146,12 @@ export default function AdminShell({ children, currentUser }: Props) {
                     {currentUser.name ?? currentUser.mobile ?? currentUser.email}
                   </div>
                   <div style={{ fontSize: 12 }}>
-                    {/* Replace the form-based logout with a GET link for reliability */}
-                    <a href="/api/auth/logout" style={{ fontSize: 12, color: "#0070f3", textDecoration: "underline" }}>
+                    {/* Use fetch-based logout to clear cookies and replace history */}
+                    <a
+                      href="#logout"
+                      onClick={handleLogout}
+                      style={{ fontSize: 12, color: "#0070f3", textDecoration: "underline" }}
+                    >
                       Logout
                     </a>
                   </div>
@@ -157,4 +186,12 @@ export default function AdminShell({ children, currentUser }: Props) {
       </main>
     </div>
   );
+
+  // If requireAuth is true, wrap shell with AuthGuard so session is verified and inactivity handled.
+  if (requireAuth) {
+    return <AuthGuard>{shell}</AuthGuard>;
+  }
+
+  // otherwise render shell directly (useful for pages that want custom behavior)
+  return shell;
 }
