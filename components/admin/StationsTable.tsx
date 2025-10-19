@@ -3,19 +3,24 @@
 import React, { useEffect, useState } from "react";
 
 /**
- * HEADERS: now an array of objects { key, title, width? }
- * Titles include spaces for wrapped labels (e.g. "Station Id").
- * Width is optional (CSS width string) to suggest column width.
+ * HEADERS: keys used to read fields from API result.
+ * title: display label in header / edit form.
+ * width optional: hint for column width.
  */
 const HEADERS: { key: string; title: string; width?: string }[] = [
   { key: "StationId", title: "Station Id", width: "90px" },
   { key: "StationName", title: "Station Name" },
   { key: "StationCode", title: "Station Code", width: "100px" },
+  { key: "Category", title: "Category", width: "90px" },
   { key: "EcatRank", title: "Ecat Rank", width: "80px" },
+  { key: "Division", title: "Division", width: "140px" },
+  { key: "RailwayZone", title: "Railway Zone", width: "110px" },
   { key: "EcatZone", title: "Ecat Zone", width: "90px" },
+  { key: "District", title: "District" },
   { key: "State", title: "State", width: "140px" },
   { key: "Lat", title: "Lat", width: "120px" },
   { key: "Long", title: "Long", width: "120px" },
+  { key: "Address", title: "Address" },
   { key: "ReGroup", title: "Re Group", width: "90px" },
 ];
 
@@ -29,6 +34,17 @@ function getField(obj: any, name: string) {
   return undefined;
 }
 
+/** helper to build Supabase public storage URL for StationImage,
+ * expects NEXT_PUBLIC_SUPABASE_URL env var like https://xyz.supabase.co
+ */
+function stationImageUrlFor(code?: string) {
+  if (!code) return null;
+  const base = (process?.env?.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
+  if (!base || !base.startsWith("http")) return null;
+  // bucket name: StationImage, file pattern: StationImage_<CODE>.png
+  return `${base}/storage/v1/object/public/StationImage/StationImage_${encodeURIComponent(String(code))}.png`;
+}
+
 export default function StationsTable() {
   const [stations, setStations] = useState<any[]>([]);
   const [stationId, setStationId] = useState("");
@@ -39,8 +55,9 @@ export default function StationsTable() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Build q param by combining fields — backend likely expects q
   function buildQ() {
-    const parts = [];
+    const parts: string[] = [];
     if (stationId.trim()) parts.push(stationId.trim());
     if (stationName.trim()) parts.push(stationName.trim());
     if (stationCode.trim()) parts.push(stationCode.trim());
@@ -53,11 +70,13 @@ export default function StationsTable() {
     try {
       const url = new URL("/api/stations", location.origin);
 
-      if (typeof overrideSearch === "string") {
-        if (overrideSearch) url.searchParams.set("q", overrideSearch);
+      // If override provided, send it as q
+      if (typeof overrideSearch === "string" && overrideSearch.length > 0) {
+        url.searchParams.set("q", overrideSearch);
       } else {
         const q = buildQ();
         if (q) url.searchParams.set("q", q);
+        // also send explicit params in case backend supports them:
         if (stationId.trim()) url.searchParams.set("stationId", stationId.trim());
         if (stationName.trim()) url.searchParams.set("stationName", stationName.trim());
         if (stationCode.trim()) url.searchParams.set("stationCode", stationCode.trim());
@@ -70,6 +89,7 @@ export default function StationsTable() {
         setStations([]);
         setError(json?.error ?? "Failed to load stations");
       } else {
+        // ensure array
         setStations(Array.isArray(json) ? json : []);
       }
     } catch (e: any) {
@@ -86,11 +106,37 @@ export default function StationsTable() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // nicer toggle switch component (pure css)
+  function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+    return (
+      <button
+        aria-pressed={checked}
+        onClick={() => onChange(!checked)}
+        className={`w-11 h-6 rounded-full p-0.5 flex items-center transition-colors ${checked ? "bg-green-500" : "bg-gray-300"}`}
+        title={checked ? "Active" : "Inactive"}
+        style={{ outline: "none", border: "none" }}
+      >
+        <div
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 999,
+            background: "white",
+            transform: checked ? "translateX(20px)" : "translateX(0px)",
+            transition: "transform 150ms ease",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+          }}
+        />
+      </button>
+    );
+  }
+
   async function toggleActive(station: any) {
     const id = getField(station, "StationId") ?? getField(station, "stationid") ?? station.id;
     const current = getField(station, "is_active") ?? getField(station, "IsActive") ?? true;
     const next = !current;
 
+    // optimistic update
     setStations((prev) =>
       prev.map((s) => {
         const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
@@ -108,6 +154,7 @@ export default function StationsTable() {
       const json = await res.json();
       if (!res.ok) {
         console.error("toggle update failed", json);
+        // rollback
         setStations((prev) =>
           prev.map((s) => {
             const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
@@ -116,6 +163,7 @@ export default function StationsTable() {
           })
         );
       } else {
+        // merge server response
         setStations((prev) =>
           prev.map((s) => {
             const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
@@ -130,16 +178,12 @@ export default function StationsTable() {
   }
 
   function openEdit(station: any) {
-    const editable = {
-      StationId: getField(station, "StationId") ?? getField(station, "stationid") ?? station.id,
-      StationName: getField(station, "StationName") ?? getField(station, "stationname") ?? "",
-      StationCode: getField(station, "StationCode") ?? getField(station, "stationcode") ?? "",
-      Category: getField(station, "Category") ?? getField(station, "category") ?? "",
-      District: getField(station, "District") ?? getField(station, "district") ?? "",
-      State: getField(station, "State") ?? getField(station, "state") ?? "",
-      Address: getField(station, "Address") ?? getField(station, "address") ?? "",
-      is_active: getField(station, "is_active") ?? getField(station, "IsActive") ?? true,
-    };
+    // create editable object containing all keys from HEADERS + is_active
+    const editable: any = {};
+    for (const h of HEADERS) {
+      editable[h.key] = getField(station, h.key) ?? "";
+    }
+    editable.is_active = getField(station, "is_active") ?? getField(station, "IsActive") ?? true;
     setEditing(editable);
   }
 
@@ -147,15 +191,14 @@ export default function StationsTable() {
     if (!editing) return;
     setSaving(true);
     const id = editing.StationId;
-    const payload = {
-      StationName: editing.StationName,
-      StationCode: editing.StationCode,
-      Category: editing.Category,
-      District: editing.District,
-      State: editing.State,
-      Address: editing.Address,
-      is_active: !!editing.is_active,
-    };
+    // Only send editable fields (exclude StationId/StationCode/StationName if they are read-only)
+    const payload: any = {};
+    for (const h of HEADERS) {
+      if (["StationId", "StationCode", "StationName"].includes(h.key)) continue; // don't update these
+      payload[h.key] = editing[h.key];
+    }
+    payload.is_active = !!editing.is_active;
+
     try {
       const res = await fetch(`/api/stations/${id}`, {
         method: "PATCH",
@@ -192,10 +235,9 @@ export default function StationsTable() {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-white rounded-xl shadow-sm p-6">
+      <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold">Stations Management</h3>
-        <div />
       </div>
 
       {/* filters */}
@@ -206,10 +248,16 @@ export default function StationsTable() {
         }}
         className="mb-4"
       >
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
             <label className="text-sm text-gray-600 mb-1 block">Search by Station ID</label>
-            <input value={stationId} onChange={(e) => setStationId(e.target.value)} placeholder="Station ID" className="search-pill-sm" />
+            <input
+              value={stationId}
+              onChange={(e) => setStationId(e.target.value)}
+              placeholder="Station ID"
+              className="search-pill-sm"
+              // when user presses Enter in this field, the form submits
+            />
           </div>
 
           <div>
@@ -277,12 +325,15 @@ export default function StationsTable() {
                         {String(getField(s, h.key) ?? "")}
                       </td>
                     ))}
+
+                    {/* Active toggle */}
                     <td className="px-3 py-2 border">
-                      <label className="inline-flex items-center cursor-pointer">
-                        <input type="checkbox" checked={!!active} onChange={() => toggleActive(s)} className="mr-2" />
+                      <div className="flex items-center gap-3">
+                        <Toggle checked={!!active} onChange={() => toggleActive(s)} />
                         <span className="text-sm">{active ? "On" : "Off"}</span>
-                      </label>
+                      </div>
                     </td>
+
                     <td className="px-3 py-2 border">
                       <button onClick={() => openEdit(s)} className="mr-2 px-3 py-1 bg-amber-400 rounded text-sm">
                         Edit
@@ -298,39 +349,75 @@ export default function StationsTable() {
 
       {/* Edit modal */}
       {editing && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
-          <div className="bg-white p-6 rounded w-[90%] max-w-2xl">
-            <h3 className="text-lg font-semibold mb-4">Edit Station {editing.StationId}</h3>
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50 p-4">
+          <div className="bg-white p-6 rounded w-full max-w-4xl overflow-auto" style={{ maxHeight: "90vh" }}>
+            <div className="flex items-start justify-between">
+              <h3 className="text-lg font-semibold mb-2">Edit Station {editing.StationId}</h3>
+              <div className="text-sm text-gray-500">Station Code: <strong>{editing.StationCode}</strong></div>
+            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <label className="col-span-2">
-                <div className="text-sm">Station Name</div>
-                <input value={editing.StationName} onChange={(e) => setEditing({ ...editing, StationName: e.target.value })} className="w-full border p-2 rounded" />
-              </label>
-              <label>
-                <div className="text-sm">Station Code</div>
-                <input value={editing.StationCode} onChange={(e) => setEditing({ ...editing, StationCode: e.target.value })} className="w-full border p-2 rounded" />
-              </label>
-              <label>
-                <div className="text-sm">Category</div>
-                <input value={editing.Category} onChange={(e) => setEditing({ ...editing, Category: e.target.value })} className="w-full border p-2 rounded" />
-              </label>
-              <label className="col-span-2">
-                <div className="text-sm">Address</div>
-                <input value={editing.Address} onChange={(e) => setEditing({ ...editing, Address: e.target.value })} className="w-full border p-2 rounded" />
-              </label>
-              <label>
-                <div className="text-sm">District</div>
-                <input value={editing.District} onChange={(e) => setEditing({ ...editing, District: e.target.value })} className="w-full border p-2 rounded" />
-              </label>
-              <label>
-                <div className="text-sm">State</div>
-                <input value={editing.State} onChange={(e) => setEditing({ ...editing, State: e.target.value })} className="w-full border p-2 rounded" />
-              </label>
-              <label className="col-span-2 flex items-center gap-3">
-                <input type="checkbox" checked={!!editing.is_active} onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })} />
-                <div className="text-sm">Active</div>
-              </label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Left: image preview */}
+              <div className="col-span-1">
+                {editing.StationCode ? (
+                  <img
+                    src={stationImageUrlFor(editing.StationCode) ?? ""}
+                    alt={editing.StationCode}
+                    onError={(e) => {
+                      // hide broken image
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                    className="w-full h-48 object-contain rounded border"
+                  />
+                ) : (
+                  <div className="w-full h-48 bg-gray-50 rounded border flex items-center justify-center text-sm text-gray-400">
+                    No image
+                  </div>
+                )}
+                <div className="mt-2 text-xs text-gray-500">Image loaded from storage path: <code>StationImage/StationImage_{editing.StationCode}.png</code></div>
+              </div>
+
+              {/* Right: form fields */}
+              <div className="col-span-2">
+                <div className="grid grid-cols-2 gap-3">
+                  {/* StationId (read-only) */}
+                  <label className="col-span-2">
+                    <div className="text-sm">Station Id</div>
+                    <input value={editing.StationId} readOnly className="w-full border p-2 rounded bg-gray-50" />
+                  </label>
+
+                  {/* Station Name (read-only) */}
+                  <label className="col-span-2">
+                    <div className="text-sm">Station Name</div>
+                    <input value={editing.StationName} readOnly className="w-full border p-2 rounded bg-gray-50" />
+                  </label>
+
+                  {/* Station Code (read-only) */}
+                  <label>
+                    <div className="text-sm">Station Code</div>
+                    <input value={editing.StationCode} readOnly className="w-full border p-2 rounded bg-gray-50" />
+                  </label>
+
+                  {/* Editable fields — loop HEADERS and show inputs for editable ones */}
+                  {HEADERS.filter(h => !["StationId","StationName","StationCode"].includes(h.key)).map(h => (
+                    <label key={h.key}>
+                      <div className="text-sm">{h.title}</div>
+                      <input
+                        value={editing[h.key] ?? ""}
+                        onChange={(e) => setEditing({ ...editing, [h.key]: e.target.value })}
+                        className="w-full border p-2 rounded"
+                      />
+                    </label>
+                  ))}
+
+                  {/* is_active toggle within form */}
+                  <label className="col-span-2 flex items-center gap-3 mt-2">
+                    <div className="text-sm">Active</div>
+                    <Toggle checked={!!editing.is_active} onChange={(v) => setEditing({ ...editing, is_active: v })} />
+                    <span className="text-sm">{editing.is_active ? "On" : "Off"}</span>
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
