@@ -1,5 +1,8 @@
 // components/restro-edit/BasicInformationTab.tsx
 import React from "react";
+import UI from "@/components/AdminUI";
+
+const { FormRow, FormField, Select, Toggle } = UI;
 
 type Props = {
   local: any;
@@ -10,114 +13,179 @@ type Props = {
 };
 
 export default function BasicInformationTab({ local, updateField, stationDisplay }: Props) {
+  const imagePrefix = process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "";
+
   return (
-    <div>
-      <h3 style={{ textAlign: "center", marginTop: 0 }}>Basic Information</h3>
+    <div style={{ maxWidth: 1200, margin: "8px auto", padding: 8 }}>
+      <h3 style={{ textAlign: "center", marginTop: 0, fontSize: 18, fontWeight: 700 }}>
+        Basic Information
+      </h3>
 
-      <div className="compact-grid" style={{ maxWidth: 1200, margin: "8px auto" }}>
-        <div className="field">
-          <label>Station</label>
-          <div className="readonly">{stationDisplay}</div>
-        </div>
+      {/* Grid: 3 columns on wide, 2 on medium, 1 on mobile */}
+      <div style={{ marginTop: 12 }}>
+        <FormRow cols={3} gap={16}>
+          <FormField label="Station">
+            <div style={{ padding: 8, borderRadius: 6, background: "#fafafa", border: "1px solid #f0f0f0" }}>
+              {stationDisplay || "—"}
+            </div>
+          </FormField>
 
-        <div className="field">
-          <label>Restro Code</label>
-          <div className="readonly">{local?.RestroCode ?? "—"}</div>
-        </div>
+          <FormField label="Restro Code">
+            <div style={{ padding: 8, borderRadius: 6, background: "#fafafa", border: "1px solid #f0f0f0" }}>
+              {local?.RestroCode ?? "—"}
+            </div>
+          </FormField>
 
-        <div className="field">
-          <label>Restro Name</label>
-          <input value={local?.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} />
-        </div>
+          <FormField label="Restro Name" required>
+            <input
+              value={local?.RestroName ?? ""}
+              onChange={(e) => updateField("RestroName", e.target.value)}
+              className="w-full"
+              style={{
+                width: "100%",
+                padding: 10,
+                borderRadius: 6,
+                border: "1px solid #e3e3e3",
+                fontSize: 14,
+              }}
+            />
+          </FormField>
 
-        <div className="field">
-          <label>Brand Name</label>
-          <input value={local?.BrandName ?? ""} onChange={(e) => updateField("BrandName", e.target.value)} />
-        </div>
+          <FormField label="Brand Name">
+            <input
+              value={local?.BrandName ?? ""}
+              onChange={(e) => updateField("BrandName", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+            />
+          </FormField>
 
-        <div className="field">
-          <label>Raileats Status</label>
-          <select value={local?.Raileats ? 1 : 0} onChange={(e) => updateField("Raileats", Number(e.target.value) === 1)}>
-            <option value={1}>On</option>
-            <option value={0}>Off</option>
-          </select>
-        </div>
+          <FormField label="Raileats Status">
+            <Select
+              value={local?.Raileats ? "1" : "0"}
+              onChange={(v) => updateField("Raileats", String(v) === "1")}
+              options={[
+                { label: "On", value: "1" },
+                { label: "Off", value: "0" },
+              ]}
+              placeholder={undefined}
+              name="raileats_status"
+            />
+          </FormField>
 
-        <div className="field">
-          <label>Is IRCTC Approved</label>
-          <select value={local?.IsIrctcApproved ? "1" : "0"} onChange={(e) => updateField("IsIrctcApproved", e.target.value === "1")}>
-            <option value="1">Yes</option>
-            <option value="0">No</option>
-          </select>
-        </div>
+          <FormField label="Is IRCTC Approved">
+            <Select
+              value={local?.IsIrctcApproved ? "1" : "0"}
+              onChange={(v) => updateField("IsIrctcApproved", String(v) === "1")}
+              options={[
+                { label: "Yes", value: "1" },
+                { label: "No", value: "0" },
+              ]}
+              name="is_irctc"
+            />
+          </FormField>
 
-        <div className="field">
-          <label>Restro Rating</label>
-          <input type="number" step="0.1" value={local?.RestroRating ?? ""} onChange={(e) => updateField("RestroRating", e.target.value)} />
-        </div>
+          <FormField label="Restro Rating">
+            <input
+              type="number"
+              step="0.1"
+              value={local?.RestroRating ?? ""}
+              onChange={(e) => updateField("RestroRating", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+            />
+          </FormField>
 
-        <div className="field">
-          <label>Restro Display Photo (path)</label>
-          <input value={local?.RestroDisplayPhoto ?? ""} onChange={(e) => updateField("RestroDisplayPhoto", e.target.value)} />
-        </div>
+          <FormField label="Restro Display Photo (path)">
+            <input
+              value={local?.RestroDisplayPhoto ?? ""}
+              onChange={(e) => updateField("RestroDisplayPhoto", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+            />
+          </FormField>
 
-        <div className="field">
-          <label>Display Preview</label>
-          {local?.RestroDisplayPhoto ? (
-            <img src={(process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "") + local.RestroDisplayPhoto} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
-          ) : (
-            <div className="readonly">No image</div>
-          )}
-        </div>
+          <FormField label="Display Preview">
+            {local?.RestroDisplayPhoto ? (
+              <img
+                src={imagePrefix + local.RestroDisplayPhoto}
+                alt="display"
+                style={{ height: 80, objectFit: "cover", borderRadius: 6, border: "1px solid #eee" }}
+                onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+              />
+            ) : (
+              <div style={{ padding: 8, borderRadius: 6, background: "#fafafa", border: "1px solid #f0f0f0" }}>
+                No image
+              </div>
+            )}
+          </FormField>
 
-        <div className="field">
-          <label>Owner Name</label>
-          <input value={local?.OwnerName ?? ""} onChange={(e) => updateField("OwnerName", e.target.value)} />
-        </div>
+          <FormField label="Owner Name">
+            <input
+              value={local?.OwnerName ?? ""}
+              onChange={(e) => updateField("OwnerName", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+            />
+          </FormField>
 
-        <div className="field">
-          <label>Owner Email</label>
-          <input value={local?.OwnerEmail ?? ""} onChange={(e) => updateField("OwnerEmail", e.target.value)} />
-        </div>
+          <FormField label="Owner Email">
+            <input
+              value={local?.OwnerEmail ?? ""}
+              onChange={(e) => updateField("OwnerEmail", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+            />
+          </FormField>
 
-        <div className="field">
-          <label>Owner Phone</label>
-          <input value={local?.OwnerPhone ?? ""} onChange={(e) => updateField("OwnerPhone", e.target.value)} />
-        </div>
+          <FormField label="Owner Phone">
+            <input
+              value={local?.OwnerPhone ?? ""}
+              onChange={(e) => updateField("OwnerPhone", e.target.value)}
+              inputMode="numeric"
+              maxLength={10}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+            />
+          </FormField>
 
-        <div className="field">
-          <label>Restro Email</label>
-          <input value={local?.RestroEmail ?? ""} onChange={(e) => updateField("RestroEmail", e.target.value)} />
-        </div>
+          <FormField label="Restro Email">
+            <input
+              value={local?.RestroEmail ?? ""}
+              onChange={(e) => updateField("RestroEmail", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+            />
+          </FormField>
 
-        <div className="field">
-          <label>Restro Phone</label>
-          <input value={local?.RestroPhone ?? ""} onChange={(e) => updateField("RestroPhone", e.target.value)} />
-        </div>
+          <FormField label="Restro Phone">
+            <input
+              value={local?.RestroPhone ?? ""}
+              onChange={(e) => updateField("RestroPhone", e.target.value)}
+              inputMode="numeric"
+              maxLength={10}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+            />
+          </FormField>
 
-        <div className="field">
-          <label>FSSAI Number</label>
-          <input value={local?.FSSAINumber ?? ""} onChange={(e) => updateField("FSSAINumber", e.target.value)} />
-        </div>
+          <FormField label="FSSAI Number">
+            <input
+              value={local?.FSSAINumber ?? ""}
+              onChange={(e) => updateField("FSSAINumber", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+            />
+          </FormField>
 
-        <div className="field">
-          <label>FSSAI Expiry Date</label>
-          <input type="date" value={local?.FSSAIExpiryDate ?? ""} onChange={(e) => updateField("FSSAIExpiryDate", e.target.value)} />
-        </div>
+          <FormField label="FSSAI Expiry Date">
+            <input
+              type="date"
+              value={local?.FSSAIExpiryDate ?? ""}
+              onChange={(e) => updateField("FSSAIExpiryDate", e.target.value)}
+              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+            />
+          </FormField>
+        </FormRow>
       </div>
 
+      {/* small responsive tweaks so grid collapses nicely; the AdminUI FormRow handles desktop grid,
+          but provide CSS fallback for smaller screens */}
       <style jsx>{`
-        .compact-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 12px 18px;
+        @media (max-width: 1100px) {
+          /* reduce columns by letting FormRow be flex-like — but FormRow uses CSS grid already */
         }
-        .field label { display: block; font-weight: 600; margin-bottom: 6px; color: #444; }
-        .field input, .field select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #e3e3e3; }
-        .readonly { padding: 8px 10px; background: #fafafa; border-radius: 6px; border: 1px solid #f0f0f0; }
-        .preview { height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #eee; }
-        @media (max-width: 1100px) { .compact-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 720px) { .compact-grid { grid-template-columns: 1fr; } }
       `}</style>
     </div>
   );
