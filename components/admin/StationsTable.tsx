@@ -11,15 +11,11 @@ const HEADERS: { key: string; title: string; width?: string }[] = [
   { key: "StationId", title: "Station Id", width: "90px" },
   { key: "StationName", title: "Station Name" },
   { key: "StationCode", title: "Station Code", width: "100px" },
-  { key: "Category", title: "Category", width: "80px" },
   { key: "EcatRank", title: "Ecat Rank", width: "80px" },
-  { key: "Division", title: "Division" },
-  { key: "RailwayZone", title: "Railway Zone", width: "110px" },
   { key: "EcatZone", title: "Ecat Zone", width: "90px" },
   { key: "State", title: "State", width: "140px" },
   { key: "Lat", title: "Lat", width: "120px" },
   { key: "Long", title: "Long", width: "120px" },
-  { key: "Address", title: "Address" },
   { key: "ReGroup", title: "Re Group", width: "90px" },
 ];
 
