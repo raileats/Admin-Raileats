@@ -2,21 +2,26 @@
 "use client";
 import React, { useEffect, useState } from "react";
 
-const HEADERS = [
-  "StationId",
-  "StationName",
-  "StationCode",
-  "Category",
-  "EcatRank",
-  "Division",
-  "RailwayZone",
-  "EcatZone",
-  "District",
-  "State",
-  "Lat",
-  "Long",
-  "Address",
-  "ReGroup",
+/**
+ * HEADERS: now an array of objects { key, title, width? }
+ * Titles include spaces for wrapped labels (e.g. "Station Id").
+ * Width is optional (CSS width string) to suggest column width.
+ */
+const HEADERS: { key: string; title: string; width?: string }[] = [
+  { key: "StationId", title: "Station Id", width: "90px" },
+  { key: "StationName", title: "Station Name" },
+  { key: "StationCode", title: "Station Code", width: "100px" },
+  { key: "Category", title: "Category", width: "80px" },
+  { key: "EcatRank", title: "Ecat Rank", width: "80px" },
+  { key: "Division", title: "Division" },
+  { key: "RailwayZone", title: "Railway Zone", width: "110px" },
+  { key: "EcatZone", title: "Ecat Zone", width: "90px" },
+  { key: "District", title: "District" },
+  { key: "State", title: "State", width: "140px" },
+  { key: "Lat", title: "Lat", width: "120px" },
+  { key: "Long", title: "Long", width: "120px" },
+  { key: "Address", title: "Address" },
+  { key: "ReGroup", title: "Re Group", width: "90px" },
 ];
 
 function getField(obj: any, name: string) {
@@ -39,7 +44,6 @@ export default function StationsTable() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Build query q for legacy API: combine inputs (server likely searches all fields)
   function buildQ() {
     const parts = [];
     if (stationId.trim()) parts.push(stationId.trim());
@@ -52,8 +56,6 @@ export default function StationsTable() {
     setLoading(true);
     setError(null);
     try {
-      // Prefer to send stationId/stationName/stationCode individually
-      // but also support legacy 'q' param by sending combined q.
       const url = new URL("/api/stations", location.origin);
 
       if (typeof overrideSearch === "string") {
@@ -61,7 +63,6 @@ export default function StationsTable() {
       } else {
         const q = buildQ();
         if (q) url.searchParams.set("q", q);
-        // also include explicit params in case backend supports them
         if (stationId.trim()) url.searchParams.set("stationId", stationId.trim());
         if (stationName.trim()) url.searchParams.set("stationName", stationName.trim());
         if (stationCode.trim()) url.searchParams.set("stationCode", stationCode.trim());
@@ -74,7 +75,6 @@ export default function StationsTable() {
         setStations([]);
         setError(json?.error ?? "Failed to load stations");
       } else {
-        // ensure array
         setStations(Array.isArray(json) ? json : []);
       }
     } catch (e: any) {
@@ -96,12 +96,13 @@ export default function StationsTable() {
     const current = getField(station, "is_active") ?? getField(station, "IsActive") ?? true;
     const next = !current;
 
-    // optimistic update
-    setStations((prev) => prev.map((s) => {
-      const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
-      if (sid === id) return { ...s, is_active: next };
-      return s;
-    }));
+    setStations((prev) =>
+      prev.map((s) => {
+        const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
+        if (sid === id) return { ...s, is_active: next };
+        return s;
+      })
+    );
 
     try {
       const res = await fetch(`/api/stations/${id}`, {
@@ -112,19 +113,21 @@ export default function StationsTable() {
       const json = await res.json();
       if (!res.ok) {
         console.error("toggle update failed", json);
-        // rollback
-        setStations((prev) => prev.map((s) => {
-          const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
-          if (sid === id) return { ...s, is_active: current };
-          return s;
-        }));
+        setStations((prev) =>
+          prev.map((s) => {
+            const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
+            if (sid === id) return { ...s, is_active: current };
+            return s;
+          })
+        );
       } else {
-        // merge server response
-        setStations((prev) => prev.map((s) => {
-          const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
-          if (sid === id) return { ...s, ...json };
-          return s;
-        }));
+        setStations((prev) =>
+          prev.map((s) => {
+            const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
+            if (sid === id) return { ...s, ...json };
+            return s;
+          })
+        );
       }
     } catch (e) {
       console.error("toggleActive error", e);
@@ -169,11 +172,13 @@ export default function StationsTable() {
         console.error("saveEdit failed", json);
         alert("Save failed: " + (json?.error ?? "unknown"));
       } else {
-        setStations((prev) => prev.map((s) => {
-          const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
-          if (sid === id) return { ...s, ...json };
-          return s;
-        }));
+        setStations((prev) =>
+          prev.map((s) => {
+            const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
+            if (sid === id) return { ...s, ...json };
+            return s;
+          })
+        );
         setEditing(null);
       }
     } catch (e) {
@@ -198,42 +203,37 @@ export default function StationsTable() {
         <div />
       </div>
 
-      {/* three filter inputs */}
-      <form onSubmit={(e) => { e.preventDefault(); fetchStations(); }} className="mb-4">
+      {/* filters */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          fetchStations();
+        }}
+        className="mb-4"
+      >
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="text-sm text-gray-600 mb-1 block">Search by Station ID</label>
-            <input
-              value={stationId}
-              onChange={(e) => setStationId(e.target.value)}
-              placeholder="Station ID"
-              className="search-pill-sm"
-            />
+            <input value={stationId} onChange={(e) => setStationId(e.target.value)} placeholder="Station ID" className="search-pill-sm" />
           </div>
 
           <div>
             <label className="text-sm text-gray-600 mb-1 block">Search by Station Name</label>
-            <input
-              value={stationName}
-              onChange={(e) => setStationName(e.target.value)}
-              placeholder="Station Name"
-              className="search-pill-sm"
-            />
+            <input value={stationName} onChange={(e) => setStationName(e.target.value)} placeholder="Station Name" className="search-pill-sm" />
           </div>
 
           <div>
             <label className="text-sm text-gray-600 mb-1 block">Search by Station Code</label>
-            <input
-              value={stationCode}
-              onChange={(e) => setStationCode(e.target.value)}
-              placeholder="Station Code"
-              className="search-pill-sm"
-            />
+            <input value={stationCode} onChange={(e) => setStationCode(e.target.value)} placeholder="Station Code" className="search-pill-sm" />
           </div>
 
           <div className="flex gap-2">
-            <button type="button" onClick={clearFilters} className="px-3 py-2 border rounded-lg bg-white">Clear</button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg">Search</button>
+            <button type="button" onClick={clearFilters} className="px-3 py-2 border rounded-lg bg-white">
+              Clear
+            </button>
+            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg">
+              Search
+            </button>
           </div>
         </div>
       </form>
@@ -244,7 +244,15 @@ export default function StationsTable() {
         <table className="min-w-full border">
           <thead>
             <tr>
-              {HEADERS.map((h) => <th key={h} className="px-3 py-2 border bg-gray-50 text-left text-sm text-gray-700">{h}</th>)}
+              {HEADERS.map((h) => (
+                <th
+                  key={h.key}
+                  className="px-3 py-2 border bg-gray-50 text-left text-sm text-gray-700 whitespace-normal break-words"
+                  style={h.width ? { width: h.width } : undefined}
+                >
+                  {h.title}
+                </th>
+              ))}
               <th className="px-3 py-2 border bg-gray-50 text-left text-sm text-gray-700">Active</th>
               <th className="px-3 py-2 border bg-gray-50 text-left text-sm text-gray-700">Actions</th>
             </tr>
@@ -252,27 +260,43 @@ export default function StationsTable() {
 
           <tbody>
             {loading ? (
-              <tr><td colSpan={HEADERS.length + 2} className="p-6 text-center">Loading...</td></tr>
+              <tr>
+                <td colSpan={HEADERS.length + 2} className="p-6 text-center">
+                  Loading...
+                </td>
+              </tr>
             ) : stations.length === 0 ? (
-              <tr><td colSpan={HEADERS.length + 2} className="p-6 text-center text-gray-400">No records found</td></tr>
-            ) : stations.map((s, idx) => {
-              const id = getField(s, "StationId") ?? getField(s, "stationid") ?? idx;
-              const active = getField(s, "is_active") ?? getField(s, "IsActive") ?? true;
-              return (
-                <tr key={String(id)} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                  {HEADERS.map((h) => <td key={h} className="px-3 py-2 border text-sm">{String(getField(s, h) ?? "")}</td>)}
-                  <td className="px-3 py-2 border">
-                    <label className="inline-flex items-center cursor-pointer">
-                      <input type="checkbox" checked={!!active} onChange={() => toggleActive(s)} className="mr-2" />
-                      <span className="text-sm">{active ? "On" : "Off"}</span>
-                    </label>
-                  </td>
-                  <td className="px-3 py-2 border">
-                    <button onClick={() => openEdit(s)} className="mr-2 px-3 py-1 bg-amber-400 rounded text-sm">Edit</button>
-                  </td>
-                </tr>
-              );
-            })}
+              <tr>
+                <td colSpan={HEADERS.length + 2} className="p-6 text-center text-gray-400">
+                  No records found
+                </td>
+              </tr>
+            ) : (
+              stations.map((s, idx) => {
+                const id = getField(s, "StationId") ?? getField(s, "stationid") ?? idx;
+                const active = getField(s, "is_active") ?? getField(s, "IsActive") ?? true;
+                return (
+                  <tr key={String(id)} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                    {HEADERS.map((h) => (
+                      <td key={h.key} className="px-3 py-2 border text-sm" style={h.width ? { width: h.width } : undefined}>
+                        {String(getField(s, h.key) ?? "")}
+                      </td>
+                    ))}
+                    <td className="px-3 py-2 border">
+                      <label className="inline-flex items-center cursor-pointer">
+                        <input type="checkbox" checked={!!active} onChange={() => toggleActive(s)} className="mr-2" />
+                        <span className="text-sm">{active ? "On" : "Off"}</span>
+                      </label>
+                    </td>
+                    <td className="px-3 py-2 border">
+                      <button onClick={() => openEdit(s)} className="mr-2 px-3 py-1 bg-amber-400 rounded text-sm">
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
@@ -315,7 +339,9 @@ export default function StationsTable() {
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setEditing(null)} className="px-4 py-2 border rounded">Cancel</button>
+              <button onClick={() => setEditing(null)} className="px-4 py-2 border rounded">
+                Cancel
+              </button>
               <button onClick={saveEdit} disabled={saving} className="px-4 py-2 bg-green-600 text-white rounded">
                 {saving ? "Saving..." : "Save"}
               </button>
