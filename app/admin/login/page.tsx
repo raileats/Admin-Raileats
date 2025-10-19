@@ -4,53 +4,18 @@
 import React, { useState } from "react";
 
 export default function AdminLogin() {
-  const [identifier, setIdentifier] = useState(""); // mobile or email
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!identifier || !password) {
-      setError("Please enter mobile/email and password");
-      return;
-    }
-    setLoading(true);
-
-    try {
-      // Build payload: send mobile OR email depending on input
-      const payload: any = { password };
-      if (identifier.includes("@")) payload.email = identifier.trim();
-      else payload.mobile = identifier.trim();
-
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        credentials: "include", // <-- important so cookies set by server are stored
-      });
-
-      // debug logs (will appear in browser console)
-      console.log("Login response status:", res.status, "ok:", res.ok);
-
-      const json = await res.json().catch(() => ({}));
-      console.log("Login response json:", json);
-
-      if (!res.ok) {
-        setError(json?.message || "Login failed");
-        return;
-      }
-
-      // Success: full navigation so cookies are attached for subsequent server requests
-      window.location.replace("/admin/home");
-    } catch (err: any) {
-      console.error("Login network error:", err);
-      setError("Network error, please try again");
-    } finally {
-      setLoading(false);
-    }
+  // We use native form POST to /api/auth/login so browser applies Set-Cookie and follows redirect
+  // Server-side parseBody supports formData, so this works with your existing login route.
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    setSubmitting(true);
+    // don't call e.preventDefault() — allow native submit so cookies & redirect are handled by browser
+    // re-enable button after a short timeout in case of network issues
+    setTimeout(() => setSubmitting(false), 5000);
   }
 
   return (
@@ -65,6 +30,8 @@ export default function AdminLogin() {
       }}
     >
       <form
+        method="post"
+        action="/api/auth/login"
         onSubmit={handleSubmit}
         style={{
           width: 380,
@@ -81,27 +48,11 @@ export default function AdminLogin() {
           <h2 style={{ margin: "8px 0 0" }}>RailEats Admin</h2>
         </div>
 
-        {error && (
-          <div
-            role="alert"
-            style={{
-              background: "#fff2f0",
-              color: "#9b1c1c",
-              border: "1px solid #ffdede",
-              padding: "8px 10px",
-              borderRadius: 6,
-              marginBottom: 12,
-              fontSize: 13,
-            }}
-          >
-            {error}
-          </div>
-        )}
-
         <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
           User ID (mobile or email)
         </label>
         <input
+          name="identifier"
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
           required
@@ -119,6 +70,7 @@ export default function AdminLogin() {
         <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Password</label>
         <div style={{ position: "relative" }}>
           <input
+            name="password"
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -131,6 +83,7 @@ export default function AdminLogin() {
               border: "1px solid #e6e6e6",
               boxSizing: "border-box",
             }}
+            autoComplete="current-password"
           />
           <button
             type="button"
@@ -153,9 +106,13 @@ export default function AdminLogin() {
           </button>
         </div>
 
+        {/* Hidden helpers; server expects either mobile or email.
+            We copy identifier into the correct hidden field right before native submit */}
+        <input type="hidden" name="identifier_raw" value={identifier} />
+
         <button
           type="submit"
-          disabled={loading}
+          disabled={submitting}
           style={{
             width: "100%",
             padding: 10,
@@ -164,16 +121,56 @@ export default function AdminLogin() {
             color: "#111",
             border: "none",
             fontWeight: 600,
-            cursor: loading ? "default" : "pointer",
+            cursor: submitting ? "default" : "pointer",
           }}
         >
-          {loading ? "Logging in…" : "Log in"}
+          {submitting ? "Logging in…" : "Log in"}
         </button>
 
         <div style={{ marginTop: 12, fontSize: 12, textAlign: "center", color: "#777" }}>
           Please use your admin credentials.
         </div>
       </form>
+
+      {/* Inline script to convert identifier to mobile/email before native submit.
+          Keeps server code unchanged (it supports reading mobile/email from formData). */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+(function(){
+  try {
+    const form = document.currentScript && document.currentScript.closest('form');
+    if (!form) return;
+    form.addEventListener('submit', function(){
+      const idInput = form.querySelector('input[name="identifier"]');
+      const v = idInput ? idInput.value.trim() : '';
+      // remove previous helper fields if any
+      const prevMobile = form.querySelector('input[name="mobile"]');
+      const prevEmail = form.querySelector('input[name="email"]');
+      if (prevMobile) prevMobile.remove();
+      if (prevEmail) prevEmail.remove();
+      if (!v) return;
+      if (v.includes('@')) {
+        const el = document.createElement('input');
+        el.type = 'hidden';
+        el.name = 'email';
+        el.value = v;
+        form.appendChild(el);
+      } else {
+        const el = document.createElement('input');
+        el.type = 'hidden';
+        el.name = 'mobile';
+        el.value = v;
+        form.appendChild(el);
+      }
+    });
+  } catch (e) {
+    // ignore
+  }
+})();
+`,
+        }}
+      />
     </div>
   );
 }
