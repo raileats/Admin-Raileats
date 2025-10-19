@@ -16,7 +16,6 @@ const HEADERS: { key: string; title: string; width?: string }[] = [
   { key: "Division", title: "Division" },
   { key: "RailwayZone", title: "Railway Zone", width: "110px" },
   { key: "EcatZone", title: "Ecat Zone", width: "90px" },
-  { key: "District", title: "District" },
   { key: "State", title: "State", width: "140px" },
   { key: "Lat", title: "Lat", width: "120px" },
   { key: "Long", title: "Long", width: "120px" },
