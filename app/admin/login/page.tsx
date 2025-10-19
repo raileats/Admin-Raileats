@@ -9,50 +9,20 @@ export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Native form POST to /api/auth/login is preferred so browser handles Set-Cookie + redirect.
-  // Before letting native submit proceed, ensure a hidden 'mobile' or 'email' input exists.
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    if (submitting) {
-      // prevent accidental double-submits by doing nothing (native submit already triggered)
-      return;
-    }
-    setSubmitting(true);
-
-    try {
-      const form = e.currentTarget;
-      const v = (form.querySelector('input[name="identifier"]') as HTMLInputElement | null)
-        ?.value?.trim();
-
-      // remove any previous helper fields
-      const prevMobile = form.querySelector('input[name="mobile"]');
-      const prevEmail = form.querySelector('input[name="email"]');
-      if (prevMobile) prevMobile.remove();
-      if (prevEmail) prevEmail.remove();
-
-      if (v) {
-        if (v.includes("@")) {
-          const el = document.createElement("input");
-          el.type = "hidden";
-          el.name = "email";
-          el.value = v;
-          form.appendChild(el);
-        } else {
-          const el = document.createElement("input");
-          el.type = "hidden";
-          el.name = "mobile";
-          el.value = v;
-          form.appendChild(el);
-        }
-      }
-
-      // let the native submit continue (do NOT call e.preventDefault())
-      // safety: re-enable submit if something goes wrong after 5s
-      setTimeout(() => setSubmitting(false), 5000);
-    } catch (err) {
-      // fallback: ensure submit button re-enabled after short timeout
-      setTimeout(() => setSubmitting(false), 2000);
-    }
+  function handleIdentifierChange(v: string) {
+    setIdentifier(v);
   }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (submitting) return;
+    setSubmitting(true);
+    // allow native submit so browser handles Set-Cookie + redirect
+    setTimeout(() => setSubmitting(false), 5000);
+  }
+
+  // compute mobile/email values to put into hidden inputs
+  const mobileVal = identifier && !identifier.includes("@") ? identifier.trim() : "";
+  const emailVal = identifier && identifier.includes("@") ? identifier.trim() : "";
 
   return (
     <div
@@ -90,7 +60,7 @@ export default function AdminLogin() {
         <input
           name="identifier"
           value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
+          onChange={(e) => handleIdentifierChange(e.target.value)}
           required
           style={{
             width: "100%",
@@ -102,6 +72,10 @@ export default function AdminLogin() {
           }}
           placeholder="eg. 8888888888 or name@example.com"
         />
+
+        {/* Hidden inputs updated on every change so they are always present in the POST */}
+        <input type="hidden" name="mobile" value={mobileVal} />
+        <input type="hidden" name="email" value={emailVal} />
 
         <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Password</label>
         <div style={{ position: "relative" }}>
