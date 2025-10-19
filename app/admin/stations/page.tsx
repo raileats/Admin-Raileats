@@ -1,4 +1,3 @@
-// app/admin/stations/page.tsx
 import dynamic from 'next/dynamic';
 const StationsTable = dynamic(() => import('@/components/admin/StationsTable'), { ssr: false });
 
