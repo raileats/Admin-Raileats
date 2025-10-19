@@ -9,13 +9,49 @@ export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // We use native form POST to /api/auth/login so browser applies Set-Cookie and follows redirect
-  // Server-side parseBody supports formData, so this works with your existing login route.
+  // Native form POST to /api/auth/login is preferred so browser handles Set-Cookie + redirect.
+  // Before letting native submit proceed, ensure a hidden 'mobile' or 'email' input exists.
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (submitting) {
+      // prevent accidental double-submits by doing nothing (native submit already triggered)
+      return;
+    }
     setSubmitting(true);
-    // don't call e.preventDefault() — allow native submit so cookies & redirect are handled by browser
-    // re-enable button after a short timeout in case of network issues
-    setTimeout(() => setSubmitting(false), 5000);
+
+    try {
+      const form = e.currentTarget;
+      const v = (form.querySelector('input[name="identifier"]') as HTMLInputElement | null)
+        ?.value?.trim();
+
+      // remove any previous helper fields
+      const prevMobile = form.querySelector('input[name="mobile"]');
+      const prevEmail = form.querySelector('input[name="email"]');
+      if (prevMobile) prevMobile.remove();
+      if (prevEmail) prevEmail.remove();
+
+      if (v) {
+        if (v.includes("@")) {
+          const el = document.createElement("input");
+          el.type = "hidden";
+          el.name = "email";
+          el.value = v;
+          form.appendChild(el);
+        } else {
+          const el = document.createElement("input");
+          el.type = "hidden";
+          el.name = "mobile";
+          el.value = v;
+          form.appendChild(el);
+        }
+      }
+
+      // let the native submit continue (do NOT call e.preventDefault())
+      // safety: re-enable submit if something goes wrong after 5s
+      setTimeout(() => setSubmitting(false), 5000);
+    } catch (err) {
+      // fallback: ensure submit button re-enabled after short timeout
+      setTimeout(() => setSubmitting(false), 2000);
+    }
   }
 
   return (
@@ -106,10 +142,6 @@ export default function AdminLogin() {
           </button>
         </div>
 
-        {/* Hidden helpers; server expects either mobile or email.
-            We copy identifier into the correct hidden field right before native submit */}
-        <input type="hidden" name="identifier_raw" value={identifier} />
-
         <button
           type="submit"
           disabled={submitting}
@@ -131,46 +163,6 @@ export default function AdminLogin() {
           Please use your admin credentials.
         </div>
       </form>
-
-      {/* Inline script to convert identifier to mobile/email before native submit.
-          Keeps server code unchanged (it supports reading mobile/email from formData). */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-(function(){
-  try {
-    const form = document.currentScript && document.currentScript.closest('form');
-    if (!form) return;
-    form.addEventListener('submit', function(){
-      const idInput = form.querySelector('input[name="identifier"]');
-      const v = idInput ? idInput.value.trim() : '';
-      // remove previous helper fields if any
-      const prevMobile = form.querySelector('input[name="mobile"]');
-      const prevEmail = form.querySelector('input[name="email"]');
-      if (prevMobile) prevMobile.remove();
-      if (prevEmail) prevEmail.remove();
-      if (!v) return;
-      if (v.includes('@')) {
-        const el = document.createElement('input');
-        el.type = 'hidden';
-        el.name = 'email';
-        el.value = v;
-        form.appendChild(el);
-      } else {
-        const el = document.createElement('input');
-        el.type = 'hidden';
-        el.name = 'mobile';
-        el.value = v;
-        form.appendChild(el);
-      }
-    });
-  } catch (e) {
-    // ignore
-  }
-})();
-`,
-        }}
-      />
     </div>
   );
 }
