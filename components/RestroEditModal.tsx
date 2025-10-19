@@ -13,7 +13,7 @@ import FutureClosedTab from "./restro-edit/FutureClosedTab";
 import MenuTab from "./restro-edit/MenuTab";
 
 import UI from "@/components/AdminUI";
-const { FormField, SubmitButton } = UI;
+const { FormField, SubmitButton, AdminForm, Select, Toggle: UIToggle } = UI;
 
 type Props = {
   restro?: any;
@@ -80,13 +80,7 @@ function validatePhoneString(s: string) {
   return true;
 }
 
-/* ---------- small reusable UI (InputWithIcon + Toggle) ---------- */
-/*
-  InputWithIcon now uses the AdminUI input styles (class names),
-  so the visual appearance matches AdminForm/FormField across the app.
-  Child tabs still call InputWithIcon(...) (we pass it in common props) so they
-  automatically inherit the consistent styling.
-*/
+/* ---------- small reusable UI (InputWithIcon + Toggle wrapper) ---------- */
 function InputWithIcon({
   name,
   label,
@@ -105,7 +99,6 @@ function InputWithIcon({
   const [touched, setTouched] = useState(false);
   const v = typeof value === "string" ? value : value ?? "";
 
-  // if phone/whatsapp: sanitize to digits only and limit to 10 when user types
   const handleChange = (raw: string) => {
     if (type === "phone" || type === "whatsapp") {
       const cleaned = String(raw).replace(/\D/g, "").slice(0, 10);
@@ -127,23 +120,22 @@ function InputWithIcon({
   return (
     <div className="mb-3">
       {label && <div className="text-sm text-gray-600 mb-1 font-medium">{label}</div>}
-
       <div className="flex items-center gap-3">
         <div style={{ fontSize: 18 }}>{icon}</div>
-
-        {/* Using same classnames as AdminUI.FormField inputs */}
-        <input
-          aria-label={label ?? name}
-          name={name}
-          placeholder={placeholder}
-          value={v}
-          onChange={(e) => handleChange(e.target.value)}
-          onBlur={() => setTouched(true)}
-          onFocus={() => setTouched(true)}
-          inputMode={type === "phone" || type === "whatsapp" ? "numeric" : "text"}
-          maxLength={type === "phone" || type === "whatsapp" ? 10 : undefined}
-          className={`w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400 ${showError ? "border-red-400" : ""}`}
-        />
+        <FormField error={showError ? "Invalid input" : null}>
+          <input
+            aria-label={label ?? name}
+            name={name}
+            placeholder={placeholder}
+            value={v}
+            onChange={(e) => handleChange(e.target.value)}
+            onBlur={() => setTouched(true)}
+            onFocus={() => setTouched(true)}
+            inputMode={type === "phone" || type === "whatsapp" ? "numeric" : "text"}
+            maxLength={type === "phone" || type === "whatsapp" ? 10 : undefined}
+            className="w-full rounded-lg border px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400"
+          />
+        </FormField>
       </div>
 
       {showError && (
@@ -158,60 +150,9 @@ function InputWithIcon({
   );
 }
 
-/* Improved Toggle: checkbox-based (styled to match AdminUI) */
-function Toggle({
-  checked,
-  onChange,
-  label,
-  id,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label?: string;
-  id?: string;
-}) {
-  const inputId = id ?? `toggle_${Math.random().toString(36).slice(2, 8)}`;
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <label htmlFor={inputId} style={{ display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
-        <input
-          id={inputId}
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          style={{ display: "none" }}
-        />
-        <span
-          aria-hidden
-          style={{
-            width: 46,
-            height: 26,
-            borderRadius: 999,
-            background: checked ? "#f6b900" : "#e6e6e6",
-            display: "inline-block",
-            position: "relative",
-            transition: "background-color 120ms ease",
-          }}
-        >
-          <span
-            style={{
-              display: "block",
-              width: 20,
-              height: 20,
-              borderRadius: 999,
-              background: "#fff",
-              position: "absolute",
-              top: 3,
-              left: checked ? 23 : 3,
-              transition: "left 120ms ease",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
-            }}
-          />
-        </span>
-      </label>
-      {label && <div className="text-sm text-gray-700">{label}</div>}
-    </div>
-  );
+/* Toggle wrapper that uses AdminUI Toggle visuals where possible */
+function Toggle({ checked, onChange, label, id }: { checked: boolean; onChange: (v: boolean) => void; label?: string; id?: string }) {
+  return <UIToggle checked={checked} onChange={onChange} label={label} id={id} />;
 }
 
 /* ---------- component ---------- */
@@ -677,55 +618,12 @@ export default function RestroEditModal({
               Cancel
             </button>
 
-            {/* Use AdminUI's SubmitButton for consistent CTA */}
-            <SubmitButton className="" disabled={saveDisabled as boolean}>
+            <SubmitButton onClick={handleSave} disabled={saveDisabled as boolean}>
               {saving ? "Saving..." : "Save"}
             </SubmitButton>
-            {/* The SubmitButton here just looks consistent — it triggers handleSave on click below */}
-            <style>{`
-              /* small override: ensure SubmitButton disabled look is obvious */
-              .submit-button[disabled] { opacity: 0.7; pointer-events: none; }
-            `}</style>
-            {/* Hook up Save handler on click — SubmitButton is a normal button type=submit; here we call handleSave manually */}
-            <script
-              // We still wire the onClick in React below instead of inline script for clarity
-              dangerouslySetInnerHTML={{ __html: "" }}
-            />
           </div>
         </div>
       </div>
-
-      {/* bind Save call to the SubmitButton using a small effect to find it by label */}
-      {/* Note: we attach an onClick on the SubmitButton via React -- do it here: */}
-      {/* (React JSX below can't place event handler on a component generated earlier, so we render a visually-hidden button that triggers handleSave and connect it) */}
-      <button
-        id="__restro_save_helper"
-        onClick={handleSave}
-        style={{ display: "none" }}
-        aria-hidden
-      />
-      <script
-        // small script to forward clicks from visible SubmitButton to hidden helper
-        dangerouslySetInnerHTML={{
-          __html: `
-            (function(){
-              try {
-                const btns = Array.from(document.querySelectorAll('button')).filter(b => b.textContent && b.textContent.trim()==='Save');
-                const helper = document.getElementById('__restro_save_helper');
-                if (helper && btns.length) {
-                  btns.forEach(b => {
-                    b.addEventListener('click', function(e) {
-                      e.preventDefault();
-                      if (b.disabled) return;
-                      helper.click();
-                    });
-                  });
-                }
-              } catch(e) {}
-            })();
-          `,
-        }}
-      />
     </div>
   );
 }
