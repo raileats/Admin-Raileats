@@ -44,7 +44,7 @@ export function FormRow({
   );
 }
 
-/** FormField - label + input wrapper + optional help */
+/** FormField - label + input wrapper + optional help + error  */
 export function FormField({
   label,
   htmlFor,
@@ -52,7 +52,15 @@ export function FormField({
   help,
   required = false,
   className = "",
-}: ChildrenProp & { label?: string; htmlFor?: string; help?: string; required?: boolean; className?: string }) {
+  error,
+}: ChildrenProp & {
+  label?: string;
+  htmlFor?: string;
+  help?: string;
+  required?: boolean;
+  className?: string;
+  error?: string | null;
+}) {
   return (
     <div className={`mb-3 ${className}`}>
       {label && (
@@ -62,6 +70,7 @@ export function FormField({
       )}
       <div>{children}</div>
       {help && <div className="mt-1 text-xs text-gray-500">{help}</div>}
+      {error ? <div className="mt-1 text-xs text-rose-600 font-medium">{error}</div> : null}
     </div>
   );
 }
