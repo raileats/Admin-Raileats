@@ -16,12 +16,6 @@ function getJwtSecret() {
   );
 }
 
-/**
- * Parse request body in a robust way:
- * - Try JSON
- * - Then formData (native forms/multipart)
- * - Then raw text (try urlencoded or JSON)
- */
 async function parseBody(req: Request) {
   // Try JSON
   try {
@@ -67,11 +61,28 @@ async function parseBody(req: Request) {
   return {};
 }
 
+function maskValue(key: string, val: any) {
+  if (val == null) return null;
+  if (key.toLowerCase().includes("pass")) return "***";
+  const s = String(val);
+  if (s.length > 50) return s.slice(0, 50) + "...";
+  return s;
+}
+
 export async function POST(req: Request) {
   try {
+    // parse body
     const body = (await parseBody(req)) || {};
 
-    // Accept multiple identifier field names for maximum compatibility
+    // collect diagnostics
+    const contentType = req.headers.get("content-type") || "unknown";
+    const keys = Object.keys(body || {});
+    const preview: Record<string, any> = {};
+    for (const k of keys) {
+      preview[k] = maskValue(k, body[k]);
+    }
+
+    // Normalize identifier fields
     const rawIdentifier =
       (body.mobile ??
         body.email ??
@@ -84,12 +95,31 @@ export async function POST(req: Request) {
 
     const password = (body.password ?? "").toString();
 
+    // If credentials missing — return helpful diagnostic JSON (and log on server)
     if (!rawIdentifier || !password) {
-      console.warn("Login attempt missing credentials. Parsed body:", body);
-      return NextResponse.json({ message: "Mobile and password required" }, { status: 400 });
+      // server console log for debugging (remove in production)
+      console.warn("LOGIN DEBUG: missing credentials. content-type:", contentType);
+      console.warn("LOGIN DEBUG: parsed body keys:", keys);
+      console.warn("LOGIN DEBUG: preview:", preview);
+
+      // Return diagnostic JSON to browser (password masked)
+      return NextResponse.json(
+        {
+          message: "Mobile and password required",
+          debug: {
+            contentType,
+            parsedKeys: keys,
+            parsedPreview: preview,
+            note:
+              "Fields expected: mobile OR email OR identifier OR identifier_raw OR user_id, and password. " +
+              "If you submitted a native form, ensure input names match these.",
+          },
+        },
+        { status: 400 }
+      );
     }
 
-    // Decide if identifier is email or mobile (but prefer explicit fields if provided)
+    // determine if identifier is email or mobile
     let mobile = "";
     let email = "";
     if (rawIdentifier.includes("@")) email = rawIdentifier;
@@ -98,7 +128,7 @@ export async function POST(req: Request) {
     if (body.mobile) mobile = String(body.mobile).trim();
     if (body.email) email = String(body.email).trim();
 
-    // Query users table: prefer mobile, then email, then user_id fallback
+    // Query users table
     let query = serviceClient.from("users").select("*").limit(1);
     if (mobile) query = query.eq("mobile", mobile);
     else if (email) query = query.eq("email", email);
@@ -107,14 +137,12 @@ export async function POST(req: Request) {
     const { data: user, error } = await query.single();
 
     if (error || !user) {
-      console.warn("Login failed - user not found for identifier:", rawIdentifier);
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
     const hash = user.password_hash ?? user.password ?? "";
     const isValid = await bcrypt.compare(password, hash);
     if (!isValid) {
-      console.warn("Login failed - invalid password for user:", user.id);
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
@@ -135,7 +163,7 @@ export async function POST(req: Request) {
 
     const token = jwt.sign(payload, secret, { expiresIn: TOKEN_EXP_SECONDS });
 
-    // set cookie and redirect to /admin
+    // set cookie and redirect
     const res = NextResponse.redirect(new URL("/admin", req.url));
     res.cookies.set({
       name: COOKIE_NAME,
