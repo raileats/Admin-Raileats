@@ -1,9 +1,9 @@
-// components/RestroEditModal.tsx
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
+import UI from "@/components/AdminUI";
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
 import AddressDocsClient from "@/components/tabs/AddressDocsClient";
@@ -12,8 +12,7 @@ import BankTab from "./restro-edit/BankTab";
 import FutureClosedTab from "./restro-edit/FutureClosedTab";
 import MenuTab from "./restro-edit/MenuTab";
 
-import UI from "@/components/AdminUI";
-const { FormField, SubmitButton, AdminForm, Select, Toggle: UIToggle } = UI;
+const { AdminForm, FormRow, FormField, FormActions, SubmitButton, SecondaryButton, Select, Toggle, SearchBar } = UI;
 
 type Props = {
   restro?: any;
@@ -34,7 +33,7 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ---------- helpers ---------- */
+/* ---------- helpers (untouched) ---------- */
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
     if (!obj) continue;
@@ -56,7 +55,7 @@ function buildStationDisplay(obj: any) {
   return left || "—";
 }
 
-/* ---------- validators ---------- */
+/* ---------- validators (untouched) ---------- */
 const emailRegex = /^\S+@\S+\.\S+$/;
 const tenDigitRegex = /^\d{10}$/;
 
@@ -78,81 +77,6 @@ function validatePhoneString(s: string) {
     if (!tenDigitRegex.test(p)) return false;
   }
   return true;
-}
-
-/* ---------- small reusable UI (InputWithIcon + Toggle wrapper) ---------- */
-function InputWithIcon({
-  name,
-  label,
-  value,
-  onChange,
-  type = "text",
-  placeholder = "",
-}: {
-  name?: string;
-  label?: string;
-  value: any;
-  onChange: (v: any) => void;
-  type?: "text" | "email" | "phone" | "whatsapp" | "name";
-  placeholder?: string;
-}) {
-  const [touched, setTouched] = useState(false);
-  const v = typeof value === "string" ? value : value ?? "";
-
-  const handleChange = (raw: string) => {
-    if (type === "phone" || type === "whatsapp") {
-      const cleaned = String(raw).replace(/\D/g, "").slice(0, 10);
-      onChange(cleaned);
-    } else {
-      onChange(raw);
-    }
-  };
-
-  let valid = true;
-  if (type === "email") valid = validateEmailString(String(v));
-  else if (type === "phone" || type === "whatsapp") valid = v === "" ? true : validatePhoneString(String(v));
-  else if (type === "name") valid = String(v).trim().length > 0;
-  else valid = true;
-
-  const showError = touched && !valid;
-  const icon = type === "phone" ? "📞" : type === "whatsapp" ? "🟢" : type === "email" ? "✉️" : "👤";
-
-  return (
-    <div className="mb-3">
-      {label && <div className="text-sm text-gray-600 mb-1 font-medium">{label}</div>}
-      <div className="flex items-center gap-3">
-        <div style={{ fontSize: 18 }}>{icon}</div>
-        <FormField error={showError ? "Invalid input" : null}>
-          <input
-            aria-label={label ?? name}
-            name={name}
-            placeholder={placeholder}
-            value={v}
-            onChange={(e) => handleChange(e.target.value)}
-            onBlur={() => setTouched(true)}
-            onFocus={() => setTouched(true)}
-            inputMode={type === "phone" || type === "whatsapp" ? "numeric" : "text"}
-            maxLength={type === "phone" || type === "whatsapp" ? 10 : undefined}
-            className="w-full rounded-lg border px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400"
-          />
-        </FormField>
-      </div>
-
-      {showError && (
-        <div className="text-xs text-red-600 mt-1">
-          {type === "email" && "Please enter a valid email (example: name@example.com)."}
-          {type === "phone" && "Enter a 10-digit numeric mobile number (no spaces)."}
-          {type === "whatsapp" && "Enter a 10-digit numeric WhatsApp number (no spaces)."}
-          {type === "name" && "Please enter a name."}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* Toggle wrapper that uses AdminUI Toggle visuals where possible */
-function Toggle({ checked, onChange, label, id }: { checked: boolean; onChange: (v: boolean) => void; label?: string; id?: string }) {
-  return <UIToggle checked={checked} onChange={onChange} label={label} id={id} />;
 }
 
 /* ---------- component ---------- */
@@ -183,16 +107,15 @@ export default function RestroEditModal({
     if (restroProp) setRestro(restroProp);
   }, [restroProp]);
 
-  // ESC to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape" || e.key === "Esc") doClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restro]);
 
-  // If no restro prop, try to fetch by parsing URL /restros/:code/edit
   useEffect(() => {
     async function fetchRestro(code: string) {
       try {
@@ -221,7 +144,6 @@ export default function RestroEditModal({
     }
   }, [restro]);
 
-  // Load stations if not provided
   useEffect(() => {
     if (stations && stations.length) return;
     (async () => {
@@ -247,7 +169,6 @@ export default function RestroEditModal({
     })();
   }, []);
 
-  // Populate local state from restro
   useEffect(() => {
     if (!restro) return;
     setLocal({
@@ -475,7 +396,6 @@ export default function RestroEditModal({
     }
   }
 
-  // common props passed to child tabs
   const common = {
     local,
     updateField,
@@ -483,8 +403,9 @@ export default function RestroEditModal({
     stations,
     loadingStations,
     restroCode,
-    InputWithIcon,
+    Select,
     Toggle,
+    InputWithIcon: (props: any) => null, // keep compatibility if children expect InputWithIcon — prefer FormField + native input
     validators: {
       validateEmailString,
       validatePhoneString,
@@ -532,14 +453,14 @@ export default function RestroEditModal({
         <div style={{ position: "sticky", top: 0, zIndex: 1200, background: "#fff", borderBottom: "1px solid #e9e9e9" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px" }}>
             <div style={{ fontWeight: 700 }}>
-              <div style={{ fontSize: 15 }}>
-                {String(local.RestroCode ?? restro?.RestroCode ?? "")}
-                {(local.RestroName ?? restro?.RestroName) ? " / " : ""}{local.RestroName ?? restro?.RestroName ?? ""}
+              <div style={{ fontSize: 16 }}>
+                <span style={{ marginRight: 6, color: "#111", fontWeight: 700 }}>{String(local.RestroCode ?? restro?.RestroCode ?? "")}</span>
+                <span style={{ fontSize: 15, color: "#333" }}>{local.RestroName ?? restro?.RestroName ?? ""}</span>
               </div>
-              <div style={{ fontWeight: 600, fontSize: 13, color: "#0b7285", marginTop: 4 }}>{stationDisplay}</div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#0b7285", marginTop: 6 }}>{stationDisplay}</div>
             </div>
 
-            <div>
+            <div style={{ display: "flex", gap: 8 }}>
               <button
                 onClick={doClose}
                 aria-label="Close"
@@ -548,9 +469,9 @@ export default function RestroEditModal({
                   background: "#ef4444",
                   color: "#fff",
                   border: "none",
-                  fontSize: 18,
+                  fontSize: 16,
                   cursor: "pointer",
-                  padding: 8,
+                  padding: "8px 10px",
                   borderRadius: 6,
                 }}
               >
@@ -559,7 +480,7 @@ export default function RestroEditModal({
             </div>
           </div>
 
-          {/* Tabs row */}
+          {/* Tabs */}
           <div style={{ background: "#fafafa", borderBottom: "1px solid #eee" }}>
             <div style={{ display: "flex", gap: 6, padding: "8px 12px", overflowX: "auto" }}>
               {TAB_NAMES.map((t) => (
@@ -570,7 +491,7 @@ export default function RestroEditModal({
                     padding: "10px 14px",
                     cursor: "pointer",
                     borderBottom: activeTab === t ? "3px solid #0ea5e9" : "3px solid transparent",
-                    fontWeight: activeTab === t ? 700 : 500,
+                    fontWeight: activeTab === t ? 700 : 600,
                     color: activeTab === t ? "#0ea5e9" : "#333",
                     display: "flex",
                     alignItems: "center",
@@ -578,8 +499,8 @@ export default function RestroEditModal({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  <span style={{ display: "inline-flex", alignItems: "center", color: activeTab === t ? "#0ea5e9" : "#666" }} />
-                  <span>{t}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", color: activeTab === t ? "#0ea5e9" : "#666" }}>{/* icon placeholder */}</span>
+                  <span style={{ fontSize: 14 }}>{t}</span>
                 </div>
               ))}
             </div>
@@ -602,23 +523,25 @@ export default function RestroEditModal({
           </div>
         )}
 
-        {/* Content */}
-        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>{renderTab()}</div>
+        {/* Content inside AdminForm for consistent font/spacing */}
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+          <AdminForm className="min-h-[480px]">
+            {/* renderTab returns client components that will use AdminUI FormField/FormRow */}
+            {renderTab()}
+          </AdminForm>
+        </div>
 
-        {/* Footer */}
+        {/* Footer (actions) */}
         <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff", alignItems: "center" }}>
           <div style={{ color: "#666", fontSize: 13 }}>
             {validationErrors.length > 0 && <div style={{ color: "#b91c1c" }}>Validation: {validationErrors[0]}{validationErrors.length>1?` (+${validationErrors.length-1} more)`: ""}</div>}
             {!primaryContactValid && <div style={{ color: "#b91c1c" }}>Provide a valid Email 1 or a 10-digit Mobile 1 to enable Save.</div>}
           </div>
 
-          <div>
+          <div style={{ display: "flex", gap: 8 }}>
             {error && <div style={{ color: "red", marginRight: 12, display: "inline-block" }}>{error}</div>}
-            <button onClick={doClose} className="px-3 py-2 border rounded mr-2" style={{ background: "#fff", color: "#333", border: "1px solid #e3e3e3" }}>
-              Cancel
-            </button>
-
-            <SubmitButton onClick={handleSave} disabled={saveDisabled as boolean}>
+            <SecondaryButton onClick={doClose}>Cancel</SecondaryButton>
+            <SubmitButton onClick={handleSave} disabled={saveDisabled}>
               {saving ? "Saving..." : "Save"}
             </SubmitButton>
           </div>
