@@ -6,9 +6,7 @@ import React from "react";
 type ChildrenProp = { children?: React.ReactNode };
 
 /**
- * AdminForm
- * - simple form wrapper. Pass formProps to attach onSubmit, method, action etc.
- * - provides consistent padding/background/font styles for admin pages.
+ * AdminForm - consistent form container
  */
 export function AdminForm({
   children,
@@ -26,9 +24,7 @@ export function AdminForm({
 }
 
 /**
- * FormRow
- * - responsive grid row that can host multiple FormField components.
- * - cols default to 2 on desktop, 1 on mobile. You can pass cols={3} for 3 columns.
+ * FormRow - responsive grid row for fields
  */
 export function FormRow({
   children,
@@ -36,27 +32,20 @@ export function FormRow({
   gap = 12,
   className = "",
 }: ChildrenProp & { cols?: number; gap?: number | string; className?: string }) {
-  const columnStyle = {
+  const columnStyle: React.CSSProperties = {
     gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
     gap: typeof gap === "number" ? `${gap}px` : gap,
-  } as React.CSSProperties;
+  };
 
   return (
-    <div className={`w-full`} style={columnStyle} className={`grid ${className}`}>
+    <div className={`grid w-full ${className}`} style={columnStyle}>
       {children}
     </div>
   );
 }
 
 /**
- * FormField
- * - label, optional help text, and container for input/controls (children).
- * - Props:
- *    label: label text
- *    htmlFor: id for the input
- *    help: small help / hint text
- *    required: shows asterisk
- *    className: wrapper class
+ * FormField - label + input wrapper + optional help
  */
 export function FormField({
   label,
@@ -73,19 +62,20 @@ export function FormField({
           {label} {required ? <span aria-hidden className="text-rose-600">*</span> : null}
         </label>
       )}
-      <div className="">{children}</div>
+      <div>{children}</div>
       {help && <div className="mt-1 text-xs text-gray-500">{help}</div>}
     </div>
   );
 }
 
 /**
- * FormActions
- * - container for buttons at the form bottom. Aligns to right by default.
- * - Props:
- *    align: "right" | "left" | "center"
+ * FormActions - container for form buttons
  */
-export function FormActions({ children, align = "right", className = "" }: ChildrenProp & { align?: "right" | "left" | "center"; className?: string }) {
+export function FormActions({
+  children,
+  align = "right",
+  className = "",
+}: ChildrenProp & { align?: "right" | "left" | "center"; className?: string }) {
   const alignClass = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
   return (
     <div className={`mt-4 flex ${alignClass} gap-3 ${className}`}>
@@ -95,14 +85,17 @@ export function FormActions({ children, align = "right", className = "" }: Child
 }
 
 /**
- * SubmitButton
- * - standardized primary submit button.
- * - disabled state styles handled.
+ * SubmitButton - standardized primary action
  */
-export function SubmitButton({ children = "Save", disabled = false, className = "", ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { children?: React.ReactNode; disabled?: boolean; className?: string }) {
+export function SubmitButton({
+  children = "Save",
+  disabled = false,
+  className = "",
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { children?: React.ReactNode; disabled?: boolean; className?: string }) {
   return (
     <button
-      type={rest.type ?? "submit"}
+      type={(rest.type as any) ?? "submit"}
       disabled={disabled}
       {...rest}
       className={`inline-flex items-center gap-2 px-4 py-2 rounded-md font-semibold text-sm shadow-sm ${
@@ -115,27 +108,23 @@ export function SubmitButton({ children = "Save", disabled = false, className = 
 }
 
 /**
- * SecondaryButton
- * - light secondary button (for Cancel etc.)
+ * SecondaryButton - light secondary action
  */
-export function SecondaryButton({ children = "Cancel", onClick, className = "", ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { children?: React.ReactNode; className?: string }) {
+export function SecondaryButton({
+  children = "Cancel",
+  onClick,
+  className = "",
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { children?: React.ReactNode; className?: string }) {
   return (
-    <button
-      type={rest.type ?? "button"}
-      onClick={onClick}
-      {...rest}
-      className={`inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm border bg-white ${className}`}
-    >
+    <button type={(rest.type as any) ?? "button"} onClick={onClick} {...rest} className={`inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm border bg-white ${className}`}>
       {children}
     </button>
   );
 }
 
 /**
- * SearchBar
- * - a simple reusable search input with an optional button.
- * - onSearch receives the current query.
- * - supports pressing Enter to trigger search.
+ * SearchBar - reusable search input + optional button
  */
 export function SearchBar({
   value,
@@ -182,7 +171,7 @@ export function SearchBar({
 }
 
 /**
- * Export a default AdminUI object for convenience (so old imports like `import AdminUI from "@/components/AdminUI"` still work).
+ * Default export object for backward-compatibility
  */
 const AdminUI = {
   AdminForm,
