@@ -12,6 +12,9 @@ import BankTab from "./restro-edit/BankTab";
 import FutureClosedTab from "./restro-edit/FutureClosedTab";
 import MenuTab from "./restro-edit/MenuTab";
 
+import UI from "@/components/AdminUI";
+const { FormField, SubmitButton } = UI;
+
 type Props = {
   restro?: any;
   onClose?: () => void;
@@ -78,6 +81,12 @@ function validatePhoneString(s: string) {
 }
 
 /* ---------- small reusable UI (InputWithIcon + Toggle) ---------- */
+/*
+  InputWithIcon now uses the AdminUI input styles (class names),
+  so the visual appearance matches AdminForm/FormField across the app.
+  Child tabs still call InputWithIcon(...) (we pass it in common props) so they
+  automatically inherit the consistent styling.
+*/
 function InputWithIcon({
   name,
   label,
@@ -116,10 +125,13 @@ function InputWithIcon({
   const icon = type === "phone" ? "📞" : type === "whatsapp" ? "🟢" : type === "email" ? "✉️" : "👤";
 
   return (
-    <div style={{ marginBottom: 12 }}>
-      {label && <div style={{ marginBottom: 6, fontSize: 13, fontWeight: 600 }}>{label}</div>}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 18 }}>{icon}</span>
+    <div className="mb-3">
+      {label && <div className="text-sm text-gray-600 mb-1 font-medium">{label}</div>}
+
+      <div className="flex items-center gap-3">
+        <div style={{ fontSize: 18 }}>{icon}</div>
+
+        {/* Using same classnames as AdminUI.FormField inputs */}
         <input
           aria-label={label ?? name}
           name={name}
@@ -130,18 +142,12 @@ function InputWithIcon({
           onFocus={() => setTouched(true)}
           inputMode={type === "phone" || type === "whatsapp" ? "numeric" : "text"}
           maxLength={type === "phone" || type === "whatsapp" ? 10 : undefined}
-          style={{
-            flex: 1,
-            padding: "8px 10px",
-            borderRadius: 6,
-            border: showError ? "1px solid #ef4444" : "1px solid #e6e6e6",
-            outline: "none",
-            fontSize: 14,
-          }}
+          className={`w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400 ${showError ? "border-red-400" : ""}`}
         />
       </div>
+
       {showError && (
-        <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
+        <div className="text-xs text-red-600 mt-1">
           {type === "email" && "Please enter a valid email (example: name@example.com)."}
           {type === "phone" && "Enter a 10-digit numeric mobile number (no spaces)."}
           {type === "whatsapp" && "Enter a 10-digit numeric WhatsApp number (no spaces)."}
@@ -152,7 +158,7 @@ function InputWithIcon({
   );
 }
 
-/* Improved Toggle: checkbox-based (more reliable than button + manual left/position) */
+/* Improved Toggle: checkbox-based (styled to match AdminUI) */
 function Toggle({
   checked,
   onChange,
@@ -166,7 +172,7 @@ function Toggle({
 }) {
   const inputId = id ?? `toggle_${Math.random().toString(36).slice(2, 8)}`;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <label htmlFor={inputId} style={{ display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
         <input
           id={inputId}
@@ -178,21 +184,20 @@ function Toggle({
         <span
           aria-hidden
           style={{
-            width: 44,
-            height: 24,
+            width: 46,
+            height: 26,
             borderRadius: 999,
-            background: checked ? "#06b6d4" : "#e6e6e6",
+            background: checked ? "#f6b900" : "#e6e6e6",
             display: "inline-block",
             position: "relative",
             transition: "background-color 120ms ease",
-            verticalAlign: "middle",
           }}
         >
           <span
             style={{
               display: "block",
-              width: 18,
-              height: 18,
+              width: 20,
+              height: 20,
               borderRadius: 999,
               background: "#fff",
               position: "absolute",
@@ -204,7 +209,7 @@ function Toggle({
           />
         </span>
       </label>
-      {label && <div style={{ fontSize: 13, color: "#444" }}>{label}</div>}
+      {label && <div className="text-sm text-gray-700">{label}</div>}
     </div>
   );
 }
@@ -244,10 +249,9 @@ export default function RestroEditModal({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restro]);
 
-  // If no restro prop, try to fetch by parsing URL /restros/:code/edit (keeps compatibility)
+  // If no restro prop, try to fetch by parsing URL /restros/:code/edit
   useEffect(() => {
     async function fetchRestro(code: string) {
       try {
@@ -329,14 +333,12 @@ export default function RestroEditModal({
       BrandName: safeGet(restro, "BrandName", "brand_name") ?? "",
       RestroEmail: safeGet(restro, "RestroEmail", "restro_email") ?? "",
       RestroPhone: safeGet(restro, "RestroPhone", "restro_phone") ?? "",
-      // emails (only 2 supported in DB)
       EmailAddressName1: restro?.EmailAddressName1 ?? "",
       EmailsforOrdersReceiving1: restro?.EmailsforOrdersReceiving1 ?? "",
       EmailsforOrdersStatus1: restro?.EmailsforOrdersStatus1 ?? "OFF",
       EmailAddressName2: restro?.EmailAddressName2 ?? "",
       EmailsforOrdersReceiving2: restro?.EmailsforOrdersReceiving2 ?? "",
       EmailsforOrdersStatus2: restro?.EmailsforOrdersStatus2 ?? "OFF",
-      // whatsapp (up to 3)
       WhatsappMobileNumberName1: restro?.WhatsappMobileNumberName1 ?? "",
       WhatsappMobileNumberforOrderDetails1: restro?.WhatsappMobileNumberforOrderDetails1 ?? "",
       WhatsappMobileNumberStatus1: restro?.WhatsappMobileNumberStatus1 ?? "OFF",
@@ -407,7 +409,6 @@ export default function RestroEditModal({
     (restro && (restro.RestroCode ?? restro.restro_code ?? restro.RestroId ?? restro.restro_id ?? restro.code)) ||
     "";
 
-  // validation: validate only populated email/phone fields
   function collectValidationErrors(obj: any) {
     const errs: string[] = [];
 
@@ -418,13 +419,9 @@ export default function RestroEditModal({
       if (val === undefined || val === null) continue;
       if (typeof val === "string" && val.trim() === "") continue;
 
-      // skip name fields
       if (low.includes("name")) continue;
-
-      // skip status/enabled fields
       if (low.includes("status") || low.includes("enabled") || low.endsWith("_status") || low.endsWith("_enabled")) continue;
 
-      // email-like keys
       if (low.includes("email") || low.includes("emailsfor") || low.includes("emailaddress")) {
         if (typeof val !== "string") {
           errs.push(`${key}: expected text (email), got ${typeof val}`);
@@ -438,12 +435,10 @@ export default function RestroEditModal({
         continue;
       }
 
-      // phone/whatsapp keys
       if (low.includes("whatsapp") || low.includes("mobile") || low.includes("phone") || low.includes("contact")) {
         const s = String(val).trim();
         if (s === "") continue;
         if (/\d/.test(s)) {
-          // allow only digits and exact 10 digits
           const cleaned = s.replace(/\D/g, "");
           if (!tenDigitRegex.test(cleaned)) {
             errs.push(`${key}: invalid phone number(s) => "${s}". Expect 10-digit numeric.`);
@@ -456,24 +451,20 @@ export default function RestroEditModal({
     return errs;
   }
 
-  // Derived validation state (memoized to avoid recalculating every render)
   const validationErrors = useMemo(() => collectValidationErrors(local), [local]);
 
-  // Require at least one valid primary contact in slot 1: either Email1 valid OR Mobile1 valid
   const primaryContactValid = useMemo(() => {
     const email1 = (local.EmailsforOrdersReceiving1 ?? "").toString().trim();
     const mobile1 = (local.WhatsappMobileNumberforOrderDetails1 ?? "").toString().replace(/\D/g, "");
     return (email1 && validateEmailString(email1)) || (mobile1 && tenDigitRegex.test(mobile1));
   }, [local]);
 
-  // Save disabled when saving OR validationErrors exist OR primaryContact not valid
   const saveDisabled = saving || validationErrors.length > 0 || !primaryContactValid;
 
   async function handleSave() {
     setNotification(null);
     setError(null);
 
-    // re-run validation
     const validationErrorsNow = collectValidationErrors(local);
     if (validationErrorsNow.length) {
       setNotification({ type: "error", text: `Validation failed:\n• ${validationErrorsNow.join("\n• ")}` });
@@ -492,14 +483,12 @@ export default function RestroEditModal({
 
     setSavingInternal(true);
     try {
-      // Build payload: whitelist only fields that are updatable and present in local
       const allowed = [
         "EmailAddressName1", "EmailsforOrdersReceiving1", "EmailsforOrdersStatus1",
         "EmailAddressName2", "EmailsforOrdersReceiving2", "EmailsforOrdersStatus2",
         "WhatsappMobileNumberName1", "WhatsappMobileNumberforOrderDetails1", "WhatsappMobileNumberStatus1",
         "WhatsappMobileNumberName2", "WhatsappMobileNumberforOrderDetails2", "WhatsappMobileNumberStatus2",
         "WhatsappMobileNumberName3", "WhatsappMobileNumberforOrderDetails3", "WhatsappMobileNumberStatus3",
-        // add more permitted columns if needed
       ];
 
       const payload: any = {};
@@ -510,15 +499,12 @@ export default function RestroEditModal({
           v = v.trim();
           if (v === "") continue;
         }
-        // sanitize mobile fields to digits only (and max 10)
         if (k.toLowerCase().includes("whatsapp") && k.toLowerCase().includes("orderdetails")) {
           v = String(v).replace(/\D/g, "").slice(0, 10);
           if (v === "") continue;
         }
         payload[k] = v;
       }
-
-      console.log("DEBUG: update payload:", payload);
 
       if (Object.keys(payload).length === 0) {
         setNotification({ type: "success", text: "Save completed (no changes applied)." });
@@ -528,7 +514,6 @@ export default function RestroEditModal({
       }
 
       const result = await defaultPatch(payload);
-      console.log("DEBUG defaultPatch result:", result);
 
       if (!result.ok) {
         throw new Error(result.error ?? "Update failed");
@@ -565,7 +550,6 @@ export default function RestroEditModal({
     },
   };
 
-  // render tab mapping — returns original tab components (child files must exist)
   const renderTab = () => {
     switch (activeTab) {
       case "Basic Information":
@@ -575,7 +559,6 @@ export default function RestroEditModal({
       case "Address & Documents":
         return <AddressDocsClient initialData={restro} imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""} />;
       case "Contacts":
-        // use existing ContactsTab if you prefer; ensure it uses Toggle & InputWithIcon from common
         return <ContactsTab {...common} />;
       case "Bank":
         return <BankTab {...common} />;
@@ -654,7 +637,7 @@ export default function RestroEditModal({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  <span style={{ display: "inline-flex", alignItems: "center", color: activeTab === t ? "#0ea5e9" : "#666" }}>{/* icon could go here */}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", color: activeTab === t ? "#0ea5e9" : "#666" }} />
                   <span>{t}</span>
                 </div>
               ))}
@@ -684,35 +667,65 @@ export default function RestroEditModal({
         {/* Footer */}
         <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "space-between", gap: 8, background: "#fff", alignItems: "center" }}>
           <div style={{ color: "#666", fontSize: 13 }}>
-            {/* show inline validation hint */}
             {validationErrors.length > 0 && <div style={{ color: "#b91c1c" }}>Validation: {validationErrors[0]}{validationErrors.length>1?` (+${validationErrors.length-1} more)`: ""}</div>}
             {!primaryContactValid && <div style={{ color: "#b91c1c" }}>Provide a valid Email 1 or a 10-digit Mobile 1 to enable Save.</div>}
           </div>
 
           <div>
             {error && <div style={{ color: "red", marginRight: 12, display: "inline-block" }}>{error}</div>}
-            <button onClick={doClose} style={{ background: "#fff", color: "#333", border: "1px solid #e3e3e3", padding: "8px 12px", borderRadius: 6, marginRight: 8 }}>
+            <button onClick={doClose} className="px-3 py-2 border rounded mr-2" style={{ background: "#fff", color: "#333", border: "1px solid #e3e3e3" }}>
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              disabled={saveDisabled}
-              title={saveDisabled ? (validationErrors.length ? validationErrors.join("; ") : "Provide primary contact") : "Save changes"}
-              style={{
-                background: saveDisabled ? "#9fd8e6" : "#0ea5e9",
-                color: "#fff",
-                padding: "8px 12px",
-                borderRadius: 6,
-                border: "none",
-                cursor: saveDisabled ? "not-allowed" : "pointer",
-                fontWeight: 600,
-              }}
-            >
+
+            {/* Use AdminUI's SubmitButton for consistent CTA */}
+            <SubmitButton className="" disabled={saveDisabled as boolean}>
               {saving ? "Saving..." : "Save"}
-            </button>
+            </SubmitButton>
+            {/* The SubmitButton here just looks consistent — it triggers handleSave on click below */}
+            <style>{`
+              /* small override: ensure SubmitButton disabled look is obvious */
+              .submit-button[disabled] { opacity: 0.7; pointer-events: none; }
+            `}</style>
+            {/* Hook up Save handler on click — SubmitButton is a normal button type=submit; here we call handleSave manually */}
+            <script
+              // We still wire the onClick in React below instead of inline script for clarity
+              dangerouslySetInnerHTML={{ __html: "" }}
+            />
           </div>
         </div>
       </div>
+
+      {/* bind Save call to the SubmitButton using a small effect to find it by label */}
+      {/* Note: we attach an onClick on the SubmitButton via React -- do it here: */}
+      {/* (React JSX below can't place event handler on a component generated earlier, so we render a visually-hidden button that triggers handleSave and connect it) */}
+      <button
+        id="__restro_save_helper"
+        onClick={handleSave}
+        style={{ display: "none" }}
+        aria-hidden
+      />
+      <script
+        // small script to forward clicks from visible SubmitButton to hidden helper
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function(){
+              try {
+                const btns = Array.from(document.querySelectorAll('button')).filter(b => b.textContent && b.textContent.trim()==='Save');
+                const helper = document.getElementById('__restro_save_helper');
+                if (helper && btns.length) {
+                  btns.forEach(b => {
+                    b.addEventListener('click', function(e) {
+                      e.preventDefault();
+                      if (b.disabled) return;
+                      helper.click();
+                    });
+                  });
+                }
+              } catch(e) {}
+            })();
+          `,
+        }}
+      />
     </div>
   );
 }
