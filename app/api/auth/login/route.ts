@@ -19,7 +19,6 @@ function getJwtSecret() {
 async function parseBody(req: Request) {
   const ct = (req.headers.get("content-type") || "").toLowerCase();
 
-  // 1) application/x-www-form-urlencoded or multipart/form-data → formData()
   if (ct.includes("application/x-www-form-urlencoded") || ct.includes("multipart/form-data")) {
     try {
       const fd = await req.formData();
@@ -29,7 +28,6 @@ async function parseBody(req: Request) {
     } catch (_) {}
   }
 
-  // 2) application/json → json()
   if (ct.includes("application/json")) {
     try {
       const json = await req.json();
@@ -37,7 +35,6 @@ async function parseBody(req: Request) {
     } catch (_) {}
   }
 
-  // 3) fallback: raw text (try urlencoded, then json)
   try {
     const text = await req.text();
     if (text && text.trim()) {
@@ -62,7 +59,6 @@ export async function POST(req: Request) {
   try {
     const body = (await parseBody(req)) || {};
 
-    // Accept multiple field names for identifier
     const rawIdentifier = (
       body.mobile ??
       body.email ??
@@ -80,7 +76,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Mobile and password required" }, { status: 400 });
     }
 
-    // Determine mobile/email
     let mobile = "";
     let email = "";
     if (rawIdentifier.includes("@")) email = rawIdentifier;
@@ -88,7 +83,6 @@ export async function POST(req: Request) {
     if (body.mobile) mobile = String(body.mobile).trim();
     if (body.email) email = String(body.email).trim();
 
-    // Find user (prefer mobile)
     let query = serviceClient.from("users").select("*").limit(1);
     if (mobile) query = query.eq("mobile", mobile);
     else if (email) query = query.eq("email", email);
@@ -105,7 +99,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid credentials" }, { status: 401 });
     }
 
-    // Sign JWT and set cookie
     const secret = getJwtSecret();
     if (!secret) {
       console.error("Missing JWT secret env var. Set ADMIN_JWT_SECRET or NEXTAUTH_SECRET.");
@@ -123,9 +116,9 @@ export async function POST(req: Request) {
 
     const token = jwt.sign(payload, secret, { expiresIn: TOKEN_EXP_SECONDS });
 
-    const redirectUrl = new URL("/admin", req.url);
+    // <-- changed redirect target to /admin/home
+    const redirectUrl = new URL("/admin/home", req.url);
 
-    // Use 303 so browser converts POST → GET to /admin (prevents hang/re-POST)
     const res = NextResponse.redirect(redirectUrl, { status: 303 });
     res.headers.set("Cache-Control", "no-store");
     res.cookies.set({
