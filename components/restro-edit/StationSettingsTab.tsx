@@ -1,8 +1,8 @@
 // components/restro-edit/StationSettingsTab.tsx
+"use client";
 import React from "react";
 import UI from "@/components/AdminUI";
-
-const { FormRow, FormField, Select, Toggle } = UI;
+const { FormRow, FormField, Toggle } = UI;
 
 type Props = {
   local: any;
@@ -12,25 +12,15 @@ type Props = {
   loadingStations?: boolean;
 };
 
-export default function StationSettingsTab({
-  local,
-  updateField,
-  stationDisplay,
-  stations = [],
-  loadingStations,
-}: Props) {
+export default function StationSettingsTab({ local, updateField, stationDisplay, stations = [], loadingStations }: Props) {
   return (
-    <div style={{ maxWidth: 1200, margin: "8px auto", padding: 8 }}>
-      <h3 style={{ textAlign: "center", marginTop: 0, fontSize: 18, fontWeight: 700 }}>
-        Station Settings
-      </h3>
+    <div className="px-4 py-2">
+      <h3 className="text-center text-lg font-bold mb-4">Station Settings</h3>
 
-      <div style={{ marginTop: 12 }}>
-        <FormRow cols={3} gap={16}>
+      <div className="max-w-6xl mx-auto bg-white rounded shadow-sm p-6">
+        <FormRow cols={3} gap={6}>
           <FormField label="Station">
-            <div style={{ padding: 8, borderRadius: 6, background: "#fafafa", border: "1px solid #f0f0f0" }}>
-              {stationDisplay || "—"}
-            </div>
+            <div className="rounded border border-slate-100 bg-slate-50 p-2 text-sm">{stationDisplay}</div>
           </FormField>
 
           <FormField label="Raileats Customer Delivery Charge">
@@ -38,25 +28,20 @@ export default function StationSettingsTab({
               type="number"
               value={local?.RaileatsDeliveryCharge ?? 0}
               onChange={(e) => updateField("RaileatsDeliveryCharge", Number(e.target.value || 0))}
-              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+              className="w-full p-2 rounded border"
             />
           </FormField>
 
           <FormField label="Weekly Off">
-            <Select
-              name="weekly_off"
-              value={local?.WeeklyOff ?? "SUN"}
-              onChange={(v: string) => updateField("WeeklyOff", v)}
-              options={[
-                { label: "SUN", value: "SUN" },
-                { label: "MON", value: "MON" },
-                { label: "TUE", value: "TUE" },
-                { label: "WED", value: "WED" },
-                { label: "THU", value: "THU" },
-                { label: "FRI", value: "FRI" },
-                { label: "SAT", value: "SAT" },
-              ]}
-            />
+            <select value={local?.WeeklyOff ?? "SUN"} onChange={(e) => updateField("WeeklyOff", e.target.value)} className="w-full p-2 rounded border">
+              <option value="SUN">SUN</option>
+              <option value="MON">MON</option>
+              <option value="TUE">TUE</option>
+              <option value="WED">WED</option>
+              <option value="THU">THU</option>
+              <option value="FRI">FRI</option>
+              <option value="SAT">SAT</option>
+            </select>
           </FormField>
 
           <FormField label="Raileats Customer Delivery Charge GST Rate (%)">
@@ -64,26 +49,16 @@ export default function StationSettingsTab({
               type="number"
               value={local?.RaileatsDeliveryChargeGSTRate ?? 0}
               onChange={(e) => updateField("RaileatsDeliveryChargeGSTRate", Number(e.target.value || 0))}
-              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+              className="w-full p-2 rounded border"
             />
           </FormField>
 
           <FormField label="Open Time">
-            <input
-              type="time"
-              value={local?.OpenTime ?? ""}
-              onChange={(e) => updateField("OpenTime", e.target.value)}
-              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
-            />
+            <input type="time" value={local?.OpenTime ?? ""} onChange={(e) => updateField("OpenTime", e.target.value)} className="w-full p-2 rounded border" />
           </FormField>
 
           <FormField label="Closed Time">
-            <input
-              type="time"
-              value={local?.ClosedTime ?? ""}
-              onChange={(e) => updateField("ClosedTime", e.target.value)}
-              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
-            />
+            <input type="time" value={local?.ClosedTime ?? ""} onChange={(e) => updateField("ClosedTime", e.target.value)} className="w-full p-2 rounded border" />
           </FormField>
 
           <FormField label="Raileats Customer Delivery Charge GST (absolute)">
@@ -91,7 +66,7 @@ export default function StationSettingsTab({
               type="number"
               value={local?.RaileatsDeliveryChargeGST ?? 0}
               onChange={(e) => updateField("RaileatsDeliveryChargeGST", Number(e.target.value || 0))}
-              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+              className="w-full p-2 rounded border"
             />
           </FormField>
 
@@ -100,64 +75,39 @@ export default function StationSettingsTab({
               type="number"
               value={local?.RaileatsDeliveryChargeTotalInclGST ?? 0}
               onChange={(e) => updateField("RaileatsDeliveryChargeTotalInclGST", Number(e.target.value || 0))}
-              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
+              className="w-full p-2 rounded border"
             />
           </FormField>
 
           <FormField label="Minimum Order Value">
-            <input
-              type="number"
-              value={local?.MinimumOrderValue ?? 0}
-              onChange={(e) => updateField("MinimumOrderValue", Number(e.target.value || 0))}
-              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
-            />
+            <input type="number" value={local?.MinimumOrderValue ?? 0} onChange={(e) => updateField("MinimumOrderValue", Number(e.target.value || 0))} className="w-full p-2 rounded border" />
           </FormField>
 
           <FormField label="Cut Off Time (mins)">
-            <input
-              type="number"
-              value={local?.CutOffTime ?? 0}
-              onChange={(e) => updateField("CutOffTime", Number(e.target.value || 0))}
-              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
-            />
+            <input type="number" value={local?.CutOffTime ?? 0} onChange={(e) => updateField("CutOffTime", Number(e.target.value || 0))} className="w-full p-2 rounded border" />
           </FormField>
 
           <FormField label="Raileats Orders Payment Option for Customer">
-            <Select
-              name="orders_payment_option"
-              value={local?.OrdersPaymentOptionForCustomer ?? "BOTH"}
-              onChange={(v: string) => updateField("OrdersPaymentOptionForCustomer", v)}
-              options={[
-                { label: "Both", value: "BOTH" },
-                { label: "Prepaid Only", value: "PREPAID" },
-                { label: "COD Only", value: "COD" },
-              ]}
-            />
+            <select value={local?.OrdersPaymentOptionForCustomer ?? "BOTH"} onChange={(e) => updateField("OrdersPaymentOptionForCustomer", e.target.value)} className="w-full p-2 rounded border">
+              <option value="BOTH">Both</option>
+              <option value="PREPAID">Prepaid Only</option>
+              <option value="COD">COD Only</option>
+            </select>
           </FormField>
 
           <FormField label="IRCTC Orders Payment Option for Customer">
-            <Select
-              name="irctc_orders_payment_option"
-              value={local?.IRCTCOrdersPaymentOptionForCustomer ?? "BOTH"}
-              onChange={(v: string) => updateField("IRCTCOrdersPaymentOptionForCustomer", v)}
-              options={[
-                { label: "Both", value: "BOTH" },
-                { label: "Prepaid Only", value: "PREPAID" },
-                { label: "COD Only", value: "COD" },
-              ]}
-            />
+            <select value={local?.IRCTCOrdersPaymentOptionForCustomer ?? "BOTH"} onChange={(e) => updateField("IRCTCOrdersPaymentOptionForCustomer", e.target.value)} className="w-full p-2 rounded border">
+              <option value="BOTH">Both</option>
+              <option value="PREPAID">Prepaid Only</option>
+              <option value="COD">COD Only</option>
+            </select>
           </FormField>
 
           <FormField label="Restro Type of Delivery (Vendor / Raileats)">
-            <Select
-              name="restro_type_of_delivery"
-              value={local?.RestroTypeOfDelivery ?? "RAILEATS"}
-              onChange={(v: string) => updateField("RestroTypeOfDelivery", v)}
-              options={[
-                { label: "Raileats Delivery", value: "RAILEATS" },
-                { label: "Vendor Self", value: "VENDOR" },
-              ]}
-            />
+            <select value={local?.RestroTypeOfDelivery ?? "RAILEATS"} onChange={(e) => updateField("RestroTypeOfDelivery", e.target.value)} className="w-full p-2 rounded border">
+              <option value="RAILEATS">Raileats Delivery</option>
+              <option value="VENDOR">Vendor Self</option>
+            </select>
           </FormField>
         </FormRow>
       </div>
