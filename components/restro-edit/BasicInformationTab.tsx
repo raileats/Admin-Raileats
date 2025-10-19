@@ -21,7 +21,6 @@ export default function BasicInformationTab({ local, updateField, stationDisplay
         Basic Information
       </h3>
 
-      {/* Grid: 3 columns on wide, 2 on medium, 1 on mobile */}
       <div style={{ marginTop: 12 }}>
         <FormRow cols={3} gap={16}>
           <FormField label="Station">
@@ -40,7 +39,6 @@ export default function BasicInformationTab({ local, updateField, stationDisplay
             <input
               value={local?.RestroName ?? ""}
               onChange={(e) => updateField("RestroName", e.target.value)}
-              className="w-full"
               style={{
                 width: "100%",
                 padding: 10,
@@ -60,16 +58,14 @@ export default function BasicInformationTab({ local, updateField, stationDisplay
           </FormField>
 
           <FormField label="Raileats Status">
-            <Select
-              value={local?.Raileats ? "1" : "0"}
-              onChange={(v) => updateField("Raileats", String(v) === "1")}
-              options={[
-                { label: "On", value: "1" },
-                { label: "Off", value: "0" },
-              ]}
-              placeholder={undefined}
-              name="raileats_status"
-            />
+            {/* Toggle slider for On / Off */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Toggle
+                checked={!!local?.Raileats}
+                onChange={(v: boolean) => updateField("Raileats", v)}
+                label={local?.Raileats ? "On" : "Off"}
+              />
+            </div>
           </FormField>
 
           <FormField label="Is IRCTC Approved">
@@ -161,7 +157,8 @@ export default function BasicInformationTab({ local, updateField, stationDisplay
             />
           </FormField>
 
-          <FormField label="FSSAI Number">
+          <FormField label="FSSAI Number" style={{ display: "none" }}>
+            {/* kept hidden in case you want to restore later */}
             <input
               value={local?.FSSAINumber ?? ""}
               onChange={(e) => updateField("FSSAINumber", e.target.value)}
@@ -169,24 +166,9 @@ export default function BasicInformationTab({ local, updateField, stationDisplay
             />
           </FormField>
 
-          <FormField label="FSSAI Expiry Date">
-            <input
-              type="date"
-              value={local?.FSSAIExpiryDate ?? ""}
-              onChange={(e) => updateField("FSSAIExpiryDate", e.target.value)}
-              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #e3e3e3", fontSize: 14 }}
-            />
-          </FormField>
+          {/* NOTE: FSSAI Expiry Date intentionally removed as requested */}
         </FormRow>
       </div>
-
-      {/* small responsive tweaks so grid collapses nicely; the AdminUI FormRow handles desktop grid,
-          but provide CSS fallback for smaller screens */}
-      <style jsx>{`
-        @media (max-width: 1100px) {
-          /* reduce columns by letting FormRow be flex-like — but FormRow uses CSS grid already */
-        }
-      `}</style>
     </div>
   );
 }
