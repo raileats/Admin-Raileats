@@ -1,8 +1,7 @@
-// components/restro-edit/AddressDocumentsTab.tsx
 "use client";
 import React from "react";
 import UI from "@/components/AdminUI";
-const { FormRow, FormField, Toggle, SubmitButton } = UI;
+const { FormField, Toggle, SubmitButton } = UI;
 
 type StationOption = { label: string; value: string };
 
@@ -32,131 +31,298 @@ export default function AddressDocumentsTab({ local, updateField }: Props) {
 
   return (
     <div className="px-4 pb-8">
-      <div className="max-w-6xl mx-auto">
-        <h2 className="text-center text-xl font-bold mb-6">Address &amp; Documents</h2>
+      <div className="max-w-7xl mx-auto">
+        <h2 className="text-center text-2xl font-extrabold mb-6">Address &amp; Documents</h2>
 
-        <div className="bg-white rounded shadow-sm p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">Address</h3>
+        {/* ---------- ADDRESS SECTION ---------- */}
+        <div className="bg-white rounded shadow-sm overflow-hidden mb-6">
+          <div className="bg-amber-50 py-3 text-center font-semibold">Address</div>
 
-          <FormRow cols={3} gap={6}>
-            <div className="col-span-3">
-              <FormField label="Restro Address">
-                <textarea
-                  name="RestroAddress"
-                  value={restroAddress}
-                  onChange={(e) => updateField("RestroAddress", e.target.value)}
-                  className="w-full min-h-[80px] p-3 rounded border border-slate-200"
-                />
-              </FormField>
+          {/* address panel: left label column + grey center area */}
+          <div className="grid grid-cols-12">
+            {/* left labels column */}
+            <div className="col-span-2 border-r border-slate-200 bg-white">
+              <div className="py-4 px-3 text-sm font-medium">Restro Address</div>
+              <div className="py-6 px-3 text-sm font-medium">City / Village</div>
+              <div className="py-6 px-3 text-sm font-medium">Pin Code</div>
             </div>
 
-            <FormField label="City / Village">
-              <input name="City" value={city} onChange={(e) => updateField("City", e.target.value)} className="w-full p-2 rounded border" />
-            </FormField>
+            {/* grey center content (spans many cols) */}
+            <div className="col-span-8 bg-slate-200 p-6">
+              <div className="mb-4">
+                {/* Large centered address text (non-edit text area appearance like screenshot) */}
+                <div className="text-center text-sm leading-relaxed px-8">
+                  {restroAddress || "—"}
+                </div>
+              </div>
 
-            <FormField label="State">
-              <input name="State" value={stateVal} onChange={(e) => updateField("State", e.target.value)} className="w-full p-2 rounded border" />
-            </FormField>
+              <div className="grid grid-cols-3 gap-4 items-center mt-6">
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">City / Village</div>
+                  <div className="bg-white p-3 rounded border h-10">{city || "—"}</div>
+                </div>
 
-            <FormField label="District">
-              <input name="District" value={district} onChange={(e) => updateField("District", e.target.value)} className="w-full p-2 rounded border" />
-            </FormField>
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">State</div>
+                  {/* state must be non-editable */}
+                  <div className="bg-white p-3 rounded border h-10">{stateVal || "—"}</div>
+                </div>
 
-            <FormField label="Pin Code">
-              <input name="PinCode" value={pin} onChange={(e) => updateField("PinCode", e.target.value)} className="w-full p-2 rounded border" />
-            </FormField>
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">District</div>
+                  {/* district non-editable */}
+                  <div className="bg-white p-3 rounded border h-10">{district || "—"}</div>
+                </div>
+              </div>
 
-            <FormField label="Latitude">
-              <input name="RestroLatitude" value={lat} onChange={(e) => updateField("RestroLatitude", e.target.value)} className="w-full p-2 rounded border" />
-            </FormField>
+              <div className="grid grid-cols-4 gap-4 items-center mt-6">
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">Pin Code</div>
+                  <div className="bg-white p-3 rounded border h-10">{pin || "—"}</div>
+                </div>
 
-            <FormField label="Longitude">
-              <input name="RestroLongitude" value={lng} onChange={(e) => updateField("RestroLongitude", e.target.value)} className="w-full p-2 rounded border" />
-            </FormField>
-          </FormRow>
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">Restro Latitude</div>
+                  <div className="bg-white p-3 rounded border h-10">{lat || "—"}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-slate-600 mb-1">Restro Longitude</div>
+                  <div className="bg-white p-3 rounded border h-10">{lng || "—"}</div>
+                </div>
+
+                {/* an empty spacer cell to match wide layout */}
+                <div />
+              </div>
+            </div>
+
+            {/* rightmost action column */}
+            <div className="col-span-2 border-l border-slate-200 bg-white">
+              <div className="py-4 px-3 text-sm font-medium">Actions</div>
+              <div className="px-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // example: focus address editing — you can change behavior to open inline editor/modal
+                    // fallback: allow editing by copying existing values into inputs via updateField if you want
+                  }}
+                  className="w-full bg-sky-500 text-white rounded py-2 mb-3"
+                >
+                  Edit Address
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white rounded shadow-sm p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4">Documents</h3>
+        {/* ---------- DOCUMENTS SECTION ---------- */}
+        <div className="bg-white rounded shadow-sm p-0 mb-6">
+          <div className="bg-sky-100 py-3 text-center font-semibold">Documents</div>
 
-          <FormRow cols={4} gap={6} className="items-end">
-            <FormField label="FSSAI Number">
-              <input name="FSSAINumber" value={fssai} onChange={(e) => updateField("FSSAINumber", e.target.value)} className="w-full p-2 rounded border" maxLength={20} />
-            </FormField>
+          {/* documents header row (table-like) */}
+          <div className="grid grid-cols-12 gap-0 border-t">
+            <div className="col-span-8">
+              {/* table header */}
+              <div className="grid grid-cols-12 text-xs">
+                <div className="col-span-3 border-r border-slate-200 p-2 font-semibold">Document</div>
+                <div className="col-span-3 border-r border-slate-200 p-2 font-semibold">Number / Type</div>
+                <div className="col-span-3 border-r border-slate-200 p-2 font-semibold">Expiry / Dropdown</div>
+                <div className="col-span-3 p-2 font-semibold">Copy Upload / Status</div>
+              </div>
 
-            <FormField label="FSSAI Expiry">
-              <input type="date" name="FSSAIExpiry" value={fssaiExpiry ?? ""} onChange={(e) => updateField("FSSAIExpiry", e.target.value)} className="w-full p-2 rounded border" />
-            </FormField>
+              {/* FSSAI row */}
+              <div className="grid grid-cols-12 text-sm items-center border-t">
+                <div className="col-span-3 border-r border-slate-200 p-3">FSSAI Number</div>
 
-            <FormField label="FSSAI Copy">
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) {
-                    // hook upload -> updateField("FSSAICopyUrl", url)
-                  }
-                }}
-              />
-            </FormField>
+                <div className="col-span-3 border-r border-slate-200 p-3">
+                  <input
+                    name="FSSAINumber"
+                    value={fssai}
+                    onChange={(e) => updateField("FSSAINumber", e.target.value)}
+                    className="w-full p-2 rounded border"
+                    maxLength={20}
+                    placeholder="14-digit FSSAI Number"
+                  />
+                </div>
 
-            <FormField label="FSSAI Status">
-              <Toggle checked={Boolean(local?.FSSAIStatus)} onChange={(v: boolean) => updateField("FSSAIStatus", v)} label={local?.FSSAIStatus ? "On" : "Off"} />
-            </FormField>
-          </FormRow>
+                <div className="col-span-3 border-r border-slate-200 p-3">
+                  <input
+                    type="date"
+                    name="FSSAIExpiry"
+                    value={fssaiExpiry ?? ""}
+                    onChange={(e) => updateField("FSSAIExpiry", e.target.value)}
+                    className="w-full p-2 rounded border"
+                  />
+                </div>
 
-          <FormRow cols={4} gap={6} className="items-end mt-4">
-            <FormField label="GST Number">
-              <input name="GSTNumber" value={gst} onChange={(e) => updateField("GSTNumber", e.target.value)} className="w-full p-2 rounded border" maxLength={20} />
-            </FormField>
+                <div className="col-span-3 p-3 flex items-center gap-3">
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          // TODO: upload to Supabase and set updateField("FSSAICopyUrl", url)
+                        }
+                      }}
+                    />
+                  </div>
 
-            <FormField label="GST Type">
-              <select name="GSTType" value={gstType ?? ""} onChange={(e) => updateField("GSTType", e.target.value)} className="w-full p-2 rounded border">
-                <option value="">-- Select --</option>
-                <option value="Regular">Regular</option>
-                <option value="Composition">Composition</option>
-                <option value="NotApplicable">Not Applicable</option>
-              </select>
-            </FormField>
+                  <div className="w-28">
+                    <Toggle checked={Boolean(local?.FSSAIStatus)} onChange={(v: boolean) => updateField("FSSAIStatus", v)} label={local?.FSSAIStatus ? "ON" : "OFF"} />
+                  </div>
+                </div>
+              </div>
 
-            <FormField label="GST Copy">
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={() => { /* implement */ }} />
-            </FormField>
+              {/* GST row */}
+              <div className="grid grid-cols-12 text-sm items-center border-t">
+                <div className="col-span-3 border-r border-slate-200 p-3">GST Number</div>
 
-            <FormField label="GST Status">
-              <Toggle checked={Boolean(local?.GSTStatus)} onChange={(v: boolean) => updateField("GSTStatus", v)} label={local?.GSTStatus ? "On" : "Off"} />
-            </FormField>
-          </FormRow>
+                <div className="col-span-3 border-r border-slate-200 p-3">
+                  <input
+                    name="GSTNumber"
+                    value={gst}
+                    onChange={(e) => updateField("GSTNumber", e.target.value)}
+                    className="w-full p-2 rounded border"
+                    maxLength={20}
+                    placeholder="15 letters / digits"
+                  />
+                </div>
 
-          <FormRow cols={4} gap={6} className="items-end mt-4">
-            <FormField label="PAN Number">
-              <input name="PANNumber" value={pan} onChange={(e) => updateField("PANNumber", e.target.value)} className="w-full p-2 rounded border" maxLength={15} />
-            </FormField>
+                <div className="col-span-3 border-r border-slate-200 p-3">
+                  <select
+                    name="GSTType"
+                    value={gstType ?? ""}
+                    onChange={(e) => updateField("GSTType", e.target.value)}
+                    className="w-full p-2 rounded border"
+                  >
+                    <option value="">-- Select --</option>
+                    <option value="Regular">Regular</option>
+                    <option value="Composition">Composition</option>
+                    <option value="NotApplicable">Not Applicable</option>
+                  </select>
+                </div>
 
-            <FormField label="PAN Type">
-              <select name="PANType" value={panType ?? ""} onChange={(e) => updateField("PANType", e.target.value)} className="w-full p-2 rounded border">
-                <option value="">-- Select --</option>
-                <option value="Individual">Individual</option>
-                <option value="Company">Company</option>
-              </select>
-            </FormField>
+                <div className="col-span-3 p-3 flex items-center gap-3">
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          // TODO: upload -> updateField("GSTCopyUrl", url)
+                        }
+                      }}
+                    />
+                  </div>
 
-            <FormField label="PAN Copy">
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={() => { /* implement */ }} />
-            </FormField>
+                  <div className="w-28">
+                    <Toggle checked={Boolean(local?.GSTStatus)} onChange={(v: boolean) => updateField("GSTStatus", v)} label={local?.GSTStatus ? "ON" : "OFF"} />
+                  </div>
+                </div>
+              </div>
 
-            <FormField label="PAN Status">
-              <Toggle checked={Boolean(local?.PANStatus)} onChange={(v: boolean) => updateField("PANStatus", v)} label={local?.PANStatus ? "On" : "Off"} />
-            </FormField>
-          </FormRow>
+              {/* PAN row */}
+              <div className="grid grid-cols-12 text-sm items-center border-t">
+                <div className="col-span-3 border-r border-slate-200 p-3">PAN Number</div>
+
+                <div className="col-span-3 border-r border-slate-200 p-3">
+                  <input
+                    name="PANNumber"
+                    value={pan}
+                    onChange={(e) => updateField("PANNumber", e.target.value)}
+                    className="w-full p-2 rounded border"
+                    maxLength={10}
+                    placeholder="10 letters/digits"
+                  />
+                </div>
+
+                <div className="col-span-3 border-r border-slate-200 p-3">
+                  <select
+                    name="PANType"
+                    value={panType ?? ""}
+                    onChange={(e) => updateField("PANType", e.target.value)}
+                    className="w-full p-2 rounded border"
+                  >
+                    <option value="">-- Select --</option>
+                    <option value="Individual">Individual</option>
+                    <option value="Company">Company</option>
+                  </select>
+                </div>
+
+                <div className="col-span-3 p-3 flex items-center gap-3">
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          // TODO: upload -> updateField("PANCpoyUrl", url)
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="w-28">
+                    <Toggle checked={Boolean(local?.PANStatus)} onChange={(v: boolean) => updateField("PANStatus", v)} label={local?.PANStatus ? "ON" : "OFF"} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* right action column with Add New buttons */}
+            <div className="col-span-4 border-l border-slate-200 bg-white p-3">
+              <div className="flex flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // ideally call add_fssai_atomic backend RPC - placeholder here
+                    // e.g. open Add FSSAI modal or call updateField('addFSSAI', true)
+                  }}
+                  className="w-full bg-sky-500 text-white rounded py-2"
+                >
+                  Add New FSSAI Entry
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    // open GST add flow
+                  }}
+                  className="w-full bg-sky-500 text-white rounded py-2"
+                >
+                  Add New GST Entry
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    // open PAN add flow
+                  }}
+                  className="w-full bg-sky-500 text-white rounded py-2"
+                >
+                  Add New PAN Entry
+                </button>
+
+                {/* explanatory note */}
+                <div className="text-xs text-slate-500 mt-4">
+                  Add new entries create history rows. Use server RPCs (add_fssai_atomic / add_gst_atomic / add_pan_atomic) when saving.
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="text-sm text-slate-500 mb-6 max-w-3xl mx-auto">Note: file inputs are placeholders — wire Supabase signed uploads and call <code>updateField</code> with stored URLs.</div>
+        {/* footer note */}
+        <div className="text-sm text-slate-500 mb-4 max-w-3xl mx-auto">
+          Note: file inputs are placeholders — wire Supabase signed uploads and call <code>updateField</code> with stored URLs. State &amp; District are non-editable (populated from station data).
+        </div>
 
         <div className="flex justify-center">
-          {/* SubmitButton usage: pass children rather than unknown 'label' prop */}
-          <SubmitButton onClick={() => { /* parent modal Save handles final persist; keep empty or call local save if needed */ }}>
+          <SubmitButton onClick={() => { /* parent modal Save handles final persist */ }}>
             Save Address &amp; Docs
           </SubmitButton>
         </div>
