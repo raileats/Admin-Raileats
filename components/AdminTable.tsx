@@ -1,8 +1,6 @@
 // components/AdminTable.tsx
 "use client";
 import React, { useMemo, useState } from "react";
-import AdminUI from "@/components/AdminUI";
-const { SearchBar } = AdminUI;
 
 export type Column<T = any> = {
   key: string;
@@ -13,11 +11,17 @@ export type Column<T = any> = {
   sortable?: boolean;
 };
 
-type AdminTableProps<T> = {
+type AdminTableProps<T = any> = {
   title?: string;
   subtitle?: string;
   data: T[];
   columns: Column<T>[];
+  /** Optional placeholder kept for backward compatibility.
+   * Component currently doesn't render a built-in search input,
+   * but pages might pass this prop — keep it optional to avoid TS errors.
+   */
+  searchPlaceholder?: string;
+  // removed built-in search input (use page-level filters instead)
   filters?: React.ReactNode;
   actions?: (row: T) => React.ReactNode;
   pageSize?: number;
@@ -26,13 +30,18 @@ type AdminTableProps<T> = {
   compact?: boolean;
   highlightStriped?: boolean;
   rowHoverShadow?: boolean;
-  // new: controlled search support
-  searchValue?: string;
-  onSearchChange?: (v: string) => void;
-  onSearch?: () => void;
+
+  // allow extra legacy/unknown props so passing pages don't fail the build
+  [key: string]: any;
 };
 
-function StatusPill({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "success" | "info" | "danger" | "warning" }) {
+function StatusPill({
+  children,
+  tone = "muted",
+}: {
+  children: React.ReactNode;
+  tone?: "muted" | "success" | "info" | "danger" | "warning";
+}) {
   const base = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium";
   const cls =
     tone === "success"
@@ -52,6 +61,8 @@ export default function AdminTable<T extends { id?: string | number }>({
   subtitle,
   data,
   columns,
+  // searchPlaceholder is accepted but not rendered here (kept for compatibility)
+  searchPlaceholder,
   filters,
   actions,
   pageSize = 10,
@@ -60,15 +71,13 @@ export default function AdminTable<T extends { id?: string | number }>({
   compact = false,
   highlightStriped = true,
   rowHoverShadow = true,
-  searchValue,
-  onSearchChange,
-  onSearch,
 }: AdminTableProps<T>) {
+  // NO built-in search state here — page-level filters should control data
   const [page, setPage] = useState(1);
 
-  // NOTE: AdminTable expects parent pages to filter data when search is used.
-  // Here we simply paginate the provided `data`.
-  const filtered = useMemo(() => data, [data]);
+  // data is assumed already filtered by page
+  const filtered = useMemo(() => data ?? [], [data]);
+
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const pageData = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -93,6 +102,7 @@ export default function AdminTable<T extends { id?: string | number }>({
 
   return (
     <section className="w-full max-w-full bg-white rounded-2xl shadow-sm">
+      {/* Header: title/subtitle and optional filters (no built-in search) */}
       <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="min-w-0">
           {title && <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 leading-tight">{title}</h1>}
@@ -101,13 +111,6 @@ export default function AdminTable<T extends { id?: string | number }>({
         </div>
 
         <div className="flex items-center gap-3 ml-auto pr-6">
-          {/* show SearchBar only if page didn't supply `filters` and provided search handlers */}
-          {!filters && (onSearchChange || onSearch) && (
-            <div className="w-64">
-              <SearchBar value={searchValue} onChange={onSearchChange ?? (() => {})} onSearch={onSearch} />
-            </div>
-          )}
-
           {showAddButton && (
             <button onClick={() => showAddButton.onClick?.()} className="inline-flex items-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-full shadow-sm">
               {showAddButton.label ?? "+ Add"}
@@ -116,6 +119,7 @@ export default function AdminTable<T extends { id?: string | number }>({
         </div>
       </div>
 
+      {/* Table */}
       <div className="overflow-x-auto border-t border-gray-100">
         <table className="min-w-full w-full table-fixed">
           <thead className="bg-white">
@@ -197,6 +201,7 @@ export default function AdminTable<T extends { id?: string | number }>({
         </table>
       </div>
 
+      {/* footer / pagination */}
       <div className="px-6 py-3 flex items-center justify-between gap-3 mt-2">
         <div className="text-sm text-gray-600">
           Showing {(page - 1) * pageSize + (total === 0 ? 0 : 1)} - {Math.min(page * pageSize, total)} of {total}
