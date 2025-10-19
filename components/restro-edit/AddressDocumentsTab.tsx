@@ -1,10 +1,13 @@
 // components/restro-edit/AddressDocumentsTab.tsx
 import React from "react";
+import UI from "@/components/AdminUI";
+
+const { FormRow, FormField, Select, Toggle } = UI;
 
 type StationOption = { label: string; value: string };
 
 type Props = {
-  // these mirror the 'common' object spread from RestroEditModal
+  // mirror of the 'common' object spread from RestroEditModal
   local: any;
   updateField: (key: string, value: any) => void;
   stationDisplay?: string;
@@ -19,7 +22,7 @@ export default function AddressDocumentsTab({
   stations,
   loadingStations,
 }: Props) {
-  // data fallbacks
+  // data fallbacks (same keys you were using)
   const restroAddress = local?.RestroAddress ?? "";
   const city = local?.City ?? "";
   const stateVal = local?.State ?? "";
@@ -35,217 +38,232 @@ export default function AddressDocumentsTab({
   const pan = local?.PANNumber ?? "";
   const panType = local?.PANType ?? "";
 
-  // small shared styles
-  const sectionBoxStyle: React.CSSProperties = {
-    background: "#e8f5ff", // light blue background as requested
+  // small shared styles (kept inline to avoid touching global CSS)
+  const sectionBox: React.CSSProperties = {
+    background: "#f6fbff",
     padding: 18,
     borderRadius: 10,
-    border: "1px solid #d6eaf8",
+    border: "1px solid #e6f2fb",
     marginBottom: 16,
   };
 
-  const labelStyle: React.CSSProperties = {
-    display: "block",
-    marginBottom: 6,
-    color: "#333",
-    fontWeight: 600,
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 6,
-    border: "1px solid #e6eef6",
-    background: "#fff",
-  };
-
-  const headingLarge: React.CSSProperties = {
-    margin: "0 0 12px 0",
-    fontSize: 20,
-    color: "#083d77",
-    fontWeight: 700,
-  };
+  const noteStyle: React.CSSProperties = { color: "#666", fontSize: 13 };
 
   return (
-    <div style={{ padding: "6px 6px 30px 6px" }}>
-      {/* NOTE: removed the duplicate station header here (you said red-marked area should be removed).
-          The global modal header already shows "1001 / Hotel Yash Palace (SUR) Solapur Jn". */}
+    <div style={{ padding: "6px 10px 30px 10px" }}>
+      {/* Address section */}
+      <div style={sectionBox}>
+        <h3 style={{ margin: 0, marginBottom: 12, fontSize: 20, color: "#083d77", fontWeight: 700 }}>
+          Address
+        </h3>
 
-      {/* Address SECTION (larger box with blue background) */}
-      <div style={sectionBoxStyle}>
-        <h3 style={headingLarge}>Address</h3>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          <div style={{ gridColumn: "1 / span 3" }}>
-            <label style={labelStyle}>Restro Address</label>
+        <FormRow cols={3} gap={14}>
+          <FormField label="Restro Address" style={{ gridColumn: "1 / span 3" } as any}>
             <textarea
               name="RestroAddress"
               value={restroAddress}
               onChange={(e) => updateField("RestroAddress", e.target.value)}
-              style={{ ...inputStyle, minHeight: 100, resize: "vertical" }}
+              style={{ width: "100%", minHeight: 96, padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label style={labelStyle}>City / Village</label>
-            <input name="City" value={city} onChange={(e) => updateField("City", e.target.value)} style={inputStyle} />
-          </div>
+          <FormField label="City / Village">
+            <input
+              name="City"
+              value={city}
+              onChange={(e) => updateField("City", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
+            />
+          </FormField>
 
-          <div>
-            <label style={labelStyle}>State</label>
-            <input name="State" value={stateVal} onChange={(e) => updateField("State", e.target.value)} style={inputStyle} />
-          </div>
+          <FormField label="State">
+            <input
+              name="State"
+              value={stateVal}
+              onChange={(e) => updateField("State", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
+            />
+          </FormField>
 
-          <div>
-            <label style={labelStyle}>District</label>
-            <input name="District" value={district} onChange={(e) => updateField("District", e.target.value)} style={inputStyle} />
-          </div>
+          <FormField label="District">
+            <input
+              name="District"
+              value={district}
+              onChange={(e) => updateField("District", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
+            />
+          </FormField>
 
-          <div>
-            <label style={labelStyle}>Pin Code</label>
-            <input name="PinCode" value={pin} onChange={(e) => updateField("PinCode", e.target.value)} style={inputStyle} />
-          </div>
+          <FormField label="Pin Code">
+            <input
+              name="PinCode"
+              value={pin}
+              onChange={(e) => updateField("PinCode", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
+            />
+          </FormField>
 
-          <div style={{ display: "flex", gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Latitude</label>
-              <input name="RestroLatitude" value={lat} onChange={(e) => updateField("RestroLatitude", e.target.value)} style={inputStyle} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Longitude</label>
-              <input name="RestroLongitude" value={lng} onChange={(e) => updateField("RestroLongitude", e.target.value)} style={inputStyle} />
-            </div>
-          </div>
-        </div>
+          <FormField label="Latitude">
+            <input
+              name="RestroLatitude"
+              value={lat}
+              onChange={(e) => updateField("RestroLatitude", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
+            />
+          </FormField>
+
+          <FormField label="Longitude">
+            <input
+              name="RestroLongitude"
+              value={lng}
+              onChange={(e) => updateField("RestroLongitude", e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
+            />
+          </FormField>
+        </FormRow>
       </div>
 
-      {/* Documents SECTION (larger box with blue background) */}
-      <div style={sectionBoxStyle}>
-        <h3 style={headingLarge}>Documents</h3>
+      {/* Documents section */}
+      <div style={sectionBox}>
+        <h3 style={{ margin: 0, marginBottom: 12, fontSize: 20, color: "#083d77", fontWeight: 700 }}>
+          Documents
+        </h3>
 
         <div style={{ display: "grid", gap: 12 }}>
-          {/* FSSAI row */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 220px 140px 120px", gap: 12, alignItems: "center" }}>
-            <div>
-              <label style={labelStyle}>FSSAI Number</label>
-              <input name="FSSAINumber" value={fssai} onChange={(e) => updateField("FSSAINumber", e.target.value)} style={inputStyle} />
-            </div>
+          {/* FSSAI */}
+          <FormRow cols={4} gap={12}>
+            <FormField label="FSSAI Number">
+              <input
+                name="FSSAINumber"
+                value={fssai}
+                onChange={(e) => updateField("FSSAINumber", e.target.value)}
+                style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
+              />
+            </FormField>
 
-            <div>
-              <label style={labelStyle}>FSSAI Expiry</label>
-              <input type="date" name="FSSAIExpiry" value={fssaiExpiry} onChange={(e) => updateField("FSSAIExpiry", e.target.value)} style={inputStyle} />
-            </div>
+            <FormField label="FSSAI Expiry">
+              <input
+                type="date"
+                name="FSSAIExpiry"
+                value={fssaiExpiry}
+                onChange={(e) => updateField("FSSAIExpiry", e.target.value)}
+                style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #e6eef6" }}
+              />
+            </FormField>
 
-            <div>
-              <label style={labelStyle}>Upload Copy</label>
-              <input type="file" name="FSSAICopy" onChange={() => { /* implement upload flow separately */ }} />
-            </div>
-
-            <div>
-              <label style={labelStyle}>Status</label>
-              <button
-                type="button"
-                onClick={() => updateField("FSSAIStatus", !(local?.FSSAIStatus ?? false))}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: local?.FSSAIStatus ? "#16a34a" : "#9ca3af",
-                  color: "#fff",
-                  fontWeight: 700,
+            <FormField label="Upload Copy">
+              {/* placeholder input — keep upload flow separate */}
+              <input
+                type="file"
+                name="FSSAICopy"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  // keep updateField payload small: you can send file.name or implement signed upload flow server-side
+                  updateField("FSSAICopyName", f ? f.name : null);
                 }}
-              >
-                {local?.FSSAIStatus ? "On" : "Off"}
-              </button>
-            </div>
-          </div>
+              />
+            </FormField>
 
-          {/* GST row */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 220px 140px 120px", gap: 12, alignItems: "center" }}>
-            <div>
-              <label style={labelStyle}>GST Number</label>
-              <input name="GSTNumber" value={gst} onChange={(e) => updateField("GSTNumber", e.target.value)} style={inputStyle} />
-            </div>
+            <FormField label="Status">
+              <Toggle
+                checked={!!local?.FSSAIStatus}
+                onChange={(v: boolean) => updateField("FSSAIStatus", v)}
+              />
+            </FormField>
+          </FormRow>
 
-            <div>
-              <label style={labelStyle}>GST Type</label>
-              <select name="GSTType" value={gstType} onChange={(e) => updateField("GSTType", e.target.value)} style={inputStyle as React.CSSProperties}>
-                <option value="">-- Select --</option>
-                <option value="Regular">Regular</option>
-                <option value="Composition">Composition</option>
-                <option value="NotApplicable">Not Applicable</option>
-              </select>
-            </div>
+          {/* GST */}
+          <FormRow cols={4} gap={12}>
+            <FormField label="GST Number">
+              <input
+                name="GSTNumber"
+                value={gst}
+                onChange={(e) => updateField("GSTNumber", e.target.value)}
+                style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
+              />
+            </FormField>
 
-            <div>
-              <label style={labelStyle}>Upload Copy</label>
-              <input type="file" name="GSTCopy" onChange={() => { /* implement upload */ }} />
-            </div>
+            <FormField label="GST Type">
+              <Select
+                name="GSTType"
+                value={gstType ?? ""}
+                onChange={(v: string) => updateField("GSTType", v)}
+                options={[
+                  { label: "-- Select --", value: "" },
+                  { label: "Regular", value: "Regular" },
+                  { label: "Composition", value: "Composition" },
+                  { label: "Not Applicable", value: "NotApplicable" },
+                ]}
+              />
+            </FormField>
 
-            <div>
-              <label style={labelStyle}>Status</label>
-              <button
-                type="button"
-                onClick={() => updateField("GSTStatus", !(local?.GSTStatus ?? false))}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: local?.GSTStatus ? "#16a34a" : "#9ca3af",
-                  color: "#fff",
-                  fontWeight: 700,
+            <FormField label="Upload Copy">
+              <input
+                type="file"
+                name="GSTCopy"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  updateField("GSTCopyName", f ? f.name : null);
                 }}
-              >
-                {local?.GSTStatus ? "On" : "Off"}
-              </button>
-            </div>
-          </div>
+              />
+            </FormField>
 
-          {/* PAN row */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 220px 140px 120px", gap: 12, alignItems: "center" }}>
-            <div>
-              <label style={labelStyle}>PAN Number</label>
-              <input name="PANNumber" value={pan} onChange={(e) => updateField("PANNumber", e.target.value)} style={inputStyle} />
-            </div>
+            <FormField label="Status">
+              <Toggle
+                checked={!!local?.GSTStatus}
+                onChange={(v: boolean) => updateField("GSTStatus", v)}
+              />
+            </FormField>
+          </FormRow>
 
-            <div>
-              <label style={labelStyle}>PAN Type</label>
-              <select name="PANType" value={panType} onChange={(e) => updateField("PANType", e.target.value)} style={inputStyle as React.CSSProperties}>
-                <option value="">-- Select --</option>
-                <option value="Individual">Individual</option>
-                <option value="Company">Company</option>
-              </select>
-            </div>
+          {/* PAN */}
+          <FormRow cols={4} gap={12}>
+            <FormField label="PAN Number">
+              <input
+                name="PANNumber"
+                value={pan}
+                onChange={(e) => updateField("PANNumber", e.target.value)}
+                style={{ width: "100%", padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
+              />
+            </FormField>
 
-            <div>
-              <label style={labelStyle}>Upload Copy</label>
-              <input type="file" name="PANCopy" onChange={() => { /* implement upload */ }} />
-            </div>
+            <FormField label="PAN Type">
+              <Select
+                name="PANType"
+                value={panType ?? ""}
+                onChange={(v: string) => updateField("PANType", v)}
+                options={[
+                  { label: "-- Select --", value: "" },
+                  { label: "Individual", value: "Individual" },
+                  { label: "Company", value: "Company" },
+                ]}
+              />
+            </FormField>
 
-            <div>
-              <label style={labelStyle}>Status</label>
-              <button
-                type="button"
-                onClick={() => updateField("PANStatus", !(local?.PANStatus ?? false))}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: local?.PANStatus ? "#16a34a" : "#9ca3af",
-                  color: "#fff",
-                  fontWeight: 700,
+            <FormField label="Upload Copy">
+              <input
+                type="file"
+                name="PANCopy"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  updateField("PANCopyName", f ? f.name : null);
                 }}
-              >
-                {local?.PANStatus ? "On" : "Off"}
-              </button>
-            </div>
-          </div>
+              />
+            </FormField>
+
+            <FormField label="Status">
+              <Toggle
+                checked={!!local?.PANStatus}
+                onChange={(v: boolean) => updateField("PANStatus", v)}
+              />
+            </FormField>
+          </FormRow>
         </div>
       </div>
 
-      {/* Note */}
-      <div style={{ color: "#666", fontSize: 13 }}>
-        Note: File uploads are placeholders — implement Supabase storage signed uploads or server endpoint to persist files.
+      <div style={noteStyle}>
+        Note: file inputs are placeholders. For production you should upload files to Supabase Storage (signed upload)
+        or use your server endpoint and then store the returned file URL/path via <code>updateField</code>.
       </div>
     </div>
   );
