@@ -5,9 +5,11 @@ import React from "react";
 
 type ChildrenProp = { children?: React.ReactNode };
 
-/**
- * AdminForm - consistent form container
- */
+/** ===========================
+ *  Admin form primitives
+ *  =========================== */
+
+/** AdminForm - consistent form container */
 export function AdminForm({
   children,
   className = "",
@@ -23,9 +25,7 @@ export function AdminForm({
   );
 }
 
-/**
- * FormRow - responsive grid row for fields
- */
+/** FormRow - responsive grid row for fields */
 export function FormRow({
   children,
   cols = 2,
@@ -44,9 +44,7 @@ export function FormRow({
   );
 }
 
-/**
- * FormField - label + input wrapper + optional help
- */
+/** FormField - label + input wrapper + optional help */
 export function FormField({
   label,
   htmlFor,
@@ -68,9 +66,7 @@ export function FormField({
   );
 }
 
-/**
- * FormActions - container for form buttons
- */
+/** FormActions - container for form buttons */
 export function FormActions({
   children,
   align = "right",
@@ -84,9 +80,7 @@ export function FormActions({
   );
 }
 
-/**
- * SubmitButton - standardized primary action
- */
+/** SubmitButton - standardized primary action */
 export function SubmitButton({
   children = "Save",
   disabled = false,
@@ -107,9 +101,7 @@ export function SubmitButton({
   );
 }
 
-/**
- * SecondaryButton - light secondary action
- */
+/** SecondaryButton - light secondary action */
 export function SecondaryButton({
   children = "Cancel",
   onClick,
@@ -123,9 +115,104 @@ export function SecondaryButton({
   );
 }
 
-/**
- * SearchBar - reusable search input + optional button
- */
+/** ===========================
+ *  Small form controls
+ *  =========================== */
+
+/** Select - consistent select element */
+export function Select({
+  value,
+  onChange,
+  options,
+  placeholder,
+  className = "",
+  name,
+  id,
+}: {
+  value?: string | number | null;
+  onChange?: (v: string) => void;
+  options: { label: string; value: string | number }[];
+  placeholder?: string;
+  className?: string;
+  name?: string;
+  id?: string;
+}) {
+  return (
+    <select
+      id={id}
+      name={name}
+      value={value ?? ""}
+      onChange={(e) => onChange?.(e.target.value)}
+      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-sky-400 ${className}`}
+    >
+      {placeholder ? <option value="">{placeholder}</option> : null}
+      {options.map((o) => (
+        <option key={String(o.value)} value={String(o.value)}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Toggle - simple checkbox-based toggle */
+export function Toggle({
+  checked,
+  onChange,
+  label,
+  id,
+}: {
+  checked: boolean;
+  onChange?: (v: boolean) => void;
+  label?: string;
+  id?: string;
+}) {
+  const inputId = id ?? `toggle_${Math.random().toString(36).slice(2, 8)}`;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <label htmlFor={inputId} style={{ display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
+        <input
+          id={inputId}
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange?.(e.target.checked)}
+          style={{ display: "none" }}
+        />
+        <span
+          aria-hidden
+          style={{
+            width: 44,
+            height: 24,
+            borderRadius: 999,
+            background: checked ? "#06b6d4" : "#e6e6e6",
+            display: "inline-block",
+            position: "relative",
+            transition: "background-color 120ms ease",
+            verticalAlign: "middle",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              background: "#fff",
+              position: "absolute",
+              top: 3,
+              left: checked ? 23 : 3,
+              transition: "left 120ms ease",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.12)",
+            }}
+          />
+        </span>
+      </label>
+      {label && <div style={{ fontSize: 13, color: "#444" }}>{label}</div>}
+    </div>
+  );
+}
+
+/** SearchBar - reusable search input + optional button */
 export function SearchBar({
   value,
   onChange,
@@ -170,16 +257,18 @@ export function SearchBar({
   );
 }
 
-/**
- * Default export object for backward-compatibility
- */
+/** ===========================
+ *  Default export (backwards compat)
+ *  =========================== */
 const AdminUI = {
   AdminForm,
-  FormField,
   FormRow,
+  FormField,
   FormActions,
   SubmitButton,
   SecondaryButton,
+  Select,
+  Toggle,
   SearchBar,
 };
 
