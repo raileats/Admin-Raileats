@@ -1,12 +1,14 @@
-// components/restro-edit/AddressDocumentsTab.tsx
+"use client";
+
 import React from "react";
 import UI from "@/components/AdminUI";
 
-const { FormRow, FormField, Select, Toggle } = UI;
+const { FormRow, FormField, Toggle, SubmitButton } = UI;
 
 type StationOption = { label: string; value: string };
 
 type Props = {
+  // these mirror the 'common' object spread from RestroEditModal
   local: any;
   updateField: (key: string, value: any) => void;
   stationDisplay?: string;
@@ -21,7 +23,7 @@ export default function AddressDocumentsTab({
   stations,
   loadingStations,
 }: Props) {
-  // data fallbacks (same keys you used)
+  // fallbacks (keep keys identical to what you persist in Supabase)
   const restroAddress = local?.RestroAddress ?? "";
   const city = local?.City ?? "";
   const stateVal = local?.State ?? "";
@@ -37,117 +39,98 @@ export default function AddressDocumentsTab({
   const pan = local?.PANNumber ?? "";
   const panType = local?.PANType ?? "";
 
-  // shared inline styles
-  const sectionBox: React.CSSProperties = {
-    background: "#f6fbff",
-    padding: 18,
-    borderRadius: 10,
-    border: "1px solid #e6f2fb",
-    marginBottom: 16,
-  };
-
-  const inputBase: React.CSSProperties = {
-    width: "100%",
-    padding: 10,
-    borderRadius: 6,
-    border: "1px solid #e6eef6",
-    boxSizing: "border-box",
-  };
-
-  const noteStyle: React.CSSProperties = { color: "#666", fontSize: 13 };
-
   return (
-    <div style={{ padding: "6px 10px 30px 10px" }}>
-      {/* Address section */}
-      <div style={sectionBox}>
-        <h3 style={{ margin: 0, marginBottom: 12, fontSize: 20, color: "#083d77", fontWeight: 700 }}>
-          Address
-        </h3>
+    <div className="px-2 pb-8">
+      {/* Page heading */}
+      <div className="max-w-6xl mx-auto">
+        <h2 className="text-center text-xl md:text-2xl font-bold mb-6">Address &amp; Documents</h2>
 
-        <FormRow cols={3} gap={14}>
-          {/* gridColumn applied to inner wrapper (not FormField) to avoid style prop on FormField */}
-          <FormField label="Restro Address">
-            <div style={{ gridColumn: "1 / span 3" }}>
-              <textarea
-                name="RestroAddress"
-                value={restroAddress}
-                onChange={(e) => updateField("RestroAddress", e.target.value)}
-                style={{ ...inputBase, minHeight: 96, resize: "vertical" }}
-              />
+        {/* ADDRESS SECTION */}
+        <div className="bg-white shadow-sm rounded-lg p-6 mb-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Address</h3>
+
+          <FormRow cols={3} gap={6}>
+            {/* full width textarea spans all 3 cols */}
+            <div className="col-span-3">
+              <FormField label="Restro Address" className="col-span-3">
+                <textarea
+                  name="RestroAddress"
+                  value={restroAddress}
+                  onChange={(e) => updateField("RestroAddress", e.target.value)}
+                  className="w-full min-h-[80px] p-3 rounded border border-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                />
+              </FormField>
             </div>
-          </FormField>
 
-          <FormField label="City / Village">
-            <input
-              name="City"
-              value={city}
-              onChange={(e) => updateField("City", e.target.value)}
-              style={inputBase}
-            />
-          </FormField>
+            <FormField label="City / Village">
+              <input
+                name="City"
+                value={city}
+                onChange={(e) => updateField("City", e.target.value)}
+                className="w-full p-2 rounded border border-slate-200"
+              />
+            </FormField>
 
-          <FormField label="State">
-            <input
-              name="State"
-              value={stateVal}
-              onChange={(e) => updateField("State", e.target.value)}
-              style={inputBase}
-            />
-          </FormField>
+            <FormField label="State">
+              <input
+                name="State"
+                value={stateVal}
+                onChange={(e) => updateField("State", e.target.value)}
+                className="w-full p-2 rounded border border-slate-200"
+              />
+            </FormField>
 
-          <FormField label="District">
-            <input
-              name="District"
-              value={district}
-              onChange={(e) => updateField("District", e.target.value)}
-              style={inputBase}
-            />
-          </FormField>
+            <FormField label="District">
+              <input
+                name="District"
+                value={district}
+                onChange={(e) => updateField("District", e.target.value)}
+                className="w-full p-2 rounded border border-slate-200"
+              />
+            </FormField>
 
-          <FormField label="Pin Code">
-            <input
-              name="PinCode"
-              value={pin}
-              onChange={(e) => updateField("PinCode", e.target.value)}
-              style={inputBase}
-            />
-          </FormField>
+            <FormField label="Pin Code">
+              <input
+                name="PinCode"
+                value={pin}
+                onChange={(e) => updateField("PinCode", e.target.value)}
+                className="w-full p-2 rounded border border-slate-200"
+              />
+            </FormField>
 
-          <FormField label="Latitude">
-            <input
-              name="RestroLatitude"
-              value={lat}
-              onChange={(e) => updateField("RestroLatitude", e.target.value)}
-              style={inputBase}
-            />
-          </FormField>
+            <FormField label="Latitude">
+              <input
+                name="RestroLatitude"
+                value={lat}
+                onChange={(e) => updateField("RestroLatitude", e.target.value)}
+                className="w-full p-2 rounded border border-slate-200"
+              />
+            </FormField>
 
-          <FormField label="Longitude">
-            <input
-              name="RestroLongitude"
-              value={lng}
-              onChange={(e) => updateField("RestroLongitude", e.target.value)}
-              style={inputBase}
-            />
-          </FormField>
-        </FormRow>
-      </div>
+            <FormField label="Longitude">
+              <input
+                name="RestroLongitude"
+                value={lng}
+                onChange={(e) => updateField("RestroLongitude", e.target.value)}
+                className="w-full p-2 rounded border border-slate-200"
+              />
+            </FormField>
+          </FormRow>
+        </div>
 
-      {/* Documents section */}
-      <div style={sectionBox}>
-        <h3 style={{ margin: 0, marginBottom: 12, fontSize: 20, color: "#083d77", fontWeight: 700 }}>
-          Documents
-        </h3>
+        {/* DOCUMENTS SECTION */}
+        <div className="bg-white shadow-sm rounded-lg p-6 mb-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Documents</h3>
 
-        <div style={{ display: "grid", gap: 12 }}>
-          {/* FSSAI */}
-          <FormRow cols={4} gap={12}>
+          {/* FSSAI Row */}
+          <FormRow cols={4} gap={6} className="items-end">
             <FormField label="FSSAI Number">
               <input
                 name="FSSAINumber"
                 value={fssai}
                 onChange={(e) => updateField("FSSAINumber", e.target.value)}
-                style={inputBase}
+                className="w-full p-2 rounded border border-slate-200"
+                maxLength={20}
               />
             </FormField>
 
@@ -155,115 +138,143 @@ export default function AddressDocumentsTab({
               <input
                 type="date"
                 name="FSSAIExpiry"
-                value={fssaiExpiry}
+                value={fssaiExpiry ?? ""}
                 onChange={(e) => updateField("FSSAIExpiry", e.target.value)}
-                style={{ ...inputBase, padding: 8 }}
+                className="w-full p-2 rounded border border-slate-200"
               />
             </FormField>
 
-            <FormField label="Upload Copy">
+            <FormField label="FSSAI Copy">
+              {/* placeholder — integrate your signed upload flow here */}
               <input
                 type="file"
-                name="FSSAICopy"
+                accept=".pdf,.jpg,.jpeg,.png"
                 onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  // keep upload flow external: send filename placeholder to local state if you want
-                  updateField("FSSAICopyName", f ? f.name : null);
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    // implement your upload and call updateField("FSSAICopyUrl", uploadedUrl) as needed
+                    // e.g. uploadToSupabaseAndSetField(f, "FSSAICopy")
+                  }
                 }}
               />
             </FormField>
 
-            <FormField label="Status">
-              <Toggle checked={!!local?.FSSAIStatus} onChange={(v: boolean) => updateField("FSSAIStatus", v)} />
+            <FormField label="FSSAI Status">
+              <div>
+                <Toggle
+                  checked={Boolean(local?.FSSAIStatus)}
+                  onChange={(v: boolean) => updateField("FSSAIStatus", v)}
+                  label={local?.FSSAIStatus ? "On" : "Off"}
+                />
+              </div>
             </FormField>
           </FormRow>
 
-          {/* GST */}
-          <FormRow cols={4} gap={12}>
+          {/* GST Row */}
+          <FormRow cols={4} gap={6} className="items-end mt-4">
             <FormField label="GST Number">
               <input
                 name="GSTNumber"
                 value={gst}
                 onChange={(e) => updateField("GSTNumber", e.target.value)}
-                style={inputBase}
+                className="w-full p-2 rounded border border-slate-200"
+                maxLength={20}
               />
             </FormField>
 
             <FormField label="GST Type">
-              <Select
+              <select
                 name="GSTType"
                 value={gstType ?? ""}
-                onChange={(v: string) => updateField("GSTType", v)}
-                options={[
-                  { label: "-- Select --", value: "" },
-                  { label: "Regular", value: "Regular" },
-                  { label: "Composition", value: "Composition" },
-                  { label: "Not Applicable", value: "NotApplicable" },
-                ]}
-              />
+                onChange={(e) => updateField("GSTType", e.target.value)}
+                className="w-full p-2 rounded border border-slate-200"
+              >
+                <option value="">-- Select --</option>
+                <option value="Regular">Regular</option>
+                <option value="Composition">Composition</option>
+                <option value="NotApplicable">Not Applicable</option>
+              </select>
             </FormField>
 
-            <FormField label="Upload Copy">
+            <FormField label="GST Copy">
               <input
                 type="file"
-                name="GSTCopy"
+                accept=".pdf,.jpg,.jpeg,.png"
                 onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  updateField("GSTCopyName", f ? f.name : null);
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    // handle upload then updateField("GSTCopyUrl", uploadedUrl)
+                  }
                 }}
               />
             </FormField>
 
-            <FormField label="Status">
-              <Toggle checked={!!local?.GSTStatus} onChange={(v: boolean) => updateField("GSTStatus", v)} />
+            <FormField label="GST Status">
+              <Toggle
+                checked={Boolean(local?.GSTStatus)}
+                onChange={(v: boolean) => updateField("GSTStatus", v)}
+                label={local?.GSTStatus ? "On" : "Off"}
+              />
             </FormField>
           </FormRow>
 
-          {/* PAN */}
-          <FormRow cols={4} gap={12}>
+          {/* PAN Row */}
+          <FormRow cols={4} gap={6} className="items-end mt-4">
             <FormField label="PAN Number">
               <input
                 name="PANNumber"
                 value={pan}
                 onChange={(e) => updateField("PANNumber", e.target.value)}
-                style={inputBase}
+                className="w-full p-2 rounded border border-slate-200"
+                maxLength={15}
               />
             </FormField>
 
             <FormField label="PAN Type">
-              <Select
+              <select
                 name="PANType"
                 value={panType ?? ""}
-                onChange={(v: string) => updateField("PANType", v)}
-                options={[
-                  { label: "-- Select --", value: "" },
-                  { label: "Individual", value: "Individual" },
-                  { label: "Company", value: "Company" },
-                ]}
-              />
+                onChange={(e) => updateField("PANType", e.target.value)}
+                className="w-full p-2 rounded border border-slate-200"
+              >
+                <option value="">-- Select --</option>
+                <option value="Individual">Individual</option>
+                <option value="Company">Company</option>
+              </select>
             </FormField>
 
-            <FormField label="Upload Copy">
+            <FormField label="PAN Copy">
               <input
                 type="file"
-                name="PANCopy"
+                accept=".pdf,.jpg,.jpeg,.png"
                 onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  updateField("PANCopyName", f ? f.name : null);
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    // handle upload then updateField("PANCopyUrl", uploadedUrl)
+                  }
                 }}
               />
             </FormField>
 
-            <FormField label="Status">
-              <Toggle checked={!!local?.PANStatus} onChange={(v: boolean) => updateField("PANStatus", v)} />
+            <FormField label="PAN Status">
+              <Toggle
+                checked={Boolean(local?.PANStatus)}
+                onChange={(v: boolean) => updateField("PANStatus", v)}
+                label={local?.PANStatus ? "On" : "Off"}
+              />
             </FormField>
           </FormRow>
         </div>
-      </div>
 
-      <div style={noteStyle}>
-        Note: file inputs are placeholders. Use Supabase Storage signed uploads or a server endpoint to store files,
-        then call <code>updateField("FSSAICopy", url)</code> (or whichever key you persist).
+        {/* small note */}
+        <div className="text-sm text-slate-500 mb-6 max-w-3xl mx-auto">
+          Note: file inputs are placeholders — implement Supabase storage signed uploads or a server upload endpoint and call `updateField` with the resulting stored URL (e.g. `updateField("FSSAICopyUrl", url)`).
+        </div>
+
+        {/* single-row Save button (this is page-level; you can remove or keep) */}
+        <div className="flex justify-center">
+          <SubmitButton onClick={() => { /* parent handles save; keep empty if you use modal Save */ }} label="Save Address & Docs" />
+        </div>
       </div>
     </div>
   );
