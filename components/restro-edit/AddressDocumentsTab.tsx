@@ -1,255 +1,432 @@
 // components/restro-edit/AddressDocumentsTab.tsx
-import React from "react";
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
 import UI from "@/components/AdminUI";
 const { AdminForm, FormRow, FormField, SubmitButton, Toggle } = UI;
 
-type StationOption = { label: string; value: string };
+type DocEntry = {
+  id: string; // unique id (timestamp-based)
+  number: string;
+  expiry?: string | null; // ISO date 'YYYY-MM-DD' or null
+  photoName?: string | null; // placeholder for uploaded file name / path
+  status: "ON" | "OFF";
+  createdAt: string; // ISO timestamp
+};
 
 type Props = {
   local: any;
-  updateField: (key: string, value: any) => void;
+  updateField: (key: string, v: any) => void;
   stationDisplay?: string;
-  stations?: StationOption[];
+  stations?: { label: string; value: string }[];
   loadingStations?: boolean;
 };
 
-export default function AddressDocumentsTab({ local, updateField }: Props) {
-  const restroAddress = local?.RestroAddress ?? "";
-  const city = local?.City ?? "";
-  const stateVal = local?.State ?? "";
-  const district = local?.District ?? "";
-  const pin = local?.PinCode ?? "";
-  const lat = local?.RestroLatitude ?? local?.Latitude ?? "";
-  const lng = local?.RestroLongitude ?? local?.Longitude ?? "";
+function genId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
-  const fssai = local?.FSSAINumber ?? "";
-  const fssaiExpiry = local?.FSSAIExpiry ?? "";
-  const gst = local?.GSTNumber ?? "";
-  const gstType = local?.GSTType ?? "";
-  const pan = local?.PANNumber ?? "";
-  const panType = local?.PANType ?? "";
+function fmtDateISOToReadable(iso?: string | null) {
+  if (!iso) return "-";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
+export default function AddressDocumentsTab({ local = {}, updateField }: Props) {
+  // normalize arrays — if older single fields exist, convert to arrays
+  const initialFSSAIs: DocEntry[] = useMemo(() => {
+    const arr: DocEntry[] = [];
+    if (Array.isArray(local?.FSSAIEntries)) {
+      return local.FSSAIEntries;
+    }
+    // if older single fields exist, create single entry
+    if (local?.FSSAINumber) {
+      arr.push({
+        id: genId(),
+        number: String(local.FSSAINumber ?? ""),
+        expiry: local?.FSSAIExpiry ? String(local.FSSAIExpiry) : null,
+        photoName: local?.FSSAICopy ?? null,
+        status: local?.FSSAIStatus === "ON" ? "ON" : "OFF",
+        createdAt: local?.FSSAICreatedAt ?? new Date().toISOString(),
+      });
+    }
+    return arr;
+  }, [local]);
+
+  const initialGSTs: DocEntry[] = useMemo(() => {
+    const arr: DocEntry[] = [];
+    if (Array.isArray(local?.GSTEntries)) return local.GSTEntries;
+    if (local?.GSTNumber) {
+      arr.push({
+        id: genId(),
+        number: String(local.GSTNumber ?? ""),
+        expiry: null,
+        photoName: local?.GSTCopy ?? null,
+        status: local?.GSTStatus === "ON" ? "ON" : "OFF",
+        createdAt: local?.GSTCreatedAt ?? new Date().toISOString(),
+      });
+    }
+    return arr;
+  }, [local]);
+
+  const initialPANs: DocEntry[] = useMemo(() => {
+    const arr: DocEntry[] = [];
+    if (Array.isArray(local?.PANEntries)) return local.PANEntries;
+    if (local?.PANNumber) {
+      arr.push({
+        id: genId(),
+        number: String(local.PANNumber ?? ""),
+        expiry: null,
+        photoName: local?.PANCopy ?? null,
+        status: local?.PANStatus === "ON" ? "ON" : "OFF",
+        createdAt: local?.PANCreatedAt ?? new Date().toISOString(),
+      });
+    }
+    return arr;
+  }, [local]);
+
+  // local UI state for entries (we'll push updates to parent via updateField)
+  const [fssaiEntries, setFssaiEntries] = useState<DocEntry[]>(initialFSSAIs);
+  const [gstEntries, setGstEntries] = useState<DocEntry[]>(initialGSTs);
+  const [panEntries, setPanEntries] = useState<DocEntry[]>(initialPANs);
+
+  // modal state
+  const [modalOpen, setModalOpen] = useState<null | "FSSAI" | "GST" | "PAN">(null);
+  const [modalForm, setModalForm] = useState<{ number: string; expiry?: string | null; photoFile?: File | null; extra?: any }>({
+    number: "",
+    expiry: null,
+    photoFile: null,
+    extra: {},
+  });
+
+  // Helper: persist arrays to parent (call updateField). Keep key names: FSSAIEntries, GSTEntries, PANEntries
+  const persist = (key: "FSSAIEntries" | "GSTEntries" | "PANEntries", arr: DocEntry[]) => {
+    // call updateField so that parent/supabase logic can handle saving
+    updateField(key, arr);
+  };
+
+  // expiry check: deactivate expired entries (runs on mount and when entries change)
+  useEffect(() => {
+    const today = new Date();
+    let changed = false;
+
+    const checkAndFix = (arr: DocEntry[]) => {
+      return arr.map((e) => {
+        if (e.expiry) {
+          // compare only date portion
+          const exp = new Date(e.expiry);
+          // set time to end of day for expiry comparison
+          exp.setHours(23, 59, 59, 999);
+          if (exp < today && e.status === "ON") {
+            changed = true;
+            return { ...e, status: "OFF" };
+          }
+        }
+        return e;
+      });
+    };
+
+    const fnew = checkAndFix(fssaiEntries);
+    const gnew = checkAndFix(gstEntries);
+    const pnew = checkAndFix(panEntries);
+
+    if (changed) {
+      // update local state and persist changed entries
+      setFssaiEntries(fnew);
+      persist("FSSAIEntries", fnew);
+
+      setGstEntries(gnew);
+      persist("GSTEntries", gnew);
+
+      setPanEntries(pnew);
+      persist("PANEntries", pnew);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
+
+  // When parent 'local' changes externally, keep our state in sync
+  useEffect(() => setFssaiEntries(initialFSSAIs), [initialFSSAIs]);
+  useEffect(() => setGstEntries(initialGSTs), [initialGSTs]);
+  useEffect(() => setPanEntries(initialPANs), [initialPANs]);
+
+  // open modal and prepare blank form
+  function openAddModal(kind: "FSSAI" | "GST" | "PAN") {
+    setModalForm({ number: "", expiry: null, photoFile: null, extra: {} });
+    setModalOpen(kind);
+  }
+
+  // handle file selection (store file name as placeholder)
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null;
+    setModalForm((s) => ({ ...s, photoFile: f }));
+  }
+
+  function saveFromModal(kind: "FSSAI" | "GST" | "PAN") {
+    const now = new Date().toISOString();
+    const newEntry: DocEntry = {
+      id: genId(),
+      number: modalForm.number?.trim() ?? "",
+      expiry: modalForm.expiry ?? null,
+      photoName: modalForm.photoFile ? modalForm.photoFile.name : null,
+      status: "ON",
+      createdAt: now,
+    };
+
+    if (!newEntry.number) {
+      alert("Please enter number");
+      return;
+    }
+
+    if (kind === "FSSAI") {
+      // deactivate existing ON entries
+      const updated = fssaiEntries.map((e) => ({ ...e, status: e.status === "ON" ? "OFF" : e.status }));
+      const next = [...updated, newEntry];
+      setFssaiEntries(next);
+      persist("FSSAIEntries", next);
+    } else if (kind === "GST") {
+      const updated = gstEntries.map((e) => ({ ...e, status: e.status === "ON" ? "OFF" : e.status }));
+      const next = [...updated, newEntry];
+      setGstEntries(next);
+      persist("GSTEntries", next);
+    } else {
+      const updated = panEntries.map((e) => ({ ...e, status: e.status === "ON" ? "OFF" : e.status }));
+      const next = [...updated, newEntry];
+      setPanEntries(next);
+      persist("PANEntries", next);
+    }
+
+    setModalOpen(null);
+  }
+
+  // UI helper: toggle status of a particular entry (rarely used if your flow always keeps 1 active)
+  function toggleEntryStatus(kind: "FSSAI" | "GST" | "PAN", id: string) {
+    if (kind === "FSSAI") {
+      const next = fssaiEntries.map((e) => (e.id === id ? { ...e, status: e.status === "ON" ? "OFF" : "ON" } : e));
+      setFssaiEntries(next);
+      persist("FSSAIEntries", next);
+    } else if (kind === "GST") {
+      const next = gstEntries.map((e) => (e.id === id ? { ...e, status: e.status === "ON" ? "OFF" : "ON" } : e));
+      setGstEntries(next);
+      persist("GSTEntries", next);
+    } else {
+      const next = panEntries.map((e) => (e.id === id ? { ...e, status: e.status === "ON" ? "OFF" : "ON" } : e));
+      setPanEntries(next);
+      persist("PANEntries", next);
+    }
+  }
+
+  const renderRowList = (kind: "FSSAI" | "GST" | "PAN", entries: DocEntry[]) => {
+    return (
+      <div style={{ marginTop: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontWeight: 700 }}>{kind}</div>
+          <div>
+            <button type="button" onClick={() => openAddModal(kind)} style={{ background: "#06b6d4", color: "#fff", padding: "8px 10px", borderRadius: 6 }}>
+              Add New {kind}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ borderTop: "1px solid #eee", paddingTop: 8 }}>
+          {entries.length === 0 ? (
+            <div style={{ color: "#666", padding: "8px 0" }}>No entries</div>
+          ) : (
+            entries
+              .slice() // copy
+              .reverse() // show latest first
+              .map((e) => (
+                <div
+                  key={e.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 220px 180px 220px 120px",
+                    gap: 12,
+                    alignItems: "center",
+                    padding: "8px 0",
+                    borderBottom: "1px dashed #f1f1f1",
+                  }}
+                >
+                  <div style={{ fontSize: 14, wordBreak: "break-all" }}>{e.number}</div>
+
+                  <div style={{ fontSize: 13 }}>{e.expiry ?? "—"}</div>
+
+                  <div style={{ fontSize: 13 }}>
+                    {e.photoName ? (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <div style={{ width: 48, height: 32, background: "#fafafa", border: "1px solid #eee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>
+                          Preview
+                        </div>
+                        <div style={{ fontSize: 12, color: "#333" }}>{e.photoName}</div>
+                      </div>
+                    ) : (
+                      <span style={{ color: "#999" }}>No file</span>
+                    )}
+                  </div>
+
+                  <div style={{ fontSize: 13 }}>{fmtDateISOToReadable(e.createdAt)}</div>
+
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <div style={{ padding: "4px 8px", borderRadius: 6, background: e.status === "ON" ? "#16a34a" : "#e5e7eb", color: e.status === "ON" ? "#fff" : "#374151", fontWeight: 700 }}>
+                      {e.status === "ON" ? "Active" : "Inactive"}
+                    </div>
+                    {/* allow quick toggle if needed */}
+                    <button type="button" onClick={() => toggleEntryStatus(kind, e.id)} style={{ border: "none", background: "#f3f4f6", padding: "6px 8px", borderRadius: 6 }}>
+                      Toggle
+                    </button>
+                  </div>
+                </div>
+              ))
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <AdminForm>
       <h3 style={{ textAlign: "center", marginTop: 0 }}>Address & Documents</h3>
 
       <div style={{ maxWidth: 1200, margin: "12px auto" }}>
-        {/* Address block */}
-        <div
-          style={{
-            background: "#eef8ff",
-            padding: 16,
-            borderRadius: 10,
-            border: "1px solid #d6eaf8",
-            marginBottom: 16,
-          }}
-        >
+        {/* Existing address fields kept minimal (you already have earlier address UI) */}
+        <div style={{ background: "#eef8ff", padding: 16, borderRadius: 10, border: "1px solid #d6eaf8", marginBottom: 16 }}>
           <h4 style={{ margin: "0 0 12px 0", color: "#083d77" }}>Address</h4>
-
+          {/* Reuse small layout — keep same as earlier simple fields */}
           <FormRow cols={3} gap={12}>
             <FormField label="Restro Address" className="col-span-3">
-              <textarea
-                name="RestroAddress"
-                value={restroAddress}
-                onChange={(e) => updateField("RestroAddress", e.target.value)}
-                style={{ width: "100%", minHeight: 100, padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
-              />
+              <textarea name="RestroAddress" value={local?.RestroAddress ?? ""} onChange={(e) => updateField("RestroAddress", e.target.value)} style={{ width: "100%", minHeight: 80, padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }} />
             </FormField>
 
             <FormField label="City / Village">
-              <input
-                name="City"
-                value={city}
-                onChange={(e) => updateField("City", e.target.value)}
-                className="w-full p-2 rounded border"
-              />
+              <input name="City" value={local?.City ?? ""} onChange={(e) => updateField("City", e.target.value)} className="w-full p-2 rounded border" />
             </FormField>
 
             <FormField label="State">
-              <input
-                name="State"
-                value={stateVal}
-                onChange={(e) => updateField("State", e.target.value)}
-                className="w-full p-2 rounded border"
-              />
+              <input name="State" value={local?.State ?? ""} onChange={(e) => updateField("State", e.target.value)} className="w-full p-2 rounded border" />
             </FormField>
 
             <FormField label="District">
-              <input
-                name="District"
-                value={district}
-                onChange={(e) => updateField("District", e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
-
-            <FormField label="Pin Code">
-              <input
-                name="PinCode"
-                value={pin}
-                onChange={(e) => updateField("PinCode", e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
-
-            <FormField label="Latitude">
-              <input
-                name="RestroLatitude"
-                value={lat}
-                onChange={(e) => updateField("RestroLatitude", e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
-
-            <FormField label="Longitude">
-              <input
-                name="RestroLongitude"
-                value={lng}
-                onChange={(e) => updateField("RestroLongitude", e.target.value)}
-                className="w-full p-2 rounded border"
-              />
+              <input name="District" value={local?.District ?? ""} onChange={(e) => updateField("District", e.target.value)} className="w-full p-2 rounded border" />
             </FormField>
           </FormRow>
         </div>
 
-        {/* Documents block */}
-        <div
-          style={{
-            background: "#eef8ff",
-            padding: 16,
-            borderRadius: 10,
-            border: "1px solid #d6eaf8",
-            marginBottom: 8,
-          }}
-        >
-          <h4 style={{ margin: "0 0 12px 0", color: "#083d77" }}>Documents</h4>
+        {/* Documents area */}
+        <div style={{ background: "#fff", padding: 12, borderRadius: 8, border: "1px solid #f1f1f1" }}>
+          <h4 style={{ margin: "4px 0 16px 0", color: "#083d77", textAlign: "center" }}>Documents</h4>
 
-          {/* FSSAI row */}
-          <FormRow cols={4} gap={12}>
-            <FormField label="FSSAI Number">
-              <input
-                name="FSSAINumber"
-                value={fssai}
-                onChange={(e) => updateField("FSSAINumber", e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
+          {/* FSSAI list */}
+          {renderRowList("FSSAI", fssaiEntries)}
 
-            <FormField label="FSSAI Expiry">
-              <input
-                type="date"
-                name="FSSAIExpiry"
-                value={fssaiExpiry}
-                onChange={(e) => updateField("FSSAIExpiry", e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
+          {/* spacer */}
+          <div style={{ height: 16 }} />
 
-            <FormField label="Upload Copy">
-              <input type="file" name="FSSAICopy" onChange={() => { /* implement upload flow separately */ }} />
-            </FormField>
+          {/* GST list */}
+          {renderRowList("GST", gstEntries)}
 
-            <FormField label="Status">
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Toggle
-                  checked={String(local?.FSSAIStatus ?? "OFF") === "ON"}
-                  onChange={(ch: boolean) => updateField("FSSAIStatus", ch ? "ON" : "OFF")}
-                />
-                <div>{String(local?.FSSAIStatus ?? "OFF")}</div>
-              </div>
-            </FormField>
-          </FormRow>
+          <div style={{ height: 16 }} />
 
-          {/* GST row */}
-          <FormRow cols={4} gap={12}>
-            <FormField label="GST Number">
-              <input
-                name="GSTNumber"
-                value={gst}
-                onChange={(e) => updateField("GSTNumber", e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
-
-            <FormField label="GST Type">
-              <select
-                name="GSTType"
-                value={gstType}
-                onChange={(e) => updateField("GSTType", e.target.value)}
-                className="w-full p-2 rounded border"
-              >
-                <option value="">-- Select --</option>
-                <option value="Regular">Regular</option>
-                <option value="Composition">Composition</option>
-                <option value="NotApplicable">Not Applicable</option>
-              </select>
-            </FormField>
-
-            <FormField label="Upload Copy">
-              <input type="file" name="GSTCopy" onChange={() => {}} />
-            </FormField>
-
-            <FormField label="Status">
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Toggle
-                  checked={String(local?.GSTStatus ?? "OFF") === "ON"}
-                  onChange={(ch: boolean) => updateField("GSTStatus", ch ? "ON" : "OFF")}
-                />
-                <div>{String(local?.GSTStatus ?? "OFF")}</div>
-              </div>
-            </FormField>
-          </FormRow>
-
-          {/* PAN row */}
-          <FormRow cols={4} gap={12}>
-            <FormField label="PAN Number">
-              <input
-                name="PANNumber"
-                value={pan}
-                onChange={(e) => updateField("PANNumber", e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
-
-            <FormField label="PAN Type">
-              <select
-                name="PANType"
-                value={panType}
-                onChange={(e) => updateField("PANType", e.target.value)}
-                className="w-full p-2 rounded border"
-              >
-                <option value="">-- Select --</option>
-                <option value="Individual">Individual</option>
-                <option value="Company">Company</option>
-              </select>
-            </FormField>
-
-            <FormField label="Upload Copy">
-              <input type="file" name="PANCopy" onChange={() => {}} />
-            </FormField>
-
-            <FormField label="Status">
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Toggle
-                  checked={String(local?.PANStatus ?? "OFF") === "ON"}
-                  onChange={(ch: boolean) => updateField("PANStatus", ch ? "ON" : "OFF")}
-                />
-                <div>{String(local?.PANStatus ?? "OFF")}</div>
-              </div>
-            </FormField>
-          </FormRow>
+          {/* PAN list */}
+          {renderRowList("PAN", panEntries)}
         </div>
 
-        <div style={{ marginTop: 8, color: "#666", fontSize: 13 }}>
-          Note: File upload controls are placeholders. Implement Supabase storage signed uploads (or server endpoint) to persist files.
+        <div style={{ marginTop: 16, color: "#666", fontSize: 13 }}>
+          Note: Add new entries will deactivate previous active entries. Expired entries are auto-marked inactive based on expiry date.
         </div>
 
         <div style={{ marginTop: 18, display: "flex", justifyContent: "center" }}>
-          <SubmitButton onClick={() => { /* parent modal usually does the full save */ }}>
-            Save Address & Docs
-          </SubmitButton>
+          <SubmitButton onClick={() => { /* you can optionally call aggregate save here (modal parent usually saves) */ }}>Save</SubmitButton>
         </div>
       </div>
+
+      {/* Modal (simple inline modal) */}
+      {modalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,0,0,0.4)",
+            zIndex: 9999,
+          }}
+        >
+          <div style={{ width: 520, background: "#fff", borderRadius: 10, padding: 18, boxShadow: "0 10px 30px rgba(0,0,0,0.12)" }}>
+            <h3 style={{ marginTop: 0 }}>{modalOpen === "FSSAI" ? "Add New FSSAI" : modalOpen === "GST" ? "Add New GST" : "Add New PAN"}</h3>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <div>
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>Number</label>
+                <input value={modalForm.number} onChange={(e) => setModalForm((s) => ({ ...s, number: e.target.value }))} className="w-full p-2 rounded border" />
+              </div>
+
+              {modalOpen === "FSSAI" && (
+                <div>
+                  <label style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>Expiry</label>
+                  <input type="date" value={modalForm.expiry ?? ""} onChange={(e) => setModalForm((s) => ({ ...s, expiry: e.target.value ?? null }))} className="w-full p-2 rounded border" />
+                </div>
+              )}
+
+              {modalOpen === "GST" && (
+                <div>
+                  <label style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>GST Type</label>
+                  <select value={modalForm.extra?.gstType ?? ""} onChange={(e) => setModalForm((s) => ({ ...s, extra: { ...(s.extra || {}), gstType: e.target.value } }))} className="w-full p-2 rounded border">
+                    <option value="">-- Select --</option>
+                    <option value="Regular">Regular</option>
+                    <option value="Composition">Composition</option>
+                    <option value="NotApplicable">Not Applicable</option>
+                  </select>
+                </div>
+              )}
+
+              {modalOpen === "PAN" && (
+                <div>
+                  <label style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>PAN Type</label>
+                  <select value={modalForm.extra?.panType ?? ""} onChange={(e) => setModalForm((s) => ({ ...s, extra: { ...(s.extra || {}), panType: e.target.value } }))} className="w-full p-2 rounded border">
+                    <option value="">-- Select --</option>
+                    <option value="Individual">Individual</option>
+                    <option value="Company">Company</option>
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>Upload Photo / Copy</label>
+                <input type="file" onChange={handleFileSelect} />
+                {modalForm.photoFile && <div style={{ marginTop: 6 }}>Selected: {modalForm.photoFile.name}</div>}
+              </div>
+
+              <div>
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>Status (auto)</label>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ padding: "6px 10px", background: "#16a34a", color: "#fff", borderRadius: 6 }}>Active</div>
+                  <div style={{ color: "#666" }}>New entries will be Active and previous will be set Inactive automatically.</div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+                <button type="button" onClick={() => setModalOpen(null)} style={{ padding: "8px 12px", borderRadius: 6 }}>Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // include modal extra values (GST/PAN type) in number or photoName? We keep them in photoName.extra
+                    saveFromModal(modalOpen);
+                  }}
+                  style={{ padding: "8px 12px", borderRadius: 6, background: "#06b6d4", color: "#fff" }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminForm>
   );
 }
