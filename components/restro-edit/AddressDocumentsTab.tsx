@@ -6,12 +6,12 @@ import UI from "@/components/AdminUI";
 const { AdminForm, FormRow, FormField, SubmitButton, Toggle } = UI;
 
 type DocEntry = {
-  id: string; // unique id (timestamp-based)
+  id: string;
   number: string;
-  expiry?: string | null; // ISO date 'YYYY-MM-DD' or null
-  photoName?: string | null; // placeholder for uploaded file name / path
+  expiry?: string | null;
+  photoName?: string | null;
   status: "ON" | "OFF";
-  createdAt: string; // ISO timestamp
+  createdAt: string;
 };
 
 type Props = {
@@ -37,18 +37,15 @@ function fmtDateISOToReadable(iso?: string | null) {
 }
 
 export default function AddressDocumentsTab({ local = {}, updateField }: Props) {
-  // normalize arrays — if older single fields exist, convert to arrays
+  // Normalize arrays from parent local (backwards-compatible single-field conversion)
   const initialFSSAIs: DocEntry[] = useMemo(() => {
     const arr: DocEntry[] = [];
-    if (Array.isArray(local?.FSSAIEntries)) {
-      return local.FSSAIEntries;
-    }
-    // if older single fields exist, create single entry
+    if (Array.isArray(local?.FSSAIEntries)) return local.FSSAIEntries;
     if (local?.FSSAINumber) {
       arr.push({
         id: genId(),
         number: String(local.FSSAINumber ?? ""),
-        expiry: local?.FSSAIExpiry ? String(local.FSSAIExpiry) : null,
+        expiry: local?.FSSAIExpiry ?? null,
         photoName: local?.FSSAICopy ?? null,
         status: local?.FSSAIStatus === "ON" ? "ON" : "OFF",
         createdAt: local?.FSSAICreatedAt ?? new Date().toISOString(),
@@ -89,12 +86,10 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
     return arr;
   }, [local]);
 
-  // local UI state for entries (we'll push updates to parent via updateField)
   const [fssaiEntries, setFssaiEntries] = useState<DocEntry[]>(initialFSSAIs);
   const [gstEntries, setGstEntries] = useState<DocEntry[]>(initialGSTs);
   const [panEntries, setPanEntries] = useState<DocEntry[]>(initialPANs);
 
-  // modal state
   const [modalOpen, setModalOpen] = useState<null | "FSSAI" | "GST" | "PAN">(null);
   const [modalForm, setModalForm] = useState<{ number: string; expiry?: string | null; photoFile?: File | null; extra?: any }>({
     number: "",
@@ -103,23 +98,19 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
     extra: {},
   });
 
-  // Helper: persist arrays to parent (call updateField). Keep key names: FSSAIEntries, GSTEntries, PANEntries
   const persist = (key: "FSSAIEntries" | "GSTEntries" | "PANEntries", arr: DocEntry[]) => {
-    // call updateField so that parent/supabase logic can handle saving
     updateField(key, arr);
   };
 
-  // expiry check: deactivate expired entries (runs on mount and when entries change)
+  // expiry check on mount (auto-inactivate expired ON entries)
   useEffect(() => {
     const today = new Date();
     let changed = false;
 
-    const checkAndFix = (arr: DocEntry[]) => {
-      return arr.map((e) => {
+    const checkAndFix = (arr: DocEntry[]) =>
+      arr.map((e) => {
         if (e.expiry) {
-          // compare only date portion
           const exp = new Date(e.expiry);
-          // set time to end of day for expiry comparison
           exp.setHours(23, 59, 59, 999);
           if (exp < today && e.status === "ON") {
             changed = true;
@@ -128,38 +119,31 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
         }
         return e;
       });
-    };
 
     const fnew = checkAndFix(fssaiEntries);
     const gnew = checkAndFix(gstEntries);
     const pnew = checkAndFix(panEntries);
 
     if (changed) {
-      // update local state and persist changed entries
       setFssaiEntries(fnew);
       persist("FSSAIEntries", fnew);
-
       setGstEntries(gnew);
       persist("GSTEntries", gnew);
-
       setPanEntries(pnew);
       persist("PANEntries", pnew);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once on mount
+  }, []);
 
-  // When parent 'local' changes externally, keep our state in sync
   useEffect(() => setFssaiEntries(initialFSSAIs), [initialFSSAIs]);
   useEffect(() => setGstEntries(initialGSTs), [initialGSTs]);
   useEffect(() => setPanEntries(initialPANs), [initialPANs]);
 
-  // open modal and prepare blank form
   function openAddModal(kind: "FSSAI" | "GST" | "PAN") {
     setModalForm({ number: "", expiry: null, photoFile: null, extra: {} });
     setModalOpen(kind);
   }
 
-  // handle file selection (store file name as placeholder)
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
     setModalForm((s) => ({ ...s, photoFile: f }));
@@ -182,7 +166,6 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
     }
 
     if (kind === "FSSAI") {
-      // deactivate existing ON entries
       const updated = fssaiEntries.map((e) => ({ ...e, status: e.status === "ON" ? "OFF" : e.status }));
       const next = [...updated, newEntry];
       setFssaiEntries(next);
@@ -202,7 +185,6 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
     setModalOpen(null);
   }
 
-  // UI helper: toggle status of a particular entry (rarely used if your flow always keeps 1 active)
   function toggleEntryStatus(kind: "FSSAI" | "GST" | "PAN", id: string) {
     if (kind === "FSSAI") {
       const next = fssaiEntries.map((e) => (e.id === id ? { ...e, status: e.status === "ON" ? "OFF" : "ON" } : e));
@@ -236,14 +218,14 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
             <div style={{ color: "#666", padding: "8px 0" }}>No entries</div>
           ) : (
             entries
-              .slice() // copy
-              .reverse() // show latest first
+              .slice()
+              .reverse()
               .map((e) => (
                 <div
                   key={e.id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 220px 180px 220px 120px",
+                    gridTemplateColumns: "1fr 200px 180px 220px 120px",
                     gap: 12,
                     alignItems: "center",
                     padding: "8px 0",
@@ -251,9 +233,7 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
                   }}
                 >
                   <div style={{ fontSize: 14, wordBreak: "break-all" }}>{e.number}</div>
-
                   <div style={{ fontSize: 13 }}>{e.expiry ?? "—"}</div>
-
                   <div style={{ fontSize: 13 }}>
                     {e.photoName ? (
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -266,14 +246,11 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
                       <span style={{ color: "#999" }}>No file</span>
                     )}
                   </div>
-
                   <div style={{ fontSize: 13 }}>{fmtDateISOToReadable(e.createdAt)}</div>
-
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <div style={{ padding: "4px 8px", borderRadius: 6, background: e.status === "ON" ? "#16a34a" : "#e5e7eb", color: e.status === "ON" ? "#fff" : "#374151", fontWeight: 700 }}>
                       {e.status === "ON" ? "Active" : "Inactive"}
                     </div>
-                    {/* allow quick toggle if needed */}
                     <button type="button" onClick={() => toggleEntryStatus(kind, e.id)} style={{ border: "none", background: "#f3f4f6", padding: "6px 8px", borderRadius: 6 }}>
                       Toggle
                     </button>
@@ -291,13 +268,18 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
       <h3 style={{ textAlign: "center", marginTop: 0 }}>Address & Documents</h3>
 
       <div style={{ maxWidth: 1200, margin: "12px auto" }}>
-        {/* Existing address fields kept minimal (you already have earlier address UI) */}
+        {/* Address block (kept at top exactly as requested) */}
         <div style={{ background: "#eef8ff", padding: 16, borderRadius: 10, border: "1px solid #d6eaf8", marginBottom: 16 }}>
-          <h4 style={{ margin: "0 0 12px 0", color: "#083d77" }}>Address</h4>
-          {/* Reuse small layout — keep same as earlier simple fields */}
+          <h4 style={{ margin: "0 0 12px 0", color: "#083d77", textAlign: "center" }}>Address</h4>
+
           <FormRow cols={3} gap={12}>
             <FormField label="Restro Address" className="col-span-3">
-              <textarea name="RestroAddress" value={local?.RestroAddress ?? ""} onChange={(e) => updateField("RestroAddress", e.target.value)} style={{ width: "100%", minHeight: 80, padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }} />
+              <textarea
+                name="RestroAddress"
+                value={local?.RestroAddress ?? ""}
+                onChange={(e) => updateField("RestroAddress", e.target.value)}
+                style={{ width: "100%", minHeight: 80, padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }}
+              />
             </FormField>
 
             <FormField label="City / Village">
@@ -311,6 +293,18 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
             <FormField label="District">
               <input name="District" value={local?.District ?? ""} onChange={(e) => updateField("District", e.target.value)} className="w-full p-2 rounded border" />
             </FormField>
+
+            <FormField label="Pin Code">
+              <input name="PinCode" value={local?.PinCode ?? ""} onChange={(e) => updateField("PinCode", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
+
+            <FormField label="Latitude">
+              <input name="RestroLatitude" value={local?.RestroLatitude ?? ""} onChange={(e) => updateField("RestroLatitude", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
+
+            <FormField label="Longitude">
+              <input name="RestroLongitude" value={local?.RestroLongitude ?? ""} onChange={(e) => updateField("RestroLongitude", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
           </FormRow>
         </div>
 
@@ -318,45 +312,29 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
         <div style={{ background: "#fff", padding: 12, borderRadius: 8, border: "1px solid #f1f1f1" }}>
           <h4 style={{ margin: "4px 0 16px 0", color: "#083d77", textAlign: "center" }}>Documents</h4>
 
-          {/* FSSAI list */}
           {renderRowList("FSSAI", fssaiEntries)}
 
-          {/* spacer */}
           <div style={{ height: 16 }} />
 
-          {/* GST list */}
           {renderRowList("GST", gstEntries)}
 
           <div style={{ height: 16 }} />
 
-          {/* PAN list */}
           {renderRowList("PAN", panEntries)}
         </div>
 
         <div style={{ marginTop: 16, color: "#666", fontSize: 13 }}>
-          Note: Add new entries will deactivate previous active entries. Expired entries are auto-marked inactive based on expiry date.
+          Note: Add new entries will deactivate the previous active entry. Expired entries are auto-marked inactive by expiry date check.
         </div>
 
         <div style={{ marginTop: 18, display: "flex", justifyContent: "center" }}>
-          <SubmitButton onClick={() => { /* you can optionally call aggregate save here (modal parent usually saves) */ }}>Save</SubmitButton>
+          <SubmitButton onClick={() => { /* parent save usually handles final persistence */ }}>Save</SubmitButton>
         </div>
       </div>
 
-      {/* Modal (simple inline modal) */}
+      {/* Modal */}
       {modalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(0,0,0,0.4)",
-            zIndex: 9999,
-          }}
-        >
+        <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 9999 }}>
           <div style={{ width: 520, background: "#fff", borderRadius: 10, padding: 18, boxShadow: "0 10px 30px rgba(0,0,0,0.12)" }}>
             <h3 style={{ marginTop: 0 }}>{modalOpen === "FSSAI" ? "Add New FSSAI" : modalOpen === "GST" ? "Add New GST" : "Add New PAN"}</h3>
 
@@ -406,20 +384,13 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
                 <label style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>Status (auto)</label>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <div style={{ padding: "6px 10px", background: "#16a34a", color: "#fff", borderRadius: 6 }}>Active</div>
-                  <div style={{ color: "#666" }}>New entries will be Active and previous will be set Inactive automatically.</div>
+                  <div style={{ color: "#666" }}>New entries are created Active; previous active entries are set Inactive automatically.</div>
                 </div>
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
                 <button type="button" onClick={() => setModalOpen(null)} style={{ padding: "8px 12px", borderRadius: 6 }}>Cancel</button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // include modal extra values (GST/PAN type) in number or photoName? We keep them in photoName.extra
-                    saveFromModal(modalOpen);
-                  }}
-                  style={{ padding: "8px 12px", borderRadius: 6, background: "#06b6d4", color: "#fff" }}
-                >
+                <button type="button" onClick={() => saveFromModal(modalOpen)} style={{ padding: "8px 12px", borderRadius: 6, background: "#06b6d4", color: "#fff" }}>
                   Save
                 </button>
               </div>
