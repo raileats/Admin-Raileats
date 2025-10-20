@@ -1,37 +1,18 @@
-"use client";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import UI from "@/components/AdminUI";
-const { Toggle, SubmitButton } = UI;
+const { AdminForm, FormRow, FormField, SubmitButton, Toggle, Select } = UI;
 
-type DocRow = {
-  id: number | string;
-  number?: string | null;
-  type?: string | null;
-  expiry?: string | null; // ISO date
-  copy_url?: string | null;
-  active?: boolean | null;
-  created_at?: string | null;
-};
-
-type DocsResponse = {
-  fssai: DocRow[];
-  gst: DocRow[];
-  pan: DocRow[];
-};
+type StationOption = { label: string; value: string };
 
 type Props = {
-  local: any; // restro object with at least Code, RestroAddress, City, State, District...
-  updateField: (k: string, v: any) => void;
+  local: any;
+  updateField: (key: string, value: any) => void;
+  stationDisplay?: string;
+  stations?: StationOption[];
+  loadingStations?: boolean;
 };
 
 export default function AddressDocumentsTab({ local, updateField }: Props) {
-  const restroCode = local?.Code ?? local?.RestroCode ?? "";
-  const [docs, setDocs] = useState<DocsResponse>({ fssai: [], gst: [], pan: [] });
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // address / display fields
   const restroAddress = local?.RestroAddress ?? "";
   const city = local?.City ?? "";
   const stateVal = local?.State ?? "";
@@ -40,290 +21,141 @@ export default function AddressDocumentsTab({ local, updateField }: Props) {
   const lat = local?.RestroLatitude ?? local?.Latitude ?? "";
   const lng = local?.RestroLongitude ?? local?.Longitude ?? "";
 
-  useEffect(() => {
-    if (!restroCode) return;
-    fetchDocs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restroCode]);
-
-  async function fetchDocs() {
-    if (!restroCode) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/restros/${encodeURIComponent(restroCode)}/docs`);
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const data: DocsResponse = await res.json();
-      setDocs(data);
-    } catch (err: any) {
-      console.error("fetchDocs error", err);
-      setError("Failed to load documents. Check server logs / API.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // simple prompt-based add flows (keeps UI lightweight). Replace with modal if you prefer.
-  async function handleAddFssai() {
-    if (!restroCode) return alert("Missing restro code");
-    const number = window.prompt("Enter FSSAI number (14 digits):", "");
-    if (!number) return;
-    const expiry = window.prompt("Expiry date (YYYY-MM-DD):", "");
-    if (!expiry) return;
-    await postAdd("add_fssai", { number: number.trim(), expiry: expiry.trim() });
-  }
-
-  async function handleAddGst() {
-    if (!restroCode) return alert("Missing restro code");
-    const number = window.prompt("Enter GST number (15 chars):", "");
-    if (!number) return;
-    const gstType = window.prompt("GST Type (Regular / Composition / NotApplicable):", "Regular");
-    if (!gstType) return;
-    await postAdd("add_gst", { number: number.trim(), gst_type: gstType.trim() });
-  }
-
-  async function handleAddPan() {
-    if (!restroCode) return alert("Missing PAN number:");
-    const number = window.prompt("Enter PAN (10 chars):", "");
-    if (!number) return;
-    const panType = window.prompt("PAN Type (Individual / Company):", "Individual");
-    if (!panType) return;
-    await postAdd("add_pan", { number: number.trim(), pan_type: panType.trim() });
-  }
-
-  async function postAdd(action: string, payload: Record<string, any>) {
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/restros/${encodeURIComponent(restroCode)}/docs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, payload }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`${res.status} ${res.statusText} ${txt}`);
-      }
-      // server returns updated docs
-      const data: DocsResponse = await res.json();
-      setDocs(data);
-    } catch (err: any) {
-      console.error("postAdd error", err);
-      setError("Failed to add entry. See console or server logs.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // helper to format date
-  function formatDate(d?: string | null) {
-    if (!d) return "—";
-    try {
-      const dt = new Date(d);
-      if (isNaN(dt.getTime())) return d;
-      // DD-MM-YYYY format to match screenshot
-      const dd = String(dt.getDate()).padStart(2, "0");
-      const mm = String(dt.getMonth() + 1).padStart(2, "0");
-      const yyyy = dt.getFullYear();
-      return `${dd}-${mm}-${yyyy}`;
-    } catch {
-      return d;
-    }
-  }
+  const fssai = local?.FSSAINumber ?? "";
+  const fssaiExpiry = local?.FSSAIExpiry ?? "";
+  const gst = local?.GSTNumber ?? "";
+  const gstType = local?.GSTType ?? "";
+  const pan = local?.PANNumber ?? "";
+  const panType = local?.PANType ?? "";
 
   return (
-    <div className="px-4 pb-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-center text-3xl font-bold mb-3">Address &amp; Documents</h1>
+    <AdminForm>
+      <h3 style={{ textAlign: "center", marginTop: 0 }}>Address & Documents</h3>
 
-        {/* ADDRESS block (read-only look) */}
-        <div className="mb-6 border rounded overflow-hidden">
-          <div className="bg-amber-100 py-4 text-center font-semibold">Address</div>
+      <div style={{ maxWidth: 1200, margin: "12px auto" }}>
+        {/* Address block */}
+        <div style={{ background: "#eef8ff", padding: 16, borderRadius: 10, border: "1px solid #d6eaf8", marginBottom: 16 }}>
+          <h4 style={{ margin: "0 0 12px 0", color: "#083d77" }}>Address</h4>
 
-          <div className="grid grid-cols-12">
-            <div className="col-span-2 bg-white border-r">
-              <div className="py-6 px-3 text-sm font-medium border-b">Restro Address</div>
-              <div className="py-6 px-3 text-sm font-medium border-b">City / Village</div>
-              <div className="py-6 px-3 text-sm font-medium">Pin Code</div>
-            </div>
+          <FormRow cols={3} gap={12}>
+            <FormField label="Restro Address" className="col-span-3">
+              <textarea name="RestroAddress" value={restroAddress} onChange={(e) => updateField("RestroAddress", e.target.value)} style={{ width: "100%", minHeight: 100, padding: 10, borderRadius: 6, border: "1px solid #e6eef6" }} />
+            </FormField>
 
-            <div className="col-span-8 bg-slate-200 p-6">
-              <div className="text-center mb-6 text-sm">{restroAddress || "—"}</div>
+            <FormField label="City / Village">
+              <input name="City" value={city} onChange={(e) => updateField("City", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
 
-              <div className="grid grid-cols-6 gap-4 items-center">
-                <div className="col-span-2">
-                  <div className="text-xs font-semibold mb-1">City</div>
-                  <div className="bg-white border rounded p-2 h-10 flex items-center">{city || "—"}</div>
-                </div>
+            <FormField label="State">
+              <input name="State" value={stateVal} onChange={(e) => updateField("State", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
 
-                <div className="col-span-1">
-                  <div className="text-xs font-semibold mb-1">State</div>
-                  <div className="bg-white border rounded p-2 h-10 flex items-center">{stateVal || "—"}</div>
-                </div>
+            <FormField label="District">
+              <input name="District" value={district} onChange={(e) => updateField("District", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
 
-                <div className="col-span-1">
-                  <div className="text-xs font-semibold mb-1">District</div>
-                  <div className="bg-white border rounded p-2 h-10 flex items-center">{district || "—"}</div>
-                </div>
+            <FormField label="Pin Code">
+              <input name="PinCode" value={pin} onChange={(e) => updateField("PinCode", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
 
-                <div className="col-span-1">
-                  <div className="text-xs font-semibold mb-1">Latitude</div>
-                  <div className="bg-white border rounded p-2 h-10 flex items-center">{lat || "—"}</div>
-                </div>
+            <FormField label="Latitude">
+              <input name="RestroLatitude" value={lat} onChange={(e) => updateField("RestroLatitude", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
 
-                <div className="col-span-1">
-                  <div className="text-xs font-semibold mb-1">Longitude</div>
-                  <div className="bg-white border rounded p-2 h-10 flex items-center">{lng || "—"}</div>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <div className="text-xs font-semibold mb-1">Pin Code</div>
-                <div className="bg-white border rounded p-2 w-40">{pin || "—"}</div>
-              </div>
-            </div>
-
-            <div className="col-span-2 bg-white border-l">
-              <div className="py-6 px-3 text-sm font-medium border-b">Actions</div>
-              <div className="p-3">
-                <button className="w-full bg-sky-600 text-white rounded py-2" onClick={() => alert("Address editing handled elsewhere")}>
-                  Edit Address
-                </button>
-              </div>
-            </div>
-          </div>
+            <FormField label="Longitude">
+              <input name="RestroLongitude" value={lng} onChange={(e) => updateField("RestroLongitude", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
+          </FormRow>
         </div>
 
-        {/* DOCUMENTS */}
-        <div className="mb-6 border rounded overflow-hidden">
-          <div className="bg-sky-100 py-3 text-center font-semibold">Documents</div>
+        {/* Documents block */}
+        <div style={{ background: "#eef8ff", padding: 16, borderRadius: 10, border: "1px solid #d6eaf8", marginBottom: 8 }}>
+          <h4 style={{ margin: "0 0 12px 0", color: "#083d77" }}>Documents</h4>
 
-          <div className="p-2">
-            {loading ? (
-              <div className="text-center py-8">Loading documents...</div>
-            ) : error ? (
-              <div className="text-center text-red-600 py-4">{error}</div>
-            ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="text-sm">
-                    <th className="w-[18%] border px-2 py-3 bg-white" />
-                    <th className="w-[22%] border px-2 py-3 bg-white">Number / Notes</th>
-                    <th className="w-[18%] border px-2 py-3 bg-white">Expiry / Type</th>
-                    <th className="w-[30%] border px-2 py-3 bg-white">Upload</th>
-                    <th className="w-[12%] border px-2 py-3 bg-white">Action</th>
-                  </tr>
-                </thead>
+          {/* FSSAI row */}
+          <FormRow cols={4} gap={12}>
+            <FormField label="FSSAI Number">
+              <input name="FSSAINumber" value={fssai} onChange={(e) => updateField("FSSAINumber", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
 
-                <tbody className="text-sm">
-                  {/* FSSAI list (show latest active first) */}
-                  <tr className="h-14">
-                    <td className="border px-2 py-2">FSSAI Number</td>
-                    <td className="border px-2 py-2">
-                      {/* show latest active or placeholder */}
-                      <div className="mb-1">Latest: {docs.fssai[0]?.number ?? "—"}</div>
-                      <div className="text-xs text-slate-500">14-digit FSSAI Number</div>
-                    </td>
-                    <td className="border px-2 py-2">{formatDate(docs.fssai[0]?.expiry) ?? "—"}</td>
-                    <td className="border px-2 py-2">
-                      {docs.fssai[0]?.copy_url ? (
-                        <a href={docs.fssai[0].copy_url} target="_blank" rel="noreferrer" className="text-sky-600 underline">
-                          View Copy
-                        </a>
-                      ) : (
-                        <div className="text-xs">No copy uploaded</div>
-                      )}
-                    </td>
-                    <td className="border px-2 py-2">
-                      <div className="flex flex-col gap-2">
-                        <button className="w-full bg-sky-500 text-white rounded py-2" onClick={handleAddFssai} disabled={saving}>
-                          Add New FSSAI Entry
-                        </button>
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs">Status</div>
-                          <div>
-                            <Toggle checked={Boolean(docs.fssai.find((r) => r.active))} onChange={() => {}} label={docs.fssai.find((r) => r.active) ? "ON" : "OFF"} />
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
+            <FormField label="FSSAI Expiry">
+              <input type="date" name="FSSAIExpiry" value={fssaiExpiry} onChange={(e) => updateField("FSSAIExpiry", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
 
-                  {/* GST */}
-                  <tr className="h-14">
-                    <td className="border px-2 py-2">GST Number</td>
-                    <td className="border px-2 py-2">
-                      <div className="mb-1">Latest: {docs.gst[0]?.number ?? "—"}</div>
-                      <div className="text-xs text-slate-500">15 Letters or Digits mix</div>
-                    </td>
-                    <td className="border px-2 py-2">{docs.gst[0]?.type ?? "—"}</td>
-                    <td className="border px-2 py-2">
-                      {docs.gst[0]?.copy_url ? (
-                        <a href={docs.gst[0].copy_url} target="_blank" rel="noreferrer" className="text-sky-600 underline">
-                          View Copy
-                        </a>
-                      ) : (
-                        <div className="text-xs">No copy uploaded</div>
-                      )}
-                    </td>
-                    <td className="border px-2 py-2">
-                      <div className="flex flex-col gap-2">
-                        <button className="w-full bg-sky-500 text-white rounded py-2" onClick={handleAddGst} disabled={saving}>
-                          Add New GST Entry
-                        </button>
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs">Status</div>
-                          <div>
-                            <Toggle checked={Boolean(docs.gst.find((r) => r.active))} onChange={() => {}} label={docs.gst.find((r) => r.active) ? "ON" : "OFF"} />
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
+            <FormField label="Upload Copy">
+              <input type="file" name="FSSAICopy" onChange={() => { /* implement upload flow separately */ }} />
+            </FormField>
 
-                  {/* PAN */}
-                  <tr className="h-14">
-                    <td className="border px-2 py-2">PAN Number</td>
-                    <td className="border px-2 py-2">
-                      <div className="mb-1">Latest: {docs.pan[0]?.number ?? "—"}</div>
-                      <div className="text-xs text-slate-500">10 Letters or Digits</div>
-                    </td>
-                    <td className="border px-2 py-2">{docs.pan[0]?.type ?? "—"}</td>
-                    <td className="border px-2 py-2">
-                      {docs.pan[0]?.copy_url ? (
-                        <a href={docs.pan[0].copy_url} target="_blank" rel="noreferrer" className="text-sky-600 underline">
-                          View Copy
-                        </a>
-                      ) : (
-                        <div className="text-xs">No copy uploaded</div>
-                      )}
-                    </td>
-                    <td className="border px-2 py-2">
-                      <div className="flex flex-col gap-2">
-                        <button className="w-full bg-sky-500 text-white rounded py-2" onClick={handleAddPan} disabled={saving}>
-                          Add New PAN Entry
-                        </button>
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs">Status</div>
-                          <div>
-                            <Toggle checked={Boolean(docs.pan.find((r) => r.active))} onChange={() => {}} label={docs.pan.find((r) => r.active) ? "ON" : "OFF"} />
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
-          </div>
+            <FormField label="Status">
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Toggle checked={String(local?.FSSAIStatus ?? "OFF") === "ON"} onChange={(ch) => updateField("FSSAIStatus", ch ? "ON" : "OFF")} />
+                <div>{String(local?.FSSAIStatus ?? "OFF")}</div>
+              </div>
+            </FormField>
+          </FormRow>
+
+          {/* GST row */}
+          <FormRow cols={4} gap={12}>
+            <FormField label="GST Number">
+              <input name="GSTNumber" value={gst} onChange={(e) => updateField("GSTNumber", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
+
+            <FormField label="GST Type">
+              <select name="GSTType" value={gstType} onChange={(e) => updateField("GSTType", e.target.value)} className="w-full p-2 rounded border">
+                <option value="">-- Select --</option>
+                <option value="Regular">Regular</option>
+                <option value="Composition">Composition</option>
+                <option value="NotApplicable">Not Applicable</option>
+              </select>
+            </FormField>
+
+            <FormField label="Upload Copy">
+              <input type="file" name="GSTCopy" onChange={() => {}} />
+            </FormField>
+
+            <FormField label="Status">
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Toggle checked={String(local?.GSTStatus ?? "OFF") === "ON"} onChange={(ch) => updateField("GSTStatus", ch ? "ON" : "OFF")} />
+                <div>{String(local?.GSTStatus ?? "OFF")}</div>
+              </div>
+            </FormField>
+          </FormRow>
+
+          {/* PAN row */}
+          <FormRow cols={4} gap={12}>
+            <FormField label="PAN Number">
+              <input name="PANNumber" value={pan} onChange={(e) => updateField("PANNumber", e.target.value)} className="w-full p-2 rounded border" />
+            </FormField>
+
+            <FormField label="PAN Type">
+              <select name="PANType" value={panType} onChange={(e) => updateField("PANType", e.target.value)} className="w-full p-2 rounded border">
+                <option value="">-- Select --</option>
+                <option value="Individual">Individual</option>
+                <option value="Company">Company</option>
+              </select>
+            </FormField>
+
+            <FormField label="Upload Copy">
+              <input type="file" name="PANCopy" onChange={() => {}} />
+            </FormField>
+
+            <FormField label="Status">
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Toggle checked={String(local?.PANStatus ?? "OFF") === "ON"} onChange={(ch) => updateField("PANStatus", ch ? "ON" : "OFF")} />
+                <div>{String(local?.PANStatus ?? "OFF")}</div>
+              </div>
+            </FormField>
+          </FormRow>
         </div>
 
-        <div className="text-sm text-slate-500 mb-4">Note: "Add New" calls server RPCs and creates history rows. File uploads are handled separately (Supabase signed uploads recommended).</div>
+        <div style={{ marginTop: 8, color: "#666", fontSize: 13 }}>
+          Note: File upload controls are placeholders. Implement Supabase storage signed uploads (or server endpoint) to persist files.
+        </div>
 
-        <div className="flex justify-center">
-          <SubmitButton onClick={() => alert("Parent Save (persist) should be handled by modal parent")}>Save Address &amp; Docs</SubmitButton>
+        <div style={{ marginTop: 18, display: "flex", justifyContent: "center" }}>
+          <SubmitButton onClick={() => {}} label="Save Address & Docs" />
         </div>
       </div>
-    </div>
+    </AdminForm>
   );
 }
