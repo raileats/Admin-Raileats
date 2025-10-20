@@ -3,23 +3,70 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import UI from "@/components/AdminUI";
-import { supabase } from "@/lib/supabase"; // <- adjust path if your supabase client is exported elsewhere
+import { supabase } from "@/lib/supabase"; // <-- adjust if your client is exported elsewhere
 const { AdminForm, FormRow, FormField, SubmitButton } = UI;
 
 type Props = {
-  local: any; // parent may pass partial row (we also fetch authoritative row from supabase)
-  updateField: (key: string, v: any) => void; // parent update hook (kept for compatibility)
+  local: any;
+  updateField: (key: string, v: any) => void;
   stationDisplay?: string;
   stations?: { label: string; value: string }[];
   loadingStations?: boolean;
 };
 
-const TABLE = "RestroMaster";
+function isDigits(s?: string | null) {
+  return !!s && /^\d+$/.test(s);
+}
+
+/** VALIDATORS */
+function validateFssai(value?: string | null) {
+  if (!value) return false;
+  // FSSAI commonly 14 digits - accept strictly 14 digits
+  return /^\d{14}$/.test(value.trim());
+}
+
+function validatePan(value?: string | null) {
+  if (!value) return false;
+  // PAN format: 5 letters + 4 digits + 1 letter (A-Z), case-insensitive
+  return /^[A-Z]{5}[0-9]{4}[A-Z]$/i.test(value.trim());
+}
+
+function validateGst(value?: string | null) {
+  if (!value) return false;
+  // GSTIN format: 15 characters: 2 digits (state) + 10-char PAN + 1 entity code (alnum) + 1 Z + 1 checksum
+  // Loose regex that checks length and allowed chars (you can make stricter depending on needs)
+  return /^[0-9]{2}[A-Z0-9]{13}$/i.test(value.trim()) && value.trim().length === 15;
+}
+
+/** small switch component (unstyled HTML + simple CSS for look) */
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+      <span style={{ width: 40, height: 22, display: "inline-block", borderRadius: 16, background: checked ? "#06b6d4" : "#e5e7eb", position: "relative", transition: "background .15s" }}>
+        <span
+          onClick={() => onChange(!checked)}
+          style={{
+            position: "absolute",
+            top: 2,
+            left: checked ? 18 : 2,
+            width: 18,
+            height: 18,
+            borderRadius: 12,
+            background: "#fff",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+            transition: "left .15s",
+          }}
+        />
+      </span>
+      <span style={{ fontSize: 13 }}>{checked ? "Active" : "Inactive"}</span>
+    </label>
+  );
+}
 
 export default function AddressDocumentsTab({ local = {}, updateField }: Props) {
-  const restroCode = local?.RestroCode ?? local?.RestroCode; // ensure we have code
+  const restroCode = local?.RestroCode ?? local?.RestroCode;
 
-  // ----- state mapped directly to your Supabase columns -----
+  // address fields
   const [restroAddress, setRestroAddress] = useState(local?.RestroAddress ?? "");
   const [stateVal, setStateVal] = useState(local?.State ?? "");
   const [city, setCity] = useState(local?.["City/Village"] ?? local?.City ?? "");
@@ -28,69 +75,57 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
   const [lat, setLat] = useState(local?.RestroLatitude ?? "");
   const [lng, setLng] = useState(local?.RestroLongituden ?? local?.RestroLongitude ?? "");
 
-  // documents (single current values per your table columns)
+  // documents (single-row columns)
   const [fssaiNumber, setFssaiNumber] = useState(local?.FSSAINumber ?? "");
   const [fssaiExpiry, setFssaiExpiry] = useState(local?.FSSAIExpiry ?? "");
   const [fssaiCopyName, setFssaiCopyName] = useState(local?.FSSAICopyUpload ?? "");
-  const [fssaiStatus, setFssaiStatus] = useState(local?.FSSAIStatus ?? "OFF");
+  const [fssaiStatus, setFssaiStatus] = useState(local?.FSSAIStatus === "ON" ? "ON" : "OFF");
 
   const [gstNumber, setGstNumber] = useState(local?.GSTNumber ?? "");
   const [gstType, setGstType] = useState(local?.GSTType ?? "");
   const [gstCopyName, setGstCopyName] = useState(local?.GSTCopyUpload ?? "");
-  const [gstStatus, setGstStatus] = useState(local?.GSTStatus ?? "OFF");
+  const [gstStatus, setGstStatus] = useState(local?.GSTStatus === "ON" ? "ON" : "OFF");
 
   const [panNumber, setPanNumber] = useState(local?.PANNumber ?? "");
   const [panType, setPanType] = useState(local?.PANType ?? "");
   const [panCopyName, setPanCopyName] = useState(local?.UploadPanCopy ?? "");
-  const [panStatus, setPanStatus] = useState(local?.PANStatus ?? "OFF");
+  const [panStatus, setPanStatus] = useState(local?.PANStatus === "ON" ? "ON" : "OFF");
 
-  // modal
+  // modal state
   const [modalOpen, setModalOpen] = useState<null | "FSSAI" | "GST" | "PAN">(null);
   const [modalNumber, setModalNumber] = useState("");
   const [modalExpiry, setModalExpiry] = useState<string | null>(null);
   const [modalFile, setModalFile] = useState<File | null>(null);
-  const [modalTypeValue, setModalTypeValue] = useState<string>(""); // GST type or PAN type when relevant
+  const [modalTypeValue, setModalTypeValue] = useState<string>("");
 
   const [loading, setLoading] = useState(false);
-  const [rowLoaded, setRowLoaded] = useState(false);
 
-  // helper to format ISO timestamp to readable
-  const fmtDate = (iso?: string | null) => {
-    if (!iso) return "—";
-    try {
-      return new Date(iso).toLocaleString();
-    } catch {
-      return iso;
-    }
-  };
-
-  // --- fetch authoritative row from supabase on mount or when restroCode changes ---
+  // load authoritative row from supabase when restroCode is available
   useEffect(() => {
     if (!restroCode) return;
-
     let mounted = true;
     setLoading(true);
-
-    async function loadRow() {
-      const { data, error } = await supabase.from(TABLE).select(`
-        FSSAICopyUpload, FSSAINumber, FSSAIStatus, FSSAIExpiry,
-        GSTNumber, GSTType, GSTCopyUpload, GSTStatus,
-        PANNumber, PANType, UploadPanCopy, PANStatus,
-        RestroAddress, State, "City/Village", District, PinCode, RestroLatitude, RestroLongituden, updated_at
-      `).eq("RestroCode", restroCode).single();
+    (async () => {
+      const { data, error } = await supabase
+        .from("RestroMaster")
+        .select(`
+          FSSAICopyUpload, FSSAINumber, FSSAIStatus, FSSAIExpiry,
+          GSTNumber, GSTType, GSTCopyUpload, GSTStatus,
+          PANNumber, PANType, UploadPanCopy, PANStatus,
+          RestroAddress, State, "City/Village", District, PinCode, RestroLatitude, RestroLongituden
+        `)
+        .eq("RestroCode", restroCode)
+        .single();
 
       if (!mounted) return;
       setLoading(false);
-
       if (error) {
-        // handle gracefully - console for debugging
         // eslint-disable-next-line no-console
-        console.error("Error fetching row:", error);
+        console.error("Error fetching RestroMaster row", error);
         return;
       }
       if (!data) return;
 
-      // populate fields from row (prefer supabase row over parent-provided local)
       setRestroAddress(data.RestroAddress ?? "");
       setStateVal(data.State ?? "");
       setCity(data["City/Village"] ?? "");
@@ -102,29 +137,24 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
       setFssaiNumber(data.FSSAINumber ?? "");
       setFssaiExpiry(data.FSSAIExpiry ?? "");
       setFssaiCopyName(data.FSSAICopyUpload ?? "");
-      setFssaiStatus(data.FSSAIStatus ?? "OFF");
+      setFssaiStatus(data.FSSAIStatus === "ON" ? "ON" : "OFF");
 
       setGstNumber(data.GSTNumber ?? "");
       setGstType(data.GSTType ?? "");
       setGstCopyName(data.GSTCopyUpload ?? "");
-      setGstStatus(data.GSTStatus ?? "OFF");
+      setGstStatus(data.GSTStatus === "ON" ? "ON" : "OFF");
 
       setPanNumber(data.PANNumber ?? "");
       setPanType(data.PANType ?? "");
       setPanCopyName(data.UploadPanCopy ?? "");
-      setPanStatus(data.PANStatus ?? "OFF");
-
-      setRowLoaded(true);
-    }
-
-    loadRow();
-
+      setPanStatus(data.PANStatus === "ON" ? "ON" : "OFF");
+    })();
     return () => {
       mounted = false;
     };
   }, [restroCode]);
 
-  // Auto-deactivate FSSAI if expired (runs on load and when expiry changes)
+  // auto-deactivate expired FSSAI on load & when expiry changes
   useEffect(() => {
     if (!fssaiExpiry) return;
     try {
@@ -132,46 +162,58 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
       exp.setHours(23, 59, 59, 999);
       const now = new Date();
       if (exp < now && fssaiStatus === "ON") {
-        // mark OFF both locally and persist to supabase
+        // set OFF locally and persist
         setFssaiStatus("OFF");
-        // persist change
         (async () => {
           if (!restroCode) return;
-          await supabase.from(TABLE).update({ FSSAIStatus: "OFF" }).eq("RestroCode", restroCode);
+          await supabase.from("RestroMaster").update({ FSSAIStatus: "OFF" }).eq("RestroCode", restroCode);
         })();
       }
-    } catch (e) {
-      // ignore parse errors
+    } catch {
+      // ignore
     }
   }, [fssaiExpiry, fssaiStatus, restroCode]);
 
-  // file input handlers (we currently store file name only; add storage upload where TODO indicates)
+  // file handlers: store only filename currently (TODO: upload to storage)
   function onFssaiFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
+    const f = e.target.files?.[0] ?? null;
     if (!f) return;
     setFssaiCopyName(f.name);
-    // TODO: upload file to Supabase storage and store the public path in FSSAICopyUpload
-    // e.g. supabase.storage.from('restro-files').upload(`${restroCode}/fssai/${Date.now()}-${f.name}`, f)
+    // TODO: upload to storage and store path in DB
   }
   function onGstFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
+    const f = e.target.files?.[0] ?? null;
     if (!f) return;
     setGstCopyName(f.name);
   }
   function onPanFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
+    const f = e.target.files?.[0] ?? null;
     if (!f) return;
     setPanCopyName(f.name);
   }
 
-  // Save entire Address & Documents row (updates the single row)
+  // Save whole row
   async function handleSaveRow() {
     if (!restroCode) {
       alert("Missing RestroCode — cannot save.");
       return;
     }
-    setLoading(true);
 
+    // Quick validation: if fields provided, ensure they validate
+    if (fssaiNumber && !validateFssai(fssaiNumber)) {
+      alert("FSSAI number invalid — must be 14 digits.");
+      return;
+    }
+    if (panNumber && !validatePan(panNumber)) {
+      alert("PAN invalid — expected format e.g. ABCDE1234F");
+      return;
+    }
+    if (gstNumber && !validateGst(gstNumber)) {
+      alert("GST invalid — expected 15-character GSTIN.");
+      return;
+    }
+
+    setLoading(true);
     const payload: any = {
       RestroAddress: restroAddress,
       State: stateVal,
@@ -181,44 +223,41 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
       RestroLatitude: lat,
       RestroLongituden: lng,
 
-      // documents columns (single current)
-      FSSAINumber: fssaiNumber,
+      FSSAINumber: fssaiNumber || null,
       FSSAIExpiry: fssaiExpiry || null,
       FSSAICopyUpload: fssaiCopyName || null,
       FSSAIStatus: fssaiStatus,
 
-      GSTNumber: gstNumber,
-      GSTType: gstType,
+      GSTNumber: gstNumber || null,
+      GSTType: gstType || null,
       GSTCopyUpload: gstCopyName || null,
       GSTStatus: gstStatus,
 
-      PANNumber: panNumber,
-      PANType: panType,
+      PANNumber: panNumber || null,
+      PANType: panType || null,
       UploadPanCopy: panCopyName || null,
       PANStatus: panStatus,
     };
 
-    const { data, error } = await supabase.from(TABLE).update(payload).eq("RestroCode", restroCode);
-
+    const { error } = await supabase.from("RestroMaster").update(payload).eq("RestroCode", restroCode);
     setLoading(false);
+
     if (error) {
       // eslint-disable-next-line no-console
-      console.error("Error saving:", error);
+      console.error("Save failed", error);
       alert("Save failed: " + error.message);
       return;
     }
 
-    // update parent local (optional)
+    // inform parent (optional)
     try {
       updateField && updateField("SupabaseLastSavedAt", new Date().toISOString());
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     alert("Saved successfully.");
   }
 
-  // ----- Modal flows for Add New FSSAI/GST/PAN -----
+  // Modal flows
   function openAdd(kind: "FSSAI" | "GST" | "PAN") {
     setModalNumber("");
     setModalExpiry(null);
@@ -227,62 +266,66 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
     setModalOpen(kind);
   }
 
+  function modalValid(kind: "FSSAI" | "GST" | "PAN") {
+    if (!modalNumber || modalNumber.trim().length === 0) return false;
+    if (kind === "FSSAI") return validateFssai(modalNumber);
+    if (kind === "GST") return validateGst(modalNumber) && !!modalTypeValue;
+    if (kind === "PAN") return validatePan(modalNumber) && !!modalTypeValue;
+    return false;
+  }
+
   async function saveModalEntry(kind: "FSSAI" | "GST" | "PAN") {
     if (!restroCode) {
-      alert("Missing RestroCode — cannot save.");
+      alert("Missing RestroCode");
       return;
     }
-    if (!modalNumber || modalNumber.trim().length === 0) {
-      alert("Please enter number.");
+    if (!modalValid(kind)) {
+      alert("Please fill valid values in the modal.");
       return;
     }
 
-    // When adding a new one, behaviour requested: make the new entry active and previous inactive.
-    // Since table columns are single fields, saving simply overwrites the columns with new values and sets status ON.
-    // If you store history in another table, you'd insert a new row and set previous row inactive — we didn't implement history here.
+    // Make new value active (set status ON) and persist: we overwrite the single-row columns.
     const payload: any = {};
     if (kind === "FSSAI") {
       payload.FSSAINumber = modalNumber.trim();
       payload.FSSAIExpiry = modalExpiry ?? null;
-      payload.FSSAICopyUpload = modalFile ? modalFile.name : fssaiCopyName ?? null; // ideally upload file and store path
+      payload.FSSAICopyUpload = modalFile ? modalFile.name : fssaiCopyName ?? null;
       payload.FSSAIStatus = "ON";
     } else if (kind === "GST") {
       payload.GSTNumber = modalNumber.trim();
-      payload.GSTType = modalTypeValue || gstType;
+      payload.GSTType = modalTypeValue;
       payload.GSTCopyUpload = modalFile ? modalFile.name : gstCopyName ?? null;
       payload.GSTStatus = "ON";
     } else {
       payload.PANNumber = modalNumber.trim();
-      payload.PANType = modalTypeValue || panType;
+      payload.PANType = modalTypeValue;
       payload.UploadPanCopy = modalFile ? modalFile.name : panCopyName ?? null;
       payload.PANStatus = "ON";
     }
 
     setLoading(true);
-    const { data, error } = await supabase.from(TABLE).update(payload).eq("RestroCode", restroCode);
+    const { error } = await supabase.from("RestroMaster").update(payload).eq("RestroCode", restroCode);
     setLoading(false);
 
     if (error) {
       // eslint-disable-next-line no-console
-      console.error("Error saving modal:", error);
+      console.error("Modal save failed", error);
       alert("Save failed: " + error.message);
       return;
     }
 
-    // reflect changes locally
+    // update local state
     if (kind === "FSSAI") {
       setFssaiNumber(payload.FSSAINumber);
       setFssaiExpiry(payload.FSSAIExpiry);
       setFssaiCopyName(payload.FSSAICopyUpload);
       setFssaiStatus("ON");
-    }
-    if (kind === "GST") {
+    } else if (kind === "GST") {
       setGstNumber(payload.GSTNumber);
       setGstType(payload.GSTType);
       setGstCopyName(payload.GSTCopyUpload);
       setGstStatus("ON");
-    }
-    if (kind === "PAN") {
+    } else {
       setPanNumber(payload.PANNumber);
       setPanType(payload.PANType);
       setPanCopyName(payload.UploadPanCopy);
@@ -293,7 +336,7 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
     alert(`${kind} saved and activated.`);
   }
 
-  // small UI render helpers
+  // small render helper for document line
   const renderDocumentLine = (
     label: string,
     number: string,
@@ -302,31 +345,31 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
     status: string,
     onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
     onAddClick: () => void,
-    onToggleStatus?: () => void
+    onToggleStatus: () => Promise<void>
   ) => {
     return (
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <strong>{label}</strong>
+          <strong style={{ fontSize: 15 }}>{label}</strong>
           <button onClick={onAddClick} style={{ background: "#06b6d4", color: "#fff", padding: "8px 10px", borderRadius: 6 }}>
             Add New {label}
           </button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 220px 200px 220px 120px", gap: 12, alignItems: "center" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 220px 220px 220px 120px", gap: 12, alignItems: "center" }}>
           <div>
             <div style={{ fontSize: 13, color: "#444", marginBottom: 6 }}>{label} Number</div>
             <div style={{ fontSize: 14 }}>{number || "—"}</div>
           </div>
 
           <div>
-            <div style={{ fontSize: 13, color: "#444", marginBottom: 6 }}>{label} Expiry</div>
+            <div style={{ fontSize: 13, color: "#444", marginBottom: 6 }}>Expiry</div>
             <div style={{ fontSize: 14 }}>{expiry || "—"}</div>
           </div>
 
           <div>
             <div style={{ fontSize: 13, color: "#444", marginBottom: 6 }}>Copy</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <div style={{ fontSize: 13 }}>{copyName || "No file"}</div>
               <label style={{ background: "#f3f4f6", padding: "6px 8px", borderRadius: 6, cursor: "pointer" }}>
                 Browse
@@ -337,16 +380,13 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
 
           <div>
             <div style={{ fontSize: 13, color: "#444", marginBottom: 6 }}>Created / Updated</div>
-            <div style={{ fontSize: 13, color: "#666" }}>{/* we don't keep a createdAt column in this single-row approach */}—</div>
+            <div style={{ fontSize: 13, color: "#666" }}>—</div>
           </div>
 
           <div>
             <div style={{ fontSize: 13, color: "#444", marginBottom: 6 }}>Status</div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <div style={{ padding: "4px 8px", borderRadius: 6, background: status === "ON" ? "#16a34a" : "#e5e7eb", color: status === "ON" ? "#fff" : "#374151", fontWeight: 700 }}>
-                {status === "ON" ? "Active" : "Inactive"}
-              </div>
-              {onToggleStatus && <button onClick={onToggleStatus} style={{ padding: "6px 8px", borderRadius: 6, border: "none", background: "#f3f4f6" }}>Toggle</button>}
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <ToggleSwitch checked={status === "ON"} onChange={async (v) => { await onToggleStatus(); }} />
             </div>
           </div>
         </div>
@@ -398,54 +438,78 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
         <div style={{ background: "#fff", padding: 12, borderRadius: 8, border: "1px solid #f1f1f1" }}>
           <h4 style={{ margin: "4px 0 16px 0", color: "#083d77", textAlign: "center" }}>Documents</h4>
 
-          {renderDocumentLine("FSSAI", fssaiNumber, fssaiExpiry, fssaiCopyName, fssaiStatus, onFssaiFile, () => openAdd("FSSAI"), async () => {
-            // toggle FSSAI status quick action
-            const newStatus = fssaiStatus === "ON" ? "OFF" : "ON";
-            setFssaiStatus(newStatus);
-            await supabase.from(TABLE).update({ FSSAIStatus: newStatus }).eq("RestroCode", restroCode);
-          })}
+          {renderDocumentLine(
+            "FSSAI",
+            fssaiNumber,
+            fssaiExpiry,
+            fssaiCopyName,
+            fssaiStatus,
+            onFssaiFile,
+            () => openAdd("FSSAI"),
+            async () => {
+              const newStatus = fssaiStatus === "ON" ? "OFF" : "ON";
+              setFssaiStatus(newStatus);
+              if (!restroCode) return;
+              await supabase.from("RestroMaster").update({ FSSAIStatus: newStatus }).eq("RestroCode", restroCode);
+            }
+          )}
 
-          <hr />
+          <hr style={{ margin: "12px 0" }} />
 
-          {renderDocumentLine("GST", gstNumber, null, gstCopyName, gstStatus, onGstFile, () => openAdd("GST"), async () => {
-            const newStatus = gstStatus === "ON" ? "OFF" : "ON";
-            setGstStatus(newStatus);
-            await supabase.from(TABLE).update({ GSTStatus: newStatus }).eq("RestroCode", restroCode);
-          })}
+          {renderDocumentLine(
+            "GST",
+            gstNumber,
+            null,
+            gstCopyName,
+            gstStatus,
+            onGstFile,
+            () => openAdd("GST"),
+            async () => {
+              const newStatus = gstStatus === "ON" ? "OFF" : "ON";
+              setGstStatus(newStatus);
+              if (!restroCode) return;
+              await supabase.from("RestroMaster").update({ GSTStatus: newStatus }).eq("RestroCode", restroCode);
+            }
+          )}
 
-          <hr />
+          <hr style={{ margin: "12px 0" }} />
 
-          {renderDocumentLine("PAN", panNumber, null, panCopyName, panStatus, onPanFile, () => openAdd("PAN"), async () => {
-            const newStatus = panStatus === "ON" ? "OFF" : "ON";
-            setPanStatus(newStatus);
-            await supabase.from(TABLE).update({ PANStatus: newStatus }).eq("RestroCode", restroCode);
-          })}
+          {renderDocumentLine(
+            "PAN",
+            panNumber,
+            null,
+            panCopyName,
+            panStatus,
+            onPanFile,
+            () => openAdd("PAN"),
+            async () => {
+              const newStatus = panStatus === "ON" ? "OFF" : "ON";
+              setPanStatus(newStatus);
+              if (!restroCode) return;
+              await supabase.from("RestroMaster").update({ PANStatus: newStatus }).eq("RestroCode", restroCode);
+            }
+          )}
         </div>
 
         <div style={{ marginTop: 14, display: "flex", justifyContent: "center", gap: 12 }}>
-          <button onClick={() => {
-            // revert to values from DB (reload)
-            if (!restroCode) return;
-            setRowLoaded(false);
-            setTimeout(() => window.location.reload(), 50); // crude reload — or call fetch again
-          }} style={{ padding: "8px 12px", borderRadius: 6 }}>Reload</button>
-
           <SubmitButton onClick={handleSaveRow}>{loading ? "Saving..." : "Save Address & Docs"}</SubmitButton>
         </div>
       </div>
 
-      {/* Add modal */}
+      {/* modal */}
       {modalOpen && (
         <div role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", zIndex: 9999 }}>
-          <div style={{ width: 520, background: "#fff", borderRadius: 10, padding: 18, boxShadow: "0 10px 30px rgba(0,0,0,0.12)" }}>
-            <h3 style={{ marginTop: 0 }}>
-              {modalOpen === "FSSAI" ? "Add New FSSAI" : modalOpen === "GST" ? "Add New GST" : "Add New PAN"}
-            </h3>
+          <div style={{ width: 520, background: "#fff", borderRadius: 10, padding: 18 }}>
+            <h3 style={{ marginTop: 0 }}>{modalOpen === "FSSAI" ? "Add New FSSAI" : modalOpen === "GST" ? "Add New GST" : "Add New PAN"}</h3>
 
             <div style={{ display: "grid", gap: 10 }}>
               <div>
                 <label style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>Number</label>
                 <input value={modalNumber} onChange={(e) => setModalNumber(e.target.value)} className="w-full p-2 rounded border" />
+                {/* inline validation message */}
+                {modalOpen === "FSSAI" && modalNumber && !validateFssai(modalNumber) && <div style={{ color: "crimson", marginTop: 6 }}>FSSAI must be exactly 14 digits.</div>}
+                {modalOpen === "GST" && modalNumber && !validateGst(modalNumber) && <div style={{ color: "crimson", marginTop: 6 }}>GST must be 15-character GSTIN.</div>}
+                {modalOpen === "PAN" && modalNumber && !validatePan(modalNumber) && <div style={{ color: "crimson", marginTop: 6 }}>PAN format e.g. ABCDE1234F.</div>}
               </div>
 
               {modalOpen === "FSSAI" && (
@@ -488,13 +552,15 @@ export default function AddressDocumentsTab({ local = {}, updateField }: Props) 
                 <label style={{ display: "block", marginBottom: 6, fontWeight: 700 }}>Status (auto)</label>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <div style={{ padding: "6px 10px", background: "#16a34a", color: "#fff", borderRadius: 6 }}>Active</div>
-                  <div style={{ color: "#666" }}>New entries will be created Active and previous values overwritten.</div>
+                  <div style={{ color: "#666" }}>New entries will be Active and previous will be overwritten/inactivated.</div>
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
                 <button onClick={() => setModalOpen(null)} style={{ padding: "8px 12px", borderRadius: 6 }}>Cancel</button>
-                <button onClick={() => saveModalEntry(modalOpen)} style={{ padding: "8px 12px", borderRadius: 6, background: "#06b6d4", color: "#fff" }}>Save</button>
+                <button disabled={!modalValid(modalOpen)} onClick={() => saveModalEntry(modalOpen)} style={{ padding: "8px 12px", borderRadius: 6, background: modalValid(modalOpen) ? "#06b6d4" : "#9ca3af", color: "#fff" }}>
+                  Save
+                </button>
               </div>
             </div>
           </div>
