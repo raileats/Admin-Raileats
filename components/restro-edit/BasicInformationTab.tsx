@@ -1,4 +1,3 @@
-// components/restro-edit/BasicInformationTab.tsx
 "use client";
 import React from "react";
 import UI from "@/components/AdminUI";
@@ -13,6 +12,20 @@ type Props = {
 };
 
 export default function BasicInformationTab({ local, updateField, stationDisplay }: Props) {
+  // helper: normalize "is active" from several possible shapes
+  const raileatsIsActive = (() => {
+    // prefer numeric column RaileatsStatus (1 or 0)
+    if (typeof local?.RaileatsStatus !== "undefined" && local?.RaileatsStatus !== null) {
+      return Number(local.RaileatsStatus) === 1;
+    }
+    // fallback older boolean/flag fields
+    if (typeof local?.Raileats !== "undefined" && local?.Raileats !== null) {
+      return Boolean(local.Raileats);
+    }
+    // if nothing set, default false
+    return false;
+  })();
+
   return (
     <div className="px-4 py-2">
       <h3 className="text-center text-lg font-bold mb-4">Basic Information</h3>
@@ -45,9 +58,11 @@ export default function BasicInformationTab({ local, updateField, stationDisplay
 
           <FormField label="Raileats Status">
             <Toggle
-              checked={Boolean(local?.Raileats)}
-              onChange={(v: boolean) => updateField("Raileats", v)}
-              label={local?.Raileats ? "On" : "Off"}
+              // checked is driven from RaileatsStatus (1 = active) or fallback Raileats boolean
+              checked={raileatsIsActive}
+              // when user toggles, update RaileatsStatus as numeric 1/0 (this is important)
+              onChange={(v: boolean) => updateField("RaileatsStatus", v ? 1 : 0)}
+              label={raileatsIsActive ? "On" : "Off"}
             />
           </FormField>
 
