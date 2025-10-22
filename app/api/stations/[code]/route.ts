@@ -72,6 +72,36 @@ async function fetchJsonWithKey(url: string, serviceKey: string) {
   return res;
 }
 
+// small helper to check if a public URL exists (HEAD)
+async function urlExists(url: string) {
+  try {
+    const r = await fetch(url, { method: "HEAD", cache: "no-store" });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+// try candidate file names for station image and return first that exists
+async function findStationImage(projectUrl: string, code: string) {
+  const candidates = [
+    `StationImage/${code}.webp`,
+    `StationImage/${code}.png`,
+    `StationImage/${code}.jpg`,
+    `StationImage/StationImage_${code}.png`,
+    `StationImage/StationImage_${code}.webp`,
+  ];
+  for (const p of candidates) {
+    const url = buildPublicImageUrl(projectUrl, p);
+    if (!url) continue;
+    // try HEAD
+    /* eslint-disable no-await-in-loop */
+    const ok = await urlExists(url);
+    if (ok) return url;
+  }
+  return null;
+}
+
 export async function OPTIONS() {
   const { FRONTEND_ORIGIN } = getEnv();
   return new NextResponse(null, { status: 204, headers: corsHeaders(FRONTEND_ORIGIN) });
@@ -108,6 +138,20 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
       console.error("Station fetch error:", stationResp.status, text);
     }
 
+    // determine station image URL (DB value takes precedence; else probe StationImage/{CODE}.webp etc)
+    let stationImageUrl: string | null = null;
+    if (station?.image_url) {
+      stationImageUrl = buildPublicImageUrl(PROJECT_URL, station.image_url);
+      // quick existence check
+      if (stationImageUrl && !(await urlExists(stationImageUrl))) {
+        // if stored path does not exist, try fallback probing
+        const fallback = await findStationImage(PROJECT_URL, code);
+        if (fallback) stationImageUrl = fallback;
+      }
+    } else {
+      stationImageUrl = await findStationImage(PROJECT_URL, code);
+    }
+
     // 2) RestroMaster query
     const selectCols = [
       "RestroCode",
@@ -136,8 +180,8 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
     const restroRows: any[] = await restroResp.json().catch(() => []);
 
     // 3) Normalize & filter
-    const normalized = restroRows
-      .map((row) => {
+    const normalized = await Promise.all(
+      restroRows.map(async (row) => {
         const raileats = row.RaileatsStatus;
         const isActive =
           raileats === 1 ||
@@ -153,7 +197,26 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
           ["active", "on", "yes", "1", "true"].includes(String(fssaiStatus).toLowerCase());
 
         const isPureVeg = row.IsPureVeg === 1 || row.IsPureVeg === "1" || String(row.IsPureVeg).toLowerCase() === "true";
-        const photoUrl = buildPublicImageUrl(PROJECT_URL, row.RestroDisplayPhoto);
+
+        // RestroDisplayPhoto might be just filename or bucket/path — build url
+        let photoUrl = buildPublicImageUrl(PROJECT_URL, row.RestroDisplayPhoto);
+        if (photoUrl && !(await urlExists(photoUrl))) {
+          // try common filenames: RestroDisplayPhoto/{RestroCode}.webp etc
+          const probeCandidates = [
+            `RestroDisplayPhoto/${row.RestroCode}.webp`,
+            `RestroDisplayPhoto/${row.RestroCode}.png`,
+            `RestroDisplayPhoto/${row.RestroCode}.jpg`,
+            `${row.RestroCode}.webp`,
+            `${row.RestroCode}.png`,
+          ];
+          for (const p of probeCandidates) {
+            const url = buildPublicImageUrl(PROJECT_URL, p);
+            if (url && (await urlExists(url))) {
+              photoUrl = url;
+              break;
+            }
+          }
+        }
 
         return {
           RestroCode: row.RestroCode,
@@ -168,8 +231,9 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
           _fssaiActiveRaw: fssaiActive,
         };
       })
-      .filter((r) => r._isActiveRaw && r._fssaiActiveRaw)
-      .map(({ _isActiveRaw, _fssaiActiveRaw, ...rest }) => rest);
+    );
+
+    const filtered = normalized.filter((r) => r._isActiveRaw && r._fssaiActiveRaw).map(({ _isActiveRaw, _fssaiActiveRaw, ...rest }) => rest);
 
     const result = {
       station: station
@@ -178,10 +242,10 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
             StationName: station.StationName ?? null,
             State: station.State ?? null,
             District: station.District ?? null,
-            image_url: station.image_url ? buildPublicImageUrl(PROJECT_URL, station.image_url) : null,
+            image_url: stationImageUrl,
           }
-        : { StationCode: code, StationName: null },
-      restaurants: normalized,
+        : { StationCode: code, StationName: null, image_url: stationImageUrl },
+      restaurants: filtered,
     };
 
     return NextResponse.json(result, { status: 200, headers });
