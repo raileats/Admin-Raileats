@@ -32,32 +32,32 @@ const corsHeaders = (origin: string | null = "*") => ({
   "Access-Control-Allow-Methods": "GET,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Max-Age": "600",
+  "Content-Type": "application/json; charset=utf-8",
 });
 
 function buildPublicImageUrl(projectUrl: string, path?: string | null) {
   if (!path) return null;
   if (/^https?:\/\//i.test(path)) return path; // already absolute
 
-  const cleaned = String(path).replace(/^\/+/, "");
-  const allowedBuckets = (process.env.NEXT_PUBLIC_SUPABASE_IMAGE_BUCKETS || "RestroDisplayPhoto,StationImage,user-photos,restro-docs,public")
+  const allowedBuckets = (process.env.NEXT_PUBLIC_SUPABASE_IMAGE_BUCKETS || "RestroDisplayPhoto,StationImage,restro-docs,user-photos,public")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
+  const cleaned = String(path).replace(/^\/+/, "");
   const parts = cleaned.split("/");
-  let bucket: string;
-  let objectPath: string;
+
+  let bucket = allowedBuckets[0] || "RestroDisplayPhoto";
+  let objectPath = cleaned;
 
   if (parts.length > 1 && allowedBuckets.includes(parts[0])) {
     bucket = parts[0];
     objectPath = parts.slice(1).join("/");
   } else {
-    bucket = allowedBuckets[0] || "RestroDisplayPhoto";
     objectPath = cleaned;
   }
 
-  // preserve slashes, encode special chars
-  const encodedObject = encodeURI(objectPath);
+  const encodedObject = objectPath.split("/").map(encodeURIComponent).join("/");
   return `${projectUrl.replace(/\/$/, "")}/storage/v1/object/public/${bucket}/${encodedObject}`;
 }
 
@@ -88,7 +88,6 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
     if (!code) {
       return NextResponse.json({ error: "Missing station code" }, { status: 400, headers });
     }
-
     if (!PROJECT_URL) {
       return NextResponse.json({ error: "SUPABASE URL not configured" }, { status: 500, headers });
     }
@@ -99,6 +98,7 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
     // 1) Station metadata
     const stationUrl = `${PROJECT_URL.replace(/\/$/, "")}/rest/v1/Stations?select=StationCode,StationName,State,District,image_url&StationCode=eq.${encodeURIComponent(code)}&limit=1`;
     const stationResp = await fetchJsonWithKey(stationUrl, SERVICE_KEY);
+
     let station: StationRow | null = null;
     if (stationResp.ok) {
       const stationJson: StationRow[] = await stationResp.json().catch(() => []);
@@ -108,7 +108,7 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
       console.error("Station fetch error:", stationResp.status, text);
     }
 
-    // 2) RestroMaster query — use actual column names
+    // 2) RestroMaster query
     const selectCols = [
       "RestroCode",
       "RestroName",
@@ -135,7 +135,7 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
 
     const restroRows: any[] = await restroResp.json().catch(() => []);
 
-    // 3) Normalize & filter: use RaileatsStatus === 1 as active, filter FSSAI
+    // 3) Normalize & filter
     const normalized = restroRows
       .map((row) => {
         const raileats = row.RaileatsStatus;
