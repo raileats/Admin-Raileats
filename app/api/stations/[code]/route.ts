@@ -3,8 +3,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-// import your server supabase helper - adjust path if different
-import { supabaseServer } from "@/lib/supabaseServer"; // used for PATCH and safe server queries
 
 type StationRow = {
   StationCode?: string;
@@ -30,7 +28,7 @@ const getEnv = () => {
 
 const corsHeaders = (origin: string | null = "*") => ({
   "Access-Control-Allow-Origin": origin ?? "*",
-  "Access-Control-Allow-Methods": "GET,OPTIONS,PATCH",
+  "Access-Control-Allow-Methods": "GET,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Max-Age": "600",
 });
@@ -42,17 +40,22 @@ function buildPublicImageUrl(projectUrl: string, path?: string | null) {
   return `${projectUrl.replace(/\/$/, "")}/storage/v1/object/public/public/${encodeURIComponent(cleaned)}`;
 }
 
-/**
- * OPTIONS (preflight)
- */
+async function fetchJsonWithKey(url: string, serviceKey: string) {
+  const res = await fetch(url, {
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      Accept: "application/json",
+    },
+  });
+  return res;
+}
+
 export async function OPTIONS() {
   const { FRONTEND_ORIGIN } = getEnv();
   return new NextResponse(null, { status: 204, headers: corsHeaders(FRONTEND_ORIGIN) });
 }
 
-/**
- * GET: return station metadata + active restaurants for station code
- */
 export async function GET(_request: Request, { params }: { params: { code?: string } }) {
   const { PROJECT_URL, SERVICE_KEY, FRONTEND_ORIGIN } = getEnv();
   const headers = corsHeaders(FRONTEND_ORIGIN ?? "*");
@@ -60,33 +63,31 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
   try {
     const codeRaw = params?.code || "";
     const code = String(codeRaw).toUpperCase().trim();
-    if (!code) return NextResponse.json({ error: "Missing station code" }, { status: 400, headers });
 
-    if (!PROJECT_URL) return NextResponse.json({ error: "SUPABASE URL not configured" }, { status: 500, headers });
-    if (!SERVICE_KEY) return NextResponse.json({ error: "SUPABASE service key not configured" }, { status: 500, headers });
-
-    // Use Supabase client (service role) for a safe server-side query
-    // If supabaseServer exposes a service client, use it; else fallback to REST fetch (will still work)
-    let station: StationRow | null = null;
-    try {
-      const { data: stData, error: stErr } = await supabaseServer
-        .from("Stations")
-        .select("StationCode,StationName,State,District,image_url")
-        .eq("StationCode", code)
-        .limit(1)
-        .maybeSingle();
-
-      if (stErr) {
-        console.error("supabase Stations fetch error", stErr);
-      } else {
-        station = stData as StationRow | null;
-      }
-    } catch (e) {
-      console.error("Stations query failed", e);
+    if (!code) {
+      return NextResponse.json({ error: "Missing station code" }, { status: 400, headers });
     }
 
-    // Fetch RestroMaster rows for this station
-    // Use supabaseServer to query RestroMaster columns
+    if (!PROJECT_URL) {
+      return NextResponse.json({ error: "SUPABASE URL not configured" }, { status: 500, headers });
+    }
+    if (!SERVICE_KEY) {
+      return NextResponse.json({ error: "SUPABASE service key not configured" }, { status: 500, headers });
+    }
+
+    // 1) Station metadata
+    const stationUrl = `${PROJECT_URL.replace(/\/$/, "")}/rest/v1/Stations?select=StationCode,StationName,State,District,image_url&StationCode=eq.${encodeURIComponent(code)}&limit=1`;
+    const stationResp = await fetchJsonWithKey(stationUrl, SERVICE_KEY);
+    let station: StationRow | null = null;
+    if (stationResp.ok) {
+      const stationJson: StationRow[] = await stationResp.json().catch(() => []);
+      station = stationJson && stationJson.length ? stationJson[0] : null;
+    } else {
+      const text = await stationResp.text().catch(() => "");
+      console.error("Station fetch error:", stationResp.status, text);
+    }
+
+    // 2) RestroMaster query — use actual column names (no IsActive)
     const selectCols = [
       "RestroCode",
       "RestroName",
@@ -96,43 +97,44 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
       "0penTime",
       "ClosedTime",
       "MinimumOrdermValue",
-      "IsActive",
       "FSSAIStatus",
       "RaileatsStatus",
       "StationCode",
       "StationName",
     ].join(",");
 
-    const { data: restroRowsRaw, error: restroErr } = await supabaseServer
-      .from("RestroMaster")
-      .select(selectCols)
-      .eq("StationCode", code);
+    const restroUrl = `${PROJECT_URL.replace(/\/$/, "")}/rest/v1/RestroMaster?select=${encodeURIComponent(selectCols)}&StationCode=eq.${encodeURIComponent(code)}`;
+    const restroResp = await fetchJsonWithKey(restroUrl, SERVICE_KEY);
 
-    if (restroErr) {
-      console.error("RestroMaster fetch error", restroErr);
-      return NextResponse.json({ error: "Failed to fetch restaurants", details: restroErr.message }, { status: 502, headers });
+    if (!restroResp.ok) {
+      const txt = await restroResp.text().catch(() => "");
+      console.error("RestroMaster fetch error:", restroResp.status, txt);
+      return NextResponse.json({ error: "Failed to fetch restaurants", details: txt }, { status: 502, headers });
     }
 
-    const restroRows: any[] = Array.isArray(restroRowsRaw) ? restroRowsRaw : [];
+    const restroRows: any[] = await restroResp.json().catch(() => []);
 
-    // Normalize & filter (IsActive & FSSAI active)
+    // 3) Normalize & filter: use RaileatsStatus === 1 as active
     const normalized = restroRows
       .map((row) => {
+        // RaileatsStatus could be numeric 1/0 or string "1"/"0" or word "active"
+        const raileats = row.RaileatsStatus;
         const isActive =
-          row.IsActive === true ||
-          String(row.IsActive).toLowerCase() === "true" ||
-          String(row.RaileatsStatus) === "1" ||
-          String(row.RaileatsStatus).toLowerCase() === "active";
+          raileats === 1 ||
+          raileats === "1" ||
+          String(raileats).toLowerCase() === "active" ||
+          String(raileats).toLowerCase() === "true";
+
+        // FSSAI: treat undefined/empty as OK; treat explicit "inactive"/"0"/"no" as inactive
         const fssaiStatus = row.FSSAIStatus ?? row.FssaiStatus ?? row.Fssai_Status;
         const fssaiActive =
           fssaiStatus === undefined ||
           fssaiStatus === null ||
-          String(fssaiStatus).toLowerCase() === "active" ||
-          String(fssaiStatus).toLowerCase() === "on" ||
-          String(fssaiStatus).toLowerCase() === "yes" ||
-          String(fssaiStatus).trim() === "";
+          String(fssaiStatus).trim() === "" ||
+          ["active", "on", "yes", "1", "true"].includes(String(fssaiStatus).toLowerCase());
+
         const isPureVeg = row.IsPureVeg === 1 || row.IsPureVeg === "1" || String(row.IsPureVeg).toLowerCase() === "true";
-        const photoUrl = buildPublicImageUrl(PROJECT_URL || "", row.RestroDisplayPhoto);
+        const photoUrl = buildPublicImageUrl(PROJECT_URL, row.RestroDisplayPhoto);
 
         return {
           RestroCode: row.RestroCode,
@@ -157,7 +159,7 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
             StationName: station.StationName ?? null,
             State: station.State ?? null,
             District: station.District ?? null,
-            image_url: station.image_url ? buildPublicImageUrl(PROJECT_URL || "", station.image_url) : null,
+            image_url: station.image_url ? buildPublicImageUrl(PROJECT_URL, station.image_url) : null,
           }
         : { StationCode: code, StationName: null },
       restaurants: normalized,
@@ -165,67 +167,8 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
 
     return NextResponse.json(result, { status: 200, headers });
   } catch (err) {
-    console.error("api/stations/[code] GET error:", err);
+    console.error("api/stations/[code] error:", err);
     const { FRONTEND_ORIGIN } = getEnv();
     return NextResponse.json({ error: String(err) }, { status: 500, headers: corsHeaders(FRONTEND_ORIGIN ?? "*") });
-  }
-}
-
-/**
- * PATCH: update station record (useful for admin UI)
- * Accepts JSON body; only allowed fields will be updated.
- * Uses supabaseServer client (service role) to perform update.
- */
-export async function PATCH(request: Request, { params }: { params: { code?: string } }) {
-  try {
-    const codeRaw = params?.code || "";
-    const code = String(codeRaw).toUpperCase().trim();
-    if (!code) return NextResponse.json({ error: "Missing station code" }, { status: 400 });
-
-    const body = await request.json().catch(() => ({}));
-    // Allowed fields for Stations table (adjust as per your schema)
-    const allowed = new Set([
-      "StationName",
-      "StationCode",
-      "Category",
-      "EcatRank",
-      "Division",
-      "RailwayZone",
-      "EcatZone",
-      "District",
-      "State",
-      "Lat",
-      "Long",
-      "Address",
-      "ReGroup",
-      "is_active",
-    ]);
-
-    const updates: any = {};
-    for (const k of Object.keys(body || {})) {
-      if (allowed.has(k)) updates[k] = body[k];
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
-    }
-
-    // Update Stations where StationCode = code
-    const { data, error } = await supabaseServer
-      .from("Stations")
-      .update(updates)
-      .eq("StationCode", code)
-      .select()
-      .maybeSingle();
-
-    if (error) {
-      console.error("supabase update error", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, data });
-  } catch (e: any) {
-    console.error("PATCH /api/stations/[code] error", e);
-    return NextResponse.json({ error: e.message ?? "unknown" }, { status: 500 });
   }
 }
