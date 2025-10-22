@@ -22,7 +22,8 @@ const getEnv = () => {
       process.env.SUPABASE_SERVICE_ROLE ??
       process.env.SUPABASE_SERVICE_ROLE_KEY ??
       process.env.SUPABASE_SERVICE_KEY,
-    FRONTEND_ORIGIN: process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_FRONTEND_URL ?? "*",
+    FRONTEND_ORIGIN:
+      process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_FRONTEND_URL ?? "*",
   };
 };
 
@@ -35,9 +36,29 @@ const corsHeaders = (origin: string | null = "*") => ({
 
 function buildPublicImageUrl(projectUrl: string, path?: string | null) {
   if (!path) return null;
-  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(path)) return path; // already absolute
+
   const cleaned = String(path).replace(/^\/+/, "");
-  return `${projectUrl.replace(/\/$/, "")}/storage/v1/object/public/public/${encodeURIComponent(cleaned)}`;
+  const allowedBuckets = (process.env.NEXT_PUBLIC_SUPABASE_IMAGE_BUCKETS || "RestroDisplayPhoto,StationImage,user-photos,restro-docs,public")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const parts = cleaned.split("/");
+  let bucket: string;
+  let objectPath: string;
+
+  if (parts.length > 1 && allowedBuckets.includes(parts[0])) {
+    bucket = parts[0];
+    objectPath = parts.slice(1).join("/");
+  } else {
+    bucket = allowedBuckets[0] || "RestroDisplayPhoto";
+    objectPath = cleaned;
+  }
+
+  // preserve slashes, encode special chars
+  const encodedObject = encodeURI(objectPath);
+  return `${projectUrl.replace(/\/$/, "")}/storage/v1/object/public/${bucket}/${encodedObject}`;
 }
 
 async function fetchJsonWithKey(url: string, serviceKey: string) {
@@ -87,7 +108,7 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
       console.error("Station fetch error:", stationResp.status, text);
     }
 
-    // 2) RestroMaster query — use actual column names (no IsActive)
+    // 2) RestroMaster query — use actual column names
     const selectCols = [
       "RestroCode",
       "RestroName",
@@ -114,10 +135,9 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
 
     const restroRows: any[] = await restroResp.json().catch(() => []);
 
-    // 3) Normalize & filter: use RaileatsStatus === 1 as active
+    // 3) Normalize & filter: use RaileatsStatus === 1 as active, filter FSSAI
     const normalized = restroRows
       .map((row) => {
-        // RaileatsStatus could be numeric 1/0 or string "1"/"0" or word "active"
         const raileats = row.RaileatsStatus;
         const isActive =
           raileats === 1 ||
@@ -125,7 +145,6 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
           String(raileats).toLowerCase() === "active" ||
           String(raileats).toLowerCase() === "true";
 
-        // FSSAI: treat undefined/empty as OK; treat explicit "inactive"/"0"/"no" as inactive
         const fssaiStatus = row.FSSAIStatus ?? row.FssaiStatus ?? row.Fssai_Status;
         const fssaiActive =
           fssaiStatus === undefined ||
