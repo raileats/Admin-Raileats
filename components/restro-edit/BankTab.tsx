@@ -1,4 +1,3 @@
-// components/BankTab.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -14,7 +13,7 @@ export type BankRow = {
   bank_name: string;
   branch: string;
   status: "active" | "inactive";
-  created_at?: string; // history.created_at OR master.BankDetailsCreatedDate
+  created_at?: string;
   updated_at?: string;
 };
 
@@ -47,17 +46,15 @@ export default function BankTab({
   const codeNum = /^\d+$/.test(codeStr) ? Number(codeStr) : null;
   const codeKeys = codeNum !== null ? [codeStr, String(codeNum)] : [codeStr];
 
-  const normalizeStatus = (v: any): "active" | "inactive" => {
-    const s = String(v ?? "").toLowerCase();
-    if (s === "1" || s === "true" || s === "active") return "active";
-    return "inactive";
-  };
+  const normalizeStatus = (v: any): "active" | "inactive" =>
+    String(v ?? "").toLowerCase() === "active" || v === 1 || v === "1" || v === true
+      ? "active"
+      : "inactive";
 
   const fmtDate = (iso?: string) => {
     if (!iso) return "—";
     try {
-      const d = new Date(iso);
-      return d.toLocaleString();
+      return new Date(iso).toLocaleString();
     } catch {
       return "—";
     }
@@ -69,17 +66,17 @@ export default function BankTab({
       setErr(null);
       if (!supabase) throw new Error("Supabase client not configured");
 
-      // 1) Try history (fetch string OR numeric restro_code)
+      // 1) Read history using BOTH possible keys (string + legacy numeric-as-string)
       const { data: hist, error: histErr } = await supabase
         .from(historyTable)
         .select("*")
         .in("restro_code", codeKeys)
-        .order("created_at", { ascending: false })
-        .order("updated_at", { ascending: false });
+        .order("created_at", { ascending: false });
 
       if (histErr) throw histErr;
 
       if (hist && hist.length > 0) {
+        // active first then inactive, and within each: latest first
         const mapped = (hist as any[]).map((r) => ({
           id: r.id,
           restro_code: String(r.restro_code ?? codeStr),
@@ -93,19 +90,18 @@ export default function BankTab({
           updated_at: r.updated_at ?? undefined,
         }));
 
-        // active first, then latest first
         mapped.sort((a, b) => {
-          if (a.status !== b.status) {
-            return a.status === "active" ? -1 : 1;
-          }
-          return (new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime());
+          // active first
+          if (a.status !== b.status) return a.status === "active" ? -1 : 1;
+          // then by created desc
+          return (b.created_at ?? "").localeCompare(a.created_at ?? "");
         });
 
         setRows(mapped);
         return;
       }
 
-      // 2) Fallback to master snapshot (when no history yet)
+      // 2) Fallback to master snapshot when history empty
       const { data: master, error: mErr } = await supabase
         .from(masterTable)
         .select(
@@ -166,7 +162,6 @@ export default function BankTab({
       </div>
 
       <div className="overflow-hidden rounded-xl border">
-        {/* 7 columns: includes Created */}
         <div className="grid grid-cols-7 bg-gray-50 px-4 py-3 text-sm font-medium">
           <div>Account Holder Name</div>
           <div>Account Number</div>
@@ -186,7 +181,7 @@ export default function BankTab({
             <div
               key={r.id ?? `${idx}-${r.account_number}-${r.ifsc_code}`}
               className={`grid grid-cols-7 border-t px-4 py-3 text-sm ${
-                r.status === "active" ? "bg-green-50" : "bg-red-50"
+                r.status === "active" ? "bg-green-50" : "bg-rose-50"
               }`}
             >
               <div className="truncate">{r.account_holder_name}</div>
@@ -209,7 +204,7 @@ export default function BankTab({
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
-          load(); // refresh after save
+          load();
         }}
         historyTable={historyTable}
         masterTable={masterTable}
