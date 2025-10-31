@@ -58,8 +58,7 @@ export default function BankFormModal({
 
   if (!open) return null;
 
-  const onChange = (k: keyof BankRow, v: any) =>
-    setForm((s) => ({ ...s, [k]: v }));
+  const onChange = (k: keyof BankRow, v: any) => setForm((s) => ({ ...s, [k]: v }));
 
   const save = async () => {
     try {
@@ -67,14 +66,8 @@ export default function BankFormModal({
       setErr(null);
       if (!supabase) throw new Error("Supabase client not configured");
 
-      // If you don't have a UNIQUE key for upsert, do insert instead:
-      const payload = {
-        ...form,
-        restro_code: restroCode,
-        status: form.status,
-      };
+      const payload = { ...form, restro_code: restroCode, status: form.status };
 
-      // INSERT and return inserted row
       const { data, error } = await supabase
         .from(tableName)
         .insert(payload)
@@ -82,7 +75,6 @@ export default function BankFormModal({
         .single();
 
       if (error) throw error;
-
       onSaved(data as BankRow);
       onClose();
     } catch (e: any) {
@@ -94,25 +86,19 @@ export default function BankFormModal({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center"
-    >
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center">
       {/* backdrop */}
-      <div
+      <button
+        type="button"                         // ✅ button so it can't submit any parent form
         className="absolute inset-0 bg-black/40"
         onClick={() => !saving && onClose()}
+        aria-label="Close"
       />
-
       {/* modal */}
       <div className="relative z-10 w-[880px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold">Add New Bank Details</h2>
-          <button
-            className="rounded-md border px-3 py-1 text-sm"
-            onClick={() => !saving && onClose()}
-          >
+          <button type="button" className="rounded-md border px-3 py-1 text-sm" onClick={() => !saving && onClose()}>
             ✕
           </button>
         </div>
@@ -192,14 +178,11 @@ export default function BankFormModal({
         {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
-          <button
-            disabled={saving}
-            onClick={onClose}
-            className="rounded-md border px-4 py-2"
-          >
+          <button type="button" disabled={saving} onClick={onClose} className="rounded-md border px-4 py-2">
             Cancel
           </button>
           <button
+            type="button"                    // ✅ button, not submit
             disabled={saving}
             onClick={save}
             className="rounded-md bg-blue-600 px-4 py-2 text-white"
