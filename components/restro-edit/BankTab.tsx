@@ -5,27 +5,29 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import BankFormModal from "./BankFormModal";
 
-type BankViewRow = {
-  restroCode: number | string;
+export type BankRow = {
+  id?: number;
+  restro_code: number | string;
   account_holder_name: string;
   account_number: string;
   ifsc_code: string;
   bank_name: string;
   branch: string;
   status: "active" | "inactive";
+  created_at?: string;
+  updated_at?: string;
 };
 
 type Props = {
   restroCode: number | string;
-  // optional: in case your table name ever differs
-  tableName?: string; // default: "RestroMaster"
+  historyTable?: string;   // default: "RestroBank"
 };
 
 export default function BankTab({
   restroCode,
-  tableName = "RestroMaster",
+  historyTable = "RestroBank",
 }: Props) {
-  const [row, setRow] = useState<BankViewRow | null>(null);
+  const [rows, setRows] = useState<BankRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -39,12 +41,6 @@ export default function BankTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const normalizeStatus = (v: any): "active" | "inactive" => {
-    if (v === 1 || v === "1" || v === true || String(v).toLowerCase() === "active")
-      return "active";
-    return "inactive";
-  };
-
   const load = async () => {
     try {
       setLoading(true);
@@ -52,30 +48,14 @@ export default function BankTab({
       if (!supabase) throw new Error("Supabase client not configured");
 
       const { data, error } = await supabase
-        .from(tableName)
-        .select(
-          "RestroCode, AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus"
-        )
-        .eq("RestroCode", restroCode)
-        .limit(1)
-        .maybeSingle();
+        .from(historyTable)
+        .select("*")
+        .eq("restro_code", restroCode)
+        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
-
-      if (!data) {
-        setRow(null);
-      } else {
-        const mapped: BankViewRow = {
-          restroCode: data.RestroCode,
-          account_holder_name: data.AccountHolderName ?? "",
-          account_number: data.AccountNumber ?? "",
-          ifsc_code: data.IFSCCode ?? "",
-          bank_name: data.BankName ?? "",
-          branch: data.Branch ?? "",
-          status: normalizeStatus(data.BankStatus),
-        };
-        setRow(mapped);
-      }
+      setRows((data as BankRow[]) || []);
     } catch (e: any) {
       console.error("Bank load error:", e);
       setErr(e?.message ?? "Failed to load bank details");
@@ -110,7 +90,7 @@ export default function BankTab({
         </button>
       </div>
 
-      {/* list view (single row from RestroMaster) */}
+      {/* list view */}
       <div className="overflow-hidden rounded-xl border">
         <div className="grid grid-cols-6 bg-gray-50 px-4 py-3 text-sm font-medium">
           <div>Account Holder Name</div>
@@ -123,24 +103,28 @@ export default function BankTab({
 
         {loading ? (
           <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
-        ) : !row ||
-          (!row.account_holder_name &&
-            !row.account_number &&
-            !row.ifsc_code &&
-            !row.bank_name &&
-            !row.branch) ? (
+        ) : rows.length === 0 ? (
           <div className="px-4 py-6 text-sm text-gray-600">
             No bank details added yet.
           </div>
         ) : (
-          <div className="grid grid-cols-6 border-t px-4 py-3 text-sm">
-            <div className="truncate">{row.account_holder_name}</div>
-            <div className="truncate">{row.account_number}</div>
-            <div className="truncate">{row.ifsc_code}</div>
-            <div className="truncate">{row.bank_name}</div>
-            <div className="truncate">{row.branch}</div>
-            <div className="text-right font-medium capitalize">{row.status}</div>
-          </div>
+          rows.map((r) => (
+            <div
+              key={r.id ?? `${r.account_number}-${r.ifsc_code}-${r.created_at}`}
+              className={`grid grid-cols-6 border-t px-4 py-3 text-sm ${
+                r.status === "active" ? "bg-green-50" : ""
+              }`}
+            >
+              <div className="truncate">{r.account_holder_name}</div>
+              <div className="truncate">{r.account_number}</div>
+              <div className="truncate">{r.ifsc_code}</div>
+              <div className="truncate">{r.bank_name}</div>
+              <div className="truncate">{r.branch}</div>
+              <div className="text-right font-medium capitalize">
+                {r.status}
+              </div>
+            </div>
+          ))
         )}
       </div>
 
@@ -153,9 +137,10 @@ export default function BankTab({
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
-          load(); // refresh after update
+          load(); // refresh: new active + old inactive
         }}
-        tableName={tableName}
+        historyTable={historyTable}
+        masterTable="RestroMaster"
       />
     </div>
   );
