@@ -4,33 +4,37 @@
 import React, { useMemo, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
+type BankStatus = "active" | "inactive";
+
 export type BankRow = {
+  id?: number;
   restro_code: number | string;
   account_holder_name: string;
   account_number: string;
   ifsc_code: string;
   bank_name: string;
   branch: string;
-  status: "active" | "inactive";
+  status: BankStatus;
+  created_at?: string;
+  updated_at?: string;
 };
 
 type Props = {
   open: boolean;
   restroCode: number | string;
-  // initialData optional if you later support edit prefill
-  initialData?: Partial<BankRow> | null;
   onClose: () => void;
   onSaved: () => void;
-  tableName?: string; // default: "RestroMaster"
+  historyTable?: string; // default: RestroBank (history)
+  masterTable?: string;  // default: RestroMaster (current)
 };
 
 export default function BankFormModal({
   open,
   restroCode,
-  initialData,
   onClose,
   onSaved,
-  tableName = "RestroMaster",
+  historyTable = "RestroBank",
+  masterTable = "RestroMaster",
 }: Props) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -41,14 +45,15 @@ export default function BankFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ✅ always blank on open
   const [form, setForm] = useState<BankRow>({
     restro_code: restroCode,
-    account_holder_name: initialData?.account_holder_name ?? "",
-    account_number: initialData?.account_number ?? "",
-    ifsc_code: initialData?.ifsc_code ?? "",
-    bank_name: initialData?.bank_name ?? "",
-    branch: initialData?.branch ?? "",
-    status: (initialData?.status as "active" | "inactive") ?? "inactive",
+    account_holder_name: "",
+    account_number: "",
+    ifsc_code: "",
+    bank_name: "",
+    branch: "",
+    status: "active",
   });
 
   const [saving, setSaving] = useState(false);
@@ -65,25 +70,47 @@ export default function BankFormModal({
       setErr(null);
       if (!supabase) throw new Error("Supabase client not configured");
 
-      // Map to RestroMaster field names
-      const payload = {
+      // 1) UPDATE RestroMaster (current live values)
+      const masterPayload = {
         AccountHolderName: form.account_holder_name || null,
         AccountNumber: form.account_number || null,
         BankName: form.bank_name || null,
         IFSCCode: form.ifsc_code || null,
         Branch: form.branch || null,
-        // store as string "Active"/"Inactive" (or adjust to 1/0 if your schema expects that)
-        BankStatus: form.status === "active" ? "Active" : "Inactive",
+        BankStatus: form.status === "active" ? "Active" : "Inactive", // adjust to 1/0 if needed
       };
 
-      const { data, error } = await supabase
-        .from(tableName)
-        .update(payload)
-        .eq("RestroCode", restroCode)
-        .select("RestroCode")
-        .single();
+      const { error: mErr } = await supabase
+        .from(masterTable)
+        .update(masterPayload)
+        .eq("RestroCode", restroCode);
 
-      if (error) throw error;
+      if (mErr) throw mErr;
+
+      // 2) INACTIVATE old history rows
+      const { error: inactErr } = await supabase
+        .from(historyTable)
+        .update({ status: "inactive" as BankStatus })
+        .eq("restro_code", restroCode);
+
+      if (inactErr) throw inactErr;
+
+      // 3) INSERT new history row as active
+      const historyPayload = {
+        restro_code: restroCode,
+        account_holder_name: form.account_holder_name || "",
+        account_number: form.account_number || "",
+        ifsc_code: form.ifsc_code || "",
+        bank_name: form.bank_name || "",
+        branch: form.branch || "",
+        status: "active" as BankStatus,
+      };
+
+      const { error: insErr } = await supabase
+        .from(historyTable)
+        .insert(historyPayload);
+
+      if (insErr) throw insErr;
 
       onSaved();
       onClose();
@@ -96,11 +123,7 @@ export default function BankFormModal({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center"
-    >
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center">
       {/* backdrop */}
       <button
         type="button"
@@ -108,16 +131,11 @@ export default function BankFormModal({
         onClick={() => !saving && onClose()}
         aria-label="Close"
       />
-
       {/* modal */}
       <div className="relative z-10 w-[880px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold">Add New Bank Details</h2>
-          <button
-            type="button"
-            className="rounded-md border px-3 py-1 text-sm"
-            onClick={() => !saving && onClose()}
-          >
+          <button type="button" className="rounded-md border px-3 py-1 text-sm" onClick={() => !saving && onClose()}>
             ✕
           </button>
         </div>
@@ -197,12 +215,7 @@ export default function BankFormModal({
         {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={onClose}
-            className="rounded-md border px-4 py-2"
-          >
+          <button type="button" disabled={saving} onClick={onClose} className="rounded-md border px-4 py-2">
             Cancel
           </button>
           <button
