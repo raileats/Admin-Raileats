@@ -14,7 +14,7 @@ export type BankRow = {
   bank_name: string;
   branch: string;
   status: "active" | "inactive";
-  created_at?: string;
+  created_at?: string; // history.created_at OR master.BankDetailsCreatedDate
   updated_at?: string;
 };
 
@@ -51,12 +51,23 @@ export default function BankTab({
     return "inactive";
   };
 
+  const fmtDate = (iso?: string) => {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString();
+    } catch {
+      return "—";
+    }
+  };
+
   const load = async () => {
     try {
       setLoading(true);
       setErr(null);
       if (!supabase) throw new Error("Supabase client not configured");
 
+      // 1) Try history
       const { data: hist, error: histErr } = await supabase
         .from(historyTable)
         .select("*")
@@ -77,18 +88,18 @@ export default function BankTab({
             bank_name: r.bank_name ?? "",
             branch: r.branch ?? "",
             status: normalizeStatus(r.status),
-            created_at: r.created_at,
-            updated_at: r.updated_at,
+            created_at: r.created_at ?? undefined,
+            updated_at: r.updated_at ?? undefined,
           }))
         );
         return;
       }
 
-      // fallback to master one-row snapshot
+      // 2) Fallback to master snapshot
       const { data: master, error: mErr } = await supabase
         .from(masterTable)
         .select(
-          "RestroCode, AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus"
+          "RestroCode, AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus, BankDetailsCreatedDate"
         )
         .eq("RestroCode", codeStr)
         .maybeSingle();
@@ -105,6 +116,7 @@ export default function BankTab({
             bank_name: master.BankName ?? "",
             branch: master.Branch ?? "",
             status: normalizeStatus(master.BankStatus),
+            created_at: master.BankDetailsCreatedDate ?? undefined,
           },
         ]);
       } else {
@@ -144,12 +156,14 @@ export default function BankTab({
       </div>
 
       <div className="overflow-hidden rounded-xl border">
-        <div className="grid grid-cols-6 bg-gray-50 px-4 py-3 text-sm font-medium">
+        {/* 7 columns now: includes Created */}
+        <div className="grid grid-cols-7 bg-gray-50 px-4 py-3 text-sm font-medium">
           <div>Account Holder Name</div>
           <div>Account Number</div>
           <div>IFSC Code</div>
           <div>Bank Name</div>
           <div>Branch</div>
+          <div>Created</div>
           <div className="text-right">Status</div>
         </div>
 
@@ -161,7 +175,7 @@ export default function BankTab({
           rows.map((r, idx) => (
             <div
               key={r.id ?? `${idx}-${r.account_number}-${r.ifsc_code}`}
-              className={`grid grid-cols-6 border-t px-4 py-3 text-sm ${
+              className={`grid grid-cols-7 border-t px-4 py-3 text-sm ${
                 r.status === "active" ? "bg-green-50" : ""
               }`}
             >
@@ -170,6 +184,7 @@ export default function BankTab({
               <div className="truncate">{r.ifsc_code}</div>
               <div className="truncate">{r.bank_name}</div>
               <div className="truncate">{r.branch}</div>
+              <div className="truncate">{fmtDate(r.created_at)}</div>
               <div className="text-right font-medium capitalize">{r.status}</div>
             </div>
           ))
