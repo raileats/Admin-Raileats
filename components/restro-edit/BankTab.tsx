@@ -43,7 +43,7 @@ export default function BankTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const codeStr = String(restroCode ?? ""); // ✅ always string (history.restro_code is text)
+  const codeStr = String(restroCode ?? "");
 
   const normalizeStatus = (v: any): "active" | "inactive" => {
     const s = String(v ?? "").toLowerCase();
@@ -57,7 +57,6 @@ export default function BankTab({
       setErr(null);
       if (!supabase) throw new Error("Supabase client not configured");
 
-      // 1) Try history table (RestroBank)
       const { data: hist, error: histErr } = await supabase
         .from(historyTable)
         .select("*")
@@ -85,7 +84,7 @@ export default function BankTab({
         return;
       }
 
-      // 2) Fallback to master table (RestroMaster) if history empty
+      // fallback to master one-row snapshot
       const { data: master, error: mErr } = await supabase
         .from(masterTable)
         .select(
@@ -97,17 +96,17 @@ export default function BankTab({
       if (mErr) throw mErr;
 
       if (master) {
-        const mapped: BankRow = {
-          restro_code: codeStr,
-          account_holder_name: master.AccountHolderName ?? "",
-          account_number: master.AccountNumber ?? "",
-          ifsc_code: master.IFSCCode ?? "",
-          bank_name: master.BankName ?? "",
-          branch: master.Branch ?? "",
-          status: normalizeStatus(master.BankStatus),
-        };
-        // show single row (no id) as a “current snapshot”
-        setRows([mapped]);
+        setRows([
+          {
+            restro_code: codeStr,
+            account_holder_name: master.AccountHolderName ?? "",
+            account_number: master.AccountNumber ?? "",
+            ifsc_code: master.IFSCCode ?? "",
+            bank_name: master.BankName ?? "",
+            branch: master.Branch ?? "",
+            status: normalizeStatus(master.BankStatus),
+          },
+        ]);
       } else {
         setRows([]);
       }
@@ -130,9 +129,7 @@ export default function BankTab({
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Bank</h3>
-          <p className="text-sm text-gray-500">
-            Current bank details for this restaurant.
-          </p>
+          <p className="text-sm text-gray-500">Current bank details for this restaurant.</p>
         </div>
         <button
           type="button"
@@ -146,7 +143,6 @@ export default function BankTab({
         </button>
       </div>
 
-      {/* list view */}
       <div className="overflow-hidden rounded-xl border">
         <div className="grid grid-cols-6 bg-gray-50 px-4 py-3 text-sm font-medium">
           <div>Account Holder Name</div>
@@ -160,9 +156,7 @@ export default function BankTab({
         {loading ? (
           <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
         ) : rows.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-gray-600">
-            No bank details added yet.
-          </div>
+          <div className="px-4 py-6 text-sm text-gray-600">No bank details added yet.</div>
         ) : (
           rows.map((r, idx) => (
             <div
@@ -176,9 +170,7 @@ export default function BankTab({
               <div className="truncate">{r.ifsc_code}</div>
               <div className="truncate">{r.bank_name}</div>
               <div className="truncate">{r.branch}</div>
-              <div className="text-right font-medium capitalize">
-                {r.status}
-              </div>
+              <div className="text-right font-medium capitalize">{r.status}</div>
             </div>
           ))
         )}
@@ -186,14 +178,13 @@ export default function BankTab({
 
       {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
 
-      {/* modal */}
       <BankFormModal
         open={open}
         restroCode={codeStr}
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
-          load(); // refresh after insert/update
+          load(); // refresh after save
         }}
         historyTable={historyTable}
         masterTable={masterTable}
