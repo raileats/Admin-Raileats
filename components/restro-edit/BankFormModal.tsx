@@ -1,7 +1,7 @@
+// components/BankFormModal.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import React, { useState } from "react";
 
 type BankStatus = "active" | "inactive";
 
@@ -23,8 +23,8 @@ type Props = {
   restroCode: number | string;
   onClose: () => void;
   onSaved: () => void;
-  historyTable?: string; // default: RestroBank (history)
-  masterTable?: string;  // default: RestroMaster (current)
+  historyTable?: string; // (kept for compatibility; not used here)
+  masterTable?: string;  // (kept for compatibility; not used here)
 };
 
 export default function BankFormModal({
@@ -32,18 +32,7 @@ export default function BankFormModal({
   restroCode,
   onClose,
   onSaved,
-  historyTable = "RestroBank",
-  masterTable = "RestroMaster",
 }: Props) {
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-  const supabase: SupabaseClient | null = useMemo(() => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const [form, setForm] = useState<BankRow>({
     restro_code: restroCode,
     account_holder_name: "",
@@ -62,161 +51,34 @@ export default function BankFormModal({
   const onChange = (k: keyof BankRow, v: any) =>
     setForm((s) => ({ ...s, [k]: v }));
 
+  // Save via server API (uses service role key server-side → no RLS issues)
   const save = async () => {
     try {
       setSaving(true);
       setErr(null);
-      if (!supabase) throw new Error("Supabase client not configured");
 
-      const codeStr = String(restroCode ?? "");
-      const codeNum = /^\d+$/.test(codeStr) ? Number(codeStr) : null;
+      const res = await fetch(
+        `/api/restros/${encodeURIComponent(String(restroCode))}/bank`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            account_holder_name: form.account_holder_name,
+            account_number: form.account_number,
+            ifsc_code: form.ifsc_code,
+            bank_name: form.bank_name,
+            branch: form.branch,
+            status: form.status,
+          }),
+        }
+      );
 
-      // --------------------------
-      // 0) existing history count
-      // --------------------------
-      const { count: histCount, error: histCountErr } = await supabase
-        .from(historyTable)
-        .select("id", { count: "exact", head: true })
-        .eq("restro_code", codeStr);
-      if (histCountErr) throw histCountErr;
-
-      // ---------------------------------
-      // 1) read old snapshot from master
-      // ---------------------------------
-      let oldSnap:
-        | {
-            AccountHolderName?: string | null;
-            AccountNumber?: string | null;
-            BankName?: string | null;
-            IFSCCode?: string | null;
-            Branch?: string | null;
-            BankStatus?: any;
-            BankDetailsCreatedDate?: string | null;
-          }
-        | null = null;
-
-      const { data: masterRowStr, error: readStrErr } = await supabase
-        .from(masterTable)
-        .select(
-          "AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus, BankDetailsCreatedDate"
-        )
-        .eq("RestroCode", codeStr)
-        .maybeSingle();
-      if (readStrErr) throw readStrErr;
-
-      if (masterRowStr) {
-        oldSnap = masterRowStr;
-      } else if (codeNum !== null) {
-        const { data: masterRowNum, error: readNumErr } = await supabase
-          .from(masterTable)
-          .select(
-            "AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus, BankDetailsCreatedDate"
-          )
-          .eq("RestroCode", codeNum)
-          .maybeSingle();
-        if (readNumErr) throw readNumErr;
-        if (masterRowNum) oldSnap = masterRowNum;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || `Save failed (${res.status})`);
       }
 
-      // ----------------------------
-      // 2) build new master payload
-      // ----------------------------
-      const masterPayload = {
-        AccountHolderName: form.account_holder_name || null,
-        AccountNumber: form.account_number || null,
-        BankName: form.bank_name || null,
-        IFSCCode: form.ifsc_code || null,
-        Branch: form.branch || null,
-        BankStatus: form.status === "active" ? "Active" : "Inactive",
-        BankDetailsCreatedDate: new Date().toISOString(),
-      };
-
-      // ----------------------------------------------------
-      // 3) UPDATE RestroMaster (string compare first, then numeric),
-      //    if nothing updated -> UPSERT a new row with RestroCode=codeStr
-      // ----------------------------------------------------
-      let updatedCount = 0;
-
-      const { data: updStrData, error: updStrErr } = await supabase
-        .from(masterTable)
-        .update(masterPayload)
-        .eq("RestroCode", codeStr)
-        .select("RestroCode");
-      if (updStrErr) throw updStrErr;
-      updatedCount = updStrData?.length ?? 0;
-
-      if (updatedCount === 0 && codeNum !== null) {
-        const { data: updNumData, error: updNumErr } = await supabase
-          .from(masterTable)
-          .update(masterPayload)
-          .eq("RestroCode", codeNum)
-          .select("RestroCode");
-        if (updNumErr) throw updNumErr;
-        updatedCount = updNumData?.length ?? 0;
-      }
-
-      if (updatedCount === 0) {
-        // As a safe fallback: create/replace a row for this RestroCode (string)
-        const upsertPayload = {
-          RestroCode: codeStr,
-          ...masterPayload,
-        };
-        const { error: upsertErr } = await supabase
-          .from(masterTable)
-          .upsert(upsertPayload, { onConflict: "RestroCode" });
-        if (upsertErr) throw upsertErr;
-      }
-
-      // ---------------------------------------
-      // 4) Inactivate all old history rows
-      // ---------------------------------------
-      const { error: inactErr } = await supabase
-        .from(historyTable)
-        .update({ status: "inactive" as BankStatus })
-        .eq("restro_code", codeStr);
-      if (inactErr) throw inactErr;
-
-      // ------------------------------------------------
-      // 5) If first-time history and we had an old snap,
-      //    store old as inactive for visibility
-      // ------------------------------------------------
-      const anyOld =
-        oldSnap &&
-        !!(
-          oldSnap.AccountHolderName ||
-          oldSnap.AccountNumber ||
-          oldSnap.BankName ||
-          oldSnap.IFSCCode ||
-          oldSnap.Branch
-        );
-      if ((histCount ?? 0) === 0 && anyOld) {
-        const { error: oldInsErr } = await supabase.from(historyTable).insert({
-          restro_code: codeStr,
-          account_holder_name: oldSnap?.AccountHolderName ?? "",
-          account_number: oldSnap?.AccountNumber ?? "",
-          ifsc_code: oldSnap?.IFSCCode ?? "",
-          bank_name: oldSnap?.BankName ?? "",
-          branch: oldSnap?.Branch ?? "",
-          status: "inactive" as BankStatus,
-        });
-        if (oldInsErr) throw oldInsErr;
-      }
-
-      // -----------------------------
-      // 6) Insert new active history
-      // -----------------------------
-      const { error: newInsErr } = await supabase.from(historyTable).insert({
-        restro_code: codeStr,
-        account_holder_name: form.account_holder_name || "",
-        account_number: form.account_number || "",
-        ifsc_code: form.ifsc_code || "",
-        bank_name: form.bank_name || "",
-        branch: form.branch || "",
-        status: "active" as BankStatus,
-      });
-      if (newInsErr) throw newInsErr;
-
-      onSaved();
+      onSaved(); // refresh parent list
       onClose();
     } catch (e: any) {
       console.error("Bank save error:", e);
