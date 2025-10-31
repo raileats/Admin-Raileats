@@ -7,7 +7,7 @@ import BankFormModal from "./BankFormModal";
 
 export type BankRow = {
   id?: number;
-  restro_code: number | string;
+  restro_code: string;
   account_holder_name: string;
   account_number: string;
   ifsc_code: string;
@@ -20,12 +20,14 @@ export type BankRow = {
 
 type Props = {
   restroCode: number | string;
-  historyTable?: string;   // default: "RestroBank"
+  historyTable?: string; // default: RestroBank
+  masterTable?: string;  // default: RestroMaster
 };
 
 export default function BankTab({
   restroCode,
   historyTable = "RestroBank",
+  masterTable = "RestroMaster",
 }: Props) {
   const [rows, setRows] = useState<BankRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,24 +43,78 @@ export default function BankTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const codeStr = String(restroCode ?? ""); // ✅ always string (history.restro_code is text)
+
+  const normalizeStatus = (v: any): "active" | "inactive" => {
+    const s = String(v ?? "").toLowerCase();
+    if (s === "1" || s === "true" || s === "active") return "active";
+    return "inactive";
+  };
+
   const load = async () => {
     try {
       setLoading(true);
       setErr(null);
       if (!supabase) throw new Error("Supabase client not configured");
 
-      const { data, error } = await supabase
+      // 1) Try history table (RestroBank)
+      const { data: hist, error: histErr } = await supabase
         .from(historyTable)
         .select("*")
-        .eq("restro_code", restroCode)
+        .eq("restro_code", codeStr)
         .order("updated_at", { ascending: false })
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setRows((data as BankRow[]) || []);
+      if (histErr) throw histErr;
+
+      if (hist && hist.length > 0) {
+        setRows(
+          (hist as any[]).map((r) => ({
+            id: r.id,
+            restro_code: String(r.restro_code ?? codeStr),
+            account_holder_name: r.account_holder_name ?? "",
+            account_number: r.account_number ?? "",
+            ifsc_code: r.ifsc_code ?? "",
+            bank_name: r.bank_name ?? "",
+            branch: r.branch ?? "",
+            status: normalizeStatus(r.status),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+          }))
+        );
+        return;
+      }
+
+      // 2) Fallback to master table (RestroMaster) if history empty
+      const { data: master, error: mErr } = await supabase
+        .from(masterTable)
+        .select(
+          "RestroCode, AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus"
+        )
+        .eq("RestroCode", codeStr)
+        .maybeSingle();
+
+      if (mErr) throw mErr;
+
+      if (master) {
+        const mapped: BankRow = {
+          restro_code: codeStr,
+          account_holder_name: master.AccountHolderName ?? "",
+          account_number: master.AccountNumber ?? "",
+          ifsc_code: master.IFSCCode ?? "",
+          bank_name: master.BankName ?? "",
+          branch: master.Branch ?? "",
+          status: normalizeStatus(master.BankStatus),
+        };
+        // show single row (no id) as a “current snapshot”
+        setRows([mapped]);
+      } else {
+        setRows([]);
+      }
     } catch (e: any) {
       console.error("Bank load error:", e);
       setErr(e?.message ?? "Failed to load bank details");
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -67,7 +123,7 @@ export default function BankTab({
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restroCode, supabase]);
+  }, [codeStr, supabase]);
 
   return (
     <div className="px-4">
@@ -108,9 +164,9 @@ export default function BankTab({
             No bank details added yet.
           </div>
         ) : (
-          rows.map((r) => (
+          rows.map((r, idx) => (
             <div
-              key={r.id ?? `${r.account_number}-${r.ifsc_code}-${r.created_at}`}
+              key={r.id ?? `${idx}-${r.account_number}-${r.ifsc_code}`}
               className={`grid grid-cols-6 border-t px-4 py-3 text-sm ${
                 r.status === "active" ? "bg-green-50" : ""
               }`}
@@ -133,14 +189,14 @@ export default function BankTab({
       {/* modal */}
       <BankFormModal
         open={open}
-        restroCode={restroCode}
+        restroCode={codeStr}
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
-          load(); // refresh: new active + old inactive
+          load(); // refresh after insert/update
         }}
         historyTable={historyTable}
-        masterTable="RestroMaster"
+        masterTable={masterTable}
       />
     </div>
   );
