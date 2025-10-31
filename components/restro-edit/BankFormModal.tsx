@@ -103,7 +103,7 @@ export default function BankFormModal({
       if (mReadErr) throw mReadErr;
       if (masterRow) oldSnap = masterRow;
 
-      // 2) update master (force-match exactly one row) + set created date
+      // 2) update master + set created date
       const masterPayload = {
         AccountHolderName: form.account_holder_name || null,
         AccountNumber: form.account_number || null,
@@ -111,25 +111,26 @@ export default function BankFormModal({
         IFSCCode: form.ifsc_code || null,
         Branch: form.branch || null,
         BankStatus: form.status === "active" ? "Active" : "Inactive",
-        BankDetailsCreatedDate: new Date().toISOString(), // ✅ created date
+        BankDetailsCreatedDate: new Date().toISOString(),
       };
 
+      // ⬇️ changed .single() ➜ .maybeSingle() to avoid “coerce to single JSON” error
       const { error: mUpdErr } = await supabase
         .from(masterTable)
         .update(masterPayload)
         .eq("RestroCode", codeFilterVal)
         .select("RestroCode")
-        .single(); // ensure row matched
+        .maybeSingle();
       if (mUpdErr) throw mUpdErr;
 
-      // 3) inactivate all old history rows for this restro
+      // 3) inactivate all old history rows
       const { error: inactErr } = await supabase
         .from(historyTable)
         .update({ status: "inactive" as BankStatus })
         .eq("restro_code", codeStr);
       if (inactErr) throw inactErr;
 
-      // 4) if history was empty and we had old snapshot → insert it inactive
+      // 4) if history was empty and we had an old snapshot → insert it inactive
       const anyOld =
         oldSnap &&
         !!(
