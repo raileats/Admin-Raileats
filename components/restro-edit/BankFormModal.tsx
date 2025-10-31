@@ -45,7 +45,7 @@ export default function BankFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ always blank on open
+  // ✅ form hamesha blank open
   const [form, setForm] = useState<BankRow>({
     restro_code: restroCode,
     account_holder_name: "",
@@ -70,47 +70,100 @@ export default function BankFormModal({
       setErr(null);
       if (!supabase) throw new Error("Supabase client not configured");
 
-      // 1) UPDATE RestroMaster (current live values)
+      const codeStr = String(restroCode ?? "");
+      const codeFilterVal: any = /^\d+$/.test(codeStr) ? Number(codeStr) : codeStr;
+
+      // 0) HISTORY COUNT (agar empty hai to purana snapshot insert karenge)
+      const { count: histCount, error: histCountErr } = await supabase
+        .from(historyTable)
+        .select("id", { count: "exact", head: true })
+        .eq("restro_code", codeStr);
+      if (histCountErr) throw histCountErr;
+
+      // 1) CURRENT MASTER READ (purana snapshot)
+      let oldSnap:
+        | {
+            AccountHolderName?: string | null;
+            AccountNumber?: string | null;
+            BankName?: string | null;
+            IFSCCode?: string | null;
+            Branch?: string | null;
+            BankStatus?: any;
+          }
+        | null = null;
+
+      const { data: masterRow, error: mReadErr } = await supabase
+        .from(masterTable)
+        .select(
+          "AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus"
+        )
+        .eq("RestroCode", codeFilterVal)
+        .maybeSingle();
+
+      if (mReadErr) throw mReadErr;
+      if (masterRow) oldSnap = masterRow;
+
+      // 2) MASTER UPDATE (replace)
       const masterPayload = {
         AccountHolderName: form.account_holder_name || null,
         AccountNumber: form.account_number || null,
         BankName: form.bank_name || null,
         IFSCCode: form.ifsc_code || null,
         Branch: form.branch || null,
-        BankStatus: form.status === "active" ? "Active" : "Inactive", // adjust to 1/0 if needed
+        // adjust to 1/0 if your DB expects integer
+        BankStatus: form.status === "active" ? "Active" : "Inactive",
       };
 
-      const { error: mErr } = await supabase
+      const { error: mUpdErr } = await supabase
         .from(masterTable)
         .update(masterPayload)
-        .eq("RestroCode", restroCode);
+        .eq("RestroCode", codeFilterVal);
 
-      if (mErr) throw mErr;
+      if (mUpdErr) throw mUpdErr;
 
-      // 2) INACTIVATE old history rows
+      // 3) HISTORY: sab ko inactive
       const { error: inactErr } = await supabase
         .from(historyTable)
         .update({ status: "inactive" as BankStatus })
-        .eq("restro_code", restroCode);
-
+        .eq("restro_code", codeStr);
       if (inactErr) throw inactErr;
 
-      // 3) INSERT new history row as active
-      const historyPayload = {
-        restro_code: restroCode,
+      // 4) HISTORY: agar history empty thi aur old snapshot me kuch values hain,
+      // to purana record "inactive" ke saath insert karo (taaki list me dikh jaye).
+      const anyOld =
+        oldSnap &&
+        !!(
+          oldSnap.AccountHolderName ||
+          oldSnap.AccountNumber ||
+          oldSnap.BankName ||
+          oldSnap.IFSCCode ||
+          oldSnap.Branch
+        );
+
+      if ((histCount ?? 0) === 0 && anyOld) {
+        const { error: oldInsErr } = await supabase.from(historyTable).insert({
+          restro_code: codeStr,
+          account_holder_name: oldSnap?.AccountHolderName ?? "",
+          account_number: oldSnap?.AccountNumber ?? "",
+          ifsc_code: oldSnap?.IFSCCode ?? "",
+          bank_name: oldSnap?.BankName ?? "",
+          branch: oldSnap?.Branch ?? "",
+          status: "inactive" as BankStatus,
+        });
+        if (oldInsErr) throw oldInsErr;
+      }
+
+      // 5) HISTORY: naya active insert
+      const { error: newInsErr } = await supabase.from(historyTable).insert({
+        restro_code: codeStr,
         account_holder_name: form.account_holder_name || "",
         account_number: form.account_number || "",
         ifsc_code: form.ifsc_code || "",
         bank_name: form.bank_name || "",
         branch: form.branch || "",
         status: "active" as BankStatus,
-      };
-
-      const { error: insErr } = await supabase
-        .from(historyTable)
-        .insert(historyPayload);
-
-      if (insErr) throw insErr;
+      });
+      if (newInsErr) throw newInsErr;
 
       onSaved();
       onClose();
