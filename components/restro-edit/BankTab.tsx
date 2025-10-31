@@ -19,7 +19,7 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-  // stable client → no blink
+  // ✅ stable client (no re-renders flicker)
   const supabase: SupabaseClient | null = useMemo(() => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -31,6 +31,7 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
       setLoading(true);
       setErr(null);
       if (!supabase) throw new Error("Supabase client not configured");
+
       const { data, error } = await supabase
         .from(tableName)
         .select("*")
@@ -40,8 +41,8 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
       if (error) throw error;
       setRows((data as BankRow[]) || []);
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to load bank details");
       console.error("Bank load error:", e);
+      setErr(e?.message ?? "Failed to load bank details");
     } finally {
       setLoading(false);
     }
@@ -69,7 +70,7 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
         </button>
       </div>
 
-      {/* list view */}
+      {/* List view */}
       <div className="overflow-hidden rounded-xl border">
         <div className="grid grid-cols-6 bg-gray-50 px-4 py-3 text-sm font-medium">
           <div>Account Holder Name</div>
@@ -107,13 +108,14 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
 
       {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
 
-      {/* modal */}
+      {/* Modal */}
       <BankFormModal
         open={open}
         restroCode={restroCode}
         initialData={null}
         onClose={() => setOpen(false)}
         onSaved={(row) => {
+          // prepend newly saved row
           setRows((prev) => [row, ...prev]);
         }}
         tableName={tableName}
