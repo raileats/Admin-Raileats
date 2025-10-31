@@ -19,7 +19,6 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-  // ✅ stable client (no re-renders flicker)
   const supabase: SupabaseClient | null = useMemo(() => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -58,19 +57,21 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Bank</h3>
-          <p className="text-sm text-gray-500">
-            Current bank details for this restaurant.
-          </p>
+          <p className="text-sm text-gray-500">Current bank details for this restaurant.</p>
         </div>
         <button
-          onClick={() => setOpen(true)}
+          type="button"                 // ✅ prevent form submit
+          onClick={(e) => {
+            e.preventDefault();         // ✅ extra safety
+            setOpen(true);
+          }}
           className="rounded-md bg-orange-600 px-4 py-2 text-white"
         >
           Add New Bank Details
         </button>
       </div>
 
-      {/* List view */}
+      {/* list view */}
       <div className="overflow-hidden rounded-xl border">
         <div className="grid grid-cols-6 bg-gray-50 px-4 py-3 text-sm font-medium">
           <div>Account Holder Name</div>
@@ -84,9 +85,7 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
         {loading ? (
           <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
         ) : rows.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-gray-600">
-            No bank details added yet.
-          </div>
+          <div className="px-4 py-6 text-sm text-gray-600">No bank details added yet.</div>
         ) : (
           rows.map((r) => (
             <div
@@ -98,9 +97,7 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
               <div className="truncate">{r.ifsc_code}</div>
               <div className="truncate">{r.bank_name}</div>
               <div className="truncate">{r.branch}</div>
-              <div className="text-right font-medium capitalize">
-                {r.status}
-              </div>
+              <div className="text-right font-medium capitalize">{r.status}</div>
             </div>
           ))
         )}
@@ -108,16 +105,13 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
 
       {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
 
-      {/* Modal */}
+      {/* modal */}
       <BankFormModal
         open={open}
         restroCode={restroCode}
         initialData={null}
         onClose={() => setOpen(false)}
-        onSaved={(row) => {
-          // prepend newly saved row
-          setRows((prev) => [row, ...prev]);
-        }}
+        onSaved={(row) => setRows((prev) => [row, ...prev])}
         tableName={tableName}
       />
     </div>
