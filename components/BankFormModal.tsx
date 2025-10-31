@@ -67,24 +67,27 @@ export default function BankFormModal({
       setErr(null);
       if (!supabase) throw new Error("Supabase client not configured");
 
+      // If you don't have a UNIQUE key for upsert, do insert instead:
       const payload = {
         ...form,
         restro_code: restroCode,
         status: form.status,
       };
 
+      // INSERT and return inserted row
       const { data, error } = await supabase
         .from(tableName)
-        .upsert(payload, { onConflict: "id", ignoreDuplicates: false })
+        .insert(payload)
         .select("*")
         .single();
 
       if (error) throw error;
+
       onSaved(data as BankRow);
       onClose();
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to save");
       console.error("Bank save error:", e);
+      setErr(e?.message ?? "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -101,10 +104,11 @@ export default function BankFormModal({
         className="absolute inset-0 bg-black/40"
         onClick={() => !saving && onClose()}
       />
+
       {/* modal */}
       <div className="relative z-10 w-[880px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Add / Edit Bank Details</h2>
+          <h2 className="text-xl font-semibold">Add New Bank Details</h2>
           <button
             className="rounded-md border px-3 py-1 text-sm"
             onClick={() => !saving && onClose()}
@@ -119,9 +123,7 @@ export default function BankFormModal({
             <input
               className="w-full rounded-md border px-3 py-2"
               value={form.account_holder_name}
-              onChange={(e) =>
-                onChange("account_holder_name", e.target.value)
-              }
+              onChange={(e) => onChange("account_holder_name", e.target.value)}
               placeholder="Account Holder Name"
             />
           </div>
