@@ -3,15 +3,29 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import BankFormModal, { BankRow } from "./BankFormModal";
+import BankFormModal from "./BankFormModal";
+
+type BankViewRow = {
+  restroCode: number | string;
+  account_holder_name: string;
+  account_number: string;
+  ifsc_code: string;
+  bank_name: string;
+  branch: string;
+  status: "active" | "inactive";
+};
 
 type Props = {
   restroCode: number | string;
-  tableName?: string; // default: "RestroBank"
+  // optional: in case your table name ever differs
+  tableName?: string; // default: "RestroMaster"
 };
 
-export default function BankTab({ restroCode, tableName = "RestroBank" }: Props) {
-  const [rows, setRows] = useState<BankRow[]>([]);
+export default function BankTab({
+  restroCode,
+  tableName = "RestroMaster",
+}: Props) {
+  const [row, setRow] = useState<BankViewRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -25,6 +39,12 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const normalizeStatus = (v: any): "active" | "inactive" => {
+    if (v === 1 || v === "1" || v === true || String(v).toLowerCase() === "active")
+      return "active";
+    return "inactive";
+  };
+
   const load = async () => {
     try {
       setLoading(true);
@@ -33,12 +53,29 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
 
       const { data, error } = await supabase
         .from(tableName)
-        .select("*")
-        .eq("restro_code", restroCode)
-        .order("updated_at", { ascending: false });
+        .select(
+          "RestroCode, AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus"
+        )
+        .eq("RestroCode", restroCode)
+        .limit(1)
+        .maybeSingle();
 
       if (error) throw error;
-      setRows((data as BankRow[]) || []);
+
+      if (!data) {
+        setRow(null);
+      } else {
+        const mapped: BankViewRow = {
+          restroCode: data.RestroCode,
+          account_holder_name: data.AccountHolderName ?? "",
+          account_number: data.AccountNumber ?? "",
+          ifsc_code: data.IFSCCode ?? "",
+          bank_name: data.BankName ?? "",
+          branch: data.Branch ?? "",
+          status: normalizeStatus(data.BankStatus),
+        };
+        setRow(mapped);
+      }
     } catch (e: any) {
       console.error("Bank load error:", e);
       setErr(e?.message ?? "Failed to load bank details");
@@ -57,12 +94,14 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Bank</h3>
-          <p className="text-sm text-gray-500">Current bank details for this restaurant.</p>
+          <p className="text-sm text-gray-500">
+            Current bank details for this restaurant.
+          </p>
         </div>
         <button
-          type="button"                 // ✅ prevent form submit
+          type="button"
           onClick={(e) => {
-            e.preventDefault();         // ✅ extra safety
+            e.preventDefault();
             setOpen(true);
           }}
           className="rounded-md bg-orange-600 px-4 py-2 text-white"
@@ -71,7 +110,7 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
         </button>
       </div>
 
-      {/* list view */}
+      {/* list view (single row from RestroMaster) */}
       <div className="overflow-hidden rounded-xl border">
         <div className="grid grid-cols-6 bg-gray-50 px-4 py-3 text-sm font-medium">
           <div>Account Holder Name</div>
@@ -84,22 +123,24 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
 
         {loading ? (
           <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
-        ) : rows.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-gray-600">No bank details added yet.</div>
+        ) : !row ||
+          (!row.account_holder_name &&
+            !row.account_number &&
+            !row.ifsc_code &&
+            !row.bank_name &&
+            !row.branch) ? (
+          <div className="px-4 py-6 text-sm text-gray-600">
+            No bank details added yet.
+          </div>
         ) : (
-          rows.map((r) => (
-            <div
-              key={r.id ?? `${r.account_number}-${r.ifsc_code}`}
-              className="grid grid-cols-6 border-t px-4 py-3 text-sm"
-            >
-              <div className="truncate">{r.account_holder_name}</div>
-              <div className="truncate">{r.account_number}</div>
-              <div className="truncate">{r.ifsc_code}</div>
-              <div className="truncate">{r.bank_name}</div>
-              <div className="truncate">{r.branch}</div>
-              <div className="text-right font-medium capitalize">{r.status}</div>
-            </div>
-          ))
+          <div className="grid grid-cols-6 border-t px-4 py-3 text-sm">
+            <div className="truncate">{row.account_holder_name}</div>
+            <div className="truncate">{row.account_number}</div>
+            <div className="truncate">{row.ifsc_code}</div>
+            <div className="truncate">{row.bank_name}</div>
+            <div className="truncate">{row.branch}</div>
+            <div className="text-right font-medium capitalize">{row.status}</div>
+          </div>
         )}
       </div>
 
@@ -109,9 +150,11 @@ export default function BankTab({ restroCode, tableName = "RestroBank" }: Props)
       <BankFormModal
         open={open}
         restroCode={restroCode}
-        initialData={null}
         onClose={() => setOpen(false)}
-        onSaved={(row) => setRows((prev) => [row, ...prev])}
+        onSaved={() => {
+          setOpen(false);
+          load(); // refresh after update
+        }}
         tableName={tableName}
       />
     </div>
