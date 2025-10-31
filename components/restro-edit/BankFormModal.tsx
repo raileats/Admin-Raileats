@@ -45,7 +45,7 @@ export default function BankFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ form hamesha blank open
+  // always blank form
   const [form, setForm] = useState<BankRow>({
     restro_code: restroCode,
     account_holder_name: "",
@@ -73,14 +73,14 @@ export default function BankFormModal({
       const codeStr = String(restroCode ?? "");
       const codeFilterVal: any = /^\d+$/.test(codeStr) ? Number(codeStr) : codeStr;
 
-      // 0) HISTORY COUNT (agar empty hai to purana snapshot insert karenge)
+      // 0) history count (for first-time snapshot logic)
       const { count: histCount, error: histCountErr } = await supabase
         .from(historyTable)
         .select("id", { count: "exact", head: true })
         .eq("restro_code", codeStr);
       if (histCountErr) throw histCountErr;
 
-      // 1) CURRENT MASTER READ (purana snapshot)
+      // 1) read old master snapshot
       let oldSnap:
         | {
             AccountHolderName?: string | null;
@@ -89,47 +89,47 @@ export default function BankFormModal({
             IFSCCode?: string | null;
             Branch?: string | null;
             BankStatus?: any;
+            BankDetailsCreatedDate?: string | null;
           }
         | null = null;
 
       const { data: masterRow, error: mReadErr } = await supabase
         .from(masterTable)
         .select(
-          "AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus"
+          "AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus, BankDetailsCreatedDate"
         )
         .eq("RestroCode", codeFilterVal)
         .maybeSingle();
-
       if (mReadErr) throw mReadErr;
       if (masterRow) oldSnap = masterRow;
 
-      // 2) MASTER UPDATE (replace)
+      // 2) update master (force-match exactly one row) + set created date
       const masterPayload = {
         AccountHolderName: form.account_holder_name || null,
         AccountNumber: form.account_number || null,
         BankName: form.bank_name || null,
         IFSCCode: form.ifsc_code || null,
         Branch: form.branch || null,
-        // adjust to 1/0 if your DB expects integer
         BankStatus: form.status === "active" ? "Active" : "Inactive",
+        BankDetailsCreatedDate: new Date().toISOString(), // ✅ created date
       };
 
       const { error: mUpdErr } = await supabase
         .from(masterTable)
         .update(masterPayload)
-        .eq("RestroCode", codeFilterVal);
-
+        .eq("RestroCode", codeFilterVal)
+        .select("RestroCode")
+        .single(); // ensure row matched
       if (mUpdErr) throw mUpdErr;
 
-      // 3) HISTORY: sab ko inactive
+      // 3) inactivate all old history rows for this restro
       const { error: inactErr } = await supabase
         .from(historyTable)
         .update({ status: "inactive" as BankStatus })
         .eq("restro_code", codeStr);
       if (inactErr) throw inactErr;
 
-      // 4) HISTORY: agar history empty thi aur old snapshot me kuch values hain,
-      // to purana record "inactive" ke saath insert karo (taaki list me dikh jaye).
+      // 4) if history was empty and we had old snapshot → insert it inactive
       const anyOld =
         oldSnap &&
         !!(
@@ -139,7 +139,6 @@ export default function BankFormModal({
           oldSnap.IFSCCode ||
           oldSnap.Branch
         );
-
       if ((histCount ?? 0) === 0 && anyOld) {
         const { error: oldInsErr } = await supabase.from(historyTable).insert({
           restro_code: codeStr,
@@ -153,7 +152,7 @@ export default function BankFormModal({
         if (oldInsErr) throw oldInsErr;
       }
 
-      // 5) HISTORY: naya active insert
+      // 5) insert new active history row
       const { error: newInsErr } = await supabase.from(historyTable).insert({
         restro_code: codeStr,
         account_holder_name: form.account_holder_name || "",
