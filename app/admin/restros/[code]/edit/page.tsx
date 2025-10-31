@@ -1,184 +1,138 @@
-// components/RestroEditModal.tsx
+// app/admin/restros/[code]/edit/page.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
-import BankTab from "./BankTab";
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import RestroEditModal from "@/components/RestroEditModal";
 
 type Restro = { [k: string]: any };
 
-interface Props {
-  restro: Restro;
-  initialTab?: string;
-  onClose: () => void;
-  onSave: (payload: any) => Promise<
-    | { ok: true; row: any }
-    | { ok: false; error: any }
-  >;
-}
+export default function RestroEditRoutePage({
+  params,
+}: {
+  params: { code: string };
+}) {
+  const router = useRouter();
+  const { code } = params;
 
-/**
- * Modal with tabs. "Bank" tab shows a list view and opens popup form (BankFormModal) via BankTab.
- */
-export default function RestroEditModal({
-  restro,
-  initialTab = "Basic Information",
-  onClose,
-  onSave,
-}: Props) {
-  const tabs = useMemo(
-    () => [
-      "Basic Information",
-      "Station Settings",
-      "Address & Documents",
-      "Contacts",
-      "Bank",
-      "Future Closed",
-      "Menu",
-    ],
-    []
-  );
-
-  const [activeTab, setActiveTab] = useState<string>(initialTab);
-  const [saving, setSaving] = useState(false);
+  const [restro, setRestro] = useState<Restro | null>(null);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  // yahan aap form payload collect karo (basic/address/contacts etc.)
-  // Bank tab ka data BankTab hi handle karega (separate table).
-  const [payload, setPayload] = useState<any>({});
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-  const handleSave = async () => {
-    try {
-      setSaving(true);
+  // ✅ Memoize the client so its reference stays stable across renders
+  const supabase: SupabaseClient | null = useMemo(() => {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // env vars are static at runtime; empty deps is fine
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
       setErr(null);
-      const res = await onSave(payload);
-      if (!res.ok) throw new Error(res.error);
-      onClose();
-    } catch (e: any) {
-      setErr(e?.message ?? "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  };
+      try {
+        if (!supabase) throw new Error("Supabase client not configured");
+
+        const codeVal = /^\d+$/.test(String(code)) ? Number(code) : String(code);
+        const { data, error } = await supabase
+          .from("RestroMaster")
+          .select("*")
+          .eq("RestroCode", codeVal)
+          .limit(1);
+
+        if (error) throw error;
+        const row = (data && data[0]) ?? null;
+        if (mounted) setRestro(row);
+      } catch (e: any) {
+        console.error("Load restro error:", e);
+        if (mounted) setErr(e?.message ?? "Failed to load restro");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    // ✅ Only depend on code; supabase ref is stable now
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, [code, supabase]); // supabase stable due to useMemo; optional to keep
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: "40vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        Loading...
+      </div>
+    );
+  }
+
+  if (err) {
+    return (
+      <div style={{ padding: 24 }}>
+        <div style={{ color: "crimson", marginBottom: 12 }}>Error: {err}</div>
+        <button onClick={() => router.back()} style={{ padding: "8px 12px" }}>
+          Back
+        </button>
+      </div>
+    );
+  }
+
+  if (!restro) {
+    return (
+      <div style={{ padding: 24 }}>
+        <div>No restro found for code: {code}</div>
+        <button
+          onClick={() => router.back()}
+          style={{ padding: "8px 12px", marginTop: 10 }}
+        >
+          Back
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center"
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-
-      {/* Modal card */}
-      <div className="relative z-10 flex h-[90vh] w-[1200px] max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <div className="text-sm font-semibold">
-              {restro?.RestroCode} {restro?.RestroName}
-            </div>
-            {restro?.StationName && (
-              <div className="text-xs text-blue-600 underline">
-                {restro.StationName} {restro.State ? `- ${restro.State}` : ""}
-              </div>
-            )}
-          </div>
-
-          <button
-            className="rounded-md border px-3 py-1 text-sm"
-            onClick={onClose}
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b px-4">
-          <div className="flex flex-wrap gap-2">
-            {tabs.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setActiveTab(t)}
-                className={`px-3 py-2 text-sm ${
-                  activeTab === t
-                    ? "border-b-2 border-blue-600 font-medium text-blue-700"
-                    : "text-gray-700 hover:text-black"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-auto px-6 py-6">
-          {activeTab === "Basic Information" && (
-            <div className="text-sm text-gray-700">
-              {/* TODO: aapka Basic form yahan render karein.
-                  setPayload((p)=>({...p, ...basicValues})) use karein */}
-              <p className="text-gray-500">
-                Basic Information form yahan aayega.
-              </p>
-            </div>
-          )}
-
-          {activeTab === "Station Settings" && (
-            <div className="text-sm text-gray-700">
-              <p className="text-gray-500">Station Settings form yahan.</p>
-            </div>
-          )}
-
-          {activeTab === "Address & Documents" && (
-            <div className="text-sm text-gray-700">
-              <p className="text-gray-500">Address & Documents form yahan.</p>
-            </div>
-          )}
-
-          {activeTab === "Contacts" && (
-            <div className="text-sm text-gray-700">
-              <p className="text-gray-500">Contacts form yahan.</p>
-            </div>
-          )}
-
-          {/* ✅ NEW: Bank tab (view + popup via BankTab) */}
-          {activeTab === "Bank" && (
-            <BankTab
-              restroCode={restro?.RestroCode /* table me jis field se map karte ho */}
-              // tableName="RestroBank" // change only if your table name different
-            />
-          )}
-
-          {activeTab === "Future Closed" && (
-            <div className="text-sm text-gray-700">
-              <p className="text-gray-500">Future Closed screen yahan.</p>
-            </div>
-          )}
-
-          {activeTab === "Menu" && (
-            <div className="text-sm text-gray-700">
-              <p className="text-gray-500">Menu config yahan.</p>
-            </div>
-          )}
-
-          {err && <p className="mt-4 text-sm text-red-600">Error: {err}</p>}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 border-t px-6 py-4">
-          <button className="rounded-md border px-4 py-2" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="rounded-md bg-blue-600 px-4 py-2 text-white"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <RestroEditModal
+      restro={restro}
+      initialTab="Basic Information"
+      onClose={() => {
+        router.back();
+      }}
+      onSave={async (payload: any) => {
+        try {
+          const res = await fetch(
+            `/api/restros/${encodeURIComponent(String(code))}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          );
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            throw new Error(txt || `Save failed (${res.status})`);
+          }
+          const json = await res.json().catch(() => null);
+          router.back();
+          return { ok: true, row: json?.row ?? payload };
+        } catch (e: any) {
+          console.error("save error:", e);
+          return { ok: false, error: e?.message ?? String(e) };
+        }
+      }}
+    />
   );
 }
