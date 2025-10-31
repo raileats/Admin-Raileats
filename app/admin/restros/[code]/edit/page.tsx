@@ -1,10 +1,10 @@
 // app/admin/restros/[code]/edit/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import RestroEditModal from "@/components/RestroEditModal"; // path adjust करें अगर अलग रखा है
+import RestroEditModal from "@/components/RestroEditModal";
 
 type Restro = { [k: string]: any };
 
@@ -22,10 +22,14 @@ export default function RestroEditRoutePage({
 
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const supabase: SupabaseClient | null =
-    SUPABASE_URL && SUPABASE_ANON_KEY
-      ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-      : null;
+
+  // ✅ Memoize the client so its reference stays stable across renders
+  const supabase: SupabaseClient | null = useMemo(() => {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // env vars are static at runtime; empty deps is fine
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -52,11 +56,13 @@ export default function RestroEditRoutePage({
         if (mounted) setLoading(false);
       }
     };
+
+    // ✅ Only depend on code; supabase ref is stable now
     load();
     return () => {
       mounted = false;
     };
-  }, [code, supabase]);
+  }, [code, supabase]); // supabase stable due to useMemo; optional to keep
 
   if (loading) {
     return (
