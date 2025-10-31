@@ -1,4 +1,3 @@
-// components/BankFormModal.tsx
 "use client";
 
 import React, { useMemo, useState } from "react";
@@ -45,7 +44,6 @@ export default function BankFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // always blank form
   const [form, setForm] = useState<BankRow>({
     restro_code: restroCode,
     account_holder_name: "",
@@ -71,16 +69,20 @@ export default function BankFormModal({
       if (!supabase) throw new Error("Supabase client not configured");
 
       const codeStr = String(restroCode ?? "");
-      const codeFilterVal: any = /^\d+$/.test(codeStr) ? Number(codeStr) : codeStr;
+      const codeNum = /^\d+$/.test(codeStr) ? Number(codeStr) : null;
 
-      // 0) history count (for first-time snapshot logic)
+      // --------------------------
+      // 0) existing history count
+      // --------------------------
       const { count: histCount, error: histCountErr } = await supabase
         .from(historyTable)
         .select("id", { count: "exact", head: true })
         .eq("restro_code", codeStr);
       if (histCountErr) throw histCountErr;
 
-      // 1) read old master snapshot
+      // ---------------------------------
+      // 1) read old snapshot from master
+      // ---------------------------------
       let oldSnap:
         | {
             AccountHolderName?: string | null;
@@ -93,17 +95,32 @@ export default function BankFormModal({
           }
         | null = null;
 
-      const { data: masterRow, error: mReadErr } = await supabase
+      const { data: masterRowStr, error: readStrErr } = await supabase
         .from(masterTable)
         .select(
           "AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus, BankDetailsCreatedDate"
         )
-        .eq("RestroCode", codeFilterVal)
+        .eq("RestroCode", codeStr)
         .maybeSingle();
-      if (mReadErr) throw mReadErr;
-      if (masterRow) oldSnap = masterRow;
+      if (readStrErr) throw readStrErr;
 
-      // 2) update master + set created date
+      if (masterRowStr) {
+        oldSnap = masterRowStr;
+      } else if (codeNum !== null) {
+        const { data: masterRowNum, error: readNumErr } = await supabase
+          .from(masterTable)
+          .select(
+            "AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus, BankDetailsCreatedDate"
+          )
+          .eq("RestroCode", codeNum)
+          .maybeSingle();
+        if (readNumErr) throw readNumErr;
+        if (masterRowNum) oldSnap = masterRowNum;
+      }
+
+      // ----------------------------
+      // 2) build new master payload
+      // ----------------------------
       const masterPayload = {
         AccountHolderName: form.account_holder_name || null,
         AccountNumber: form.account_number || null,
@@ -114,23 +131,55 @@ export default function BankFormModal({
         BankDetailsCreatedDate: new Date().toISOString(),
       };
 
-      // ⬇️ changed .single() ➜ .maybeSingle() to avoid “coerce to single JSON” error
-      const { error: mUpdErr } = await supabase
+      // ----------------------------------------------------
+      // 3) UPDATE RestroMaster (string compare first, then numeric),
+      //    if nothing updated -> UPSERT a new row with RestroCode=codeStr
+      // ----------------------------------------------------
+      let updatedCount = 0;
+
+      const { data: updStrData, error: updStrErr } = await supabase
         .from(masterTable)
         .update(masterPayload)
-        .eq("RestroCode", codeFilterVal)
-        .select("RestroCode")
-        .maybeSingle();
-      if (mUpdErr) throw mUpdErr;
+        .eq("RestroCode", codeStr)
+        .select("RestroCode");
+      if (updStrErr) throw updStrErr;
+      updatedCount = updStrData?.length ?? 0;
 
-      // 3) inactivate all old history rows
+      if (updatedCount === 0 && codeNum !== null) {
+        const { data: updNumData, error: updNumErr } = await supabase
+          .from(masterTable)
+          .update(masterPayload)
+          .eq("RestroCode", codeNum)
+          .select("RestroCode");
+        if (updNumErr) throw updNumErr;
+        updatedCount = updNumData?.length ?? 0;
+      }
+
+      if (updatedCount === 0) {
+        // As a safe fallback: create/replace a row for this RestroCode (string)
+        const upsertPayload = {
+          RestroCode: codeStr,
+          ...masterPayload,
+        };
+        const { error: upsertErr } = await supabase
+          .from(masterTable)
+          .upsert(upsertPayload, { onConflict: "RestroCode" });
+        if (upsertErr) throw upsertErr;
+      }
+
+      // ---------------------------------------
+      // 4) Inactivate all old history rows
+      // ---------------------------------------
       const { error: inactErr } = await supabase
         .from(historyTable)
         .update({ status: "inactive" as BankStatus })
         .eq("restro_code", codeStr);
       if (inactErr) throw inactErr;
 
-      // 4) if history was empty and we had an old snapshot → insert it inactive
+      // ------------------------------------------------
+      // 5) If first-time history and we had an old snap,
+      //    store old as inactive for visibility
+      // ------------------------------------------------
       const anyOld =
         oldSnap &&
         !!(
@@ -153,7 +202,9 @@ export default function BankFormModal({
         if (oldInsErr) throw oldInsErr;
       }
 
-      // 5) insert new active history row
+      // -----------------------------
+      // 6) Insert new active history
+      // -----------------------------
       const { error: newInsErr } = await supabase.from(historyTable).insert({
         restro_code: codeStr,
         account_holder_name: form.account_holder_name || "",
