@@ -66,12 +66,26 @@ export default function MenuItemFormModal({ open, restroCode, onClose, onSaved }
   }
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center">
-      <button className="absolute inset-0 bg-black/40" onClick={() => !saving && onClose()} />
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-center justify-center">
+      {/* backdrop */}
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/40"
+        onClick={() => !saving && onClose()}
+        aria-label="Close"
+      />
+      {/* modal */}
       <div className="relative z-10 w-[980px] max-w-[96vw] rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold">Add New Item</h2>
-          <button className="rounded-md border px-3 py-1 text-sm" onClick={() => !saving && onClose()}>✕</button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1 text-sm"
+            onClick={() => !saving && onClose()}
+            aria-label="Close"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -123,8 +137,15 @@ export default function MenuItemFormModal({ open, restroCode, onClose, onSaved }
         {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
-          <button className="rounded-md border px-4 py-2" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="rounded-md bg-blue-600 px-4 py-2 text-white" onClick={save} disabled={saving}>
+          <button type="button" className="rounded-md border px-4 py-2" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="rounded-md bg-blue-600 px-4 py-2 text-white"
+            onClick={save}
+            disabled={saving}
+          >
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
