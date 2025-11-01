@@ -80,6 +80,14 @@ export default function MenuItemFormModal({ open, restroCode, onClose, onSaved }
   const [err, setErr] = useState<string | null>(null);
   if (!open) return null;
 
+  // helpers to accept only digits for price fields (no spinners, no suggestions)
+  function toNumOrEmpty(val: string) {
+    const cleaned = val.replace(/[^\d.]/g, "");
+    if (cleaned === "") return "";
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : "";
+  }
+
   async function save() {
     try {
       setSaving(true);
@@ -122,75 +130,150 @@ export default function MenuItemFormModal({ open, restroCode, onClose, onSaved }
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-center justify-center">
-      <button type="button" className="absolute inset-0 bg-black/40" onClick={() => !saving && onClose()} aria-label="Close" />
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/40"
+        onClick={() => !saving && onClose()}
+        aria-label="Close"
+      />
       <div className="relative z-10 w-[980px] max-w-[96vw] rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold">Add New Item</h2>
-          <button type="button" className="rounded-md border px-3 py-1 text-sm" onClick={() => !saving && onClose()} aria-label="Close">✕</button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1 text-sm"
+            onClick={() => !saving && onClose()}
+            aria-label="Close"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {/* Name */}
           <div className="md:col-span-3">
             <label className="text-sm">Item Name</label>
-            <input className="w-full rounded border px-3 py-2" value={item_name} onChange={(e) => setItemName(e.target.value)} placeholder="e.g., Veg Mini Thali" />
+            <input
+              className="w-full rounded border px-3 py-2"
+              value={item_name}
+              onChange={(e) => setItemName(e.target.value)}
+              placeholder="e.g., Veg Mini Thali"
+            />
           </div>
 
           {/* Description */}
           <div className="md:col-span-3">
             <label className="text-sm">Item Description</label>
-            <input className="w-full rounded border px-3 py-2" value={item_description} onChange={(e) => setItemDescription(e.target.value)} placeholder="Short description" />
+            <input
+              className="w-full rounded border px-3 py-2"
+              value={item_description}
+              onChange={(e) => setItemDescription(e.target.value)}
+              placeholder="Short description"
+            />
           </div>
 
           {/* Category / Cuisine / Menu type */}
           <div>
             <label className="text-sm">Item Category</label>
-            <select className="w-full rounded border px-3 py-2" value={item_category} onChange={(e) => setItemCategory(e.target.value)}>
+            <select
+              className="w-full rounded border px-3 py-2"
+              value={item_category}
+              onChange={(e) => setItemCategory(e.target.value)}
+            >
               <option value="">Select category</option>
-              {CATEGORY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {CATEGORY_OPTIONS.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
             </select>
           </div>
 
           <div>
             <label className="text-sm">Cuisine</label>
-            <select className="w-full rounded border px-3 py-2" value={item_cuisine} onChange={(e) => setItemCuisine(e.target.value)}>
+            <select
+              className="w-full rounded border px-3 py-2"
+              value={item_cuisine}
+              onChange={(e) => setItemCuisine(e.target.value)}
+            >
               <option value="">Select cuisine</option>
-              {CUISINE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {CUISINE_OPTIONS.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
             </select>
           </div>
 
           <div>
             <label className="text-sm">Menu Type</label>
-            <select className="w-full rounded border px-3 py-2" value={menu_type} onChange={(e) => setMenuType(e.target.value)}>
+            <select
+              className="w-full rounded border px-3 py-2"
+              value={menu_type}
+              onChange={(e) => setMenuType(e.target.value)}
+            >
               <option value="">Select menu type</option>
-              {MENU_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {MENU_TYPE_OPTIONS.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
             </select>
           </div>
 
           {/* Times */}
           <div>
             <label className="text-sm">Item Start Time</label>
-            <input type="time" className="w-full rounded border px-3 py-2" value={start_time} onChange={(e) => setStartTime(e.target.value)} />
+            <input
+              type="time"
+              className="w-full rounded border px-3 py-2"
+              value={start_time}
+              onChange={(e) => setStartTime(e.target.value)}
+            />
           </div>
           <div>
             <label className="text-sm">Item Closed Time</label>
-            <input type="time" className="w-full rounded border px-3 py-2" value={end_time} onChange={(e) => setEndTime(e.target.value)} />
+            <input
+              type="time"
+              className="w-full rounded border px-3 py-2"
+              value={end_time}
+              onChange={(e) => setEndTime(e.target.value)}
+            />
           </div>
 
-          {/* PRICES ROW: Restro → Base → GST */}
+          {/* PRICES ROW: Restro → Base → GST → Selling → Status */}
           <div className="md:col-span-3">
             <div className="flex flex-wrap items-end gap-3">
               <div>
                 <label className="text-sm">Restro Price (internal)</label>
-                <input type="number" className={smallInput} value={restro_price} onChange={(e) => setRestroPrice(e.target.value === "" ? "" : Number(e.target.value))} placeholder="optional" />
+                <input
+                  // text + numeric inputMode removes spinner arrows & suggestions
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*"
+                  className={smallInput}
+                  value={restro_price === "" ? "" : String(restro_price)}
+                  onChange={(e) => setRestroPrice(toNumOrEmpty(e.target.value))}
+                  placeholder=""
+                  autoComplete="off"
+                />
               </div>
               <div>
                 <label className="text-sm">Base Price</label>
-                <input type="number" className={smallInput} value={base_price} onChange={(e) => setBasePrice(e.target.value === "" ? "" : Number(e.target.value))} placeholder="e.g., 100" />
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*"
+                  className={smallInput}
+                  value={base_price === "" ? "" : String(base_price)}
+                  onChange={(e) => setBasePrice(toNumOrEmpty(e.target.value))}
+                  placeholder=""
+                  autoComplete="off"
+                />
               </div>
               <div>
                 <label className="text-sm">GST %</label>
-                <select className={smallInput} value={String(gst_percent === "" ? "" : gst_percent)} onChange={(e) => setGstPercent(e.target.value === "" ? "" : Number(e.target.value))}>
+                <select
+                  className={smallInput}
+                  value={String(gst_percent === "" ? "" : gst_percent)}
+                  onChange={(e) =>
+                    setGstPercent(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                >
                   <option value="5">5</option>
                   <option value="12">12</option>
                   <option value="18">18</option>
@@ -202,7 +285,11 @@ export default function MenuItemFormModal({ open, restroCode, onClose, onSaved }
               </div>
               <div>
                 <label className="text-sm">Status</label>
-                <select className={smallInput} value={status} onChange={(e) => setStatus(e.target.value as "ON" | "OFF")}>
+                <select
+                  className={smallInput}
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as "ON" | "OFF")}
+                >
                   <option value="ON">On</option>
                   <option value="OFF">Off</option>
                 </select>
@@ -214,8 +301,15 @@ export default function MenuItemFormModal({ open, restroCode, onClose, onSaved }
         {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
-          <button type="button" className="rounded-md border px-4 py-2" onClick={onClose} disabled={saving}>Cancel</button>
-          <button type="button" className="rounded-md bg-blue-600 px-4 py-2 text-white" onClick={save} disabled={saving}>
+          <button type="button" className="rounded-md border px-4 py-2" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="rounded-md bg-blue-600 px-4 py-2 text-white"
+            onClick={save}
+            disabled={saving}
+          >
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
