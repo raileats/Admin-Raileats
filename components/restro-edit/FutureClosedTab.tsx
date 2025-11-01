@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import FutureClosedFormModal from "./FutureClosedFormModal";
+import FutureClosedTab from "./restro-edit/FutureClosedTab";
 
 type Row = {
   id: number;
