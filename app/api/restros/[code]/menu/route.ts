@@ -64,7 +64,7 @@ export async function GET(req: Request, { params }: { params: { code: string } }
       query = query.is("deleted_at", null);
     }
 
-    // IMPORTANT: order by an always-present column
+    // order by stable always-present column
     query = query.order("id", { ascending: false });
 
     const { data, error } = await query;
@@ -108,27 +108,30 @@ export async function POST(req: Request, { params }: { params: { code: string } 
         : null;
 
     // ---------- AUTO item_code (global) ----------
-    // Take the last inserted row (by id), and also consider last textual item_code numerically.
-    const { data: lastRows, error: lastErr } = await supabase
+    // Try to compute numeric max(item_code) and id; fallback safely to 0
+    const { data: agg, error: aggErr } = await supabase
       .from("RestroMenuItems")
-      .select("id,item_code")
+      .select("max_id=max(id), last_code=item_code")
       .order("id", { ascending: false })
-      .limit(1);
+      .limit(1)
+      .single();
 
-    if (lastErr) throw lastErr;
+    if (aggErr && aggErr.code !== "PGRST116") throw aggErr; // ignore "no rows" error
 
     let nextCode = 1;
-    if (lastRows && lastRows.length > 0) {
-      const last = lastRows[0] as { id: number; item_code: any };
-      const numericItemCode = Number(String(last.item_code ?? "").replace(/\D/g, ""));
-      const safeItemCode = Number.isFinite(numericItemCode) ? numericItemCode : 0;
-      nextCode = Math.max(last.id ?? 0, safeItemCode) + 1;
+    if (agg) {
+      const lastNumeric =
+        typeof agg.last_code === "string"
+          ? Number(agg.last_code.replace(/\D/g, "")) || 0
+          : 0;
+      const maxId = Number(agg.max_id || 0);
+      nextCode = Math.max(maxId, lastNumeric) + 1;
     }
     // --------------------------------------------
 
     const insert = {
       restro_code: codeStr,
-      item_code: String(nextCode), // <- auto assigned here
+      item_code: String(nextCode), // auto code
       item_name,
       item_description: (body.item_description ?? "").toString().trim() || null,
       item_category: body.item_category || null,
@@ -144,10 +147,16 @@ export async function POST(req: Request, { params }: { params: { code: string } 
       status: body.status === "OFF" ? "OFF" : "ON",
     };
 
-    const { error } = await supabase.from("RestroMenuItems").insert(insert);
+    const { data: created, error } = await supabase
+      .from("RestroMenuItems")
+      .insert(insert)
+      .select("*")
+      .single();
+
     if (error) throw error;
 
-    return NextResponse.json({ ok: true });
+    // return created row so UI can update immediately
+    return NextResponse.json({ ok: true, row: created }, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 400 });
   }
