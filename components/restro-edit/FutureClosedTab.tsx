@@ -1,44 +1,96 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import FutureClosedFormModal from "./FutureClosedFormModal";
 
-type HolidayRow = {
-  id: number;
-  restro_code: string;
-  start_at: string;   // ISO
-  end_at: string;     // ISO
-  comment: string | null;
-  created_by_id: string | null;
-  created_by_name: string | null;
-  created_at?: string;
-  updated_at?: string;
+type Props = {
+  local: any; // comes from parent (you already use this pattern)
+  updateField?: (k: string, v: any) => void;
+  stationDisplay?: string;
 };
 
-type Props = {
-  local: any;                              // same signature you already have
-  updateField: (k: string, v: any) => void;
-  stationDisplay: string;
+type Row = {
+  id: number;
+  restro_code: string;
+  start_iso: string; // ISO string
+  end_iso: string;   // ISO string
+  comment: string | null;
+  created_by_email: string | null;
+  created_by_name: string | null; // joined from users table if available
+  created_at?: string | null;
+  // derived
+  status: "active" | "upcoming" | "expired";
 };
 
 export default function FutureClosedTab({ local }: Props) {
-  const [rows, setRows] = useState<HolidayRow[]>([]);
-  const [open, setOpen] = useState(false);
+  const restroCode = useMemo(() => String(local?.RestroCode ?? local?.restro_code ?? ""), [local]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const supabase: SupabaseClient | null = useMemo(() => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const currentUserEmail =
+    local?.CurrentUserEmail || local?.UserEmail || local?.OwnerEmail || null;
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      setErr(null);
+
+      const res = await fetch(
+        `/api/restros/${encodeURIComponent(restroCode)}/holidays`,
+        { cache: "no-store" }
+      );
+      const json = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(json?.error || "Failed");
+
+      const now = Date.now();
+
+      const mapped: Row[] = (json.items as any[]).map((r) => {
+        const s = new Date(r.holiday_start).getTime();
+        const e = new Date(r.holiday_end).getTime();
+        let status: Row["status"] = "expired";
+        if (now < s) status = "upcoming";
+        else if (now > e) status = "expired";
+        else status = "active";
+
+        return {
+          id: r.id,
+          restro_code: r.restro_code,
+          start_iso: r.holiday_start,
+          end_iso: r.holiday_end,
+          comment: r.holiday_comment ?? null,
+          created_by_email: r.created_by_email ?? null,
+          created_by_name: r.created_by_name ?? null,
+          created_at: r.created_at ?? null,
+          status,
+        };
+      });
+
+      // sort: active → upcoming → expired; then start desc
+      mapped.sort((a, b) => {
+        const order = (s: Row["status"]) =>
+          s === "active" ? 0 : s === "upcoming" ? 1 : 2;
+        const diff = order(a.status) - order(b.status);
+        if (diff !== 0) return diff;
+        return (b.start_iso || "").localeCompare(a.start_iso || "");
+      });
+
+      setRows(mapped);
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to load");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (restroCode) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [restroCode]);
 
-  const codeStr = String(local?.RestroCode ?? local?.restro_code ?? "");
-
-  const fmt = (iso?: string) => {
+  const fmt = (iso?: string | null) => {
     if (!iso) return "—";
     try {
       return new Date(iso).toLocaleString();
@@ -47,59 +99,19 @@ export default function FutureClosedTab({ local }: Props) {
     }
   };
 
-  const statusOf = (row: HolidayRow) => {
-    const now = new Date().getTime();
-    const s = new Date(row.start_at).getTime();
-    const e = new Date(row.end_at).getTime();
-    if (now < s) return "Upcoming";
-    if (now >= s && now <= e) return "Active";
-    return "Inactive";
-  };
-
-  const load = async () => {
-    try {
-      setLoading(true);
-      setErr(null);
-      if (!supabase) throw new Error("Supabase client not configured");
-      if (!codeStr) {
-        setRows([]);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("RestroHolidays")
-        .select("*")
-        .eq("restro_code", codeStr)
-        .order("start_at", { ascending: false });
-
-      if (error) throw error;
-      setRows((data ?? []) as HolidayRow[]);
-    } catch (e: any) {
-      console.error("load holidays error:", e);
-      setErr(e?.message ?? "Failed to load holidays");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codeStr, supabase]);
-
   return (
     <div className="px-4">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold m-0">Future Closed</h3>
-
-        <button
-          className="rounded-md bg-orange-600 px-4 py-2 text-white"
-          onClick={() => setOpen(true)}
-          type="button"
-        >
-          Add New Holiday
-        </button>
+        <h3 className="text-lg font-semibold">Future Closed</h3>
+        {!!restroCode && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="rounded-md bg-orange-600 px-4 py-2 text-white"
+          >
+            Add New Holiday
+          </button>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-xl border">
@@ -116,24 +128,32 @@ export default function FutureClosedTab({ local }: Props) {
           <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
         ) : rows.length === 0 ? (
           <div className="px-4 py-6 text-sm text-gray-600">
-            No holidays yet. Click “Add New Holiday”.
+            No holidays configured yet.
           </div>
         ) : (
-          rows.map((r) => {
-            const st = statusOf(r);
-            const bg =
-              st === "Active" ? "bg-green-50" : st === "Upcoming" ? "bg-blue-50" : "bg-rose-50";
-            return (
-              <div key={r.id} className={`grid grid-cols-6 border-t px-4 py-3 text-sm ${bg}`}>
-                <div className="truncate">{fmt(r.start_at)}</div>
-                <div className="truncate">{fmt(r.end_at)}</div>
-                <div className="truncate">{r.comment || "—"}</div>
-                <div className="truncate">{r.created_by_name || r.created_by_id || "—"}</div>
-                <div className="truncate">{fmt(r.created_at)}</div>
-                <div className="text-right font-medium">{st}</div>
+          rows.map((r) => (
+            <div
+              key={r.id}
+              className={`grid grid-cols-6 border-t px-4 py-3 text-sm ${
+                r.status === "active"
+                  ? "bg-yellow-50"
+                  : r.status === "upcoming"
+                  ? "bg-sky-50"
+                  : "bg-gray-50"
+              }`}
+            >
+              <div className="truncate">{fmt(r.start_iso)}</div>
+              <div className="truncate">{fmt(r.end_iso)}</div>
+              <div className="truncate" title={r.comment ?? ""}>
+                {r.comment || "—"}
               </div>
-            );
-          })
+              <div className="truncate" title={r.created_by_email ?? ""}>
+                {r.created_by_name || r.created_by_email || "—"}
+              </div>
+              <div className="truncate">{fmt(r.created_at)}</div>
+              <div className="text-right font-medium capitalize">{r.status}</div>
+            </div>
+          ))
         )}
       </div>
 
@@ -141,7 +161,8 @@ export default function FutureClosedTab({ local }: Props) {
 
       <FutureClosedFormModal
         open={open}
-        restroCode={codeStr}
+        restroCode={restroCode}
+        createdByEmail={currentUserEmail ?? null}
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
