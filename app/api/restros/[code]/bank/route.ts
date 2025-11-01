@@ -1,3 +1,4 @@
+// app/api/restros/[code]/bank/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -24,8 +25,9 @@ export async function POST(
   try {
     const codeStr = String(params.code ?? "");
     const codeNum = /^\d+$/.test(codeStr) ? Number(codeStr) : null;
-    const body = await req.json();
+    const codeKeys = codeNum !== null ? [codeStr, String(codeNum)] : [codeStr];
 
+    const body = await req.json();
     const form = {
       account_holder_name: (body.account_holder_name ?? "").trim(),
       account_number: (body.account_number ?? "").trim(),
@@ -35,7 +37,7 @@ export async function POST(
       status: ((body.status ?? "active") as BankStatus),
     };
 
-    // ---- 1) Read old snapshot from RestroMaster (BEFORE update)
+    // 1) पुराना master snapshot (UPDATE से पहले)
     let oldSnap:
       | {
           AccountHolderName?: string | null;
@@ -48,58 +50,31 @@ export async function POST(
         }
       | null = null;
 
-    const readOld = async (key: string | number) =>
-      supabase
+    // string key
+    const { data: mStr, error: mStrErr } = await supabase
+      .from(masterTable)
+      .select(
+        "AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus, BankDetailsCreatedDate"
+      )
+      .eq("RestroCode", codeStr)
+      .maybeSingle();
+    if (mStrErr) throw mStrErr;
+    if (mStr) oldSnap = mStr;
+
+    // numeric key fallback
+    if (!oldSnap && codeNum !== null) {
+      const { data: mNum, error: mNumErr } = await supabase
         .from(masterTable)
         .select(
           "AccountHolderName, AccountNumber, BankName, IFSCCode, Branch, BankStatus, BankDetailsCreatedDate"
         )
-        .eq("RestroCode", key)
+        .eq("RestroCode", codeNum)
         .maybeSingle();
-
-    // try string key first, then numeric key
-    let { data: mStr, error: mStrErr } = await readOld(codeStr);
-    if (mStrErr) throw mStrErr;
-    if (mStr) oldSnap = mStr;
-    if (!oldSnap && codeNum !== null) {
-      const { data: mNum, error: mNumErr } = await readOld(codeNum);
       if (mNumErr) throw mNumErr;
       if (mNum) oldSnap = mNum;
     }
 
-    const hasAnyOld =
-      !!(
-        oldSnap?.AccountHolderName ||
-        oldSnap?.AccountNumber ||
-        oldSnap?.IFSCCode ||
-        oldSnap?.BankName ||
-        oldSnap?.Branch
-      );
-
-    // ---- 2) Make all existing history rows inactive (for both string/num keys)
-    // (करने से पहले भी safe है, बाद में भी; sequence को simple रखते हैं)
-    const codeKeys = codeNum !== null ? [codeStr, String(codeNum)] : [codeStr];
-    const { error: inactErr } = await supabase
-      .from(historyTable)
-      .update({ status: "inactive" as BankStatus })
-      .in("restro_code", codeKeys);
-    if (inactErr) throw inactErr;
-
-    // ---- 3) Insert OLD snapshot as INACTIVE (always if there is any old value)
-    if (hasAnyOld) {
-      const { error: oldInsErr } = await supabase.from(historyTable).insert({
-        restro_code: codeStr, // normalize to string
-        account_holder_name: oldSnap?.AccountHolderName ?? "",
-        account_number: oldSnap?.AccountNumber ?? "",
-        ifsc_code: oldSnap?.IFSCCode ?? "",
-        bank_name: oldSnap?.BankName ?? "",
-        branch: oldSnap?.Branch ?? "",
-        status: "inactive" as BankStatus,
-      });
-      if (oldInsErr) throw oldInsErr;
-    }
-
-    // ---- 4) Update/Upsert master to NEW payload
+    // 2) Master replace
     const masterPayload = {
       AccountHolderName: form.account_holder_name || null,
       AccountNumber: form.account_number || null,
@@ -137,17 +112,52 @@ export async function POST(
       if (error) throw error;
     }
 
-    // ---- 5) Insert NEW active snapshot to history
-    const { error: newInsErr } = await supabase.from(historyTable).insert({
-      restro_code: codeStr, // always string
-      account_holder_name: form.account_holder_name,
-      account_number: form.account_number,
-      ifsc_code: form.ifsc_code,
-      bank_name: form.bank_name,
-      branch: form.branch,
-      status: "active" as BankStatus,
-    });
-    if (newInsErr) throw newInsErr;
+    // 3) History: सभी पुरानी rows inactive
+    {
+      const { error } = await supabase
+        .from(historyTable)
+        .update({ status: "inactive" as BankStatus })
+        .in("restro_code", codeKeys);
+      if (error) throw error;
+    }
+
+    // 4) हमेशा पुराना snapshot INSERT करो (अगर कोई meaningful वैल्यू है)
+    const anyOld =
+      oldSnap &&
+      !!(
+        oldSnap.AccountHolderName ||
+        oldSnap.AccountNumber ||
+        oldSnap.BankName ||
+        oldSnap.IFSCCode ||
+        oldSnap.Branch
+      );
+
+    if (anyOld) {
+      const { error } = await supabase.from(historyTable).insert({
+        restro_code: codeStr, // normalize as string
+        account_holder_name: oldSnap?.AccountHolderName ?? "",
+        account_number: oldSnap?.AccountNumber ?? "",
+        ifsc_code: oldSnap?.IFSCCode ?? "",
+        bank_name: oldSnap?.BankName ?? "",
+        branch: oldSnap?.Branch ?? "",
+        status: "inactive" as BankStatus,
+      });
+      if (error) throw error;
+    }
+
+    // 5) नया snapshot active INSERT
+    {
+      const { error } = await supabase.from(historyTable).insert({
+        restro_code: codeStr,
+        account_holder_name: form.account_holder_name || "",
+        account_number: form.account_number || "",
+        ifsc_code: form.ifsc_code || "",
+        bank_name: form.bank_name || "",
+        branch: form.branch || "",
+        status: "active" as BankStatus,
+      });
+      if (error) throw error;
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
