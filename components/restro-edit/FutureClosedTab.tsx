@@ -2,18 +2,16 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import FutureClosedTab from "./restro-edit/FutureClosedTab";
+import FutureClosedFormModal from "./FutureClosedFormModal";
 
 type Row = {
   id: number;
   restro_code: string;
-  start_at: string;      // ISO
-  end_at: string;        // ISO
-  comment: string;
-  applied_by?: string | null;
-  applied_by_name?: string | null; // from join
-  status_calc?: "active" | "upcoming" | "expired";
-  created_at?: string;
+  start_at: string;
+  end_at: string;
+  comment: string | null;
+  applied_by: string | null;
+  created_at: string;
 };
 
 type Props = {
@@ -23,35 +21,49 @@ type Props = {
 };
 
 export default function FutureClosedTab({ local }: Props) {
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const supabase: SupabaseClient | null = useMemo(() => {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+    return createClient(SUPABASE_URL, SUPABASE_KEY);
+  }, [SUPABASE_URL, SUPABASE_KEY]);
+
+  const restroCode =
+    String(local?.RestroCode ?? local?.restro_code ?? local?.RestroId ?? local?.id ?? "");
+
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  const restroCode =
-    local?.RestroCode ?? local?.restro_code ?? local?.id ?? local?.code ?? "";
+  const statusOf = (r: Row) => {
+    const now = Date.now();
+    const s = new Date(r.start_at).getTime();
+    const e = new Date(r.end_at).getTime();
+    if (now < s) return "upcoming";
+    if (now >= s && now <= e) return "active";
+    return "inactive";
+  };
 
-  const load = async () => {
+  const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString() : "—");
+
+  async function load() {
     try {
       setLoading(true);
       setErr(null);
-      const res = await fetch(
-        `/api/restros/${encodeURIComponent(String(restroCode))}/holidays`
-      );
-      const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(json?.error || `Fetch failed (${res.status})`);
+      if (!supabase) throw new Error("Supabase not configured");
+      if (!restroCode) {
+        setRows([]);
+        return;
       }
-      const list: Row[] = json?.rows ?? [];
-      // Sort: active → upcoming → expired, then most recent start first
-      const rank = (s?: Row["status_calc"]) =>
-        s === "active" ? 0 : s === "upcoming" ? 1 : 2;
-      list.sort((a, b) => {
-        const r = rank(a.status_calc) - rank(b.status_calc);
-        if (r !== 0) return r;
-        return (b.start_at ?? "").localeCompare(a.start_at ?? "");
-      });
-      setRows(list);
+      const { data, error } = await supabase
+        .from("RestroHoliday")
+        .select("*")
+        .eq("restro_code", restroCode)
+        .order("start_at", { ascending: false });
+
+      if (error) throw error;
+      setRows((data as any[]) as Row[]);
     } catch (e: any) {
       console.error(e);
       setErr(e?.message ?? "Failed to load holidays");
@@ -59,35 +71,29 @@ export default function FutureClosedTab({ local }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
-    if (restroCode) load();
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restroCode]);
-
-  const fmt = (iso?: string) => {
-    if (!iso) return "—";
-    try {
-      return new Date(iso).toLocaleString();
-    } catch {
-      return iso;
-    }
-  };
-
-  const badge = (s?: Row["status_calc"]) => {
-    const common = "inline-block rounded-full px-2 py-0.5 text-xs font-semibold";
-    if (s === "active") return <span className={`${common} bg-green-100 text-green-700`}>Active</span>;
-    if (s === "upcoming") return <span className={`${common} bg-amber-100 text-amber-700`}>Upcoming</span>;
-    return <span className={`${common} bg-gray-100 text-gray-700`}>Expired</span>;
-  };
+  }, [restroCode, supabase]);
 
   return (
-    <div className="px-2">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-base font-semibold">Future Closed</h3>
+    // Cancel ANY accidental form submit bubbling up to AdminForm
+    <div onSubmitCapture={(e) => e.preventDefault()}>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Future Closed</h3>
+          <p className="text-sm text-gray-500">Schedule restaurant holiday/closure windows.</p>
+        </div>
+
         <button
-          onClick={() => setOpen(true)}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation(); // <- hard stop so parent form won't submit
+            setOpen(true);
+          }}
           className="rounded-md bg-orange-600 px-4 py-2 text-white"
         >
           Add New Holiday
@@ -95,28 +101,35 @@ export default function FutureClosedTab({ local }: Props) {
       </div>
 
       <div className="overflow-hidden rounded-xl border">
-        <div className="grid grid-cols-5 bg-gray-50 px-3 py-2 text-sm font-medium">
+        <div className="grid grid-cols-6 bg-gray-50 px-4 py-3 text-sm font-medium">
           <div>Holiday Start</div>
           <div>Holiday End</div>
           <div>Comment</div>
           <div>Applied By</div>
+          <div>Created</div>
           <div className="text-right">Status</div>
         </div>
 
         {loading ? (
-          <div className="px-3 py-4 text-sm text-gray-600">Loading…</div>
+          <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
         ) : rows.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-gray-600">No holiday added yet.</div>
+          <div className="px-4 py-6 text-sm text-gray-600">No holidays yet.</div>
         ) : (
-          rows.map((r) => (
-            <div key={r.id} className="grid grid-cols-5 border-t px-3 py-2 text-sm">
-              <div className="truncate">{fmt(r.start_at)}</div>
-              <div className="truncate">{fmt(r.end_at)}</div>
-              <div className="truncate">{r.comment || "—"}</div>
-              <div className="truncate">{r.applied_by_name || r.applied_by || "—"}</div>
-              <div className="text-right">{badge(r.status_calc)}</div>
-            </div>
-          ))
+          rows.map((r) => {
+            const st = statusOf(r);
+            const rowBg =
+              st === "active" ? "bg-green-50" : st === "upcoming" ? "bg-amber-50" : "bg-rose-50";
+            return (
+              <div key={r.id} className={`grid grid-cols-6 border-t px-4 py-3 text-sm ${rowBg}`}>
+                <div className="truncate">{fmt(r.start_at)}</div>
+                <div className="truncate">{fmt(r.end_at)}</div>
+                <div className="truncate">{r.comment || "—"}</div>
+                <div className="truncate">{r.applied_by || "—"}</div>
+                <div className="truncate">{fmt(r.created_at)}</div>
+                <div className="text-right font-medium capitalize">{st}</div>
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -125,7 +138,7 @@ export default function FutureClosedTab({ local }: Props) {
       <FutureClosedFormModal
         open={open}
         restroCode={restroCode}
-        currentUserId={local?.UpdatedByUserId ?? null}
+        currentUserId={local?.UpdatedBy ?? local?.updated_by ?? null}
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
