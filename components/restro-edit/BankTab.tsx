@@ -1,3 +1,4 @@
+// components/BankTab.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -46,10 +47,10 @@ export default function BankTab({
   const codeNum = /^\d+$/.test(codeStr) ? Number(codeStr) : null;
   const codeKeys = codeNum !== null ? [codeStr, String(codeNum)] : [codeStr];
 
-  const normalizeStatus = (v: any): "active" | "inactive" =>
-    String(v ?? "").toLowerCase() === "active" || v === 1 || v === "1" || v === true
-      ? "active"
-      : "inactive";
+  const normalizeStatus = (v: any): "active" | "inactive" => {
+    const s = String(v ?? "").toLowerCase();
+    return s === "active" || v === 1 || v === "1" || v === true ? "active" : "inactive";
+  };
 
   const fmtDate = (iso?: string) => {
     if (!iso) return "—";
@@ -66,17 +67,17 @@ export default function BankTab({
       setErr(null);
       if (!supabase) throw new Error("Supabase client not configured");
 
-      // 1) Read history using BOTH possible keys (string + legacy numeric-as-string)
+      // 1) History (दोनों keys पर) — explicit columns + created_at/updated_at
       const { data: hist, error: histErr } = await supabase
         .from(historyTable)
-        .select("*")
+        .select("id, restro_code, account_holder_name, account_number, ifsc_code, bank_name, branch, status, created_at, updated_at")
         .in("restro_code", codeKeys)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .order("updated_at", { ascending: false });
 
       if (histErr) throw histErr;
 
       if (hist && hist.length > 0) {
-        // active first then inactive, and within each: latest first
         const mapped = (hist as any[]).map((r) => ({
           id: r.id,
           restro_code: String(r.restro_code ?? codeStr),
@@ -90,10 +91,9 @@ export default function BankTab({
           updated_at: r.updated_at ?? undefined,
         }));
 
+        // Active पहले, फिर Inactive; और हर group में latest पहले
         mapped.sort((a, b) => {
-          // active first
           if (a.status !== b.status) return a.status === "active" ? -1 : 1;
-          // then by created desc
           return (b.created_at ?? "").localeCompare(a.created_at ?? "");
         });
 
@@ -101,7 +101,7 @@ export default function BankTab({
         return;
       }
 
-      // 2) Fallback to master snapshot when history empty
+      // 2) History नहीं मिला तो master snapshot fallback
       const { data: master, error: mErr } = await supabase
         .from(masterTable)
         .select(
@@ -204,7 +204,7 @@ export default function BankTab({
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
-          load();
+          load(); // save के तुरंत बाद fresh history
         }}
         historyTable={historyTable}
         masterTable={masterTable}
