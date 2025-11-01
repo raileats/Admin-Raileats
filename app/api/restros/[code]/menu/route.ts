@@ -33,13 +33,12 @@ export async function GET(req: Request, { params }: { params: { code: string } }
     const cuisine = (searchParams.get("cuisine") || "").trim();
     const statusFilter = (searchParams.get("status") || "").toUpperCase(); // ON | OFF | DELETED
 
-    let query = srv()
+    let query = supabase
       .from("RestroMenuItems" as any)
       .select("*")
       .eq("restro_code", codeStr);
 
     if (q) {
-      // OR across common text columns (Supabase expects a single OR string)
       query = query.or(
         [
           `item_code.ilike.%${q}%`,
@@ -80,6 +79,8 @@ export async function GET(req: Request, { params }: { params: { code: string } }
  *  - start_time, end_time        // "HH:MM"
  *  - restro_price, base_price, gst_percent
  *  - status ("ON" | "OFF")
+ *
+ * Also: auto-assigns a GLOBAL sequential item_code ("1","2","3",...)
  */
 export async function POST(req: Request, { params }: { params: { code: string } }) {
   try {
@@ -90,8 +91,10 @@ export async function POST(req: Request, { params }: { params: { code: string } 
     const item_name: string = (body.item_name ?? "").toString().trim();
     if (!item_name) throw new Error("Item Name required");
 
-    const base_price = body.base_price === "" || body.base_price == null ? null : Number(body.base_price);
-    const gst_percent = body.gst_percent === "" || body.gst_percent == null ? 0 : Number(body.gst_percent);
+    const base_price =
+      body.base_price === "" || body.base_price == null ? null : Number(body.base_price);
+    const gst_percent =
+      body.gst_percent === "" || body.gst_percent == null ? 0 : Number(body.gst_percent);
 
     // compute selling price if base & gst available
     const selling_price =
@@ -99,9 +102,28 @@ export async function POST(req: Request, { params }: { params: { code: string } 
         ? Math.round(base_price * (1 + (Number.isFinite(gst_percent) ? gst_percent : 0) / 100) * 100) / 100
         : null;
 
+    // ---------- AUTO item_code (global) ----------
+    // Find the last row by 'id' and increment. Fallback to 1 if table is empty.
+    const { data: lastRows, error: lastErr } = await supabase
+      .from("RestroMenuItems" as any)
+      .select("id,item_code")
+      .order("id", { ascending: false })
+      .limit(1);
+
+    if (lastErr) throw lastErr;
+
+    let nextCode = 1;
+    if (lastRows && lastRows.length > 0) {
+      const last = lastRows[0] as { id: number; item_code: any };
+      const numericItemCode = Number(String(last.item_code ?? "").replace(/\D/g, ""));
+      const safeItemCode = Number.isFinite(numericItemCode) ? numericItemCode : 0;
+      nextCode = Math.max(last.id ?? 0, safeItemCode) + 1;
+    }
+    // --------------------------------------------
+
     const insert = {
       restro_code: codeStr,
-      item_code: body.item_code ?? null, // optional / can stay null
+      item_code: String(nextCode), // <- auto assigned here
       item_name,
       item_description: (body.item_description ?? "").toString().trim() || null,
       item_category: body.item_category || null,
@@ -109,7 +131,8 @@ export async function POST(req: Request, { params }: { params: { code: string } 
       menu_type: body.menu_type || null,
       start_time: body.start_time || null,
       end_time: body.end_time || null,
-      restro_price: body.restro_price === "" || body.restro_price == null ? null : Number(body.restro_price),
+      restro_price:
+        body.restro_price === "" || body.restro_price == null ? null : Number(body.restro_price),
       base_price,
       gst_percent,
       selling_price,
