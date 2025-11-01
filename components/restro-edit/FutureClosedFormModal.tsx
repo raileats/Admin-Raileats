@@ -17,10 +17,9 @@ export default function FutureClosedFormModal({
   onClose,
   onSaved,
 }: Props) {
-  const [start, setStart] = useState<string>(""); // yyyy-MM-ddTHH:mm
+  const [start, setStart] = useState<string>("");
   const [end, setEnd] = useState<string>("");
   const [comment, setComment] = useState<string>("");
-
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -37,7 +36,7 @@ export default function FutureClosedFormModal({
         start_at: new Date(start).toISOString(),
         end_at: new Date(end).toISOString(),
         comment: (comment ?? "").trim(),
-        applied_by: currentUserId ? String(currentUserId) : "system", // fallback
+        applied_by: currentUserId ? String(currentUserId) : "system",
       };
 
       const res = await fetch(
@@ -52,6 +51,7 @@ export default function FutureClosedFormModal({
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || `Save failed (${res.status})`);
       }
+
       onSaved();
       onClose();
     } catch (e: any) {
@@ -64,14 +64,12 @@ export default function FutureClosedFormModal({
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* backdrop */}
       <button
         type="button"
         className="absolute inset-0 bg-black/40"
         onClick={() => !saving && onClose()}
         aria-label="Close"
       />
-      {/* modal */}
       <div className="relative z-10 w-[820px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold">Add New Holiday</h2>
