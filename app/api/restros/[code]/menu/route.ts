@@ -6,7 +6,7 @@ function srv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   if (!url || !key) throw new Error("Supabase service configuration missing");
-  // no session persistence for server routes
+  // server routes don't need session persistence
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
@@ -62,7 +62,9 @@ export async function GET(req: Request, { params }: { params: { code: string } }
       query = query.is("deleted_at", null);
     }
 
-    const { data, error } = await query.order("created_at", { ascending: false });
+    query = query.order("created_at", { ascending: false });
+
+    const { data, error } = await query;
     if (error) throw error;
 
     return NextResponse.json({ ok: true, rows: data ?? [] });
@@ -80,7 +82,7 @@ export async function GET(req: Request, { params }: { params: { code: string } }
  *  - restro_price, base_price, gst_percent
  *  - status ("ON" | "OFF")
  *
- * Also: auto-assigns a GLOBAL sequential item_code ("1","2","3",...)
+ * Also: auto-assigns a GLOBAL sequential item_code ("1","2","3",...).
  */
 export async function POST(req: Request, { params }: { params: { code: string } }) {
   try {
@@ -103,7 +105,7 @@ export async function POST(req: Request, { params }: { params: { code: string } 
         : null;
 
     // ---------- AUTO item_code (global) ----------
-    // Find the last row by 'id' and increment. Fallback to 1 if table is empty.
+    // Take the last inserted row (by id), and also consider last textual item_code numerically.
     const { data: lastRows, error: lastErr } = await supabase
       .from("RestroMenuItems" as any)
       .select("id,item_code")
@@ -137,7 +139,6 @@ export async function POST(req: Request, { params }: { params: { code: string } 
       gst_percent,
       selling_price,
       status: body.status === "OFF" ? "OFF" : "ON",
-      // deleted_at stays null on create
     };
 
     const { error } = await supabase.from("RestroMenuItems").insert(insert as any);
