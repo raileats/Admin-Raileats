@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import FutureClosedFormModal from "./FutureClosedFormModal";
-
+import FutureClosedFormModal from "./restro-edit/FutureClosedFormModal";
 type Row = {
   id: number;
   restro_code: string;
