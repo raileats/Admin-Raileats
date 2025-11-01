@@ -13,7 +13,7 @@ function srv() {
 /**
  * GET /api/restros/[code]/menu
  * Query params:
- *  - q            : fuzzy search across item_code, item_name, item_description
+ *  - q            : fuzzy search across item_code, item_name, item_description, item_category, item_cuisine
  *  - item_code    : ILIKE filter
  *  - item_name    : ILIKE filter
  *  - category     : ILIKE filter on item_category
@@ -34,7 +34,7 @@ export async function GET(req: Request, { params }: { params: { code: string } }
     const statusFilter = (searchParams.get("status") || "").toUpperCase(); // ON | OFF | DELETED
 
     let query = supabase
-      .from("RestroMenuItems" as any)
+      .from("RestroMenuItems")
       .select("*")
       .eq("restro_code", codeStr);
 
@@ -44,7 +44,9 @@ export async function GET(req: Request, { params }: { params: { code: string } }
           `item_code.ilike.%${q}%`,
           `item_name.ilike.%${q}%`,
           `item_description.ilike.%${q}%`,
-        ].join(","),
+          `item_category.ilike.%${q}%`,
+          `item_cuisine.ilike.%${q}%`,
+        ].join(",")
       );
     }
 
@@ -62,7 +64,8 @@ export async function GET(req: Request, { params }: { params: { code: string } }
       query = query.is("deleted_at", null);
     }
 
-    query = query.order("created_at", { ascending: false });
+    // IMPORTANT: order by an always-present column
+    query = query.order("id", { ascending: false });
 
     const { data, error } = await query;
     if (error) throw error;
@@ -107,7 +110,7 @@ export async function POST(req: Request, { params }: { params: { code: string } 
     // ---------- AUTO item_code (global) ----------
     // Take the last inserted row (by id), and also consider last textual item_code numerically.
     const { data: lastRows, error: lastErr } = await supabase
-      .from("RestroMenuItems" as any)
+      .from("RestroMenuItems")
       .select("id,item_code")
       .order("id", { ascending: false })
       .limit(1);
@@ -141,7 +144,7 @@ export async function POST(req: Request, { params }: { params: { code: string } 
       status: body.status === "OFF" ? "OFF" : "ON",
     };
 
-    const { error } = await supabase.from("RestroMenuItems").insert(insert as any);
+    const { error } = await supabase.from("RestroMenuItems").insert(insert);
     if (error) throw error;
 
     return NextResponse.json({ ok: true });
