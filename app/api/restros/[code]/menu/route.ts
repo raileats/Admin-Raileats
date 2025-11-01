@@ -107,31 +107,28 @@ export async function POST(req: Request, { params }: { params: { code: string } 
         ? Math.round(base_price * (1 + (Number.isFinite(gst_percent) ? gst_percent : 0) / 100) * 100) / 100
         : null;
 
-    // ---------- AUTO item_code (global) ----------
-    // Try to compute numeric max(item_code) and id; fallback safely to 0
-    const { data: agg, error: aggErr } = await supabase
+    // ---------- AUTO item_code (global, compile-safe) ----------
+    // Get last row by id and derive next numeric code
+    const { data: lastRows, error: lastErr } = await supabase
       .from("RestroMenuItems")
-      .select("max_id=max(id), last_code=item_code")
+      .select("id,item_code")
       .order("id", { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
-    if (aggErr && aggErr.code !== "PGRST116") throw aggErr; // ignore "no rows" error
+    if (lastErr) throw lastErr;
 
     let nextCode = 1;
-    if (agg) {
-      const lastNumeric =
-        typeof agg.last_code === "string"
-          ? Number(agg.last_code.replace(/\D/g, "")) || 0
-          : 0;
-      const maxId = Number(agg.max_id || 0);
-      nextCode = Math.max(maxId, lastNumeric) + 1;
+    if (Array.isArray(lastRows) && lastRows.length > 0) {
+      const last = lastRows[0] as { id: number; item_code: any };
+      const numericItemCode = Number(String(last.item_code ?? "").replace(/\D/g, ""));
+      const safeItemCode = Number.isFinite(numericItemCode) ? numericItemCode : 0;
+      nextCode = Math.max(last.id ?? 0, safeItemCode) + 1;
     }
-    // --------------------------------------------
+    // ----------------------------------------------------------
 
     const insert = {
       restro_code: codeStr,
-      item_code: String(nextCode), // auto code
+      item_code: String(nextCode), // auto assigned
       item_name,
       item_description: (body.item_description ?? "").toString().trim() || null,
       item_category: body.item_category || null,
@@ -155,7 +152,6 @@ export async function POST(req: Request, { params }: { params: { code: string } 
 
     if (error) throw error;
 
-    // return created row so UI can update immediately
     return NextResponse.json({ ok: true, row: created }, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 400 });
