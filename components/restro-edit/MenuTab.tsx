@@ -41,7 +41,7 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
     }
   }
 
-  useEffect(() => { if (code) load(); }, [code, status]); // initial + status change
+  useEffect(() => { if (code) load(); }, [code, status]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -97,14 +97,24 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
             <option value="OFF">Off</option>
             <option value="DELETED">Deleted</option>
           </select>
-          <button className="rounded-md border px-3 py-2" onClick={load}>Search</button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-2"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); load(); }}
+          >
+            Search
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="text-sm text-gray-500">
             Item Count {counts.total} • Active {counts.on} • Deactive {counts.off} • Deleted {counts.deleted}
           </div>
-          <button className="rounded-md bg-orange-600 text-white px-4 py-2" onClick={()=>setOpenModal(true)}>
+          <button
+            type="button"
+            className="rounded-md bg-orange-600 text-white px-4 py-2"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpenModal(true); }}
+          >
             Add New Item
           </button>
         </div>
@@ -159,13 +169,31 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
                       {r.status !== "DELETED" && (
                         <>
                           {r.status === "ON" ? (
-                            <button className="rounded border px-2 py-1" onClick={()=>toggleStatus(r,"OFF")}>Deactivate</button>
+                            <button
+                              type="button"
+                              className="rounded border px-2 py-1"
+                              onClick={() => toggleStatus(r,"OFF")}
+                            >
+                              Deactivate
+                            </button>
                           ) : (
-                            <button className="rounded border px-2 py-1" onClick={()=>toggleStatus(r,"ON")}>Activate</button>
+                            <button
+                              type="button"
+                              className="rounded border px-2 py-1"
+                              onClick={() => toggleStatus(r,"ON")}
+                            >
+                              Activate
+                            </button>
                           )}
                         </>
                       )}
-                      <button className="rounded border px-2 py-1 text-rose-700" onClick={()=>deleteItem(r)}>Delete</button>
+                      <button
+                        type="button"
+                        className="rounded border px-2 py-1 text-rose-700"
+                        onClick={() => deleteItem(r)}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </td>
                 </tr>
