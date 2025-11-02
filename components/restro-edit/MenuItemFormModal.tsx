@@ -27,11 +27,8 @@ type Props = {
   restroCode: string | number;
   onClose: () => void;
   onSaved: () => void;
-  /** create (default) | edit (prefilled) */
   mode?: "create" | "edit";
-  /** edit mode me pass karo */
   initial?: Partial<BaseRow> | null;
-  /** optionally parent se supabase pass */
   supabase?: SupabaseClient;
 };
 
@@ -80,7 +77,6 @@ export default function MenuItemFormModal({
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-  // -------- form state --------
   const [item_name, setItemName] = useState("");
   const [item_description, setItemDescription] = useState("");
   const [item_category, setItemCategory] = useState<string>("");
@@ -103,24 +99,13 @@ export default function MenuItemFormModal({
       setMenuType(initial.menu_type ?? "");
       setStartTime((initial.start_time ?? "").slice(0, 5));
       setEndTime((initial.end_time ?? "").slice(0, 5));
-      setRestroPrice(
-        initial.restro_price === null || initial.restro_price === undefined
-          ? ""
-          : Number(initial.restro_price)
-      );
-      setBasePrice(
-        initial.base_price === null || initial.base_price === undefined
-          ? ""
-          : Number(initial.base_price)
-      );
+      setRestroPrice(initial.restro_price == null ? "" : Number(initial.restro_price));
+      setBasePrice(initial.base_price == null ? "" : Number(initial.base_price));
       setGstPercent(
-        (initial.gst_percent === null || initial.gst_percent === undefined
-          ? 5
-          : Number(initial.gst_percent)) as number
+        (initial.gst_percent == null ? 5 : Number(initial.gst_percent)) as number
       );
       setStatus((initial.status as any) === "OFF" ? "OFF" : "ON");
     } else {
-      // blank
       setItemName("");
       setItemDescription("");
       setItemCategory("");
@@ -146,7 +131,6 @@ export default function MenuItemFormModal({
   const [err, setErr] = useState<string | null>(null);
   if (!open) return null;
 
-  // numeric helper
   function toNumOrEmpty(val: string) {
     const cleaned = val.replace(/[^\d.]/g, "");
     if (cleaned === "") return "";
@@ -160,9 +144,8 @@ export default function MenuItemFormModal({
       setErr(null);
       if (!item_name.trim()) throw new Error("Item Name required");
 
-      // common payload (server route compute karega selling bhi; hum bhej denge)
-      const payload = {
-        item_code: null, // API me ignore / auto
+      // base payload (shared)
+      const basePayload = {
         item_name: item_name.trim(),
         item_description: item_description.trim() || null,
         item_category: item_category || null,
@@ -173,24 +156,26 @@ export default function MenuItemFormModal({
         restro_price: restro_price === "" ? null : Number(restro_price),
         base_price: base_price === "" ? null : Number(base_price),
         gst_percent: gst_percent === "" ? 0 : Number(gst_percent),
+        selling_price, // keep computed price updated
         status,
       };
 
       if (mode === "edit" && initial?.id) {
-        // EDIT -> direct supabase update
+        // EDIT: DO NOT send item_code -> keeps NOT NULL column intact
         const { error } = await supabase
           .from("RestroMenuItems")
-          .update(payload as any)
+          .update(basePayload as any)
           .eq("id", initial.id);
         if (error) throw error;
       } else {
-        // CREATE -> use existing route (global item_code auto)
+        // CREATE: route handles auto item_code
+        const payloadCreate = { ...basePayload, item_code: null };
         const res = await fetch(
           `/api/restros/${encodeURIComponent(String(restroCode))}/menu`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(payloadCreate),
           }
         );
         const j = await res.json().catch(() => ({}));
