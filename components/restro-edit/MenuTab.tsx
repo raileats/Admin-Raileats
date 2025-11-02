@@ -18,16 +18,16 @@ type Row = {
   gst_percent?: number | null;
   selling_price?: number | null;
   status: "ON" | "OFF" | "DELETED";
-  deleted_at?: string | null;
 };
 
 export default function MenuTab({ restroCode }: { restroCode?: string }) {
   const code = String(restroCode ?? "");
+
   const supabase = useMemo(
     () =>
       createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       ),
     []
   );
@@ -38,31 +38,26 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
   const [status, setStatus] = useState<"" | "ON" | "OFF" | "DELETED">("");
   const [openModal, setOpenModal] = useState(false);
 
-  // Load from Supabase (outlet-wise)
   async function load() {
     if (!code) return;
     setLoading(true);
+
     try {
       let query = supabase
         .from("RestroMenuItems")
         .select("*")
         .eq("restro_code", code);
 
-      // default: show not-deleted
-      if (status === "DELETED") {
-        query = query.not("deleted_at", "is", null);
-      } else {
-        query = query.is("deleted_at", null);
-        if (status === "ON" || status === "OFF") {
-          query = query.eq("status", status);
-        }
+      if (status === "ON" || status === "OFF" || status === "DELETED") {
+        query = query.eq("status", status);
       }
 
       const { data, error } = await query.order("id", { ascending: false });
+
       if (error) throw error;
-      setRows((data as Row[]) ?? []);
-    } catch (e) {
-      console.error("Menu load failed:", e);
+      setRows(data ?? []);
+    } catch (err) {
+      console.error(err);
       setRows([]);
     } finally {
       setLoading(false);
@@ -71,10 +66,8 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, status]); // reload on outlet/status change
+  }, [code, status]);
 
-  // Client-side search filter
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return rows;
@@ -92,56 +85,43 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
       total: rows.length,
       on: rows.filter((r) => r.status === "ON").length,
       off: rows.filter((r) => r.status === "OFF").length,
-      deleted: rows.filter((r) => r.deleted_at).length,
+      deleted: rows.filter((r) => r.status === "DELETED").length,
     }),
     [rows]
   );
 
-  // Update status directly in Supabase
   async function toggleStatus(row: Row, to: "ON" | "OFF") {
-    try {
-      const { error } = await supabase
-        .from("RestroMenuItems")
-        .update({ status: to })
-        .eq("id", row.id)
-        .is("deleted_at", null);
+    await supabase
+      .from("RestroMenuItems")
+      .update({ status: to })
+      .eq("id", row.id);
 
-      if (error) throw error;
-      await load();
-    } catch (e: any) {
-      alert(e?.message || "Failed to update status");
-    }
+    load();
   }
 
-  // Soft delete
   async function deleteItem(row: Row) {
     if (!confirm(`Delete "${row.item_name}"?`)) return;
-    try {
-      const { error } = await supabase
-        .from("RestroMenuItems")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", row.id);
-      if (error) throw error;
-      await load();
-    } catch (e: any) {
-      alert(e?.message || "Failed to delete");
-    }
+    await supabase
+      .from("RestroMenuItems")
+      .update({ status: "DELETED" })
+      .eq("id", row.id);
+
+    load();
   }
 
   return (
     <div className="space-y-3">
-      {/* top bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
+      {/* Top bar */}
+      <div className="flex justify-between items-center">
+        <div className="flex gap-2">
           <input
-            placeholder="Search (code, name, category, cuisine)…"
-            className="w-[360px] max-w-[70vw] rounded-md border px-3 py-2"
+            placeholder="Search..."
+            className="border px-3 py-2 rounded-md"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && load()}
           />
           <select
-            className="rounded-md border px-3 py-2"
+            className="border px-3 py-2 rounded-md"
             value={status}
             onChange={(e) => setStatus(e.target.value as any)}
           >
@@ -150,127 +130,59 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
             <option value="OFF">Off</option>
             <option value="DELETED">Deleted</option>
           </select>
-          <button
-            type="button"
-            className="rounded-md border px-3 py-2"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              load();
-            }}
-          >
-            Search
-          </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-500">
-            Item Count {counts.total} • Active {counts.on} • Deactive {counts.off} • Deleted{" "}
-            {counts.deleted}
-          </div>
-          <button
-            type="button"
-            className="rounded-md bg-orange-600 text-white px-4 py-2"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setOpenModal(true);
-            }}
-          >
-            Add New Item
-          </button>
-        </div>
+        <button
+          className="bg-orange-600 text-white px-4 py-2 rounded-md"
+          onClick={() => setOpenModal(true)}
+        >
+          Add New Item
+        </button>
       </div>
 
-      {/* table */}
-      <div className="overflow-auto rounded border">
-        <table className="min-w-[980px] w-full text-sm">
+      {/* Table */}
+      <div className="border rounded overflow-auto">
+        <table className="w-full text-sm">
           <thead className="bg-gray-50">
-            <tr className="text-left">
+            <tr>
               <th className="p-2">Item Code</th>
               <th className="p-2">Item Name</th>
-              <th className="p-2">Item Description</th>
-              <th className="p-2">Item Category</th>
+              <th className="p-2">Category</th>
               <th className="p-2">Cuisine</th>
-              <th className="p-2">Item Start</th>
-              <th className="p-2">Item Closed</th>
-              <th className="p-2 text-right">Restro Price</th>
-              <th className="p-2 text-right">Base Price</th>
-              <th className="p-2 text-right">GST %</th>
-              <th className="p-2 text-right">Selling Price</th>
+              <th className="p-2 text-right">Price</th>
               <th className="p-2">Status</th>
-              <th className="p-2">Edit</th>
+              <th className="p-2">Action</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={13} className="p-3 text-center text-gray-500">
-                  Loading…
+                <td colSpan={7} className="text-center p-3">
+                  Loading...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={13} className="p-3 text-center text-gray-500">
-                  No items.
+                <td colSpan={7} className="text-center p-3">
+                  No items
                 </td>
               </tr>
             ) : (
               filtered.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2">{r.item_code}</td>
-                  <td className="p-2 font-medium">{r.item_name}</td>
-                  <td className="p-2 text-gray-600">{r.item_description}</td>
+                  <td className="p-2">{r.item_name}</td>
                   <td className="p-2">{r.item_category}</td>
                   <td className="p-2">{r.item_cuisine}</td>
-                  <td className="p-2">{r.start_time?.slice(0, 5) ?? "—"}</td>
-                  <td className="p-2">{r.end_time?.slice(0, 5) ?? "—"}</td>
-                  <td className="p-2 text-right">{r.restro_price ?? "—"}</td>
-                  <td className="p-2 text-right">{r.base_price ?? "—"}</td>
-                  <td className="p-2 text-right">{r.gst_percent ?? 0}</td>
-                  <td className="p-2 text-right">{r.selling_price ?? "—"}</td>
-                  <td className="p-2">
-                    {r.status === "ON" && (
-                      <span className="rounded bg-sky-100 px-2 py-1 text-sky-700">On</span>
-                    )}
-                    {r.status === "OFF" && (
-                      <span className="rounded bg-amber-100 px-2 py-1 text-amber-700">Off</span>
-                    )}
-                    {r.deleted_at && (
-                      <span className="rounded bg-rose-100 px-2 py-1 text-rose-700">Deleted</span>
-                    )}
-                  </td>
-                  <td className="p-2">
-                    <div className="flex gap-2">
-                      {!r.deleted_at && (
-                        <>
-                          {r.status === "ON" ? (
-                            <button
-                              type="button"
-                              className="rounded border px-2 py-1"
-                              onClick={() => toggleStatus(r, "OFF")}
-                            >
-                              Deactivate
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="rounded border px-2 py-1"
-                              onClick={() => toggleStatus(r, "ON")}
-                            >
-                              Activate
-                            </button>
-                          )}
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        className="rounded border px-2 py-1 text-rose-700"
-                        onClick={() => deleteItem(r)}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                  <td className="p-2 text-right">{r.selling_price}</td>
+                  <td className="p-2">{r.status}</td>
+                  <td className="p-2 flex gap-2">
+                    <button className="underline" onClick={() => toggleStatus(r, r.status === "ON" ? "OFF" : "ON")}>
+                      Toggle
+                    </button>
+                    <button className="text-red-600 underline" onClick={() => deleteItem(r)}>
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))
