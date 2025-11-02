@@ -6,22 +6,32 @@ function srv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   if (!url || !key) throw new Error("Supabase service configuration missing");
+  // server routes don't need session persistence
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-/** GET: list items for a restro (newest first) */
+/**
+ * GET /api/restros/[code]/menu
+ * Query params:
+ *  - q            : fuzzy search across item_code, item_name, item_description, item_category, item_cuisine
+ *  - item_code    : ILIKE filter
+ *  - item_name    : ILIKE filter
+ *  - category     : ILIKE filter on item_category
+ *  - cuisine      : ILIKE filter on item_cuisine
+ *  - status       : ON | OFF | DELETED  (default: return all statuses)
+ */
 export async function GET(req: Request, { params }: { params: { code: string } }) {
   try {
     const supabase = srv();
     const codeStr = String(params.code ?? "");
     const { searchParams } = new URL(req.url);
 
-    const q        = (searchParams.get("q") || "").trim();
+    const q = (searchParams.get("q") || "").trim();
     const itemCode = (searchParams.get("item_code") || "").trim();
     const itemName = (searchParams.get("item_name") || "").trim();
     const category = (searchParams.get("category") || "").trim();
-    const cuisine  = (searchParams.get("cuisine") || "").trim();
-    const status   = (searchParams.get("status") || "").toUpperCase(); // "ON" | "OFF" | "DELETED"
+    const cuisine = (searchParams.get("cuisine") || "").trim();
+    const statusFilter = (searchParams.get("status") || "").toUpperCase(); // ON | OFF | DELETED
 
     let query = supabase
       .from("RestroMenuItems")
@@ -43,17 +53,14 @@ export async function GET(req: Request, { params }: { params: { code: string } }
     if (itemCode) query = query.ilike("item_code", `%${itemCode}%`);
     if (itemName) query = query.ilike("item_name", `%${itemName}%`);
     if (category) query = query.ilike("item_category", `%${category}%`);
-    if (cuisine)  query = query.ilike("item_cuisine", `%${cuisine}%`);
+    if (cuisine) query = query.ilike("item_cuisine", `%${cuisine}%`);
 
-    // Only filter by status if provided; DO NOT touch non-existent deleted_at
-    if (status === "ON" || status === "OFF" || status === "DELETED") {
-      query = query.eq("status", status);
+    // Status filter (no deleted_at usage)
+    if (statusFilter === "ON" || statusFilter === "OFF" || statusFilter === "DELETED") {
+      query = query.eq("status", statusFilter);
     }
 
-    // Use an always-present column for ordering
-    query = query.order("id", { ascending: false });
-
-    const { data, error } = await query;
+    const { data, error } = await query.order("id", { ascending: false });
     if (error) throw error;
 
     return NextResponse.json({ ok: true, rows: data ?? [] });
@@ -62,7 +69,17 @@ export async function GET(req: Request, { params }: { params: { code: string } }
   }
 }
 
-/** POST: create item (auto global item_code) */
+/**
+ * POST /api/restros/[code]/menu
+ * Body:
+ *  - item_name (required)
+ *  - item_description, item_category, item_cuisine, menu_type
+ *  - start_time, end_time        // "HH:MM"
+ *  - restro_price, base_price, gst_percent
+ *  - status ("ON" | "OFF")
+ *
+ * Also: auto-assigns a GLOBAL sequential item_code ("1","2","3",...).
+ */
 export async function POST(req: Request, { params }: { params: { code: string } }) {
   try {
     const supabase = srv();
@@ -77,12 +94,13 @@ export async function POST(req: Request, { params }: { params: { code: string } 
     const gst_percent =
       body.gst_percent === "" || body.gst_percent == null ? 0 : Number(body.gst_percent);
 
+    // compute selling price if base & gst available
     const selling_price =
       typeof base_price === "number"
         ? Math.round(base_price * (1 + (Number.isFinite(gst_percent) ? gst_percent : 0) / 100) * 100) / 100
         : null;
 
-    // Auto item_code (global): get last row by id, +1
+    // ---------- AUTO item_code (global) ----------
     const { data: lastRows, error: lastErr } = await supabase
       .from("RestroMenuItems")
       .select("id,item_code")
@@ -91,12 +109,13 @@ export async function POST(req: Request, { params }: { params: { code: string } 
     if (lastErr) throw lastErr;
 
     let nextCode = 1;
-    if (Array.isArray(lastRows) && lastRows.length > 0) {
+    if (lastRows && lastRows.length > 0) {
       const last = lastRows[0] as { id: number; item_code: any };
       const numericItemCode = Number(String(last.item_code ?? "").replace(/\D/g, ""));
       const safeItemCode = Number.isFinite(numericItemCode) ? numericItemCode : 0;
       nextCode = Math.max(last.id ?? 0, safeItemCode) + 1;
     }
+    // --------------------------------------------
 
     const insert = {
       restro_code: codeStr,
@@ -116,15 +135,10 @@ export async function POST(req: Request, { params }: { params: { code: string } 
       status: body.status === "OFF" ? "OFF" : "ON",
     };
 
-    const { data: created, error } = await supabase
-      .from("RestroMenuItems")
-      .insert(insert)
-      .select("*")
-      .single();
-
+    const { error } = await supabase.from("RestroMenuItems").insert(insert);
     if (error) throw error;
 
-    return NextResponse.json({ ok: true, row: created }, { status: 201 });
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 400 });
   }
