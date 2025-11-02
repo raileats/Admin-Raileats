@@ -26,11 +26,10 @@ type Row = {
 export default function MenuTab({ restroCode }: { restroCode?: string }) {
   const code = String(restroCode ?? "");
   const supabase = useMemo(
-    () =>
-      createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      ),
+    () => createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ),
     []
   );
 
@@ -39,28 +38,21 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<"" | "ON" | "OFF" | "DELETED">("");
   const [openModal, setOpenModal] = useState(false);
+  const [editRow, setEditRow] = useState<Row | null>(null);
 
-  // ---------- helpers ----------
-  const t = (s?: string | null) => (s ? s.slice(0, 5) : "—"); // "HH:MM"
+  const t = (s?: string | null) => (s ? s.slice(0, 5) : "—");
   const n = (x?: number | null) =>
     typeof x === "number" ? Number(x).toFixed(2).replace(/\.00$/, "") : "—";
-  const dt = (s?: string | null) =>
-    s ? new Date(s).toLocaleString() : "—";
+  const dt = (s?: string | null) => (s ? new Date(s).toLocaleString() : "—");
 
-  // load directly from Supabase (restro_code wise)
   async function load() {
     if (!code) return;
     setLoading(true);
     try {
-      let query = supabase
-        .from("RestroMenuItems")
-        .select("*")
-        .eq("restro_code", code);
-
+      let query = supabase.from("RestroMenuItems").select("*").eq("restro_code", code);
       if (status === "ON" || status === "OFF" || status === "DELETED") {
         query = query.eq("status", status);
       }
-
       const { data, error } = await query.order("id", { ascending: false });
       if (error) throw error;
       setRows((data as Row[]) ?? []);
@@ -77,17 +69,15 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, status]);
 
-  // client filter
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return rows;
-    return rows.filter(
-      (r) =>
-        r.item_name?.toLowerCase().includes(s) ||
-        r.item_code?.toLowerCase().includes(s) ||
-        r.item_category?.toLowerCase().includes(s) ||
-        r.item_cuisine?.toLowerCase().includes(s) ||
-        (r.menu_type ?? "").toLowerCase().includes(s)
+    return rows.filter((r) =>
+      r.item_name?.toLowerCase().includes(s) ||
+      r.item_code?.toLowerCase().includes(s) ||
+      r.item_category?.toLowerCase().includes(s) ||
+      r.item_cuisine?.toLowerCase().includes(s) ||
+      (r.menu_type ?? "").toLowerCase().includes(s)
     );
   }, [rows, q]);
 
@@ -102,20 +92,14 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
   );
 
   async function toggleStatus(row: Row, to: "ON" | "OFF") {
-    const { error } = await supabase
-      .from("RestroMenuItems")
-      .update({ status: to })
-      .eq("id", row.id);
+    const { error } = await supabase.from("RestroMenuItems").update({ status: to }).eq("id", row.id);
     if (!error) load();
     else alert(error.message || "Failed to update");
   }
 
   async function deleteItem(row: Row) {
     if (!confirm(`Delete "${row.item_name}"?`)) return;
-    const { error } = await supabase
-      .from("RestroMenuItems")
-      .update({ status: "DELETED" })
-      .eq("id", row.id);
+    const { error } = await supabase.from("RestroMenuItems").update({ status: "DELETED" }).eq("id", row.id);
     if (!error) load();
     else alert(error.message || "Failed to delete");
   }
@@ -142,15 +126,7 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
             <option value="OFF">Off</option>
             <option value="DELETED">Deleted</option>
           </select>
-          <button
-            type="button"
-            className="rounded-md border px-3 py-2"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              load();
-            }}
-          >
+          <button type="button" className="rounded-md border px-3 py-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); load(); }}>
             Search
           </button>
         </div>
@@ -162,11 +138,7 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
           <button
             type="button"
             className="rounded-md bg-orange-600 text-white px-4 py-2"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setOpenModal(true);
-            }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditRow(null); setOpenModal(true); }}
           >
             Add New Item
           </button>
@@ -230,48 +202,34 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
                   <td className="p-2">{dt(r.created_at)}</td>
                   <td className="p-2">{dt(r.updated_at)}</td>
 
-                  {/* Pencil edit icon (UI) */}
+                  {/* Pencil edit icon */}
                   <td className="p-2">
                     <button
                       type="button"
                       title="Edit"
                       className="p-1 rounded hover:bg-gray-100"
-                      onClick={() => alert("Edit form coming soon")}
+                      onClick={() => { setEditRow(r); setOpenModal(true); }}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4"
-                        viewBox="0 0 20 20" fill="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M17.414 2.586a2 2 0 010 2.828l-1.586 1.586-2.828-2.828L14.586 2.586a2 2 0 012.828 0zM12.293 5.293l2.828 2.828L7.414 15.828a2 2 0 01-.828.5l-3 1a1 1 0 01-1.266-1.266l1-3a2 2 0 01.5-.828l7.473-7.473z" />
                       </svg>
                     </button>
                   </td>
 
-                  {/* Actions */}
                   <td className="p-2">
                     <div className="flex gap-2">
                       {r.status !== "DELETED" && (
                         r.status === "ON" ? (
-                          <button
-                            type="button"
-                            className="rounded border px-2 py-1"
-                            onClick={() => toggleStatus(r, "OFF")}
-                          >
+                          <button className="rounded border px-2 py-1" onClick={() => toggleStatus(r, "OFF")}>
                             Deactivate
                           </button>
                         ) : (
-                          <button
-                            type="button"
-                            className="rounded border px-2 py-1"
-                            onClick={() => toggleStatus(r, "ON")}
-                          >
+                          <button className="rounded border px-2 py-1" onClick={() => toggleStatus(r, "ON")}>
                             Activate
                           </button>
                         )
                       )}
-                      <button
-                        type="button"
-                        className="rounded border px-2 py-1 text-rose-700"
-                        onClick={() => deleteItem(r)}
-                      >
+                      <button className="rounded border px-2 py-1 text-rose-700" onClick={() => deleteItem(r)}>
                         Delete
                       </button>
                     </div>
@@ -286,7 +244,10 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
       <MenuItemFormModal
         open={openModal}
         restroCode={code}
-        onClose={() => setOpenModal(false)}
+        mode={editRow ? "edit" : "create"}
+        initial={editRow ?? undefined}
+        supabase={supabase}
+        onClose={() => { setOpenModal(false); setEditRow(null); }}
         onSaved={load}
       />
     </div>
