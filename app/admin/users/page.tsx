@@ -31,14 +31,26 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
 
-  useEffect(() => {
-    if (typeof document !== "undefined") {
-      const el = document.getElementById("__next") || undefined;
-      try {
-        Modal.setAppElement(el || undefined);
-      } catch (e) {}
+ useEffect(() => {
+  // run only on client
+  if (typeof window === "undefined") return;
+
+  try {
+    // prefer actual HTMLElement if present
+    const el = document.getElementById("__next");
+    if (el) {
+      Modal.setAppElement(el);
+    } else {
+      // fallback to selector string (react-modal accepts this)
+      Modal.setAppElement("#__next");
     }
-  }, []);
+  } catch (err) {
+    // non-fatal, but log to help debugging
+    // console.warn will not break build
+    // eslint-disable-next-line no-console
+    console.warn("Modal.setAppElement failed:", err);
+  }
+}, []);
 
   useEffect(() => {
     fetchUsers();
