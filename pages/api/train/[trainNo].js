@@ -1,36 +1,32 @@
-// pages/api/train/[trainNo].js
-// Minimal test + proxy handler for RapidAPI (works without local dev)
+// app/api/train/[trainNo]/route.ts
+import { NextResponse } from "next/server";
 
-export default async function handler(req, res) {
-  const { trainNo } = req.query;
+export async function GET(request: Request, { params }: { params: { trainNo?: string } }) {
+  const trainNo = params?.trainNo;
+  if (!trainNo) return NextResponse.json({ ok: false, error: "Provide trainNo in URL path" }, { status: 400 });
 
-  // Basic check
-  if (!trainNo) {
-    return res.status(400).json({ ok: false, error: "Provide trainNo in URL path" });
+  const urlObj = new URL(request.url);
+  if (urlObj.searchParams.get("test") === "1") {
+    return NextResponse.json({ ok: true, msg: "route working (app router)", trainNo: String(trainNo) });
   }
 
-  // Quick test response so we can confirm route exists without RapidAPI
-  // Visit: /api/train/123?test=1 to see test response
-  if (req.query.test === "1") {
-    return res.status(200).json({ ok: true, msg: "route working", trainNo: String(trainNo) });
-  }
-
-  // If RAPIDAPI_KEY not set in environment, return info (so you can see it's working)
   const key = process.env.RAPIDAPI_KEY;
-  const host = process.env.RAPIDAPI_HOST || "indian-railway-irctc.p.rapidapi.com";
+  const host = process.env.RAPIDAPI_HOST ?? "indian-railway-irctc.p.rapidapi.com";
+
+  // If key not set, return informative response so you can confirm route exists
   if (!key) {
-    return res.status(200).json({
+    return NextResponse.json({
       ok: true,
-      info: "Route exists. RAPIDAPI_KEY not set — set it in Vercel env vars to enable proxy.",
+      info: "Route exists. RAPIDAPI_KEY not set in environment — set it in Vercel to enable proxy.",
       trainNo: String(trainNo),
-      testHint: "Add ?test=1 to skip proxy",
+      testHint: "Add ?test=1 to quickly test",
     });
   }
 
-  // Proxy to RapidAPI (only if key present)
-  const url = `https://${host}/api/v1/train/info?train_number=${encodeURIComponent(String(trainNo))}`;
+  const target = `https://${host}/api/v1/train/info?train_number=${encodeURIComponent(String(trainNo))}`;
+
   try {
-    const upstream = await fetch(url, {
+    const upstream = await fetch(target, {
       method: "GET",
       headers: {
         "x-rapidapi-key": key,
@@ -41,12 +37,15 @@ export default async function handler(req, res) {
     const text = await upstream.text();
     try {
       const json = text ? JSON.parse(text) : null;
-      return res.status(upstream.ok ? 200 : upstream.status).json(json);
-    } catch (e) {
-      // non-json response
-      return res.status(upstream.ok ? 200 : upstream.status).send(text);
+      return NextResponse.json(json, { status: upstream.ok ? 200 : upstream.status });
+    } catch {
+      // upstream returned non-json - forward raw text
+      return new Response(text, {
+        status: upstream.ok ? 200 : upstream.status,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
     }
   } catch (err) {
-    return res.status(500).json({ ok: false, error: "Proxy failed", details: String(err) });
+    return NextResponse.json({ ok: false, error: "Proxy failed", details: String(err) }, { status: 500 });
   }
 }
