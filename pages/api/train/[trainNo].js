@@ -1,9 +1,11 @@
-// app/api/train/[trainNo]/route.ts
+// app/api/train/[trainNo]/route.js
 import { NextResponse } from "next/server";
 
-export async function GET(request: Request, { params }: { params: { trainNo?: string } }) {
-  const trainNo = params?.trainNo;
-  if (!trainNo) return NextResponse.json({ ok: false, error: "Provide trainNo in URL path" }, { status: 400 });
+export async function GET(request, { params }) {
+  const trainNo = params && params.trainNo;
+  if (!trainNo) {
+    return NextResponse.json({ ok: false, error: "Provide trainNo in URL path" }, { status: 400 });
+  }
 
   const urlObj = new URL(request.url);
   if (urlObj.searchParams.get("test") === "1") {
@@ -13,7 +15,6 @@ export async function GET(request: Request, { params }: { params: { trainNo?: st
   const key = process.env.RAPIDAPI_KEY;
   const host = process.env.RAPIDAPI_HOST ?? "indian-railway-irctc.p.rapidapi.com";
 
-  // If key not set, return informative response so you can confirm route exists
   if (!key) {
     return NextResponse.json({
       ok: true,
