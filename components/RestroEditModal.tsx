@@ -222,6 +222,7 @@ export default function RestroEditModal({
     setNotification(null);
   }, []);
 
+  // ---- FIXED defaultPatch: safe typing + robust parsing of non-json responses
   async function defaultPatch(payload: any) {
     try {
       const code =
@@ -234,8 +235,9 @@ export default function RestroEditModal({
         body: JSON.stringify(payload),
       });
 
+      // read text first (safe for non-JSON responses)
       const text = await res.text().catch(() => "");
-      let json = null;
+      let json: any = null;
       try {
         json = text ? JSON.parse(text) : null;
       } catch {
@@ -243,7 +245,11 @@ export default function RestroEditModal({
       }
 
       if (!res.ok) {
-        throw new Error((json?.error?.message ?? json?.error ?? text) || `Update failed (${res.status})`);
+        const errMsg =
+          (json && (json.error?.message ?? json.message ?? json.error)) ||
+          text ||
+          `Update failed (${res.status})`;
+        throw new Error(String(errMsg));
       }
 
       return { ok: true, row: json?.row ?? json?.data ?? json ?? null };
