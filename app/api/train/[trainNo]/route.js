@@ -1,80 +1,63 @@
 // app/api/train/[trainNo]/route.js
 import { NextResponse } from "next/server";
 
-export async function GET(request, { params }) {
-  const trainNo = params && params.trainNo;
-  if (!trainNo) {
-    return NextResponse.json({ ok: false, error: "Provide trainNo in URL path" }, { status: 400 });
-  }
+function fillTemplate(tpl, trainNo, date) {
+  return tpl
+    .replaceAll("{trainNo}", encodeURIComponent(String(trainNo)))
+    .replaceAll("{train_number}", encodeURIComponent(String(trainNo)))
+    .replaceAll("{date}", encodeURIComponent(String(date ?? "")));
+}
 
-  // quick smoke test: add ?test=1 to URL to verify route without external call
+export async function GET(request, { params }) {
+  const trainNo = params?.trainNo;
+  if (!trainNo) return NextResponse.json({ ok: false, error: "Provide trainNo in URL path" }, { status: 400 });
+
+  // quick smoke test
   try {
-    const urlObj = new URL(request.url);
-    if (urlObj.searchParams.get("test") === "1") {
-      return NextResponse.json({ ok: true, msg: "route working (app router)", trainNo: String(trainNo) });
+    const u = new URL(request.url);
+    if (u.searchParams.get("test") === "1") {
+      return NextResponse.json({ ok: true, msg: "route working", trainNo: String(trainNo) });
     }
-  } catch (e) {
-    // ignore
-  }
+  } catch (e) {}
 
   const key = process.env.RAPIDAPI_KEY;
-  const host = process.env.RAPIDAPI_HOST || "";
+  const host = process.env.RAPIDAPI_HOST;
+  const tpl = process.env.RAPIDAPI_PATH_TEMPLATE || "/api/v1/train/info?train_number={trainNo}";
 
   if (!key || !host) {
-    return NextResponse.json({
-      ok: false,
-      error: "RAPIDAPI_KEY or RAPIDAPI_HOST not configured in environment",
-      hint: "Set RAPIDAPI_KEY and RAPIDAPI_HOST in Vercel (or .env for local)."
-    }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "RAPIDAPI_KEY or RAPIDAPI_HOST not set" }, { status: 500 });
   }
 
-  // candidate endpoint paths (try common variants)
-  const candidatePaths = [
-    "/api/v1/train/info?train_number=",
-    "/api/v1/train/info?train_no=",
-    "/api/v1/train/info?trainNo=",
-    "/api/v1/train/info?train=",
-    "/api/v1/train?train_number=",
-    "/api/train/info?train_number=",
-    "/train/info?train_number=",
-    "/train/info?train="
-  ];
+  // allow client to pass date param for live-status: ?date=2025-11-09
+  let dateFromClient = null;
+  try {
+    const ru = new URL(request.url);
+    dateFromClient = ru.searchParams.get("date");
+  } catch {}
 
-  const tried = [];
+  const path = fillTemplate(tpl, trainNo, dateFromClient);
+  const target = `https://${host}${path}`;
 
-  for (const base of candidatePaths) {
-    const target = `https://${host}${base}${encodeURIComponent(String(trainNo))}`;
-    try {
-      const upstream = await fetch(target, {
-        method: "GET",
-        headers: {
-          "x-rapidapi-key": key,
-          "x-rapidapi-host": host,
-          "Accept": "application/json, text/*"
-        }
-      });
-
-      const status = upstream.status;
-      const text = await upstream.text().catch(() => "");
-      let json = null;
-      try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
-
-      tried.push({ url: target, status, ok: upstream.ok, body: json ?? text });
-
-      if (upstream.ok) {
-        if (json !== null) return NextResponse.json(json, { status });
-        return new Response(text, { status, headers: { "content-type": "text/plain; charset=utf-8" }});
+  try {
+    const upstream = await fetch(target, {
+      method: "GET",
+      headers: {
+        "x-rapidapi-key": key,
+        "x-rapidapi-host": host,
+        "Accept": "application/json,text/*"
       }
-      // otherwise try next candidate
-    } catch (err) {
-      tried.push({ url: target, error: String(err) });
-    }
-  }
+    });
 
-  return NextResponse.json({
-    ok: false,
-    error: "All candidate endpoints failed. Check RAPIDAPI host/path or subscription.",
-    tried,
-    hint: "Open the API docs on RapidAPI and confirm exact path & param name, or paste 'tried' here."
-  }, { status: 502 });
+    const status = upstream.status;
+    const text = await upstream.text().catch(() => "");
+
+    try {
+      const json = text ? JSON.parse(text) : null;
+      return NextResponse.json(json, { status });
+    } catch {
+      return new Response(text, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
+    }
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: "Proxy failed", details: String(err) }, { status: 500 });
+  }
 }
