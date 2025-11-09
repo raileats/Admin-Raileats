@@ -1,61 +1,72 @@
-// app/api/train/[trainNo]/route.js
+// app/api/train/[trainNo]/route.ts
 import { NextResponse } from "next/server";
 
-function fillTemplate(tpl, trainNo, date) {
-  return tpl
-    .replaceAll("{trainNo}", encodeURIComponent(String(trainNo)))
-    .replaceAll("{train_number}", encodeURIComponent(String(trainNo)))
-    .replaceAll("{date}", encodeURIComponent(String(date ?? "")));
-}
+type Params = { params?: { trainNo?: string } };
 
-export async function GET(request, { params }) {
+export async function GET(request: Request, { params }: Params) {
   const trainNo = params?.trainNo;
-  if (!trainNo) return NextResponse.json({ ok: false, error: "Provide trainNo in URL path" }, { status: 400 });
-
-  // quick smoke test
-  try {
-    const u = new URL(request.url);
-    if (u.searchParams.get("test") === "1") {
-      return NextResponse.json({ ok: true, msg: "route working", trainNo: String(trainNo) });
-    }
-  } catch (e) {}
-
-  const key = process.env.RAPIDAPI_KEY;
-  const host = process.env.RAPIDAPI_HOST;
-  const tpl = process.env.RAPIDAPI_PATH_TEMPLATE || "/api/v1/train/info?train_number={trainNo}";
-
-  if (!key || !host) {
-    return NextResponse.json({ ok: false, error: "RAPIDAPI_KEY or RAPIDAPI_HOST not set" }, { status: 500 });
+  if (!trainNo) {
+    return NextResponse.json({ ok: false, error: "Provide trainNo in URL path" }, { status: 400 });
   }
 
-  // allow client to pass date param for live-status: ?date=2025-11-09
-  let dateFromClient = null;
-  try {
-    const ru = new URL(request.url);
-    dateFromClient = ru.searchParams.get("date");
-  } catch {}
+  // Quick local test
+  const urlObj = new URL(request.url);
+  if (urlObj.searchParams.get("test") === "1") {
+    return NextResponse.json({ ok: true, msg: "route working (app router)", trainNo: String(trainNo) });
+  }
 
-  const path = fillTemplate(tpl, trainNo, dateFromClient);
-  const target = `https://${host}${path}`;
+  const key = process.env.RAPIDAPI_KEY;
+  const host = process.env.RAPIDAPI_HOST ?? "indian-railway-irctc.p.rapidapi.com";
+
+  // Decide which upstream path to call:
+  // - If caller provided departure_date or date -> use the 'status' endpoint (needs date param)
+  // - Otherwise use the 'info' endpoint which just wants train_number
+  const departureDate = urlObj.searchParams.get("departure_date") ?? urlObj.searchParams.get("date");
+  let targetUrl: string;
+
+  if (departureDate) {
+    // Use the endpoint pattern seen in playground: /api/trains/v1/train/status
+    // We forward all query params present in the incoming request but ensure train_number is present.
+    const q = new URLSearchParams(urlObj.searchParams as any);
+    q.set("train_number", String(trainNo));
+    targetUrl = `https://${host}/api/trains/v1/train/status?${q.toString()}`;
+  } else {
+    // Use the info endpoint: /api/v1/train/info?train_number=...
+    const q = new URLSearchParams();
+    q.set("train_number", String(trainNo));
+    // If caller passed additional query params, forward the most common ones
+    // (but keep this simple: info endpoint typically just needs train_number)
+    targetUrl = `https://${host}/api/v1/train/info?${q.toString()}`;
+  }
+
+  if (!key) {
+    return NextResponse.json({
+      ok: true,
+      info: "Route exists. RAPIDAPI_KEY not set in environment — set it in Vercel to enable proxy.",
+      try: { testHint: "Add ?test=1 to quickly test", target: targetUrl },
+    });
+  }
 
   try {
-    const upstream = await fetch(target, {
+    const upstream = await fetch(targetUrl, {
       method: "GET",
       headers: {
         "x-rapidapi-key": key,
         "x-rapidapi-host": host,
-        "Accept": "application/json,text/*"
-      }
+        // You may add Accept or User-Agent if needed
+      },
     });
 
-    const status = upstream.status;
-    const text = await upstream.text().catch(() => "");
-
+    const text = await upstream.text();
+    // try parse JSON, otherwise forward raw text
     try {
       const json = text ? JSON.parse(text) : null;
-      return NextResponse.json(json, { status });
+      return NextResponse.json(json, { status: upstream.ok ? 200 : upstream.status });
     } catch {
-      return new Response(text, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
+      return new Response(text, {
+        status: upstream.ok ? 200 : upstream.status,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
     }
   } catch (err) {
     return NextResponse.json({ ok: false, error: "Proxy failed", details: String(err) }, { status: 500 });
