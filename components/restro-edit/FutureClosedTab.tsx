@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import FutureClosedFormModal from "./FutureClosedFormModal";
 
 type Row = {
@@ -27,7 +27,10 @@ export default function FutureClosedTab({ restroCode }: Props) {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/restros/${encodeURIComponent(codeStr)}/holidays`, { method: "GET" });
+      const res = await fetch(
+        `/api/restros/${encodeURIComponent(codeStr)}/holidays`,
+        { method: "GET" }
+      );
       const json = await res.json();
       setRows(Array.isArray(json?.rows) ? json.rows : []);
     } catch (e) {
@@ -37,7 +40,9 @@ export default function FutureClosedTab({ restroCode }: Props) {
     }
   };
 
-  useEffect(() => { load(); /* on mount */ }, [codeStr]);
+  useEffect(() => {
+    load(); /* on mount */
+  }, [codeStr]);
 
   const statusOf = (r: Row) => {
     if (r.deleted_at) return "Deleted";
@@ -52,11 +57,14 @@ export default function FutureClosedTab({ restroCode }: Props) {
   const doDelete = async (id: number) => {
     if (!confirm("Delete this holiday?")) return;
     try {
-      const res = await fetch(`/api/restros/${encodeURIComponent(codeStr)}/holidays`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
+      const res = await fetch(
+        `/api/restros/${encodeURIComponent(codeStr)}/holidays`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        }
+      );
       const json = await res.json();
       if (!json?.ok) throw new Error(json?.error || "Delete failed");
       await load(); // refresh list immediately
@@ -65,17 +73,26 @@ export default function FutureClosedTab({ restroCode }: Props) {
     }
   };
 
-  const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString() : "—");
+  const fmt = (iso?: string) =>
+    iso ? new Date(iso).toLocaleString() : "—";
 
   return (
     <div className="px-4">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Future Closed</h3>
-          <p className="text-sm text-gray-500">Schedule restaurant holiday/closure windows.</p>
+          <p className="text-sm text-gray-500">
+            Schedule restaurant holiday/closure windows.
+          </p>
         </div>
+
+        {/* 🔴 FIXED BUTTON */}
         <button
-          onClick={() => setOpen(true)}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault(); // stop parent form submit
+            setOpen(true);
+          }}
           className="rounded-md bg-orange-600 px-4 py-2 text-white"
         >
           Add New Holiday
@@ -95,16 +112,25 @@ export default function FutureClosedTab({ restroCode }: Props) {
         {loading ? (
           <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
         ) : rows.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-gray-600">No holidays yet.</div>
+          <div className="px-4 py-6 text-sm text-gray-600">
+            No holidays yet.
+          </div>
         ) : (
           rows.map((r) => {
             const st = statusOf(r);
             return (
-              <div key={r.id} className="grid grid-cols-6 border-t px-4 py-3 text-sm">
+              <div
+                key={r.id}
+                className="grid grid-cols-6 border-t px-4 py-3 text-sm"
+              >
                 <div>{fmt(r.start_at)}</div>
                 <div>{fmt(r.end_at)}</div>
-                <div className="truncate">{r.comment || "—"}</div>
-                <div className="truncate">{r.created_by_name || r.created_by_id || "—"}</div>
+                <div className="truncate">
+                  {r.comment || "—"}
+                </div>
+                <div className="truncate">
+                  {r.created_by_name || r.created_by_id || "—"}
+                </div>
                 <div className="text-right">
                   <span
                     className={
@@ -122,7 +148,11 @@ export default function FutureClosedTab({ restroCode }: Props) {
                 </div>
                 <div className="text-right">
                   {!r.deleted_at && (
-                    <button onClick={() => doDelete(r.id)} className="rounded border px-2 py-1 text-xs">
+                    <button
+                      type="button" // also prevent submit here
+                      onClick={() => doDelete(r.id)}
+                      className="rounded border px-2 py-1 text-xs"
+                    >
                       Delete
                     </button>
                   )}
@@ -139,7 +169,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
-          load(); // <— refresh without page reload
+          load(); // refresh without page reload
         }}
       />
     </div>
