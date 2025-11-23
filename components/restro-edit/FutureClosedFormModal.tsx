@@ -30,7 +30,9 @@ export default function FutureClosedFormModal({
       setSaving(true);
       setErr(null);
 
-      if (!start || !end) throw new Error("Please select start & end date/time.");
+      if (!start || !end) {
+        throw new Error("Please select start & end date/time.");
+      }
 
       const payload = {
         start_at: new Date(start).toISOString(),
@@ -47,7 +49,9 @@ export default function FutureClosedFormModal({
           body: JSON.stringify(payload),
         }
       );
-      const json = await res.json().catch(() => ({}));
+
+      const json = await res.json().catch(() => ({} as any));
+
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || `Save failed (${res.status})`);
       }
@@ -62,15 +66,25 @@ export default function FutureClosedFormModal({
     }
   };
 
+  const handleBackdropClick = () => {
+    if (!saving) onClose();
+  };
+
+  const stopPropagation: React.MouseEventHandler<HTMLDivElement> = (e) => {
+    e.stopPropagation();
+  };
+
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/40"
-        onClick={() => !saving && onClose()}
-        aria-label="Close"
-      />
-      <div className="relative z-10 w-[820px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={handleBackdropClick} // click outside dialog
+    >
+      <div
+        className="relative z-10 w-[820px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl"
+        onClick={stopPropagation} // clicks inside dialog won't close
+      >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold">Add New Holiday</h2>
           <button
@@ -116,14 +130,19 @@ export default function FutureClosedFormModal({
         {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
-          <button type="button" disabled={saving} onClick={onClose} className="rounded-md border px-4 py-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onClose}
+            className="rounded-md border px-4 py-2"
+          >
             Cancel
           </button>
           <button
             type="button"
             disabled={saving}
             onClick={save}
-            className="rounded-md bg-blue-600 px-4 py-2 text-white"
+            className="rounded-md bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save"}
           </button>
