@@ -25,6 +25,10 @@ export default function FutureClosedFormModal({
 
   if (!open) return null;
 
+  const handleClose = () => {
+    if (!saving) onClose();
+  };
+
   const save = async () => {
     try {
       setSaving(true);
@@ -57,7 +61,7 @@ export default function FutureClosedFormModal({
       }
 
       onSaved();
-      onClose();
+      handleClose();
     } catch (e: any) {
       console.error("holiday save error:", e);
       setErr(e?.message ?? "Failed to save");
@@ -66,31 +70,22 @@ export default function FutureClosedFormModal({
     }
   };
 
-  const handleBackdropClick = () => {
-    if (!saving) onClose();
-  };
-
-  const stopPropagation: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    e.stopPropagation();
-  };
-
   return (
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={handleBackdropClick} // click outside dialog
+      className="fixed inset-0 z-50 flex items-center justify-center"
     >
-      <div
-        className="relative z-10 w-[820px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl"
-        onClick={stopPropagation} // clicks inside dialog won't close
-      >
+      {/* backdrop only visual, no click handler */}
+      <div className="absolute inset-0 bg-black/40" />
+
+      <div className="relative z-10 w-[820px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold">Add New Holiday</h2>
           <button
             type="button"
             className="rounded-md border px-3 py-1 text-sm"
-            onClick={() => !saving && onClose()}
+            onClick={handleClose}
           >
             ✕
           </button>
@@ -133,7 +128,7 @@ export default function FutureClosedFormModal({
           <button
             type="button"
             disabled={saving}
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-md border px-4 py-2"
           >
             Cancel
