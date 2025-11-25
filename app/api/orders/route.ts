@@ -113,6 +113,7 @@ function timeHM() {
   return `${h}:${m}`;
 }
 
+/* ========= POST: create new order from raileats.in ========= */
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
@@ -197,7 +198,7 @@ export async function POST(req: Request) {
       PlatformCharge: pricing.platform_charge ?? 0,
       TotalAmount: pricing.total,
       PaymentMode: pricing.payment_mode ?? "COD",
-      Status: "Booked",
+      Status: "booked", // 🔹 TabKey ke hisaab se lowercase
       JourneyPayload: body.meta ?? null,
       CreatedAt: nowIso,
       UpdatedAt: nowIso,
@@ -235,11 +236,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "order_items_insert_failed" }, { status: 500 });
     }
 
-    // 6) OrderStatusHistory me initial "Booked" row
+    // 6) OrderStatusHistory me initial "booked" row
     const { error: histErr } = await supa.from("OrderStatusHistory").insert({
       OrderId: orderId,
       OldStatus: null,
-      NewStatus: "Booked",
+      NewStatus: "booked",
       Note: "Order created",
       ChangedBy: "system",
       ChangedAt: nowIso,
@@ -253,6 +254,72 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, order_id: orderId });
   } catch (err) {
     console.error("orders.POST error", err);
+    return NextResponse.json({ error: "server_error" }, { status: 500 });
+  }
+}
+
+/* ========= GET: fetch orders for Admin UI ========= */
+
+export async function GET(req: Request) {
+  try {
+    const supa = serviceClient;
+    const { searchParams } = new URL(req.url);
+    const statusFilter = searchParams.get("status"); // e.g. "booked", "inkitchen", ...
+
+    let query = supa
+      .from("Orders")
+      .select(
+        `
+        OrderId,
+        RestroCode,
+        RestroName,
+        StationCode,
+        StationName,
+        DeliveryDate,
+        DeliveryTime,
+        TrainNumber,
+        Coach,
+        Seat,
+        CustomerName,
+        CustomerMobile,
+        TotalAmount,
+        Status
+      `
+      )
+      .order("CreatedAt", { ascending: false });
+
+    if (statusFilter) {
+      query = query.eq("Status", statusFilter);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Orders GET error", error);
+      return NextResponse.json({ error: "orders_fetch_failed" }, { status: 500 });
+    }
+
+    const orders = (data || []).map((row: any) => ({
+      id: row.OrderId as string,
+      status: (row.Status || "booked") as string,
+      restroCode: row.RestroCode,
+      restroName: row.RestroName,
+      stationCode: row.StationCode,
+      stationName: row.StationName,
+      deliveryDate: row.DeliveryDate, // "YYYY-MM-DD"
+      deliveryTime: row.DeliveryTime, // "HH:MM" / "HH:MM:SS"
+      trainNumber: row.TrainNumber,
+      coach: row.Coach,
+      seat: row.Seat,
+      customerName: row.CustomerName,
+      customerMobile: row.CustomerMobile,
+      totalAmount: Number(row.TotalAmount ?? 0),
+      history: [] as any[], // baad me OrderStatusHistory se bhi bhar sakte hain
+    }));
+
+    return NextResponse.json({ ok: true, orders });
+  } catch (err) {
+    console.error("orders.GET error", err);
     return NextResponse.json({ error: "server_error" }, { status: 500 });
   }
 }
