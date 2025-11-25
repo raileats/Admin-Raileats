@@ -160,7 +160,7 @@ export default function AdminOrdersPage() {
   // Derived orders for active tab
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
 
-  /* ---------- Helpers: move to next status (quick, local only) ---------- */
+  /* ---------- Helpers: move to next status (API + local) ---------- */
   function moveOrderToNext(orderId: string) {
     const current = allOrders[activeTab] ?? [];
     const idx = current.findIndex((o) => o.id === orderId);
@@ -172,32 +172,57 @@ export default function AdminOrdersPage() {
       return;
     }
 
-    // TODO: In production, call API to persist status change.
-    const updated: Order = {
-      ...order,
-      status: mapping.next!,
-      history: [
-        ...order.history,
-        {
-          at: new Date().toISOString(),
-          by: "admin",
-          note: mapping.actionLabel,
-          status: mapping.next!,
-        },
-      ],
-    };
+    const nextStatus = mapping.next;
 
-    setAllOrders((prev) => {
-      const copy = { ...prev };
-      // remove from current tab
-      copy[activeTab] = (copy[activeTab] ?? []).filter((o) => o.id !== orderId);
-      // add to target tab list locally (so user can switch tab and see it)
-      copy[mapping.next!] = [updated, ...(copy[mapping.next!] ?? [])];
-      return copy;
-    });
+    // 🔹 API call to update status in Supabase
+    (async () => {
+      try {
+        const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            newStatus: nextStatus,
+            remarks: mapping.actionLabel,
+            changedBy: "admin",
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json?.ok) {
+          console.error("status change failed", json);
+          alert("Failed to change status");
+          return;
+        }
+
+        const updated: Order = {
+          ...order,
+          status: nextStatus!,
+          history: [
+            ...order.history,
+            {
+              at: new Date().toISOString(),
+              by: "admin",
+              note: mapping.actionLabel,
+              status: nextStatus!,
+            },
+          ],
+        };
+
+        setAllOrders((prev) => {
+          const copy = { ...prev };
+          // remove from current tab
+          copy[activeTab] = (copy[activeTab] ?? []).filter((o) => o.id !== orderId);
+          // add to target tab list locally
+          copy[nextStatus!] = [updated, ...(copy[nextStatus!] ?? [])];
+          return copy;
+        });
+      } catch (e) {
+        console.error("status change error", e);
+        alert("Failed to change status (network error)");
+      }
+    })();
   }
 
-  /* ---------- Submit marking (dropdown) ---------- */
+  /* ---------- Submit marking (dropdown + API) ---------- */
   function submitMark(order: Order) {
     const selection = marking[order.id];
     if (!selection || !selection.status) {
@@ -205,42 +230,66 @@ export default function AdminOrdersPage() {
       return;
     }
     const target = selection.status as TabKey;
+    const remarks = selection.remarks || `Marked ${target}`;
 
-    // TODO: In production, call API: POST /api/orders/:id/mark { newStatus, remarks }
-    const updated: Order = {
-      ...order,
-      status: target,
-      history: [
-        ...order.history,
-        {
-          at: new Date().toISOString(),
-          by: "admin",
-          note: selection.remarks || `Marked ${target}`,
+    // 🔹 API call to update status in Supabase
+    (async () => {
+      try {
+        const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            newStatus: target,
+            remarks,
+            changedBy: "admin",
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json?.ok) {
+          console.error("mark submit failed", json);
+          alert("Failed to change status");
+          return;
+        }
+
+        const updated: Order = {
+          ...order,
           status: target,
-        },
-      ],
-    };
+          history: [
+            ...order.history,
+            {
+              at: new Date().toISOString(),
+              by: "admin",
+              note: remarks,
+              status: target,
+            },
+          ],
+        };
 
-    setAllOrders((prev) => {
-      const copy: Record<TabKey, Order[]> = { ...prev } as any;
-      // remove from all tabs
-      (Object.keys(copy) as TabKey[]).forEach((k) => {
-        copy[k] = (copy[k] ?? []).filter((o) => o.id !== order.id);
-      });
-      // add into target tab
-      copy[target] = [updated, ...(copy[target] ?? [])];
-      return copy;
-    });
+        setAllOrders((prev) => {
+          const copy: Record<TabKey, Order[]> = { ...prev } as any;
+          // remove from all tabs
+          (Object.keys(copy) as TabKey[]).forEach((k) => {
+            copy[k] = (copy[k] ?? []).filter((o) => o.id !== order.id);
+          });
+          // add into target tab
+          copy[target] = [updated, ...(copy[target] ?? [])];
+          return copy;
+        });
 
-    // cleanup selection
-    setMarking((prev) => {
-      const cp = { ...prev };
-      delete cp[order.id];
-      return cp;
-    });
+        // cleanup selection
+        setMarking((prev) => {
+          const cp = { ...prev };
+          delete cp[order.id];
+          return cp;
+        });
 
-    // switch to target tab
-    setActiveTab(target);
+        // switch to target tab
+        setActiveTab(target);
+      } catch (e) {
+        console.error("mark submit error", e);
+        alert("Failed to change status (network error)");
+      }
+    })();
   }
 
   /* ---------- Filtering logic (based on selected search type + inputs) ---------- */
