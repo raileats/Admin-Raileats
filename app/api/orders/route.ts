@@ -3,17 +3,37 @@ import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabaseServer";
 
 /**
- * Expected payload from raileats.in CheckoutClient:
+ * Expected payload from raileats.in CheckoutClient (approx):
  *
  * {
- *   restro_code: "1005",
- *   customer: { full_name, phone, pnr },
- *   delivery: { train_no, coach, seat, note },
- *   pricing: { subtotal, delivery_fee, total, currency },
- *   items: [
- *     { item_id, name, qty, base_price, line_total }
- *   ],
- *   meta: { ... }
+ *   restro_code: number | string;              // RestroCode
+ *   customer: {
+ *     full_name: string;
+ *     phone: string;
+ *   };
+ *   delivery: {
+ *     train_no: string;
+ *     coach: string;
+ *     seat: string;
+ *     delivery_date?: string;                 // "YYYY-MM-DD" (optional)
+ *     delivery_time?: string;                 // "HH:MM" (optional)
+ *     note?: string | null;
+ *   };
+ *   pricing: {
+ *     subtotal: number;
+ *     gst?: number;
+ *     platform_charge?: number;
+ *     total: number;
+ *     payment_mode?: "COD" | "ONLINE";
+ *   };
+ *   items: {
+ *     item_id: number;
+ *     name: string;
+ *     qty: number;
+ *     base_price: number;
+ *     line_total: number;
+ *   }[];
+ *   meta?: any;
  * }
  */
 
@@ -22,19 +42,21 @@ type Payload = {
   customer: {
     full_name: string;
     phone: string;
-    pnr?: string | null;
   };
   delivery: {
     train_no: string;
     coach: string;
     seat: string;
+    delivery_date?: string;
+    delivery_time?: string;
     note?: string | null;
   };
   pricing: {
     subtotal: number;
-    delivery_fee?: number | null;
+    gst?: number;
+    platform_charge?: number;
     total: number;
-    currency?: string;
+    payment_mode?: "COD" | "ONLINE";
   };
   items: {
     item_id: number;
@@ -56,7 +78,7 @@ type RestroMasterRow = {
 type MenuRow = {
   id: number;
   restro_code: number;
-  item_code: string | null;
+  item_code: number | null;
   item_name: string;
   item_description?: string | null;
   item_category?: string | null;
@@ -110,15 +132,16 @@ export async function POST(req: Request) {
     }
 
     const supa = serviceClient;
-
     const restroCodeNum = Number(body.restro_code);
 
-    // 1) Restro master se details lao
-    const { data: restro, error: restroErr } = await supa
-      .from<RestroMasterRow>("RestroMaster")
+    // 1) RestroMaster se outlet + station details lao
+    const { data: restroData, error: restroErr } = await supa
+      .from("RestroMaster")
       .select("RestroCode, RestroName, StationCode, StationName")
       .eq("RestroCode", restroCodeNum)
       .maybeSingle();
+
+    const restro = (restroData || null) as RestroMasterRow | null;
 
     if (restroErr) {
       console.error("RestroMaster error", restroErr);
@@ -128,10 +151,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "restro_not_found" }, { status: 400 });
     }
 
-    // 2) Menu se item details lao (so that OrderItems me full info save ho)
+    // 2) Menu rows lao, taaki OrderItems me full info aa sake
     const itemIds = body.items.map((i) => i.item_id);
-    const { data: menuRows, error: menuErr } = await supa
-      .from<MenuRow>("RestroMenuItems")
+    const { data: menuRowsData, error: menuErr } = await supa
+      .from("RestroMenuItems")
       .select(
         "id, restro_code, item_code, item_name, item_description, item_category, item_cuisine, menu_type, base_price, gst_percent, selling_price"
       )
@@ -142,20 +165,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "menu_lookup_failed" }, { status: 500 });
     }
 
+    const menuRows = (menuRowsData || []) as MenuRow[];
     const menuById = new Map<number, MenuRow>();
-    (menuRows || []).forEach((row) => menuById.set(row.id, row));
+    menuRows.forEach((row) => menuById.set(row.id, row));
 
-    // 3) OrderId generate karo
+    // 3) OrderId + time generate
     const orderId = generateOrderId();
-    const now = new Date().toISOString();
-    const deliveryDate = todayYMD(); // abhi ke liye aaj ki date
-    const deliveryTime = timeHM();   // abhi ke liye current time
+    const nowIso = new Date().toISOString();
 
     const { customer, delivery, pricing } = body;
 
-    // 4) Orders table insert
+    const deliveryDate = delivery.delivery_date || todayYMD();
+    const deliveryTime = delivery.delivery_time || timeHM();
+
+    // 4) Orders table insert (Supabase "Orders" with PascalCase columns)
     const { error: orderInsertErr } = await supa.from("Orders").insert({
-      // ⚠️ yahan column naam bilkul Supabase table jaise rakho
       OrderId: orderId,
       RestroCode: restro.RestroCode,
       RestroName: restro.RestroName,
@@ -163,19 +187,20 @@ export async function POST(req: Request) {
       StationName: restro.StationName,
       DeliveryDate: deliveryDate,
       DeliveryTime: deliveryTime,
-      TrainNo: delivery.train_no,
+      TrainNumber: delivery.train_no,
       Coach: delivery.coach,
       Seat: delivery.seat,
       CustomerName: customer.full_name,
       CustomerMobile: customer.phone,
-      PNR: customer.pnr || null,
       SubTotal: pricing.subtotal,
-      DeliveryFee: pricing.delivery_fee ?? 0,
+      GSTAmount: pricing.gst ?? 0,
+      PlatformCharge: pricing.platform_charge ?? 0,
       TotalAmount: pricing.total,
-      PaymentMode: "COD", // abhi ke liye saare COD
-      CurrentStatus: "booked",
-      CreatedAt: now,
-      UpdatedAt: now,
+      PaymentMode: pricing.payment_mode ?? "COD",
+      Status: "Booked",
+      JourneyPayload: body.meta ?? null,
+      CreatedAt: nowIso,
+      UpdatedAt: nowIso,
     });
 
     if (orderInsertErr) {
@@ -187,10 +212,9 @@ export async function POST(req: Request) {
     const orderItemsPayload = body.items.map((it) => {
       const row = menuById.get(it.item_id);
       return {
-        // ⚠️ columns ko apne OrderItems table ke according check kar lena
         OrderId: orderId,
         RestroCode: restro.RestroCode,
-        ItemCode: row?.item_code ?? String(it.item_id),
+        ItemCode: row?.item_code ?? it.item_id,
         ItemName: row?.item_name ?? it.name,
         ItemDescription: row?.item_description ?? null,
         ItemCategory: row?.item_category ?? null,
@@ -211,22 +235,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "order_items_insert_failed" }, { status: 500 });
     }
 
-    // 6) Status history me initial row "booked"
+    // 6) OrderStatusHistory me initial "Booked" row
     const { error: histErr } = await supa.from("OrderStatusHistory").insert({
       OrderId: orderId,
       OldStatus: null,
-      NewStatus: "booked",
+      NewStatus: "Booked",
       Note: "Order created",
       ChangedBy: "system",
-      ChangedAt: now,
+      ChangedAt: nowIso,
     });
 
     if (histErr) {
       console.error("OrderStatusHistory insert error", histErr);
-      // yahan error aayega to bhi order ko fail nahi kar rahe
+      // history fail ho jaye to bhi order ko fail nahi kar rahe
     }
 
-    // final response jo CheckoutClient expect kar raha hai
     return NextResponse.json({ ok: true, order_id: orderId });
   } catch (err) {
     console.error("orders.POST error", err);
