@@ -1,6 +1,6 @@
 // app/api/admin/trains/route.ts
 import { NextResponse } from "next/server";
-import { serviceClient } from "../../../lib/supabaseServer";
+import { serviceClient } from "../../../../lib/supabaseServer";
 
 type AdminTrainListRow = {
   trainId: number;
