@@ -1,4 +1,4 @@
-// app/admin/trains/[trainNumber]/page.tsx
+// app/admin/trains/[trainId]/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -45,8 +45,8 @@ type ApiResponse = {
 
 export default function AdminTrainEditPage() {
   const router = useRouter();
-  const params = useParams() as { trainNumber?: string };
-  const trainNumberParam = params?.trainNumber;
+  const params = useParams() as { trainId?: string };
+  const trainIdParam = params?.trainId;
 
   const [head, setHead] = useState<TrainHead | null>(null);
   const [routeRows, setRouteRows] = useState<TrainRouteRow[]>([]);
@@ -54,9 +54,9 @@ export default function AdminTrainEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>("");
 
-  // ─── Load train by TRAIN NUMBER ──────────────────────────────
+  // ------- LOAD BY trainId ---------
   useEffect(() => {
-    if (!trainNumberParam) return;
+    if (!trainIdParam) return;
 
     async function fetchData() {
       try {
@@ -64,7 +64,7 @@ export default function AdminTrainEditPage() {
         setError("");
 
         const res = await fetch(
-          `/api/admin/trains/${encodeURIComponent(trainNumberParam)}`,
+          `/api/admin/trains/${encodeURIComponent(trainIdParam)}`,
           { cache: "no-store" },
         );
         const json: ApiResponse = await res.json();
@@ -90,9 +90,9 @@ export default function AdminTrainEditPage() {
     }
 
     fetchData();
-  }, [trainNumberParam]);
+  }, [trainIdParam]);
 
-  // ─── Simple helpers ──────────────────────────────────────────
+  // ------- HELPERS ---------
   function updateHead<K extends keyof TrainHead>(key: K, value: TrainHead[K]) {
     setHead((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
@@ -104,20 +104,20 @@ export default function AdminTrainEditPage() {
   ) {
     setRouteRows((prev) => {
       const copy = [...prev];
-      const row = { ...copy[index], [key]: value };
-      copy[index] = row;
+      copy[index] = { ...copy[index], [key]: value };
       return copy;
     });
   }
 
   async function onSave() {
-    if (!head) return;
+    if (!head || !trainIdParam) return;
+
     try {
       setSaving(true);
       setError("");
 
       const res = await fetch(
-        `/api/admin/trains/${encodeURIComponent(String(head.trainNumber ?? ""))}`,
+        `/api/admin/trains/${encodeURIComponent(trainIdParam)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -134,7 +134,6 @@ export default function AdminTrainEditPage() {
         setError("Failed to save changes.");
         return;
       }
-      // reload after save
       router.refresh();
     } catch (e) {
       console.error("save error", e);
@@ -144,8 +143,7 @@ export default function AdminTrainEditPage() {
     }
   }
 
-  /* ───────────────────── UI ───────────────────── */
-
+  // ------- UI ---------
   if (loading && !head) {
     return (
       <div className="page-root">
@@ -166,7 +164,7 @@ export default function AdminTrainEditPage() {
 
   return (
     <div className="page-root">
-      {/* Title (subtitle hata diya) */}
+      {/* top bar – subtitle hata diya */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-semibold">
@@ -193,23 +191,17 @@ export default function AdminTrainEditPage() {
       </div>
 
       {error && (
-        <p className="text-sm text-red-600 mb-3">
-          {error}
-        </p>
+        <p className="text-sm text-red-600 mb-3">{error}</p>
       )}
 
-      {/* Top form: Train details */}
+      {/* Train details */}
       <section className="bg-white border rounded p-4 mb-4">
         <h2 className="font-semibold mb-3">Train Details</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
           <div>
             <label className="text-xs text-gray-600 block mb-1">Train ID</label>
-            <input
-              className="input w-full"
-              value={head.trainId}
-              readOnly
-            />
+            <input className="input w-full" value={head.trainId} readOnly />
           </div>
           <div>
             <label className="text-xs text-gray-600 block mb-1">
@@ -235,11 +227,9 @@ export default function AdminTrainEditPage() {
             />
           </div>
 
-          {/* STATUS TOGGLE ─ slider style */}
+          {/* STATUS SLIDER */}
           <div>
-            <label className="text-xs text-gray-600 block mb-1">
-              Status
-            </label>
+            <label className="text-xs text-gray-600 block mb-1">Status</label>
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -308,7 +298,7 @@ export default function AdminTrainEditPage() {
         </div>
       </section>
 
-      {/* Route table */}
+      {/* Route table – saari rows editable */}
       <section className="bg-white border rounded p-4">
         <h2 className="font-semibold mb-3">Route (stations)</h2>
 
