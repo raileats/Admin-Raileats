@@ -1,9 +1,9 @@
+// app/api/admin/trains/[trainId]/route.ts
 import { NextResponse } from "next/server";
 import { serviceClient } from "../../../../../lib/supabaseServer";
 
-
 type TrainRouteRow = {
-  id?: number; // agar table me PK ho to
+  id?: number;
   trainId: number;
   trainNumber: number | null;
   trainName: string | null;
@@ -37,11 +37,10 @@ export async function GET(
       );
     }
 
+    // Again, select("*") to avoid column-name mismatch issues
     const { data, error } = await supa
       .from("TrainRoute")
-      .select(
-        "trainId, trainNumber, trainName, stationFrom, stationTo, runningDays, StnNumber, StationCode, StationName, Arrives, Departs, Stoptime, Distance, Platform, Route, Day, status, created_at, updated_at, id",
-      )
+      .select("*")
       .eq("trainId", trainIdNum)
       .order("StnNumber", { ascending: true });
 
@@ -61,20 +60,20 @@ export async function GET(
       );
     }
 
-    const head = rows[0];
+    const head: any = rows[0];
 
     return NextResponse.json({
       ok: true,
       train: {
         trainId: head.trainId,
-        trainNumber: head.trainNumber,
-        trainName: head.trainName,
-        stationFrom: head.stationFrom,
-        stationTo: head.stationTo,
-        runningDays: head.runningDays,
-        status: (head as any).status ?? null,
-        created_at: (head as any).created_at ?? null,
-        updated_at: (head as any).updated_at ?? null,
+        trainNumber: head.trainNumber ?? null,
+        trainName: head.trainName ?? null,
+        stationFrom: head.stationFrom ?? null,
+        stationTo: head.stationTo ?? null,
+        runningDays: head.runningDays ?? null,
+        status: head.status ?? null,
+        created_at: head.created_at ?? null,
+        updated_at: head.updated_at ?? null,
       },
       route: rows,
     });
@@ -147,7 +146,7 @@ export async function POST(
       );
     }
 
-    // 2) Upsert each route row (by id if available, else by trainId+StnNumber)
+    // 2) Upsert each route row (by id if available)
     const cleanedRoutes = route.map((r) => ({
       id: r.id ?? undefined,
       trainId: trainIdNum,
@@ -171,7 +170,7 @@ export async function POST(
     const { error: routeErr } = await supa
       .from("TrainRoute")
       .upsert(cleanedRoutes, {
-        onConflict: "id", // agar tumhaare table me alag PK ho to yahan change karna
+        onConflict: "id", // agar table me PK alag ho to yahan change karna
       });
 
     if (routeErr) {
