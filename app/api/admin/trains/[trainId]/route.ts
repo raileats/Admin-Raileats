@@ -1,4 +1,3 @@
-// app/api/admin/trains/[trainId]/route.ts
 import { NextResponse } from "next/server";
 import { serviceClient } from "../../../../../lib/supabaseServer";
 
@@ -22,26 +21,28 @@ type TrainRouteRow = {
   Day: number | null;
 };
 
+// 🚂 GET: load *all* route rows for this trainNumber
 export async function GET(
   req: Request,
-  ctx: { params: { trainId: string } },
+  ctx: { params: { trainId: string } }, // yaha param ka naam trainId hi rahega, but value = trainNumber
 ) {
   try {
     const supa = serviceClient;
-    const trainIdNum = Number(ctx.params.trainId);
 
-    if (!Number.isFinite(trainIdNum)) {
+    // URL se aane wali value ko trainNumber treat kar rahe hain
+    const trainNumberNum = Number(ctx.params.trainId);
+    if (!Number.isFinite(trainNumberNum)) {
       return NextResponse.json(
-        { ok: false, error: "invalid_train_id" },
+        { ok: false, error: "invalid_train_number" },
         { status: 400 },
       );
     }
 
-    // Again, select("*") to avoid column-name mismatch issues
+    // ⭐️ Ab trainNumber se saari rows laa rahe
     const { data, error } = await supa
       .from("TrainRoute")
       .select("*")
-      .eq("trainId", trainIdNum)
+      .eq("trainNumber", trainNumberNum)
       .order("StnNumber", { ascending: true });
 
     if (error) {
@@ -65,8 +66,9 @@ export async function GET(
     return NextResponse.json({
       ok: true,
       train: {
-        trainId: head.trainId,
-        trainNumber: head.trainNumber ?? null,
+        // trainId optional hai, first row se le liya
+        trainId: head.trainId ?? null,
+        trainNumber: head.trainNumber ?? trainNumberNum,
         trainName: head.trainName ?? null,
         stationFrom: head.stationFrom ?? null,
         stationTo: head.stationTo ?? null,
@@ -86,17 +88,18 @@ export async function GET(
   }
 }
 
-// 💾 Save back changes (basic example – full replace by trainId)
+// 💾 POST: save / upsert full route for this trainNumber
 export async function POST(
   req: Request,
-  ctx: { params: { trainId: string } },
+  ctx: { params: { trainId: string } }, // value = trainNumber
 ) {
   try {
     const supa = serviceClient;
-    const trainIdNum = Number(ctx.params.trainId);
-    if (!Number.isFinite(trainIdNum)) {
+
+    const trainNumberNum = Number(ctx.params.trainId);
+    if (!Number.isFinite(trainNumberNum)) {
       return NextResponse.json(
-        { ok: false, error: "invalid_train_id" },
+        { ok: false, error: "invalid_train_number" },
         { status: 400 },
       );
     }
@@ -121,10 +124,10 @@ export async function POST(
       route: TrainRouteRow[];
     };
 
-    // 1) Update common fields for this trainId (all rows)
+    // 1) Update common fields for this trainNumber (saari rows)
     const updatePayload: any = {
       trainName: train.trainName,
-      trainNumber: train.trainNumber,
+      trainNumber: trainNumberNum,
       stationFrom: train.stationFrom,
       stationTo: train.stationTo,
       runningDays: train.runningDays,
@@ -136,7 +139,7 @@ export async function POST(
     const { error: updErr } = await supa
       .from("TrainRoute")
       .update(updatePayload)
-      .eq("trainId", trainIdNum);
+      .eq("trainNumber", trainNumberNum);
 
     if (updErr) {
       console.error("admin train bulk update error", updErr);
@@ -146,15 +149,16 @@ export async function POST(
       );
     }
 
-    // 2) Upsert each route row (by id if available)
+    // 2) Upsert each route row (by id)
+    //    NOTE: yaha trainId column ko touch nahi kar rahe, jo DB me hai woh rahega
     const cleanedRoutes = route.map((r) => ({
       id: r.id ?? undefined,
-      trainId: trainIdNum,
-      trainNumber: r.trainNumber,
-      trainName: r.trainName,
-      stationFrom: r.stationFrom,
-      stationTo: r.stationTo,
-      runningDays: r.runningDays,
+      // trainId ko as-is chhod diya (agar hai to update se change nahi hoga)
+      trainNumber: trainNumberNum,
+      trainName: train.trainName,
+      stationFrom: train.stationFrom,
+      stationTo: train.stationTo,
+      runningDays: train.runningDays,
       StnNumber: r.StnNumber,
       StationCode: r.StationCode,
       StationName: r.StationName,
@@ -170,7 +174,7 @@ export async function POST(
     const { error: routeErr } = await supa
       .from("TrainRoute")
       .upsert(cleanedRoutes, {
-        onConflict: "id", // agar table me PK alag ho to yahan change karna
+        onConflict: "id",
       });
 
     if (routeErr) {
