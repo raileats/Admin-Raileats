@@ -21,28 +21,33 @@ type TrainRouteRow = {
   Day: number | null;
 };
 
-// 🚂 GET: load *all* route rows for this trainNumber
+//
+//  GET  → /api/admin/trains/[trainId]
+//  Yaha [trainId] actually TRAIN NUMBER hoga (e.g. 10001, 12716)
+//
 export async function GET(
   req: Request,
-  ctx: { params: { trainId: string } }, // yaha param ka naam trainId hi rahega, but value = trainNumber
+  ctx: { params: { trainId: string } },
 ) {
   try {
     const supa = serviceClient;
 
-    // URL se aane wali value ko trainNumber treat kar rahe hain
-    const trainNumberNum = Number(ctx.params.trainId);
-    if (!Number.isFinite(trainNumberNum)) {
+    const slug = (ctx.params.trainId || "").trim(); // URL ka part
+    if (!slug) {
       return NextResponse.json(
         { ok: false, error: "invalid_train_number" },
         { status: 400 },
       );
     }
 
-    // ⭐️ Ab trainNumber se saari rows laa rahe
+    // slug ko number ya string jaisa bhi ho, usi tarah filter ke liye use karenge
+    const num = Number(slug);
+    const trainNumberFilter = Number.isFinite(num) ? num : slug;
+
     const { data, error } = await supa
       .from("TrainRoute")
       .select("*")
-      .eq("trainNumber", trainNumberNum)
+      .eq("trainNumber", trainNumberFilter)
       .order("StnNumber", { ascending: true });
 
     if (error) {
@@ -66,9 +71,8 @@ export async function GET(
     return NextResponse.json({
       ok: true,
       train: {
-        // trainId optional hai, first row se le liya
         trainId: head.trainId ?? null,
-        trainNumber: head.trainNumber ?? trainNumberNum,
+        trainNumber: head.trainNumber ?? null,
         trainName: head.trainName ?? null,
         stationFrom: head.stationFrom ?? null,
         stationTo: head.stationTo ?? null,
@@ -88,21 +92,26 @@ export async function GET(
   }
 }
 
-// 💾 POST: save / upsert full route for this trainNumber
+//
+//  POST  → save changes for **given trainNumber**
+//
 export async function POST(
   req: Request,
-  ctx: { params: { trainId: string } }, // value = trainNumber
+  ctx: { params: { trainId: string } },
 ) {
   try {
     const supa = serviceClient;
 
-    const trainNumberNum = Number(ctx.params.trainId);
-    if (!Number.isFinite(trainNumberNum)) {
+    const slug = (ctx.params.trainId || "").trim();
+    if (!slug) {
       return NextResponse.json(
         { ok: false, error: "invalid_train_number" },
         { status: 400 },
       );
     }
+
+    const num = Number(slug);
+    const trainNumberFilter = Number.isFinite(num) ? num : slug;
 
     const body = await req.json().catch(() => null);
     if (!body || !body.train || !Array.isArray(body.route)) {
@@ -124,10 +133,10 @@ export async function POST(
       route: TrainRouteRow[];
     };
 
-    // 1) Update common fields for this trainNumber (saari rows)
+    // 1) Common fields update → saari rows jinke trainNumber = slug
     const updatePayload: any = {
       trainName: train.trainName,
-      trainNumber: trainNumberNum,
+      trainNumber: train.trainNumber,
       stationFrom: train.stationFrom,
       stationTo: train.stationTo,
       runningDays: train.runningDays,
@@ -139,7 +148,7 @@ export async function POST(
     const { error: updErr } = await supa
       .from("TrainRoute")
       .update(updatePayload)
-      .eq("trainNumber", trainNumberNum);
+      .eq("trainNumber", trainNumberFilter);
 
     if (updErr) {
       console.error("admin train bulk update error", updErr);
@@ -149,16 +158,15 @@ export async function POST(
       );
     }
 
-    // 2) Upsert each route row (by id)
-    //    NOTE: yaha trainId column ko touch nahi kar rahe, jo DB me hai woh rahega
+    // 2) Route rows upsert (id ke basis pe)
     const cleanedRoutes = route.map((r) => ({
       id: r.id ?? undefined,
-      // trainId ko as-is chhod diya (agar hai to update se change nahi hoga)
-      trainNumber: trainNumberNum,
-      trainName: train.trainName,
-      stationFrom: train.stationFrom,
-      stationTo: train.stationTo,
-      runningDays: train.runningDays,
+      trainId: r.trainId,
+      trainNumber: r.trainNumber,
+      trainName: r.trainName,
+      stationFrom: r.stationFrom,
+      stationTo: r.stationTo,
+      runningDays: r.runningDays,
       StnNumber: r.StnNumber,
       StationCode: r.StationCode,
       StationName: r.StationName,
