@@ -156,7 +156,7 @@ export default function AdminTrainsPage() {
                     {t.trainName ?? "-"}
                   </td>
 
-                  {/* NEW DATA FROM FIRST ROUTE ROW */}
+                  {/* DATA FROM FIRST ROUTE ROW */}
                   <td className="px-3 py-2 align-top">
                     {t.StnNumber ?? "-"}
                   </td>
@@ -169,7 +169,6 @@ export default function AdminTrainsPage() {
                   <td className="px-3 py-2 align-top">
                     {t.Stoptime ?? "-"}
                   </td>
-                  {/* /NEW */}
 
                   <td className="px-3 py-2 align-top">
                     {t.runningDays ?? "-"}
@@ -184,12 +183,18 @@ export default function AdminTrainsPage() {
                     {t.updated_at ? t.updated_at.slice(0, 10) : "-"}
                   </td>
                   <td className="px-3 py-2 align-top">
-                    <a
-                      href={`/admin/trains/${t.trainId}`}
-                      className="text-blue-600 hover:underline text-xs"
-                    >
-                      Edit
-                    </a>
+                    {t.trainNumber != null ? (
+                      <a
+                        href={`/admin/trains/${encodeURIComponent(
+                          String(t.trainNumber),
+                        )}`}
+                        className="text-blue-600 hover:underline text-xs"
+                      >
+                        Edit
+                      </a>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                 </tr>
               ))
