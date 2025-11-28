@@ -45,8 +45,12 @@ type ApiResponse = {
 
 export default function AdminTrainEditPage() {
   const router = useRouter();
-  const params = useParams() as { trainId?: string };
-  const trainIdParam = params?.trainId;
+  // params ko hamesha string bana diya
+  const rawParams = useParams() as { trainId?: string | string[] };
+  const trainIdParam =
+    Array.isArray(rawParams.trainId)
+      ? rawParams.trainId[0]
+      : rawParams.trainId || "";
 
   const [head, setHead] = useState<TrainHead | null>(null);
   const [routeRows, setRouteRows] = useState<TrainRouteRow[]>([]);
@@ -54,7 +58,7 @@ export default function AdminTrainEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>("");
 
-  // ------- LOAD BY trainId ---------
+  /* -------- LOAD BY trainId -------- */
   useEffect(() => {
     if (!trainIdParam) return;
 
@@ -92,7 +96,7 @@ export default function AdminTrainEditPage() {
     fetchData();
   }, [trainIdParam]);
 
-  // ------- HELPERS ---------
+  /* -------- HELPERS -------- */
   function updateHead<K extends keyof TrainHead>(key: K, value: TrainHead[K]) {
     setHead((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
@@ -143,7 +147,7 @@ export default function AdminTrainEditPage() {
     }
   }
 
-  // ------- UI ---------
+  /* -------- UI -------- */
   if (loading && !head) {
     return (
       <div className="page-root">
@@ -298,7 +302,7 @@ export default function AdminTrainEditPage() {
         </div>
       </section>
 
-      {/* Route table – saari rows editable */}
+      {/* Route table */}
       <section className="bg-white border rounded p-4">
         <h2 className="font-semibold mb-3">Route (stations)</h2>
 
