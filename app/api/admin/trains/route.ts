@@ -1,8 +1,8 @@
+// app/api/admin/trains/route.ts
 import { NextResponse } from "next/server";
 import { serviceClient } from "../../../../lib/supabaseServer";
 
-
-type TrainSummary = {
+type AdminTrainListRow = {
   trainId: number;
   trainNumber: number | null;
   trainName: string | null;
@@ -18,30 +18,16 @@ export async function GET(req: Request) {
   try {
     const supa = serviceClient;
     const url = new URL(req.url);
-    const q = (url.searchParams.get("q") || "").trim();
+    const qRaw = (url.searchParams.get("q") || "").trim();
+    const q = qRaw.toUpperCase();
 
-    let query = supa
+    // ⚠️ Important: select("*") so even if some columns
+    // (status / created_at / updated_at) are missing, query won’t fail
+    const { data, error } = await supa
       .from("TrainRoute")
-      .select(
-        "trainId, trainNumber, trainName, stationFrom, stationTo, runningDays, StnNumber, status, created_at, updated_at",
-      )
-      .eq("StnNumber", 1) // sirf origin station ko train master maan rahe
-      .order("trainNumber", { ascending: true })
-      .limit(5000);
-
-    if (q) {
-      // trainId / trainNumber / trainName 3on pe basic search
-      const num = Number(q);
-      if (Number.isFinite(num)) {
-        query = query.or(
-          `trainId.eq.${num},trainNumber.eq.${num},trainName.ilike.%${q}%`,
-        );
-      } else {
-        query = query.or(`trainName.ilike.%${q}%,stationFrom.ilike.%${q}%,stationTo.ilike.%${q}%`);
-      }
-    }
-
-    const { data, error } = await query;
+      .select("*")
+      .order("trainId", { ascending: true })
+      .order("StnNumber", { ascending: true });
 
     if (error) {
       console.error("admin trains list error", error);
@@ -51,12 +37,51 @@ export async function GET(req: Request) {
       );
     }
 
-    const trains: TrainSummary[] = (data || []) as any[];
+    const rows = (data || []) as any[];
 
-    return NextResponse.json({
-      ok: true,
-      trains,
-    });
+    // Group by trainId – first row of each train will be used as “header”
+    const byTrainId = new Map<number, AdminTrainListRow>();
+
+    for (const row of rows) {
+      const id = Number(row.trainId);
+      if (!Number.isFinite(id)) continue;
+      if (byTrainId.has(id)) continue;
+
+      byTrainId.set(id, {
+        trainId: id,
+        trainNumber:
+          typeof row.trainNumber === "number"
+            ? row.trainNumber
+            : row.trainNumber ?? null,
+        trainName: row.trainName ?? null,
+        stationFrom: row.stationFrom ?? null,
+        stationTo: row.stationTo ?? null,
+        runningDays: row.runningDays ?? null,
+        status: row.status ?? null,
+        created_at: row.created_at ?? null,
+        updated_at: row.updated_at ?? null,
+      });
+    }
+
+    let trains = Array.from(byTrainId.values());
+
+    // 🔍 search filter (Train ID / Number / Name / From / To)
+    if (q) {
+      trains = trains.filter((t) => {
+        const fields: string[] = [];
+        if (t.trainId) fields.push(String(t.trainId));
+        if (t.trainNumber != null) fields.push(String(t.trainNumber));
+        if (t.trainName) fields.push(t.trainName);
+        if (t.stationFrom) fields.push(t.stationFrom);
+        if (t.stationTo) fields.push(t.stationTo);
+        if (t.runningDays) fields.push(t.runningDays);
+
+        const hay = fields.join(" ").toUpperCase();
+        return hay.includes(q);
+      });
+    }
+
+    return NextResponse.json({ ok: true, trains });
   } catch (e) {
     console.error("admin trains list server_error", e);
     return NextResponse.json(
