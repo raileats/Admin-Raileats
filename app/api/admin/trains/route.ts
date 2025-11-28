@@ -7,11 +7,11 @@ type AdminTrainListRow = {
   trainNumber: number | null;
   trainName: string | null;
 
-  // naya data jo list me dikhana hai
-  stnNumber: number | string | null;
-  stationCode: string | null;
-  distance: string | null;
-  stoptime: string | null;
+  // EXACT same names as frontend type
+  StnNumber: number | null;
+  StationCode: string | null;
+  Distance: string | null;
+  Stoptime: string | null;
 
   runningDays: string | null;
   status?: string | null;
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     const qRaw = (url.searchParams.get("q") || "").trim();
     const q = qRaw.toUpperCase();
 
-    // ⭐ yahan "*" hi rakhte hain, taaki koi missing-column error na aaye
+    // sab columns lo taaki koi column-mismatch error na aaye
     const { data, error } = await supa
       .from("TrainRoute")
       .select("*")
@@ -43,7 +43,7 @@ export async function GET(req: Request) {
 
     const rows = (data || []) as any[];
 
-    // har DB row ko direct list row bana rahe hain
+    // har DB row -> ek table row (route wise list)
     let trains: AdminTrainListRow[] = rows.map((row) => ({
       trainId: Number(row.trainId) || 0,
       trainNumber:
@@ -52,13 +52,14 @@ export async function GET(req: Request) {
           : row.trainNumber ?? null,
       trainName: row.trainName ?? null,
 
-      stnNumber:
+      // yahi 4 fields UI me dikh rahe hain
+      StnNumber:
         row.StnNumber !== undefined && row.StnNumber !== null
-          ? row.StnNumber
+          ? Number(row.StnNumber)
           : null,
-      stationCode: row.StationCode ?? null,
-      distance: row.Distance ?? null,
-      stoptime: row.Stoptime ?? null,
+      StationCode: row.StationCode ?? null,
+      Distance: row.Distance ?? null,
+      Stoptime: row.Stoptime ?? null,
 
       runningDays: row.runningDays ?? null,
       status: row.status ?? null,
@@ -66,18 +67,17 @@ export async function GET(req: Request) {
       updated_at: row.updated_at ?? null,
     }));
 
-    // 🔍 search: Train ID, Number, Name, StationCode sab pe
+    // 🔍 search: Train ID / Number / Name / StationCode / RunningDays
     if (q) {
       trains = trains.filter((t) => {
         const fields: string[] = [];
-
         if (t.trainId) fields.push(String(t.trainId));
         if (t.trainNumber != null) fields.push(String(t.trainNumber));
         if (t.trainName) fields.push(t.trainName);
-        if (t.stationCode) fields.push(t.stationCode);
+        if (t.StationCode) fields.push(t.StationCode);
         if (t.runningDays) fields.push(t.runningDays);
-        if (t.distance) fields.push(String(t.distance));
-        if (t.stnNumber != null) fields.push(String(t.stnNumber));
+        if (t.StnNumber != null) fields.push(String(t.StnNumber));
+        if (t.Distance) fields.push(String(t.Distance));
 
         const hay = fields.join(" ").toUpperCase();
         return hay.includes(q);
