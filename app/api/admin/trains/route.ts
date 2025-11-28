@@ -18,7 +18,20 @@ export async function GET(req: Request) {
   try {
     const supa = serviceClient;
     const url = new URL(req.url);
+
+    // 🔹 naya: individual filters
+    const trainIdFilterRaw = (url.searchParams.get("trainId") || "").trim();
+    const trainNoFilterRaw = (url.searchParams.get("trainNumber") || "").trim();
+    const trainNameFilterRaw = (url.searchParams.get("trainName") || "").trim();
+    const stationFilterRaw = (url.searchParams.get("station") || "").trim();
+
+    // 🔹 purana combined search (optional)
     const qRaw = (url.searchParams.get("q") || "").trim();
+
+    const trainIdFilter = trainIdFilterRaw;
+    const trainNoFilter = trainNoFilterRaw;
+    const trainNameFilter = trainNameFilterRaw.toUpperCase();
+    const stationFilter = stationFilterRaw.toUpperCase();
     const q = qRaw.toUpperCase();
 
     // ⚠️ Important: select("*") so even if some columns
@@ -65,7 +78,38 @@ export async function GET(req: Request) {
 
     let trains = Array.from(byTrainId.values());
 
-    // 🔍 search filter (Train ID / Number / Name / From / To)
+    // 🔍 1) Train ID filter (partial match allowed)
+    if (trainIdFilter) {
+      trains = trains.filter((t) =>
+        String(t.trainId).includes(trainIdFilter),
+      );
+    }
+
+    // 🔍 2) Train Number filter
+    if (trainNoFilter) {
+      trains = trains.filter(
+        (t) =>
+          t.trainNumber != null &&
+          String(t.trainNumber).includes(trainNoFilter),
+      );
+    }
+
+    // 🔍 3) Train Name filter (case-insensitive)
+    if (trainNameFilter) {
+      trains = trains.filter((t) =>
+        (t.trainName || "").toUpperCase().includes(trainNameFilter),
+      );
+    }
+
+    // 🔍 4) Station filter (from / to – usually station codes)
+    if (stationFilter) {
+      trains = trains.filter((t) => {
+        const combined = `${t.stationFrom || ""} ${t.stationTo || ""}`.toUpperCase();
+        return combined.includes(stationFilter);
+      });
+    }
+
+    // 🔍 5) Optional combined search (ID / number / name / from / to / runningDays)
     if (q) {
       trains = trains.filter((t) => {
         const fields: string[] = [];
