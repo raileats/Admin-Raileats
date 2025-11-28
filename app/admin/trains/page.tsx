@@ -44,8 +44,9 @@ type ApiResponse = {
 
 export default function AdminTrainEditPage() {
   const router = useRouter();
-  const params = useParams<{ trainId: string }>();
-  const trainIdParam = params?.trainId;
+  // ❌ generic hata diya, simple useParams
+  const params = useParams();
+  const trainIdParam = (params as any)?.trainId as string | undefined;
 
   const [head, setHead] = useState<TrainHead | null>(null);
   const [routeRows, setRouteRows] = useState<TrainRouteRow[]>([]);
@@ -102,14 +103,15 @@ export default function AdminTrainEditPage() {
     );
   }
 
-  function updateRouteRow<
-    K extends keyof TrainRouteRow,
-  >(index: number, field: K, value: string) {
+  function updateRouteRow<K extends keyof TrainRouteRow>(
+    index: number,
+    field: K,
+    value: string,
+  ) {
     setRouteRows((prev) =>
       prev.map((row, i) => {
         if (i !== index) return row;
 
-        // numeric fields
         const numericFields: (keyof TrainRouteRow)[] = [
           "StnNumber",
           "Platform",
@@ -120,11 +122,10 @@ export default function AdminTrainEditPage() {
         if (numericFields.includes(field)) {
           const num =
             value === "" ? null : Number(value.replace(/[^\d]/g, ""));
-          return { ...row, [field]: (num as any) };
+          return { ...row, [field]: num as any };
         }
 
-        // everything else string
-        return { ...row, [field]: (value as any) };
+        return { ...row, [field]: value as any };
       }),
     );
   }
@@ -321,7 +322,7 @@ export default function AdminTrainEditPage() {
         </div>
       </section>
 
-      {/* -------- Route table (ALL STATIONS) -------- */}
+      {/* -------- Route table -------- */}
       <section className="border rounded bg-white p-4">
         <h2 className="font-semibold mb-3 text-sm">
           Route (stations)
