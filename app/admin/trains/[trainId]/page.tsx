@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 
-type TrainHeader = {
-  trainId: number;
+type TrainHead = {
+  trainId: number | null;
   trainNumber: number | null;
   trainName: string | null;
   stationFrom: string | null;
@@ -15,7 +15,7 @@ type TrainHeader = {
   updated_at?: string | null;
 };
 
-type RouteRow = {
+type TrainRouteRow = {
   id?: number;
   trainId: number;
   trainNumber: number | null;
@@ -35,128 +35,155 @@ type RouteRow = {
   Day: number | null;
 };
 
-export default function TrainEditPage({
-  params,
-}: {
-  params: { trainId: string };
-}) {
+type ApiResponse = {
+  ok: boolean;
+  train?: TrainHead;
+  route?: TrainRouteRow[];
+  error?: string;
+  meta?: any;
+};
+
+export default function AdminTrainEditPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const params = useParams() as { trainId?: string };
+  const trainIdParam = params?.trainId;
+
+  const [head, setHead] = useState<TrainHead | null>(null);
+  const [routeRows, setRouteRows] = useState<TrainRouteRow[]>([]);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>("");
-  const [train, setTrain] = useState<TrainHeader | null>(null);
-  const [route, setRoute] = useState<RouteRow[]>([]);
 
-  const trainId = params.trainId;
-
+  // ---- Load data ----
   useEffect(() => {
-    (async () => {
+    if (!trainIdParam) return;
+
+    async function load() {
       try {
         setLoading(true);
         setError("");
-        const res = await fetch(`/api/admin/trains/${trainId}`, {
+
+        const res = await fetch(`/api/admin/trains/${trainIdParam}`, {
           cache: "no-store",
         });
-        const json = await res.json();
-        if (!json?.ok) {
-          setError("Failed to load train details.");
+        const json: ApiResponse = await res.json();
+
+        if (!json.ok || !json.train || !json.route) {
+          console.error("train detail load failed", json);
+          setError("Train not found.");
+          setHead(null);
+          setRouteRows([]);
           return;
         }
-        setTrain(json.train);
-        setRoute(json.route || []);
+
+        setHead(json.train);
+        setRouteRows(json.route);
       } catch (e) {
-        console.error("train detail error", e);
-        setError("Failed to load train details.");
+        console.error("train detail load error", e);
+        setError("Failed to load train.");
+        setHead(null);
+        setRouteRows([]);
       } finally {
         setLoading(false);
       }
-    })();
-  }, [trainId]);
+    }
 
-  async function handleSave() {
-    if (!train) return;
+    load();
+  }, [trainIdParam]);
+
+  // ---- handle basic field change ----
+  function updateHead<K extends keyof TrainHead>(key: K, value: TrainHead[K]) {
+    setHead((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
+  function updateRouteRow(
+    index: number,
+    key: keyof TrainRouteRow,
+    value: any,
+  ) {
+    setRouteRows((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [key]: value };
+      return copy;
+    });
+  }
+
+  // ---- Save ----
+  async function onSave() {
+    if (!head) return;
+    if (!trainIdParam) return;
+
     try {
       setSaving(true);
       setError("");
-      const res = await fetch(`/api/admin/trains/${trainId}`, {
+
+      const payload = {
+        train: head,
+        route: routeRows,
+      };
+
+      const res = await fetch(`/api/admin/trains/${trainIdParam}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ train, route }),
+        body: JSON.stringify(payload),
       });
-      const json = await res.json();
-      if (!json?.ok) {
-        console.error("save failed", json);
-        setError("Failed to save changes.");
+
+      const json: ApiResponse = await res.json().catch(() => ({} as any));
+
+      if (!res.ok || !json.ok) {
+        console.error("train save failed", json);
+        setError("Failed to save train changes.");
         return;
       }
-      alert("Train updated successfully.");
-      router.push("/admin/trains");
+
+      alert("Train route updated successfully.");
+      // optional: reload
+      router.refresh();
     } catch (e) {
-      console.error("save error", e);
-      setError("Failed to save changes.");
+      console.error("train save error", e);
+      setError("Failed to save train changes.");
     } finally {
       setSaving(false);
     }
   }
 
-  function updateTrainField<K extends keyof TrainHeader>(
-    key: K,
-    value: TrainHeader[K],
-  ) {
-    setTrain((prev) => (prev ? { ...prev, [key]: value } : prev));
-  }
-
-  function updateRouteRow(
-    index: number,
-    field: keyof RouteRow,
-    value: any,
-  ) {
-    setRoute((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)),
-    );
-  }
-
   if (loading) {
     return (
-      <div className="p-6">
-        <p className="text-sm text-gray-600">Loading train details…</p>
+      <div className="page-root">
+        <p className="text-sm text-gray-600">Loading train…</p>
       </div>
     );
   }
 
-  if (!train) {
+  if (!head) {
     return (
-      <div className="p-6">
-        <p className="text-sm text-red-600">
-          Train not found or failed to load.
-        </p>
+      <div className="page-root">
+        <p className="text-sm text-red-600">Train not found.</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="page-root">
+      <div className="flex items-center justify-between mb-3">
         <div>
           <h1 className="text-2xl font-semibold">
-            Edit Train #{train.trainId}
+            Edit Train #{head.trainNumber ?? head.trainId ?? ""}
           </h1>
           <p className="text-sm text-gray-600">
             Update train information and route.
           </p>
         </div>
-        <div className="space-x-2">
+        <div className="flex gap-2">
           <button
-            type="button"
-            className="px-3 py-2 text-sm rounded border"
+            className="px-3 py-2 rounded border text-sm"
             onClick={() => router.push("/admin/trains")}
           >
             Back
           </button>
           <button
-            type="button"
-            className="px-4 py-2 text-sm rounded bg-green-600 text-white"
-            onClick={handleSave}
+            className="px-4 py-2 rounded bg-green-600 text-white text-sm"
+            onClick={onSave}
             disabled={saving}
           >
             {saving ? "Saving…" : "Save Changes"}
@@ -164,146 +191,119 @@ export default function TrainEditPage({
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="text-sm text-red-600 mb-3">{error}</p>
+      )}
 
-      {/* Train header form */}
-      <section className="border rounded bg-white p-4 space-y-3">
-        <h2 className="font-semibold text-base mb-2">Train Details</h2>
-        <div className="grid md:grid-cols-3 gap-3">
+      {/* Train head form */}
+      <section className="border rounded bg-white p-4 mb-4">
+        <h2 className="font-semibold mb-3 text-sm">Train Details</h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="block text-xs text-gray-600 mb-1">
-              Train ID
-            </label>
+            <label className="block text-xs mb-1">Train ID</label>
             <input
-              className="border rounded px-3 py-2 w-full text-sm bg-gray-100"
-              value={train.trainId}
-              disabled
+              className="border rounded px-3 py-2 text-sm w-full bg-gray-100"
+              value={head.trainId ?? ""}
+              readOnly
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-600 mb-1">
-              Train Number
-            </label>
+            <label className="block text-xs mb-1">Train Number</label>
             <input
-              className="border rounded px-3 py-2 w-full text-sm"
-              value={train.trainNumber ?? ""}
+              className="border rounded px-3 py-2 text-sm w-full"
+              value={head.trainNumber ?? ""}
               onChange={(e) =>
-                updateTrainField(
+                updateHead(
                   "trainNumber",
                   e.target.value ? Number(e.target.value) : null,
                 )
               }
             />
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="block text-xs text-gray-600 mb-1">
-              Status
-            </label>
+            <label className="block text-xs mb-1">Train Name</label>
             <input
-              className="border rounded px-3 py-2 w-full text-sm"
-              value={train.status ?? ""}
-              onChange={(e) => updateTrainField("status", e.target.value)}
+              className="border rounded px-3 py-2 text-sm w-full"
+              value={head.trainName ?? ""}
+              onChange={(e) => updateHead("trainName", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs mb-1">Status</label>
+            <input
+              className="border rounded px-3 py-2 text-sm w-full"
+              value={head.status ?? ""}
+              onChange={(e) => updateHead("status", e.target.value)}
               placeholder="e.g. ACTIVE / INACTIVE"
             />
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-3">
-          <div className="md:col-span-2">
-            <label className="block text-xs text-gray-600 mb-1">
-              Train Name
-            </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="block text-xs mb-1">Station From</label>
             <input
-              className="border rounded px-3 py-2 w-full text-sm"
-              value={train.trainName ?? ""}
-              onChange={(e) =>
-                updateTrainField("trainName", e.target.value || null)
-              }
+              className="border rounded px-3 py-2 text-sm w-full"
+              value={head.stationFrom ?? ""}
+              onChange={(e) => updateHead("stationFrom", e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-600 mb-1">
-              Running Days
-            </label>
+            <label className="block text-xs mb-1">Station To</label>
             <input
-              className="border rounded px-3 py-2 w-full text-sm"
-              value={train.runningDays ?? ""}
-              onChange={(e) =>
-                updateTrainField("runningDays", e.target.value || null)
-              }
-              placeholder="e.g. Mon,Tue,Wed,Thu,Fri,Sat,Sun"
+              className="border rounded px-3 py-2 text-sm w-full"
+              value={head.stationTo ?? ""}
+              onChange={(e) => updateHead("stationTo", e.target.value)}
             />
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-gray-600 mb-1">
-              Station From
-            </label>
+            <label className="block text-xs mb-1">Running Days</label>
             <input
-              className="border rounded px-3 py-2 w-full text-sm"
-              value={train.stationFrom ?? ""}
-              onChange={(e) =>
-                updateTrainField("stationFrom", e.target.value || null)
-              }
+              className="border rounded px-3 py-2 text-sm w-full"
+              value={head.runningDays ?? ""}
+              onChange={(e) => updateHead("runningDays", e.target.value)}
+              placeholder="Mon,Tue,Wed,Thu,Fri,Sat,Sun"
             />
           </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">
-              Station To
-            </label>
-            <input
-              className="border rounded px-3 py-2 w-full text-sm"
-              value={train.stationTo ?? ""}
-              onChange={(e) =>
-                updateTrainField("stationTo", e.target.value || null)
-              }
-            />
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-3 text-xs text-gray-500 mt-2">
-          <div>
-            Created:{" "}
-            {train.created_at
-              ? new Date(train.created_at).toLocaleString()
-              : "-"}
-          </div>
-          <div>
-            Updated:{" "}
-            {train.updated_at
-              ? new Date(train.updated_at).toLocaleString()
-              : "-"}
+          <div className="text-xs text-gray-500 flex items-end">
+            Created: {head.created_at?.slice(0, 10) || "-"} &nbsp; | Updated:{" "}
+            {head.updated_at?.slice(0, 10) || "-"}
           </div>
         </div>
       </section>
 
-      {/* Route editable table */}
+      {/* Route table */}
       <section className="border rounded bg-white p-4">
-        <h2 className="font-semibold text-base mb-3">Route (stations)</h2>
+        <h2 className="font-semibold mb-3 text-sm">Route (stations)</h2>
 
         <div className="overflow-auto">
           <table className="min-w-full text-xs">
-            <thead className="bg-gray-100 text-[11px] uppercase text-gray-600">
+            <thead className="bg-gray-100 uppercase text-[10px] text-gray-600">
               <tr>
-                <th className="px-2 py-1 text-left">Stn #</th>
-                <th className="px-2 py-1 text-left">Code</th>
-                <th className="px-2 py-1 text-left">Name</th>
-                <th className="px-2 py-1 text-left">Arrives</th>
-                <th className="px-2 py-1 text-left">Departs</th>
-                <th className="px-2 py-1 text-left">Stop time</th>
-                <th className="px-2 py-1 text-left">Distance</th>
-                <th className="px-2 py-1 text-left">Platform</th>
-                <th className="px-2 py-1 text-left">Day</th>
+                <th className="px-2 py-2 text-left">Stn #</th>
+                <th className="px-2 py-2 text-left">Code</th>
+                <th className="px-2 py-2 text-left">Name</th>
+                <th className="px-2 py-2 text-left">Arrives</th>
+                <th className="px-2 py-2 text-left">Departs</th>
+                <th className="px-2 py-2 text-left">Stop Time</th>
+                <th className="px-2 py-2 text-left">Distance</th>
+                <th className="px-2 py-2 text-left">Platform</th>
+                <th className="px-2 py-2 text-left">Day</th>
               </tr>
             </thead>
             <tbody>
-              {route.map((r, idx) => (
+              {routeRows.map((r, idx) => (
                 <tr key={r.id ?? idx} className="border-t">
                   <td className="px-2 py-1">
                     <input
-                      className="border rounded px-1 py-0.5 w-16"
+                      className="border rounded px-1 py-1 w-16 text-xs"
                       value={r.StnNumber ?? ""}
                       onChange={(e) =>
                         updateRouteRow(
@@ -316,92 +316,72 @@ export default function TrainEditPage({
                   </td>
                   <td className="px-2 py-1">
                     <input
-                      className="border rounded px-1 py-0.5 w-20"
+                      className="border rounded px-1 py-1 w-20 text-xs"
                       value={r.StationCode ?? ""}
                       onChange={(e) =>
-                        updateRouteRow(
-                          idx,
-                          "StationCode",
-                          e.target.value || null,
-                        )
+                        updateRouteRow(idx, "StationCode", e.target.value)
                       }
                     />
                   </td>
                   <td className="px-2 py-1">
                     <input
-                      className="border rounded px-1 py-0.5 w-56"
+                      className="border rounded px-1 py-1 w-52 text-xs"
                       value={r.StationName ?? ""}
                       onChange={(e) =>
-                        updateRouteRow(
-                          idx,
-                          "StationName",
-                          e.target.value || null,
-                        )
+                        updateRouteRow(idx, "StationName", e.target.value)
                       }
                     />
                   </td>
                   <td className="px-2 py-1">
                     <input
-                      className="border rounded px-1 py-0.5 w-20"
-                      placeholder="HH:MM"
+                      className="border rounded px-1 py-1 w-20 text-xs"
                       value={r.Arrives ?? ""}
                       onChange={(e) =>
-                        updateRouteRow(idx, "Arrives", e.target.value || null)
+                        updateRouteRow(idx, "Arrives", e.target.value)
                       }
+                      placeholder="HH:MM"
                     />
                   </td>
                   <td className="px-2 py-1">
                     <input
-                      className="border rounded px-1 py-0.5 w-20"
-                      placeholder="HH:MM"
+                      className="border rounded px-1 py-1 w-20 text-xs"
                       value={r.Departs ?? ""}
                       onChange={(e) =>
-                        updateRouteRow(idx, "Departs", e.target.value || null)
+                        updateRouteRow(idx, "Departs", e.target.value)
                       }
+                      placeholder="HH:MM"
                     />
                   </td>
                   <td className="px-2 py-1">
                     <input
-                      className="border rounded px-1 py-0.5 w-24"
+                      className="border rounded px-1 py-1 w-24 text-xs"
                       value={r.Stoptime ?? ""}
                       onChange={(e) =>
-                        updateRouteRow(
-                          idx,
-                          "Stoptime",
-                          e.target.value || null,
-                        )
+                        updateRouteRow(idx, "Stoptime", e.target.value)
                       }
                     />
                   </td>
                   <td className="px-2 py-1">
                     <input
-                      className="border rounded px-1 py-0.5 w-20"
+                      className="border rounded px-1 py-1 w-20 text-xs"
                       value={r.Distance ?? ""}
                       onChange={(e) =>
-                        updateRouteRow(
-                          idx,
-                          "Distance",
-                          e.target.value || null,
-                        )
+                        updateRouteRow(idx, "Distance", e.target.value)
                       }
                     />
                   </td>
                   <td className="px-2 py-1">
                     <input
-                      className="border rounded px-1 py-0.5 w-16"
+                      className="border rounded px-1 py-1 w-16 text-xs"
                       value={r.Platform ?? ""}
                       onChange={(e) =>
-                        updateRouteRow(
-                          idx,
-                          "Platform",
-                          e.target.value || null,
-                        )
+                        updateRouteRow(idx, "Platform", e.target.value)
                       }
                     />
                   </td>
                   <td className="px-2 py-1">
                     <input
-                      className="border rounded px-1 py-0.5 w-16"
+                      className="border rounded px-1 py-1 w-16 text-xs"
                       value={r.Day ?? ""}
                       onChange={(e) =>
                         updateRouteRow(
