@@ -6,8 +6,13 @@ type AdminTrainListRow = {
   trainId: number;
   trainNumber: number | null;
   trainName: string | null;
-  stationFrom: string | null;
-  stationTo: string | null;
+
+  // 👇 yeh 4 nayi fields list table me dikhani hain
+  stnNumber: number | null;
+  stationCode: string | null;
+  distance: string | null;
+  stoptime: string | null;
+
   runningDays: string | null;
   status?: string | null;
   created_at?: string | null;
@@ -18,24 +23,10 @@ export async function GET(req: Request) {
   try {
     const supa = serviceClient;
     const url = new URL(req.url);
-
-    // 🔹 naya: individual filters
-    const trainIdFilterRaw = (url.searchParams.get("trainId") || "").trim();
-    const trainNoFilterRaw = (url.searchParams.get("trainNumber") || "").trim();
-    const trainNameFilterRaw = (url.searchParams.get("trainName") || "").trim();
-    const stationFilterRaw = (url.searchParams.get("station") || "").trim();
-
-    // 🔹 purana combined search (optional)
     const qRaw = (url.searchParams.get("q") || "").trim();
-
-    const trainIdFilter = trainIdFilterRaw;
-    const trainNoFilter = trainNoFilterRaw;
-    const trainNameFilter = trainNameFilterRaw.toUpperCase();
-    const stationFilter = stationFilterRaw.toUpperCase();
     const q = qRaw.toUpperCase();
 
-    // ⚠️ Important: select("*") so even if some columns
-    // (status / created_at / updated_at) are missing, query won’t fail
+    // '*' use kar rahe hain taaki koi extra column ho to bhi query fail na ho
     const { data, error } = await supa
       .from("TrainRoute")
       .select("*")
@@ -52,7 +43,7 @@ export async function GET(req: Request) {
 
     const rows = (data || []) as any[];
 
-    // Group by trainId – first row of each train will be used as “header”
+    // har trainId ka sirf pehla row list ke liye use karenge
     const byTrainId = new Map<number, AdminTrainListRow>();
 
     for (const row of rows) {
@@ -67,8 +58,13 @@ export async function GET(req: Request) {
             ? row.trainNumber
             : row.trainNumber ?? null,
         trainName: row.trainName ?? null,
-        stationFrom: row.stationFrom ?? null,
-        stationTo: row.stationTo ?? null,
+
+        // 👇 DB -> API mapping (exact keys jo front-end use karega)
+        stnNumber: row.StnNumber ?? null,
+        stationCode: row.StationCode ?? null,
+        distance: row.Distance ?? null,
+        stoptime: row.Stoptime ?? null,
+
         runningDays: row.runningDays ?? null,
         status: row.status ?? null,
         created_at: row.created_at ?? null,
@@ -78,46 +74,14 @@ export async function GET(req: Request) {
 
     let trains = Array.from(byTrainId.values());
 
-    // 🔍 1) Train ID filter (partial match allowed)
-    if (trainIdFilter) {
-      trains = trains.filter((t) =>
-        String(t.trainId).includes(trainIdFilter),
-      );
-    }
-
-    // 🔍 2) Train Number filter
-    if (trainNoFilter) {
-      trains = trains.filter(
-        (t) =>
-          t.trainNumber != null &&
-          String(t.trainNumber).includes(trainNoFilter),
-      );
-    }
-
-    // 🔍 3) Train Name filter (case-insensitive)
-    if (trainNameFilter) {
-      trains = trains.filter((t) =>
-        (t.trainName || "").toUpperCase().includes(trainNameFilter),
-      );
-    }
-
-    // 🔍 4) Station filter (from / to – usually station codes)
-    if (stationFilter) {
-      trains = trains.filter((t) => {
-        const combined = `${t.stationFrom || ""} ${t.stationTo || ""}`.toUpperCase();
-        return combined.includes(stationFilter);
-      });
-    }
-
-    // 🔍 5) Optional combined search (ID / number / name / from / to / runningDays)
+    // 🔍 search: Train ID / Number / Name / StationCode / RunningDays
     if (q) {
       trains = trains.filter((t) => {
         const fields: string[] = [];
         if (t.trainId) fields.push(String(t.trainId));
         if (t.trainNumber != null) fields.push(String(t.trainNumber));
         if (t.trainName) fields.push(t.trainName);
-        if (t.stationFrom) fields.push(t.stationFrom);
-        if (t.stationTo) fields.push(t.stationTo);
+        if (t.stationCode) fields.push(t.stationCode);
         if (t.runningDays) fields.push(t.runningDays);
 
         const hay = fields.join(" ").toUpperCase();
