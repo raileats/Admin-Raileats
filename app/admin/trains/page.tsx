@@ -1,47 +1,64 @@
+// app/admin/trains/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 
-type TrainSummary = {
+type TrainRow = {
   trainId: number;
   trainNumber: number | null;
   trainName: string | null;
-  stationFrom: string | null;
-  stationTo: string | null;
   runningDays: string | null;
+  StnNumber: number | null;
+  StationCode: string | null;
+  Distance: string | null;
+  Stoptime: string | null;
   status?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
 
-export default function TrainsPage() {
-  const [q, setQ] = useState("");
+type ApiResponse = {
+  ok: boolean;
+  trains: TrainRow[];
+  error?: string;
+};
+
+export default function AdminTrainsPage() {
+  const [trains, setTrains] = useState<TrainRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [rows, setRows] = useState<TrainSummary[]>([]);
   const [error, setError] = useState<string>("");
 
-  async function loadTrains(search?: string) {
+  const [searchText, setSearchText] = useState("");
+  const [pendingSearch, setPendingSearch] = useState("");
+
+  async function loadTrains(q?: string) {
     try {
       setLoading(true);
       setError("");
+
       const params = new URLSearchParams();
-      if (search && search.trim()) params.set("q", search.trim());
+      if (q && q.trim()) {
+        // combined search param (Train ID / Number / Name / Station)
+        params.set("q", q.trim());
+      }
+
       const res = await fetch(`/api/admin/trains?${params.toString()}`, {
         cache: "no-store",
       });
-      const json = await res.json();
-      if (!json?.ok) {
-        console.error("trains list failed", json);
+      const json: ApiResponse = await res.json();
+
+      if (!json.ok) {
+        console.error("loadTrains failed", json);
         setError("Failed to load trains.");
-        setRows([]);
+        setTrains([]);
         return;
       }
-      setRows(json.trains || []);
+
+      setTrains(json.trains || []);
     } catch (e) {
-      console.error("trains list error", e);
+      console.error("loadTrains error", e);
       setError("Failed to load trains.");
-      setRows([]);
+      setTrains([]);
     } finally {
       setLoading(false);
     }
@@ -51,55 +68,53 @@ export default function TrainsPage() {
     loadTrains();
   }, []);
 
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    loadTrains(q);
+  function onSearchClick() {
+    setSearchText(pendingSearch);
+    loadTrains(pendingSearch);
+  }
+
+  function onReset() {
+    setPendingSearch("");
+    setSearchText("");
+    loadTrains("");
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-2">Trains</h1>
+    <div className="page-root">
+      <h1 className="text-2xl font-semibold mb-1">Trains</h1>
       <p className="text-sm text-gray-600 mb-4">Manage trains here.</p>
 
       {/* Search bar */}
-      <form
-        onSubmit={handleSearch}
-        className="flex flex-wrap gap-2 items-end mb-4"
-      >
-        <div className="flex-1 min-w-[220px]">
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Search (Train ID / Number / Name / Station)
-          </label>
-          <input
-            className="border rounded px-3 py-2 w-full text-sm"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="e.g. 11016, Jhelum Express, BPL..."
-          />
-        </div>
+      <div className="flex items-center gap-2 mb-3">
+        <input
+          className="border rounded px-3 py-2 flex-1 text-sm"
+          placeholder="Search (Train ID / Number / Name / Station)"
+          value={pendingSearch}
+          onChange={(e) => setPendingSearch(e.target.value)}
+        />
         <button
-          type="submit"
           className="px-4 py-2 rounded bg-blue-600 text-white text-sm"
+          onClick={onSearchClick}
           disabled={loading}
         >
-          {loading ? "Loading..." : "Search"}
+          Search
         </button>
         <button
-          type="button"
           className="px-3 py-2 rounded border text-sm"
-          onClick={() => {
-            setQ("");
-            loadTrains("");
-          }}
-          disabled={loading}
+          onClick={onReset}
+          disabled={loading && !searchText}
         >
           Reset
         </button>
-      </form>
+      </div>
 
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {loading && (
+        <p className="text-sm text-gray-500 mb-2">Loading trains…</p>
+      )}
+      {error && (
+        <p className="text-sm text-red-600 mb-2">{error}</p>
+      )}
 
-      {/* Table */}
       <div className="border rounded bg-white overflow-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-100 text-xs uppercase text-gray-600">
@@ -107,60 +122,78 @@ export default function TrainsPage() {
               <th className="px-3 py-2 text-left">Train ID</th>
               <th className="px-3 py-2 text-left">Train Number</th>
               <th className="px-3 py-2 text-left">Train Name</th>
-              <th className="px-3 py-2 text-left">From</th>
-              <th className="px-3 py-2 text-left">To</th>
+              {/* NEW COLUMNS */}
+              <th className="px-3 py-2 text-left">Stn No.</th>
+              <th className="px-3 py-2 text-left">Station Code</th>
+              <th className="px-3 py-2 text-left">Distance</th>
+              <th className="px-3 py-2 text-left">Stoptime</th>
+              {/* /NEW */}
               <th className="px-3 py-2 text-left">Running Days</th>
               <th className="px-3 py-2 text-left">Status</th>
               <th className="px-3 py-2 text-left">Created</th>
               <th className="px-3 py-2 text-left">Updated</th>
-              <th className="px-3 py-2 text-right">Actions</th>
+              <th className="px-3 py-2 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && !loading && (
+            {trains.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
-                  className="px-3 py-6 text-center text-gray-500"
+                  className="px-3 py-4 text-center text-gray-500"
+                  colSpan={11}
                 >
                   No trains found.
                 </td>
               </tr>
-            )}
+            ) : (
+              trains.map((t) => (
+                <tr key={t.trainId} className="border-t">
+                  <td className="px-3 py-2 align-top">{t.trainId}</td>
+                  <td className="px-3 py-2 align-top">
+                    {t.trainNumber ?? "-"}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {t.trainName ?? "-"}
+                  </td>
 
-            {rows.map((t) => (
-              <tr key={t.trainId} className="border-t last:border-b-0">
-                <td className="px-3 py-2">{t.trainId}</td>
-                <td className="px-3 py-2">{t.trainNumber ?? "-"}</td>
-                <td className="px-3 py-2">{t.trainName ?? "-"}</td>
-                <td className="px-3 py-2">{t.stationFrom ?? "-"}</td>
-                <td className="px-3 py-2">{t.stationTo ?? "-"}</td>
-                <td className="px-3 py-2">{t.runningDays ?? "-"}</td>
-                <td className="px-3 py-2">
-                  {t.status ?? (
-                    <span className="text-gray-400 italic">N/A</span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-xs text-gray-500">
-                  {t.created_at
-                    ? new Date(t.created_at).toLocaleString()
-                    : "-"}
-                </td>
-                <td className="px-3 py-2 text-xs text-gray-500">
-                  {t.updated_at
-                    ? new Date(t.updated_at).toLocaleString()
-                    : "-"}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <Link
-                    href={`/admin/trains/${t.trainId}`}
-                    className="inline-flex items-center px-3 py-1 rounded border text-xs hover:bg-gray-50"
-                  >
-                    Edit
-                  </Link>
-                </td>
-              </tr>
-            ))}
+                  {/* NEW DATA FROM FIRST ROUTE ROW */}
+                  <td className="px-3 py-2 align-top">
+                    {t.StnNumber ?? "-"}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {t.StationCode ?? "-"}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {t.Distance ?? "-"}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {t.Stoptime ?? "-"}
+                  </td>
+                  {/* /NEW */}
+
+                  <td className="px-3 py-2 align-top">
+                    {t.runningDays ?? "-"}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {t.status ?? "N/A"}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {t.created_at ? t.created_at.slice(0, 10) : "-"}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {t.updated_at ? t.updated_at.slice(0, 10) : "-"}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <a
+                      href={`/admin/trains/${t.trainId}`}
+                      className="text-blue-600 hover:underline text-xs"
+                    >
+                      Edit
+                    </a>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
