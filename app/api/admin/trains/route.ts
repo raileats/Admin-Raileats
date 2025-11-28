@@ -1,13 +1,13 @@
 // app/api/admin/trains/route.ts
 import { NextResponse } from "next/server";
-import { serviceClient } from "../../../../lib/supabaseServer";
+import { serviceClient } from "../../../lib/supabaseServer";
 
 type AdminTrainListRow = {
   trainId: number;
   trainNumber: number | null;
   trainName: string | null;
 
-  // 👇 yeh 4 nayi fields list table me dikhani hain
+  // yahi 4 naye columns list me dikhane hain
   stnNumber: number | null;
   stationCode: string | null;
   distance: string | null;
@@ -26,10 +26,12 @@ export async function GET(req: Request) {
     const qRaw = (url.searchParams.get("q") || "").trim();
     const q = qRaw.toUpperCase();
 
-    // '*' use kar rahe hain taaki koi extra column ho to bhi query fail na ho
+    // yahan se directly TrainRoute ka data le rahe hain
     const { data, error } = await supa
       .from("TrainRoute")
-      .select("*")
+      .select(
+        "trainId, trainNumber, trainName, StnNumber, StationCode, Distance, Stoptime, runningDays, status, created_at, updated_at",
+      )
       .order("trainId", { ascending: true })
       .order("StnNumber", { ascending: true });
 
@@ -43,40 +45,32 @@ export async function GET(req: Request) {
 
     const rows = (data || []) as any[];
 
-    // har trainId ka sirf pehla row list ke liye use karenge
-    const byTrainId = new Map<number, AdminTrainListRow>();
+    const trains: AdminTrainListRow[] = rows.map((row) => ({
+      trainId: Number(row.trainId),
+      trainNumber:
+        typeof row.trainNumber === "number"
+          ? row.trainNumber
+          : row.trainNumber ?? null,
+      trainName: row.trainName ?? null,
 
-    for (const row of rows) {
-      const id = Number(row.trainId);
-      if (!Number.isFinite(id)) continue;
-      if (byTrainId.has(id)) continue;
+      stnNumber:
+        typeof row.StnNumber === "number"
+          ? row.StnNumber
+          : row.StnNumber ?? null,
+      stationCode: row.StationCode ?? null,
+      distance: row.Distance ?? null,
+      stoptime: row.Stoptime ?? null,
 
-      byTrainId.set(id, {
-        trainId: id,
-        trainNumber:
-          typeof row.trainNumber === "number"
-            ? row.trainNumber
-            : row.trainNumber ?? null,
-        trainName: row.trainName ?? null,
+      runningDays: row.runningDays ?? null,
+      status: row.status ?? null,
+      created_at: row.created_at ?? null,
+      updated_at: row.updated_at ?? null,
+    }));
 
-        // 👇 DB -> API mapping (exact keys jo front-end use karega)
-        stnNumber: row.StnNumber ?? null,
-        stationCode: row.StationCode ?? null,
-        distance: row.Distance ?? null,
-        stoptime: row.Stoptime ?? null,
-
-        runningDays: row.runningDays ?? null,
-        status: row.status ?? null,
-        created_at: row.created_at ?? null,
-        updated_at: row.updated_at ?? null,
-      });
-    }
-
-    let trains = Array.from(byTrainId.values());
-
-    // 🔍 search: Train ID / Number / Name / StationCode / RunningDays
+    // 🔍 search: Train ID / Number / Name / Station Code
+    let filtered = trains;
     if (q) {
-      trains = trains.filter((t) => {
+      filtered = trains.filter((t) => {
         const fields: string[] = [];
         if (t.trainId) fields.push(String(t.trainId));
         if (t.trainNumber != null) fields.push(String(t.trainNumber));
@@ -89,7 +83,7 @@ export async function GET(req: Request) {
       });
     }
 
-    return NextResponse.json({ ok: true, trains });
+    return NextResponse.json({ ok: true, trains: filtered });
   } catch (e) {
     console.error("admin trains list server_error", e);
     return NextResponse.json(
