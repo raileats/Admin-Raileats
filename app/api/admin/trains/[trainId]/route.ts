@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { serviceClient } from "../../../../lib/supabaseServer";
+import { serviceClient } from "../../../../../lib/supabaseServer";
+
 
 type TrainRouteRow = {
   id?: number; // agar table me PK ho to
