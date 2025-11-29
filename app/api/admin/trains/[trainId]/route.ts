@@ -1,7 +1,9 @@
+// app/api/admin/trains/[trainId]/route.ts
 import { NextResponse } from "next/server";
 import { serviceClient } from "../../../../../lib/supabaseServer";
 
 type TrainRouteRow = {
+  // id optional rakhenge, par use nahi kar rahe
   id?: number;
   trainId: number;
   trainNumber: number | null;
@@ -23,7 +25,7 @@ type TrainRouteRow = {
 
 //
 //  GET  → /api/admin/trains/[trainId]
-//  Yaha [trainId] actually TRAIN NUMBER hoga (e.g. 10001, 12716)
+//  yahan [trainId] = TRAIN NUMBER (e.g. 10001, 12716)
 //
 export async function GET(
   req: Request,
@@ -32,7 +34,7 @@ export async function GET(
   try {
     const supa = serviceClient;
 
-    const slug = (ctx.params.trainId || "").trim(); // URL ka part
+    const slug = (ctx.params.trainId || "").trim();
     if (!slug) {
       return NextResponse.json(
         { ok: false, error: "invalid_train_number" },
@@ -40,7 +42,6 @@ export async function GET(
       );
     }
 
-    // slug ko number ya string jaisa bhi ho, usi tarah filter ke liye use karenge
     const num = Number(slug);
     const trainNumberFilter = Number.isFinite(num) ? num : slug;
 
@@ -133,22 +134,46 @@ export async function POST(
       route: TrainRouteRow[];
     };
 
-    // 1) Common fields update → saari rows jinke trainNumber = slug
-    const updatePayload: any = {
+    // ------------ 1) COMMON FIELDS UPDATE (saari rows for this trainNumber) -------------
+    const baseUpdate: any = {
       trainName: train.trainName,
       trainNumber: train.trainNumber,
       stationFrom: train.stationFrom,
       stationTo: train.stationTo,
       runningDays: train.runningDays,
     };
-    if (train.status !== undefined) {
-      updatePayload.status = train.status;
-    }
 
-    const { error: updErr } = await supa
+    let statusColumnMissing = false;
+
+    // status ke saath try
+    let { error: updErr } = await supa
       .from("TrainRoute")
-      .update(updatePayload)
+      .update({
+        ...baseUpdate,
+        status: typeof train.status === "undefined" ? null : train.status,
+      })
       .eq("trainNumber", trainNumberFilter);
+
+    // agar "status" column hi nahi hai to bina status ke fir se
+    if (updErr && updErr.message?.toLowerCase().includes("status")) {
+      console.warn("TrainRoute table missing 'status' column, retrying without it.");
+      statusColumnMissing = true;
+
+      const { error: retryErr } = await supa
+        .from("TrainRoute")
+        .update(baseUpdate)
+        .eq("trainNumber", trainNumberFilter);
+
+      if (retryErr) {
+        console.error("admin train bulk update error (retry)", retryErr);
+        return NextResponse.json(
+          { ok: false, error: "update_error" },
+          { status: 500 },
+        );
+      }
+
+      updErr = null;
+    }
 
     if (updErr) {
       console.error("admin train bulk update error", updErr);
@@ -158,42 +183,61 @@ export async function POST(
       );
     }
 
-    // 2) Route rows upsert (id ke basis pe)
-    const cleanedRoutes = route.map((r) => ({
-      id: r.id ?? undefined,
-      trainId: r.trainId,
-      trainNumber: r.trainNumber,
-      trainName: r.trainName,
-      stationFrom: r.stationFrom,
-      stationTo: r.stationTo,
-      runningDays: r.runningDays,
-      StnNumber: r.StnNumber,
-      StationCode: r.StationCode,
-      StationName: r.StationName,
-      Arrives: r.Arrives,
-      Departs: r.Departs,
-      Stoptime: r.Stoptime,
-      Distance: r.Distance,
-      Platform: r.Platform,
-      Route: r.Route,
-      Day: r.Day,
-    }));
+    // ------------ 2) ROUTE ROWS UPDATE (NO id, key = trainNumber + StnNumber) -------------
+    for (const r of route as TrainRouteRow[]) {
+      if (r.StnNumber == null) {
+        // agar station number hi nahi hai to kaise identify kare — skip
+        continue;
+      }
 
-    const { error: routeErr } = await supa
-      .from("TrainRoute")
-      .upsert(cleanedRoutes, {
-        onConflict: "id",
+      // payload banate waqt undefined → null kar dete hain
+      const updateCols: any = {
+        trainId: r.trainId,
+        trainNumber: train.trainNumber, // ensure sab same ho
+        trainName: r.trainName,
+        stationFrom: r.stationFrom,
+        stationTo: r.stationTo,
+        runningDays: r.runningDays,
+        StnNumber: r.StnNumber,
+        StationCode: r.StationCode,
+        StationName: r.StationName,
+        Arrives: r.Arrives,
+        Departs: r.Departs,
+        Stoptime: r.Stoptime,
+        Distance: r.Distance,
+        Platform: r.Platform,
+        Route: r.Route,
+        Day: r.Day,
+      };
+
+      Object.keys(updateCols).forEach((k) => {
+        const key = k as keyof typeof updateCols;
+        if (updateCols[key] === undefined) {
+          updateCols[key] = null;
+        }
       });
 
-    if (routeErr) {
-      console.error("admin train route upsert error", routeErr);
-      return NextResponse.json(
-        { ok: false, error: "route_update_error" },
-        { status: 500 },
-      );
+      const { error: rowErr } = await supa
+        .from("TrainRoute")
+        .update(updateCols)
+        .eq("trainNumber", trainNumberFilter)
+        .eq("StnNumber", r.StnNumber);
+
+      if (rowErr) {
+        console.error("admin train route row update error", rowErr, r);
+        return NextResponse.json(
+          { ok: false, error: "route_update_error" },
+          { status: 500 },
+        );
+      }
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      warning: statusColumnMissing
+        ? 'TrainRoute table me "status" column nahi mila; agar chahiye to Supabase me ek text/varchar column add kar sakte ho.'
+        : null,
+    });
   } catch (e) {
     console.error("admin train save server_error", e);
     return NextResponse.json(
