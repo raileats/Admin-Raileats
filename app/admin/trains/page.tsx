@@ -1,7 +1,12 @@
 // app/admin/trains/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  ChangeEvent,
+} from "react";
 
 type TrainRow = {
   trainId: number;
@@ -30,6 +35,11 @@ export default function AdminTrainsPage() {
 
   const [searchText, setSearchText] = useState("");
   const [pendingSearch, setPendingSearch] = useState("");
+
+  // CSV upload state
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function loadTrains(q?: string) {
     try {
@@ -79,13 +89,88 @@ export default function AdminTrainsPage() {
     loadTrains("");
   }
 
+  // ---------- CSV upload handlers ----------
+
+  function openUploadDialog() {
+    setUploadMsg("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  }
+
+  async function onFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploading(true);
+      setUploadMsg("");
+
+      const form = new FormData();
+      form.append("file", file);
+
+      const res = await fetch("/api/admin/trains/upload", {
+        method: "POST",
+        body: form,
+      });
+
+      const json = await res.json().catch(() => ({} as any));
+
+      if (!res.ok || !json.ok) {
+        console.error("upload failed", json);
+        setUploadMsg(
+          json?.error
+            ? `Upload failed: ${json.error}`
+            : "Upload failed. Please check CSV.",
+        );
+        return;
+      }
+
+      setUploadMsg(
+        `Upload successful. Trains affected: ${json.trainsAffected}, rows inserted: ${json.inserted}.`,
+      );
+
+      // refresh list with current search
+      loadTrains(searchText);
+    } catch (err) {
+      console.error("upload error", err);
+      setUploadMsg("Upload error. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="page-root">
-      <h1 className="text-2xl font-semibold mb-1">Trains</h1>
-      <p className="text-sm text-gray-600 mb-4">Manage trains here.</p>
+      {/* Header + Upload button */}
+      <div className="flex items-center justify-between mb-1">
+        <div>
+          <h1 className="text-2xl font-semibold">Trains</h1>
+          <p className="text-sm text-gray-600">Manage trains here.</p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={onFileChange}
+            style={{ display: "none" }}
+          />
+          <button
+            type="button"
+            className="px-3 py-2 rounded border text-sm"
+            onClick={openUploadDialog}
+            disabled={uploading}
+          >
+            {uploading ? "Uploading…" : "Upload CSV"}
+          </button>
+        </div>
+      </div>
 
       {/* Search bar */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-3 mt-2">
         <input
           className="border rounded px-3 py-2 flex-1 text-sm"
           placeholder="Search (Train ID / Number / Name / Station)"
@@ -114,6 +199,9 @@ export default function AdminTrainsPage() {
       {error && (
         <p className="text-sm text-red-600 mb-2">{error}</p>
       )}
+      {uploadMsg && (
+        <p className="text-sm text-gray-700 mb-2">{uploadMsg}</p>
+      )}
 
       <div className="border rounded bg-white overflow-auto">
         <table className="min-w-full text-sm">
@@ -122,12 +210,10 @@ export default function AdminTrainsPage() {
               <th className="px-3 py-2 text-left">Train ID</th>
               <th className="px-3 py-2 text-left">Train Number</th>
               <th className="px-3 py-2 text-left">Train Name</th>
-              {/* NEW COLUMNS */}
               <th className="px-3 py-2 text-left">Stn No.</th>
               <th className="px-3 py-2 text-left">Station Code</th>
               <th className="px-3 py-2 text-left">Distance</th>
               <th className="px-3 py-2 text-left">Stoptime</th>
-              {/* /NEW */}
               <th className="px-3 py-2 text-left">Running Days</th>
               <th className="px-3 py-2 text-left">Status</th>
               <th className="px-3 py-2 text-left">Created</th>
@@ -140,14 +226,17 @@ export default function AdminTrainsPage() {
               <tr>
                 <td
                   className="px-3 py-4 text-center text-gray-500"
-                  colSpan={11}
+                  colSpan={12}
                 >
                   No trains found.
                 </td>
               </tr>
             ) : (
               trains.map((t) => (
-                <tr key={t.trainId} className="border-t">
+                <tr
+                  key={`${t.trainId}-${t.trainNumber ?? "null"}`}
+                  className="border-t"
+                >
                   <td className="px-3 py-2 align-top">{t.trainId}</td>
                   <td className="px-3 py-2 align-top">
                     {t.trainNumber ?? "-"}
