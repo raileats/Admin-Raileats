@@ -33,8 +33,14 @@ export default function AdminTrainsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
+  // last used combined search string (CSV upload ke baad refresh ke liye)
   const [searchText, setSearchText] = useState("");
-  const [pendingSearch, setPendingSearch] = useState("");
+
+  // 🔹 individual search boxes
+  const [searchTrainId, setSearchTrainId] = useState("");
+  const [searchTrainNumber, setSearchTrainNumber] = useState("");
+  const [searchTrainName, setSearchTrainName] = useState("");
+  const [searchStationCode, setSearchStationCode] = useState("");
 
   // CSV upload state
   const [uploading, setUploading] = useState(false);
@@ -78,13 +84,30 @@ export default function AdminTrainsPage() {
     loadTrains();
   }, []);
 
+  // 🔍 Search button click
   function onSearchClick() {
-    setSearchText(pendingSearch);
-    loadTrains(pendingSearch);
+    // 4 alag boxes ko ek string me jodo (backend old `q` param use karega)
+    const parts = [
+      searchTrainId,
+      searchTrainNumber,
+      searchTrainName,
+      searchStationCode,
+    ]
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const combined = parts.join(" ");
+
+    setSearchText(combined);
+    loadTrains(combined);
   }
 
+  // 🔄 Reset button
   function onReset() {
-    setPendingSearch("");
+    setSearchTrainId("");
+    setSearchTrainNumber("");
+    setSearchTrainName("");
+    setSearchStationCode("");
     setSearchText("");
     loadTrains("");
   }
@@ -170,13 +193,32 @@ export default function AdminTrainsPage() {
       </div>
 
       {/* Search bar */}
-      <div className="flex items-center gap-2 mb-3 mt-2">
+      <div className="flex flex-wrap items-end gap-2 mb-3 mt-2">
         <input
-          className="border rounded px-3 py-2 flex-1 text-sm"
-          placeholder="Search (Train ID / Number / Name / Station)"
-          value={pendingSearch}
-          onChange={(e) => setPendingSearch(e.target.value)}
+          className="border rounded px-3 py-2 text-sm w-32"
+          placeholder="Train ID"
+          value={searchTrainId}
+          onChange={(e) => setSearchTrainId(e.target.value)}
         />
+        <input
+          className="border rounded px-3 py-2 text-sm w-40"
+          placeholder="Train Number"
+          value={searchTrainNumber}
+          onChange={(e) => setSearchTrainNumber(e.target.value)}
+        />
+        <input
+          className="border rounded px-3 py-2 text-sm flex-1 min-w-[160px]"
+          placeholder="Train Name"
+          value={searchTrainName}
+          onChange={(e) => setSearchTrainName(e.target.value)}
+        />
+        <input
+          className="border rounded px-3 py-2 text-sm w-36"
+          placeholder="Station Code"
+          value={searchStationCode}
+          onChange={(e) => setSearchStationCode(e.target.value)}
+        />
+
         <button
           className="px-4 py-2 rounded bg-blue-600 text-white text-sm"
           onClick={onSearchClick}
