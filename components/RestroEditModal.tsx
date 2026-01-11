@@ -556,3 +556,25 @@ export default function RestroEditModal({
     </div>
   );
 }
+const isNewOutlet = !restroProp;
+useEffect(() => {
+  if (isNewOutlet) {
+    setLocal({
+      RestroName: "",
+      RestroCode: "",
+      StationCode: "",
+      StationName: "",
+      State: "",
+      OwnerName: "",
+      OwnerPhone: "",
+      WeeklyOff: "SUN",
+      OpenTime: "10:00",
+      ClosedTime: "23:00",
+      RestroTypeOfDelivery: "RAILEATS",
+      OrdersPaymentOptionForCustomer: "BOTH",
+      IRCTCOrdersPaymentOptionForCustomer: "BOTH",
+    });
+  }
+}, [isNewOutlet]);
+
+  
