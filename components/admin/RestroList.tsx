@@ -28,7 +28,11 @@ export default function RestroList() {
       const json = await res.json().catch(() => null);
       // handle different shapes: { data: [...] } or direct array [...]
       const rows = Array.isArray(json) ? json : (json && Array.isArray(json.data) ? json.data : []);
-      setList(rows);
+     const sorted = [...rows].sort(
+  (a, b) => Number(b.RestroCode) - Number(a.RestroCode)
+);
+setList(sorted);
+
     } catch (e: any) {
       console.error('fetchList error', e);
       setList([]);
