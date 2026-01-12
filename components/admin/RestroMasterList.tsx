@@ -22,8 +22,15 @@ export default function RestroMasterList() {
         setList([]);
         return;
       }
-      const json = await res.json();
-      setList(Array.isArray(json) ? json : []);
+     const json = await res.json();
+const rows = Array.isArray(json) ? json : [];
+
+const sorted = [...rows].sort(
+  (a, b) => Number(b.RestroCode) - Number(a.RestroCode)
+);
+
+setList(sorted);
+
     } catch (e) {
       console.error('fetchList error', e);
       setList([]);
