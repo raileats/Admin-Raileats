@@ -411,7 +411,7 @@ const saveDisabled =
   RestroPhone: local.RestroPhone,
 
   // ✅ EXACT column name (case-sensitive)
-  BrandNameIfAny: local.BrandName || null,
+  BrandNameifany: local.BrandName || null,
 
   // ✅ EXACT DB column (int8)
   RaileatsStatus: local.RaileatsStatus ? 1 : 0,
