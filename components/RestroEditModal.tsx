@@ -372,8 +372,6 @@ const saveDisabled =
       setNotification({ type: "error", text: `Please provide a valid Email 1 or a 10-digit Mobile 1 before saving.` });
       return;
     }
-const isNewRestro = !restroCode;
-
     setSavingInternal(true);
     try {
       const allowed = [
@@ -406,12 +404,40 @@ const isNewRestro = !restroCode;
         return;
       }
 
-     if (isNewRestro) {
+    if (isNewRestro) {
+  const createPayload = {
+    RestroName: local.RestroName,
+    StationCode: local.StationCode,
+    StationName: local.StationName,
+    OwnerName: local.OwnerName,
+    OwnerEmail: local.OwnerEmail,
+    OwnerPhone: local.OwnerPhone,
+    RestroEmail: local.RestroEmail,
+    RestroPhone: local.RestroPhone,
+    BrandName: local.BrandName,
+    RaileatsStatus: local.RaileatsStatus ?? "OFF",
+    IsIrctcApproved: local.IsIrctcApproved ?? "No",
+  };
+
   const res = await fetch("/api/restrosmaster", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(local),
+    body: JSON.stringify(createPayload),
   });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Create failed");
+  }
+
+  // ✅ NEW RestroCode state me daalo
+  setRestro(json);
+  setLocal((s: any) => ({ ...s, ...json }));
+
+  // ✅ NEXT TAB PAR MOVE
+  setActiveTab("Station Settings");
+}
+
 
   const json = await res.json();
   if (!res.ok) {
@@ -431,6 +457,9 @@ const isNewRestro = !restroCode;
 
 
       setNotification({ type: "success", text: "Changes saved successfully ✅" });
+if (!isNewRestro) {
+  setActiveTab("Station Settings");
+}
 
       setTimeout(() => {
         if ((router as any).refresh) router.refresh();
