@@ -19,11 +19,10 @@ export async function GET(req: Request) {
     const q = sanitizeSearch(qRaw);
 
     let query = supabaseServer
-  .from(TABLE)
-  .select("*")
-  .order("CreatedAt", { ascending: false }) // 🔥 KEY FIX
-  .limit(1000);
-
+      .from(TABLE)
+      .select("*")
+      .order("CreatedAt", { ascending: false }) // ✅ ONLY ORDER
+      .limit(1000);
 
     if (q) {
       const pattern = `%${q}%`;
@@ -39,7 +38,7 @@ export async function GET(req: Request) {
             `StationName.ilike.${pattern}`,
           ].join(",")
         )
-        .order("RestroName", { ascending: true })
+        .order("CreatedAt", { ascending: false }) // ✅ SAME
         .limit(1000);
     }
 
@@ -55,6 +54,7 @@ export async function GET(req: Request) {
     );
   }
 }
+
 
 /* ============================
    PATCH : UPDATE RESTRO
