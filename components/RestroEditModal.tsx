@@ -349,6 +349,7 @@ const saveDisabled =
       setNotification({ type: "error", text: `Please provide a valid Email 1 or a 10-digit Mobile 1 before saving.` });
       return;
     }
+const isNewRestro = !restroCode;
 
     setSavingInternal(true);
     try {
