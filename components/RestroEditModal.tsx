@@ -397,13 +397,6 @@ const saveDisabled =
         payload[k] = v;
       }
 
-      if (Object.keys(payload).length === 0) {
-        setNotification({ type: "success", text: "Save completed (no changes applied)." });
-        setSavingInternal(false);
-        setTimeout(() => setNotification(null), 4000);
-        return;
-      }
-
     if (isNewRestro) {
   const createPayload = {
     RestroName: local.RestroName,
