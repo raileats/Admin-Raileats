@@ -439,21 +439,6 @@ const saveDisabled =
 }
 
 
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json?.error || "Create failed");
-  }
-
-  // 🔥 New RestroCode (1011 etc) state में डालो
-  setRestro(json);
-  setLocal((s: any) => ({ ...s, ...json }));
-
-} else {
-  const result = await defaultPatch(payload);
-  if (!result.ok) {
-    throw new Error(result.error ?? "Update failed");
-  }
-}
 
 
       setNotification({ type: "success", text: "Changes saved successfully ✅" });
