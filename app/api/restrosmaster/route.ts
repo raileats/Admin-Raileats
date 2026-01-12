@@ -18,10 +18,16 @@ export async function GET(req: Request) {
     const qRaw = url.searchParams.get("q") || "";
     const q = sanitizeSearch(qRaw);
 
+    export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const qRaw = url.searchParams.get("q") || "";
+    const q = sanitizeSearch(qRaw);
+
     let query = supabaseServer
       .from(TABLE)
       .select("*")
-      .order("CreatedAt", { ascending: false }) // ✅ ONLY ORDER
+      .order("CreatedAt", { ascending: false }) // 🔥 ALWAYS
       .limit(1000);
 
     if (q) {
@@ -38,7 +44,7 @@ export async function GET(req: Request) {
             `StationName.ilike.${pattern}`,
           ].join(",")
         )
-        .order("CreatedAt", { ascending: false }) // ✅ SAME
+        .order("CreatedAt", { ascending: false }) // 🔥 SAME ORDER
         .limit(1000);
     }
 
@@ -54,6 +60,7 @@ export async function GET(req: Request) {
     );
   }
 }
+
 
 
 /* ============================
