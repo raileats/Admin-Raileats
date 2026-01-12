@@ -4,38 +4,16 @@ import { supabaseServer } from "@/lib/supabaseServer";
 
 const TABLENAME = "RestroMaster";
 
-/* ---------------- GET : LIST / SEARCH ---------------- */
-function sanitizeSearch(q: string) {
-  return q.replace(/[%_']/g, "").trim();
-}
-
+/* ---------------- GET ---------------- */
 export async function GET(req: Request) {
   try {
-    const url = new URL(req.url);
-    const qRaw = (url.searchParams.get("q") || "").trim();
-    const q = sanitizeSearch(qRaw);
-
-    let builder = supabaseServer
+    const { data, error } = await supabaseServer
       .from(TABLENAME)
       .select("*")
       .order("RestroName", { ascending: true })
       .limit(1000);
 
-    if (q) {
-      const pattern = `%${q}%`;
-      builder = supabaseServer
-        .from(TABLENAME)
-        .select("*")
-        .or(
-          `RestroCode.ilike.${pattern},RestroName.ilike.${pattern},OwnerName.ilike.${pattern},StationCode.ilike.${pattern}`
-        )
-        .order("RestroName", { ascending: true })
-        .limit(1000);
-    }
-
-    const { data, error } = await builder;
     if (error) throw error;
-
     return NextResponse.json(data ?? []);
   } catch (err: any) {
     return NextResponse.json(
@@ -45,7 +23,7 @@ export async function GET(req: Request) {
   }
 }
 
-/* ---------------- PATCH : EDIT RESTRO ---------------- */
+/* ---------------- PATCH (EDIT) ---------------- */
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
@@ -58,7 +36,7 @@ export async function PATCH(req: Request) {
       );
     }
 
-    const allowed = new Set([
+    const allowed = [
       "RestroName",
       "OwnerName",
       "StationCode",
@@ -70,30 +48,21 @@ export async function PATCH(req: Request) {
       "IRCTCStatus",
       "RaileatsStatus",
       "IsIrctcApproved",
-    ]);
+    ];
 
     const updates: any = {};
-    for (const k of Object.keys(body)) {
-      if (allowed.has(k)) updates[k] = body[k];
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json(
-        { error: "No valid fields to update" },
-        { status: 400 }
-      );
-    }
+    allowed.forEach((k) => {
+      if (body[k] !== undefined) updates[k] = body[k];
+    });
 
     const { data, error } = await supabaseServer
       .from(TABLENAME)
       .update(updates)
       .eq("RestroCode", code)
-      .select()
-      .single();
+      .select();
 
     if (error) throw error;
-
-    return NextResponse.json(data);
+    return NextResponse.json(data?.[0] ?? null);
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || String(err) },
@@ -102,12 +71,11 @@ export async function PATCH(req: Request) {
   }
 }
 
-/* ---------------- POST : ADD NEW RESTRO ---------------- */
+/* ---------------- POST (ADD NEW RESTRO) ---------------- */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // 👉 sirf name mandatory
     if (!body.RestroName) {
       return NextResponse.json(
         { error: "RestroName required" },
@@ -115,17 +83,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🔥 last RestroCode nikaalo
-    const { data: lastRow } = await supabaseServer
+    // 🔥 get last RestroCode safely (NO .single())
+    const { data: rows, error: lastErr } = await supabaseServer
       .from(TABLENAME)
       .select("RestroCode")
       .order("RestroCode", { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
-    const newRestroCode = Number(lastRow?.RestroCode || 1000) + 1;
+    if (lastErr) throw lastErr;
 
-    // 🔥 new restro insert
+    const lastCode = rows?.[0]?.RestroCode ?? 1000;
+    const newRestroCode = Number(lastCode) + 1;
+
     const insertPayload = {
       ...body,
       RestroCode: newRestroCode,
@@ -135,12 +104,11 @@ export async function POST(req: Request) {
     const { data, error } = await supabaseServer
       .from(TABLENAME)
       .insert([insertPayload])
-      .select()
-      .single();
+      .select();
 
     if (error) throw error;
 
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(data?.[0], { status: 201 });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || String(err) },
