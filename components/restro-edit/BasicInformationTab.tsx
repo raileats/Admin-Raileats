@@ -1,67 +1,91 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import UI from "@/components/AdminUI";
 
 const { FormRow, FormField, Toggle } = UI;
 
+type StationOption = {
+  label: string;
+  value: string; // StationCode
+};
+
 type Props = {
   local: any;
   updateField: (k: string, v: any) => void;
-  stationDisplay: string;
-  stations?: { label: string; value: string }[];
+  stations?: StationOption[];
   loadingStations?: boolean;
 };
 
 export default function BasicInformationTab({
   local,
   updateField,
-  stationDisplay,
   stations = [],
   loadingStations = false,
 }: Props) {
-  const [saving, setSaving] = useState(false);
-  const [stationSearch, setStationSearch] = useState("");
+  /* ---------------- Station Search Dropdown ---------------- */
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // helpers
-  const getIsActive = () => Number(local?.RaileatsStatus ?? 0) === 1;
+  // when station already selected (edit mode), show it in input
+  useEffect(() => {
+    if (local?.StationName && local?.StationCode) {
+      const label = `${local.StationName} (${local.StationCode})${local.State ? ` - ${local.State}` : ""}`;
+      setQuery(label);
+    }
+  }, [local?.StationName, local?.StationCode, local?.State]);
 
-  // searchable station list
+  // close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const filteredStations = useMemo(() => {
-    if (!stationSearch) return stations;
-    const q = stationSearch.toLowerCase();
+    if (!query) return stations;
+    const q = query.toLowerCase();
     return stations.filter(
       (s) =>
         s.label.toLowerCase().includes(q) ||
         s.value.toLowerCase().includes(q)
     );
-  }, [stationSearch, stations]);
+  }, [query, stations]);
 
-  function onSelectStation(code: string) {
-    const st = stations.find((s) => s.value === code);
-    if (!st) return;
+  function handleSelectStation(opt: StationOption) {
+    // label format already: Station Name (CODE) - STATE
+    setQuery(opt.label);
+    setOpen(false);
 
-    // label format: "Ambala Cant Jn (UMB) - Haryana"
-    const match = st.label.match(/^(.*)\s+\((.*)\)\s+-\s+(.*)$/);
+    // extract values safely
+    const match = opt.label.match(/^(.*?)\s*\((.*?)\)\s*(?:-\s*(.*))?$/);
 
-    updateField("StationCode", code);
-    updateField("StationName", match ? match[1] : "");
-    updateField("State", match ? match[3] : "");
+    updateField("StationName", match?.[1]?.trim() ?? "");
+    updateField("StationCode", opt.value);
+    updateField("State", match?.[3]?.trim() ?? "");
   }
 
-  // call server API to set RaileatsStatus (0 or 1)
-  async function doToggleStatus(newValue: boolean) {
-    const newStatus = newValue ? 1 : 0;
+  /* ---------------- Raileats Status ---------------- */
+  const isActive = Number(local?.RaileatsStatus ?? 0) === 1;
+  const [savingStatus, setSavingStatus] = useState(false);
 
+  async function toggleStatus(value: boolean) {
+    const newStatus = value ? 1 : 0;
     const prev = local?.RaileatsStatus;
+
     updateField("RaileatsStatus", newStatus);
 
     try {
-      setSaving(true);
+      setSavingStatus(true);
       const code = local?.RestroCode;
-      if (!code) throw new Error("RestroCode missing");
+      if (!code) return;
 
-      const resp = await fetch(
+      const res = await fetch(
         `/api/admin/restros/${encodeURIComponent(code)}/status`,
         {
           method: "PATCH",
@@ -70,64 +94,75 @@ export default function BasicInformationTab({
         }
       );
 
-      const json = await resp.json().catch(() => ({}));
-
-      if (!resp.ok) {
+      if (!res.ok) {
         updateField("RaileatsStatus", prev ?? 0);
-        alert("Status update failed: " + (json?.error || "Unknown error"));
+        alert("Failed to update Raileats status");
       }
     } catch {
       updateField("RaileatsStatus", prev ?? 0);
-      alert("Unexpected error updating status");
     } finally {
-      setSaving(false);
+      setSavingStatus(false);
     }
   }
 
+  /* ---------------- UI ---------------- */
   return (
     <div className="px-4 py-2">
       <h3 className="text-center text-lg font-bold mb-4">Basic Information</h3>
 
       <div className="max-w-6xl mx-auto bg-white rounded shadow-sm p-6">
         <FormRow cols={3} gap={6}>
-          {/* STATION SEARCH + SELECT */}
-          <FormField label="Station">
-            <input
-              placeholder="Type station name or code"
-              value={stationSearch}
-              onChange={(e) => setStationSearch(e.target.value)}
-              className="w-full mb-2 p-2 rounded border border-slate-200"
-            />
+          {/* STATION SEARCH DROPDOWN */}
+          <FormField label="Station" required>
+            <div ref={wrapperRef} className="relative">
+              <input
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setOpen(true);
+                }}
+                onFocus={() => setOpen(true)}
+                placeholder="Type station name or code"
+                className="w-full p-2 rounded border border-slate-200"
+              />
 
-            <select
-              value={local?.StationCode ?? ""}
-              onChange={(e) => onSelectStation(e.target.value)}
-              className="w-full p-2 rounded border border-slate-200"
-              disabled={loadingStations}
-            >
-              <option value="">
-                {loadingStations ? "Loading stations..." : "Select station"}
-              </option>
-              {filteredStations.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              {open && (
+                <div className="absolute z-20 mt-1 w-full max-h-60 overflow-auto rounded border bg-white shadow">
+                  {loadingStations && (
+                    <div className="p-2 text-sm text-gray-500">
+                      Loading stations…
+                    </div>
+                  )}
 
-            {local?.StationCode && (
-              <div className="mt-2 rounded border border-slate-100 bg-slate-50 p-2 text-sm">
-                {stationDisplay}
-              </div>
-            )}
+                  {!loadingStations && filteredStations.length === 0 && (
+                    <div className="p-2 text-sm text-gray-500">
+                      No station found
+                    </div>
+                  )}
+
+                  {!loadingStations &&
+                    filteredStations.map((opt) => (
+                      <div
+                        key={opt.value}
+                        onClick={() => handleSelectStation(opt)}
+                        className="cursor-pointer px-3 py-2 text-sm hover:bg-sky-50"
+                      >
+                        {opt.label}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
           </FormField>
 
+          {/* RESTRO CODE */}
           <FormField label="Restro Code">
             <div className="rounded border border-slate-100 bg-slate-50 p-2 text-sm">
               {local?.RestroCode ?? "—"}
             </div>
           </FormField>
 
+          {/* RESTRO NAME */}
           <FormField label="Restro Name" required>
             <input
               value={local?.RestroName ?? ""}
@@ -147,12 +182,12 @@ export default function BasicInformationTab({
           <FormField label="Raileats Status">
             <div className="flex items-center gap-3">
               <Toggle
-                checked={getIsActive()}
-                onChange={(v: boolean) => void doToggleStatus(v)}
-                label={getIsActive() ? "On" : "Off"}
+                checked={isActive}
+                onChange={(v) => toggleStatus(v)}
+                label={isActive ? "On" : "Off"}
               />
-              {saving && (
-                <span className="text-xs text-gray-500">Updating...</span>
+              {savingStatus && (
+                <span className="text-xs text-gray-500">Updating…</span>
               )}
             </div>
           </FormField>
@@ -197,14 +232,13 @@ export default function BasicInformationTab({
                   (process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "") +
                   local.RestroDisplayPhoto
                 }
-                alt="display"
-                className="h-20 object-cover rounded border"
+                className="h-20 rounded border object-cover"
                 onError={(e) =>
                   ((e.target as HTMLImageElement).style.display = "none")
                 }
               />
             ) : (
-              <div className="rounded border border-slate-100 bg-slate-50 p-2 text-sm">
+              <div className="rounded border bg-slate-50 p-2 text-sm">
                 No image
               </div>
             )}
