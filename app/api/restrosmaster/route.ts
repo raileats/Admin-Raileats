@@ -71,24 +71,24 @@ export async function PATCH(req: Request) {
     }
 
     const allowedFields = [
-      "RestroName",
-      "BrandName",
-      "StationCode",
-      "StationName",
-      "State",
-      "OwnerName",
-      "OwnerEmail",
-      "OwnerPhone",
-      "RestroEmail",
-      "RestroPhone",
-      "RestroRating",
-      "RestroDisplayPhoto",
-      "RaileatsStatus",
-      "IsIrctcApproved",
-      "FSSAINumber",
-      "FSSAIExpiryDate",
-      "Status",
-    ];
+  "RestroName",
+  "BrandNameIfAny",   // ✅ exact column
+  "StationCode",
+  "StationName",
+  "State",
+  "OwnerName",
+  "OwnerEmail",
+  "OwnerPhone",
+  "RestroEmail",
+  "RestroPhone",
+  "RestroRating",
+  "RestroDisplayPhoto",
+  "RaileatsStatus",   // ✅ exact
+  "IsIrctcApproved",
+  "FSSAINumber",
+  "FSSAIExpiryDate",
+];
+
 
     const updates: any = {};
     for (const key of allowedFields) {
@@ -152,11 +152,15 @@ export async function POST(req: Request) {
 
     /* 🔥 STEP 2: Insert new restro */
     const insertPayload = {
-      ...body,
-      RestroCode: newRestroCode,
-      Status: "ACTIVE", // or DRAFT if you want
-      CreatedAt: new Date().toISOString(),
-    };
+  ...body,
+  RestroCode: newRestroCode,
+
+  // ✅ DB column
+  RaileatsStatus: body.RaileatsStatus ?? 0,
+
+  // ❌ Status / CreatedAt / UpdatedAt कभी मत भेजो
+};
+
 
     const { data, error } = await supabaseServer
       .from(TABLE)
