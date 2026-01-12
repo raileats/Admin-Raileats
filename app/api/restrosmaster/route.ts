@@ -19,10 +19,11 @@ export async function GET(req: Request) {
     const q = sanitizeSearch(qRaw);
 
     let query = supabaseServer
-      .from(TABLE)
-      .select("*")
-      .order("RestroName", { ascending: true })
-      .limit(1000);
+  .from(TABLE)
+  .select("*")
+  .order("CreatedAt", { ascending: false }) // 🔥 KEY FIX
+  .limit(1000);
+
 
     if (q) {
       const pattern = `%${q}%`;
