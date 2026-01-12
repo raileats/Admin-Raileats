@@ -2,21 +2,24 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
-const TABLENAME = "RestroMaster";
+const TABLE = "RestroMaster";
 
-/* ---------------- GET : LIST / SEARCH ---------------- */
+/* ---------------- UTILS ---------------- */
 function sanitizeSearch(q: string) {
   return q.replace(/[%_']/g, "").trim();
 }
 
+/* ============================
+   GET : LIST / SEARCH RESTROS
+   ============================ */
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const qRaw = (url.searchParams.get("q") || "").trim();
+    const qRaw = url.searchParams.get("q") || "";
     const q = sanitizeSearch(qRaw);
 
     let query = supabaseServer
-      .from(TABLENAME)
+      .from(TABLE)
       .select("*")
       .order("RestroName", { ascending: true })
       .limit(1000);
@@ -24,10 +27,16 @@ export async function GET(req: Request) {
     if (q) {
       const pattern = `%${q}%`;
       query = supabaseServer
-        .from(TABLENAME)
+        .from(TABLE)
         .select("*")
         .or(
-          `RestroCode.ilike.${pattern},RestroName.ilike.${pattern},OwnerName.ilike.${pattern},StationCode.ilike.${pattern}`
+          [
+            `RestroCode.ilike.${pattern}`,
+            `RestroName.ilike.${pattern}`,
+            `OwnerName.ilike.${pattern}`,
+            `StationCode.ilike.${pattern}`,
+            `StationName.ilike.${pattern}`,
+          ].join(",")
         )
         .order("RestroName", { ascending: true })
         .limit(1000);
@@ -38,6 +47,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(data ?? []);
   } catch (err: any) {
+    console.error("GET RestroMaster error:", err);
     return NextResponse.json(
       { error: err?.message || String(err) },
       { status: 500 }
@@ -45,35 +55,43 @@ export async function GET(req: Request) {
   }
 }
 
-/* ---------------- PATCH : EDIT RESTRO ---------------- */
+/* ============================
+   PATCH : UPDATE RESTRO
+   ============================ */
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    const code = body?.RestroCode;
+    const restroCode = body?.RestroCode;
 
-    if (!code) {
+    if (!restroCode) {
       return NextResponse.json(
-        { error: "RestroCode required" },
+        { error: "RestroCode is required for update" },
         { status: 400 }
       );
     }
 
-    const allowed = [
+    const allowedFields = [
       "RestroName",
-      "OwnerName",
+      "BrandName",
       "StationCode",
       "StationName",
-      "OwnerPhone",
+      "State",
+      "OwnerName",
       "OwnerEmail",
-      "FSSAINumber",
-      "FSSAIExpiryDate",
-      "IRCTCStatus",
+      "OwnerPhone",
+      "RestroEmail",
+      "RestroPhone",
+      "RestroRating",
+      "RestroDisplayPhoto",
       "RaileatsStatus",
       "IsIrctcApproved",
+      "FSSAINumber",
+      "FSSAIExpiryDate",
+      "Status",
     ];
 
     const updates: any = {};
-    for (const key of allowed) {
+    for (const key of allowedFields) {
       if (body[key] !== undefined) {
         updates[key] = body[key];
       }
@@ -87,15 +105,17 @@ export async function PATCH(req: Request) {
     }
 
     const { data, error } = await supabaseServer
-      .from(TABLENAME)
+      .from(TABLE)
       .update(updates)
-      .eq("RestroCode", code)
-      .select();
+      .eq("RestroCode", restroCode)
+      .select()
+      .limit(1);
 
     if (error) throw error;
 
     return NextResponse.json(data?.[0] ?? null);
   } catch (err: any) {
+    console.error("PATCH RestroMaster error:", err);
     return NextResponse.json(
       { error: err?.message || String(err) },
       { status: 500 }
@@ -103,46 +123,52 @@ export async function PATCH(req: Request) {
   }
 }
 
-/* ---------------- POST : ADD NEW RESTRO ---------------- */
+/* ============================
+   POST : ADD NEW RESTRO
+   ============================ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // 👉 Sirf RestroName required (RestroCode auto-generate hoga)
-    if (!body.RestroName) {
+    // 🔴 Minimum required fields
+    if (!body.RestroName || !body.StationCode || !body.StationName) {
       return NextResponse.json(
-        { error: "RestroName required" },
+        { error: "RestroName, StationCode and StationName are required" },
         { status: 400 }
       );
     }
 
-    // 🔥 Last RestroCode safely nikaalo (NO .single())
-    const { data: rows, error: lastErr } = await supabaseServer
-      .from(TABLENAME)
+    /* 🔥 STEP 1: Get LAST RestroCode */
+    const { data: lastRows, error: lastErr } = await supabaseServer
+      .from(TABLE)
       .select("RestroCode")
       .order("RestroCode", { ascending: false })
       .limit(1);
 
     if (lastErr) throw lastErr;
 
-    const lastCode = rows?.[0]?.RestroCode ?? 1000;
-    const newRestroCode = Number(lastCode) + 1;
+    const lastCode = Number(lastRows?.[0]?.RestroCode ?? 1010);
+    const newRestroCode = lastCode + 1;
 
+    /* 🔥 STEP 2: Insert new restro */
     const insertPayload = {
       ...body,
       RestroCode: newRestroCode,
-      Status: "DRAFT",
+      Status: "ACTIVE", // or DRAFT if you want
+      CreatedAt: new Date().toISOString(),
     };
 
     const { data, error } = await supabaseServer
-      .from(TABLENAME)
+      .from(TABLE)
       .insert([insertPayload])
-      .select();
+      .select()
+      .limit(1);
 
     if (error) throw error;
 
     return NextResponse.json(data?.[0], { status: 201 });
   } catch (err: any) {
+    console.error("POST RestroMaster error:", err);
     return NextResponse.json(
       { error: err?.message || String(err) },
       { status: 500 }
