@@ -12,17 +12,14 @@ import BankTab from "./restro-edit/BankTab";
 import FutureClosedTab from "./restro-edit/FutureClosedTab";
 import MenuTab from "./restro-edit/MenuTab";
 
-const {
-  AdminForm,
-  SubmitButton,
-  SecondaryButton,
-  Select,
-  Toggle,
-} = UI;
+const { AdminForm, SubmitButton, SecondaryButton } = UI;
 
 type Props = {
   restro?: any;
   onClose?: () => void;
+  onSave?: (payload: any) => Promise<{ ok: boolean; row?: any; error?: any }>;
+  saving?: boolean;
+  stationsOptions?: { label: string; value: string }[];
   initialTab?: string;
 };
 
@@ -36,136 +33,143 @@ const TAB_NAMES = [
   "Menu",
 ];
 
+/* ---------- helpers ---------- */
+function safeGet(obj: any, ...keys: string[]) {
+  for (const k of keys) {
+    if (!obj) continue;
+    if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined && obj[k] !== null)
+      return obj[k];
+  }
+  return undefined;
+}
+
+function buildStationDisplay(obj: any) {
+  const sName = (safeGet(obj, "StationName") ?? "").toString().trim();
+  const sCode = (safeGet(obj, "StationCode") ?? "").toString().trim();
+  const state = (safeGet(obj, "State") ?? "").toString().trim();
+  let txt = "";
+  if (sName) txt += sName;
+  if (sCode) txt += ` (${sCode})`;
+  if (state) txt += ` - ${state}`;
+  return txt || "—";
+}
+
 /* ---------- validators ---------- */
 const emailRegex = /^\S+@\S+\.\S+$/;
 const tenDigitRegex = /^\d{10}$/;
 
 function validateEmailString(s: string) {
   if (!s) return false;
-  return s
-    .split(",")
-    .map((p) => p.trim())
-    .every((p) => emailRegex.test(p));
+  return s.split(",").every((p) => emailRegex.test(p.trim()));
 }
 
-/* ---------- component ---------- */
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
+  saving: parentSaving,
+  stationsOptions = [],
   initialTab,
 }: Props) {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState(initialTab ?? "Basic Information");
-  const [local, setLocal] = useState<any>(restroProp ?? {});
-  const [saving, setSaving] = useState(false);
+  const [restro, setRestro] = useState<any | undefined>(restroProp);
+  const [local, setLocal] = useState<any>({});
+  const [stations] = useState(stationsOptions);
+  const [savingInternal, setSavingInternal] = useState(false);
   const [notification, setNotification] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  /* ---------- helpers ---------- */
-  const updateField = useCallback((key: string, value: any) => {
-    setLocal((s: any) => ({ ...s, [key]: value }));
+  const saving = parentSaving ?? savingInternal;
+
+  useEffect(() => {
+    if (restroProp) setRestro(restroProp);
+  }, [restroProp]);
+
+  useEffect(() => {
+    if (!restro) return;
+    setLocal({ ...restro });
+  }, [restro]);
+
+  const updateField = useCallback((k: string, v: any) => {
+    setLocal((s: any) => ({ ...s, [k]: v }));
     setError(null);
+    setNotification(null);
   }, []);
 
-  const isNewRestro = !local?.RestroCode;
-  const isBasicTab = activeTab === "Basic Information";
+  const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
-  /* ---------- validation ---------- */
+  const restroCode =
+    local?.RestroCode ??
+    restro?.RestroCode ??
+    "";
+
+  /* ---------- VALIDATION FIX ---------- */
   const validationErrors = useMemo(() => {
-    const errs: string[] = [];
-
-    if (!local.RestroName) errs.push("Restro Name required");
-    if (!local.StationCode) errs.push("Station required");
-
-    return errs;
+    if (!local.RestroName) return ["Restro Name required"];
+    if (!local.StationCode) return ["Station required"];
+    return [];
   }, [local]);
 
   const primaryContactValid = useMemo(() => {
     const email = (local.EmailsforOrdersReceiving1 ?? "").trim();
-    const mobile = (local.WhatsappMobileNumberforOrderDetails1 ?? "")
-      .replace(/\D/g, "");
-    return (
-      (email && validateEmailString(email)) ||
-      (mobile && tenDigitRegex.test(mobile))
-    );
+    const mobile = (local.WhatsappMobileNumberforOrderDetails1 ?? "").replace(/\D/g, "");
+    return validateEmailString(email) || tenDigitRegex.test(mobile);
   }, [local]);
+
+  const isBasicTab = activeTab === "Basic Information";
 
   const saveDisabled =
     saving ||
     validationErrors.length > 0 ||
     (!isBasicTab && !primaryContactValid);
 
-  /* ---------- SAVE ---------- */
+  /* ---------- SAVE HANDLER (POST + PATCH) ---------- */
   async function handleSave() {
+    setSavingInternal(true);
     setError(null);
-    setNotification(null);
 
-    if (validationErrors.length) {
-      setNotification({
-        type: "error",
-        text: validationErrors.join(", "),
-      });
-      return;
-    }
-
-    setSaving(true);
     try {
-      let res: Response;
+      let res;
+      let json;
 
-      if (isNewRestro) {
-        // 👉 CREATE
+      if (!restroCode) {
+        // 🔥 CREATE NEW RESTRO
         res = await fetch("/api/restrosmaster", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(local),
         });
+        json = await res.json();
+        if (!res.ok) throw new Error(json?.error || "Create failed");
+        setLocal(json);
+        setRestro(json);
       } else {
-        // 👉 UPDATE
-        res = await fetch("/api/restrosmaster", {
+        // ✏️ UPDATE EXISTING
+        res = await fetch(`/api/restros/${restroCode}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...local,
-            RestroCode: local.RestroCode,
-          }),
+          body: JSON.stringify(local),
         });
+        json = await res.json();
+        if (!res.ok) throw new Error(json?.error || "Update failed");
       }
 
-      const json = await res.json();
-
-      if (!res.ok) throw new Error(json?.error || "Save failed");
-
-      setNotification({
-        type: "success",
-        text: isNewRestro
-          ? `Restro created successfully (Code ${json.RestroCode})`
-          : "Changes saved successfully",
-      });
-
-      if (isNewRestro && json?.RestroCode) {
-        setLocal(json);
-      }
-
-      setTimeout(() => {
-        router.refresh();
-      }, 500);
+      setNotification({ type: "success", text: "Saved successfully ✅" });
+      setTimeout(() => router.refresh?.(), 800);
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setSaving(false);
+      setSavingInternal(false);
     }
-  }
-
-  function doClose() {
-    onClose ? onClose() : router.push("/admin/restros");
   }
 
   const common = {
     local,
     updateField,
-    Select,
-    Toggle,
+    stationDisplay,
+    stations,
+    restroCode,
   };
 
   const renderTab = () => {
@@ -175,12 +179,7 @@ export default function RestroEditModal({
       case "Station Settings":
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        return (
-          <AddressDocsClient
-            initialData={local}
-            imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}
-          />
-        );
+        return <AddressDocsClient initialData={restro} />;
       case "Contacts":
         return <ContactsTab {...common} />;
       case "Bank":
@@ -195,79 +194,51 @@ export default function RestroEditModal({
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        zIndex: 1100,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <div
-        style={{
-          background: "#fff",
-          width: "98%",
-          height: "98%",
-          maxWidth: 1700,
-          borderRadius: 8,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {/* HEADER */}
-        <div style={{ padding: 16, borderBottom: "1px solid #eee" }}>
-          <strong>
-            {local.RestroName || "New Restro"}{" "}
-            {local.RestroCode ? `(#${local.RestroCode})` : ""}
-          </strong>
-          <button
-            onClick={doClose}
-            style={{ float: "right", background: "#ef4444", color: "#fff" }}
-          >
+    <div className="fixed inset-0 bg-black/50 z-[1100] flex items-center justify-center p-4">
+      <div className="bg-white w-[98%] h-[98%] rounded-lg flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="border-b p-4 flex justify-between">
+          <div>
+            <div className="font-bold">
+              {local.RestroCode || "NEW"} — {local.RestroName || ""}
+            </div>
+            <div className="text-sm text-sky-700">{stationDisplay}</div>
+          </div>
+          <button onClick={onClose} className="bg-red-500 text-white px-3 rounded">
             ✕
           </button>
         </div>
 
-        {/* TABS */}
-        <div style={{ display: "flex", borderBottom: "1px solid #eee" }}>
+        {/* Tabs */}
+        <div className="flex gap-4 px-4 border-b overflow-x-auto">
           {TAB_NAMES.map((t) => (
             <div
               key={t}
               onClick={() => setActiveTab(t)}
-              style={{
-                padding: "10px 14px",
-                cursor: "pointer",
-                fontWeight: activeTab === t ? 700 : 500,
-                borderBottom:
-                  activeTab === t ? "3px solid #0ea5e9" : "none",
-              }}
+              className={`cursor-pointer py-2 ${
+                activeTab === t ? "border-b-2 border-sky-500 font-bold" : ""
+              }`}
             >
               {t}
             </div>
           ))}
         </div>
 
-        {/* BODY */}
-        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+        {/* Body */}
+        <div className="flex-1 overflow-auto p-4">
           <AdminForm>{renderTab()}</AdminForm>
         </div>
 
-        {/* FOOTER */}
-        <div
-          style={{
-            padding: 12,
-            borderTop: "1px solid #eee",
-            display: "flex",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ color: "red" }}>{error}</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <SecondaryButton onClick={doClose}>Cancel</SecondaryButton>
-            <SubmitButton onClick={handleSave} disabled={saveDisabled}>
+        {/* Footer */}
+        <div className="border-t p-3 flex justify-between items-center">
+          <div className="text-red-600 text-sm">
+            {validationErrors[0]}
+            {!isBasicTab && !primaryContactValid && " | Contact required"}
+            {error}
+          </div>
+          <div className="flex gap-2">
+            <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+            <SubmitButton disabled={saveDisabled} onClick={handleSave}>
               {saving ? "Saving..." : "Save"}
             </SubmitButton>
           </div>
