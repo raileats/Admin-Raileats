@@ -322,10 +322,32 @@ export default function RestroEditModal({
   const validationErrors = useMemo(() => collectValidationErrors(local), [local]);
 
   const primaryContactValid = useMemo(() => {
-    const email1 = (local.EmailsforOrdersReceiving1 ?? "").toString().trim();
-    const mobile1 = (local.WhatsappMobileNumberforOrderDetails1 ?? "").toString().replace(/\D/g, "");
-    return (email1 && validateEmailString(email1)) || (mobile1 && tenDigitRegex.test(mobile1));
-  }, [local]);
+  // Priority 1: Contacts tab fields
+  const email1 = (local.EmailsforOrdersReceiving1 ?? "").toString().trim();
+  const mobile1 = (local.WhatsappMobileNumberforOrderDetails1 ?? "").toString().replace(/\D/g, "");
+
+  if (
+    (email1 && validateEmailString(email1)) ||
+    (mobile1 && tenDigitRegex.test(mobile1))
+  ) {
+    return true;
+  }
+
+  // ✅ Priority 2: Basic Information fallback
+  const ownerEmail = (local.OwnerEmail ?? "").toString().trim();
+  const ownerPhone = (local.OwnerPhone ?? "").toString().replace(/\D/g, "");
+
+  const restroEmail = (local.RestroEmail ?? "").toString().trim();
+  const restroPhone = (local.RestroPhone ?? "").toString().replace(/\D/g, "");
+
+  return (
+    (ownerEmail && validateEmailString(ownerEmail)) ||
+    (restroEmail && validateEmailString(restroEmail)) ||
+    (ownerPhone && tenDigitRegex.test(ownerPhone)) ||
+    (restroPhone && tenDigitRegex.test(restroPhone))
+  );
+}, [local]);
+
 
  const isBasicTab = activeTab === "Basic Information";
 
