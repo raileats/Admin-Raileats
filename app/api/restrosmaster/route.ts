@@ -72,7 +72,7 @@ export async function PATCH(req: Request) {
 
     const allowedFields = [
   "RestroName",
-  "BrandNameifany",   // ✅ exact column
+  "BrandNameifAny",   // ✅ exact column
   "StationCode",
   "StationName",
   "State",
