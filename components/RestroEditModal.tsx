@@ -399,25 +399,27 @@ const saveDisabled =
 
     if (isNewRestro) {
   const createPayload = {
-    RestroName: local.RestroName,
-    StationCode: local.StationCode,
-    StationName: local.StationName,
+  RestroName: local.RestroName,
+  StationCode: local.StationCode,
+  StationName: local.StationName,
 
-    OwnerName: local.OwnerName,
-    OwnerEmail: local.OwnerEmail,
-    OwnerPhone: local.OwnerPhone,
+  OwnerName: local.OwnerName,
+  OwnerEmail: local.OwnerEmail,
+  OwnerPhone: local.OwnerPhone,
 
-    RestroEmail: local.RestroEmail,
-    RestroPhone: local.RestroPhone,
+  RestroEmail: local.RestroEmail,
+  RestroPhone: local.RestroPhone,
 
-    // ✅ EXACT Supabase column
-    BrandNameIfAny: local.BrandName,
+  // ✅ EXACT column name (case-sensitive)
+  BrandNameIfAny: local.BrandName || null,
 
-    // ✅ EXISTING column
-    RaileatsStatus: local.RaileatsStatus ? 1 : 0,
+  // ✅ EXACT DB column (int8)
+  RaileatsStatus: local.RaileatsStatus ? 1 : 0,
 
-    IsIrctcApproved: local.IsIrctcApproved === "Yes" ? 1 : 0,
-  };
+  // ✅ int8 (0/1)
+  IsIrctcApproved: local.IsIrctcApproved === "Yes" ? 1 : 0,
+};
+
 
   const res = await fetch("/api/restrosmaster", {
     method: "POST",
