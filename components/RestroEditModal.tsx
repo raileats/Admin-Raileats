@@ -276,6 +276,7 @@ export default function RestroEditModal({
     (local && (local.RestroCode ?? local.restro_code ?? local.id ?? local.code)) ||
     (restro && (restro.RestroCode ?? restro.restro_code ?? restro.RestroId ?? restro.restro_id ?? restro.code)) ||
     "";
+const isNewRestro = !restroCode;
 
   function collectValidationErrors(obj: any) {
     const errs: string[] = [];
