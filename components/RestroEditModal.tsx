@@ -407,7 +407,7 @@ const saveDisabled =
     OwnerPhone: local.OwnerPhone,
     RestroEmail: local.RestroEmail,
     RestroPhone: local.RestroPhone,
-    BrandName: local.BrandName,
+    BrandNameifAny: local.BrandName,
     RaileatsStatus: local.RaileatsStatus ?? "OFF",
     IsIrctcApproved: local.IsIrctcApproved ?? "No",
   };
