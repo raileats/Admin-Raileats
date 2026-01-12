@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import UI from "@/components/AdminUI";
@@ -18,7 +18,6 @@ type Props = {
   restro?: any | null;
   onClose?: () => void;
   saving?: boolean;
-  stationsOptions?: { label: string; value: string }[];
   initialTab?: string;
 };
 
@@ -32,33 +31,23 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ---------- helpers ---------- */
-function safeGet(obj: any, ...keys: string[]) {
-  for (const k of keys) {
-    if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
-  }
-  return undefined;
-}
-
-/* ---------- component ---------- */
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
   saving: parentSaving,
-  stationsOptions = [],
   initialTab,
 }: Props) {
   const router = useRouter();
 
-  /** 🔥 ADD vs EDIT MODE */
+  /** 🆕 ADD vs ✏️ EDIT */
   const isNewOutlet = !restroProp;
 
-  const [activeTab, setActiveTab] = useState<string>(initialTab ?? "Basic Information");
+  const [activeTab, setActiveTab] = useState(initialTab ?? "Basic Information");
   const [restro, setRestro] = useState<any | null>(restroProp ?? null);
   const [local, setLocal] = useState<any>({});
   const [savingInternal, setSavingInternal] = useState(false);
 
-  /** 🔥 NEW RESTRO = BLANK FORM */
+  /** 🆕 NEW RESTRO → BLANK FORM */
   useEffect(() => {
     if (isNewOutlet) {
       setLocal({
@@ -81,14 +70,14 @@ export default function RestroEditModal({
   const saving = parentSaving ?? savingInternal;
 
   const updateField = useCallback((key: string, value: any) => {
-    setLocal((s: any) => ({ ...s, [key]: value }));
+    setLocal((prev: any) => ({ ...prev, [key]: value }));
   }, []);
 
-  /** 🔥 SAVE HANDLER (ADD + EDIT) */
+  /** 💾 SAVE (ADD + EDIT) */
   async function handleSave() {
     setSavingInternal(true);
     try {
-      // 🆕 ADD NEW RESTRO
+      /** 🆕 CREATE */
       if (isNewOutlet) {
         const res = await fetch("/api/restrosmaster", {
           method: "POST",
@@ -97,22 +86,25 @@ export default function RestroEditModal({
         });
 
         const json = await res.json();
-        if (!res.ok) throw new Error(json.error);
+        if (!res.ok) throw new Error(json?.error || "Create failed");
 
-        // 🔁 EDIT MODE AFTER CREATE
+        // 🔁 Redirect to EDIT MODE
         router.push(`/admin/restros/${json.RestroCode}/edit/basic`);
         return;
       }
 
-      // ✏️ EDIT EXISTING
+      /** ✏️ UPDATE */
       await fetch("/api/restrosmaster", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(local),
+        body: JSON.stringify({
+          ...local,
+          RestroCode: local.RestroCode ?? restro?.RestroCode,
+        }),
       });
-
     } catch (err) {
-      console.error(err);
+      console.error("Save failed:", err);
+      alert("Save failed. Check console.");
     } finally {
       setSavingInternal(false);
     }
@@ -136,7 +128,7 @@ export default function RestroEditModal({
       case "Station Settings":
         return <StationSettingsTab {...common} />;
       case "Address & Documents":
-        return <AddressDocsClient initialData={restro} />;
+        return restro ? <AddressDocsClient initialData={restro} /> : null;
       case "Contacts":
         return <ContactsTab {...common} />;
       case "Bank":
@@ -152,7 +144,7 @@ export default function RestroEditModal({
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1100 }}>
-      <div style={{ background: "#fff", width: "98%", height: "98%", margin: "1%", borderRadius: 8 }}>
+      <div style={{ background: "#fff", width: "98%", height: "98%", margin: "1%", borderRadius: 8, display: "flex", flexDirection: "column" }}>
         {/* Tabs */}
         <div style={{ display: "flex", padding: 12, borderBottom: "1px solid #eee" }}>
           {TAB_NAMES.map((t) => (
@@ -172,7 +164,9 @@ export default function RestroEditModal({
         </div>
 
         {/* Content */}
-        <div style={{ padding: 20 }}>{renderTab()}</div>
+        <div style={{ padding: 20, flex: 1, overflow: "auto" }}>
+          <AdminForm>{renderTab()}</AdminForm>
+        </div>
 
         {/* Footer */}
         <div style={{ padding: 12, borderTop: "1px solid #eee", display: "flex", justifyContent: "flex-end", gap: 8 }}>
