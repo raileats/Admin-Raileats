@@ -402,14 +402,21 @@ const saveDisabled =
     RestroName: local.RestroName,
     StationCode: local.StationCode,
     StationName: local.StationName,
+
     OwnerName: local.OwnerName,
     OwnerEmail: local.OwnerEmail,
     OwnerPhone: local.OwnerPhone,
+
     RestroEmail: local.RestroEmail,
     RestroPhone: local.RestroPhone,
-    BrandNameifAny: local.BrandName,
-    RaileatsStatus: local.RaileatsStatus ?? "OFF",
-    IsIrctcApproved: local.IsIrctcApproved ?? "No",
+
+    // ✅ EXACT Supabase column
+    BrandNameIfAny: local.BrandName,
+
+    // ✅ EXISTING column
+    RaileatsStatus: local.RaileatsStatus ? 1 : 0,
+
+    IsIrctcApproved: local.IsIrctcApproved === "Yes" ? 1 : 0,
   };
 
   const res = await fetch("/api/restrosmaster", {
@@ -423,11 +430,11 @@ const saveDisabled =
     throw new Error(json?.error || "Create failed");
   }
 
-  // ✅ NEW RestroCode state me daalo
+  // ✅ RestroCode state में आया
   setRestro(json);
   setLocal((s: any) => ({ ...s, ...json }));
 
-  // ✅ NEXT TAB PAR MOVE
+  // ✅ NEXT TAB
   setActiveTab("Station Settings");
 }
 
