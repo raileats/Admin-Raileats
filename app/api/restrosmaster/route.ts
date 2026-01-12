@@ -18,16 +18,10 @@ export async function GET(req: Request) {
     const qRaw = url.searchParams.get("q") || "";
     const q = sanitizeSearch(qRaw);
 
-    export async function GET(req: Request) {
-  try {
-    const url = new URL(req.url);
-    const qRaw = url.searchParams.get("q") || "";
-    const q = sanitizeSearch(qRaw);
-
     let query = supabaseServer
       .from(TABLE)
       .select("*")
-      .order("CreatedAt", { ascending: false }) // 🔥 ALWAYS
+      .order("RestroCode", { ascending: false }) // ✅ BIG → SMALL
       .limit(1000);
 
     if (q) {
@@ -44,7 +38,7 @@ export async function GET(req: Request) {
             `StationName.ilike.${pattern}`,
           ].join(",")
         )
-        .order("CreatedAt", { ascending: false }) // 🔥 SAME ORDER
+        .order("RestroCode", { ascending: false }) // ✅ SAME ORDER
         .limit(1000);
     }
 
@@ -60,8 +54,6 @@ export async function GET(req: Request) {
     );
   }
 }
-
-
 
 /* ============================
    PATCH : UPDATE RESTRO
@@ -79,37 +71,29 @@ export async function PATCH(req: Request) {
     }
 
     const allowedFields = [
-  "RestroName",
-  "BrandNameifAny",   // ✅ exact column
-  "StationCode",
-  "StationName",
-  "State",
-  "OwnerName",
-  "OwnerEmail",
-  "OwnerPhone",
-  "RestroEmail",
-  "RestroPhone",
-  "RestroRating",
-  "RestroDisplayPhoto",
-  "RaileatsStatus",   // ✅ exact
-  "IsIrctcApproved",
-  "FSSAINumber",
-  "FSSAIExpiryDate",
-];
-
+      "RestroName",
+      "BrandNameifAny",
+      "StationCode",
+      "StationName",
+      "State",
+      "OwnerName",
+      "OwnerEmail",
+      "OwnerPhone",
+      "RestroEmail",
+      "RestroPhone",
+      "RestroRating",
+      "RestroDisplayPhoto",
+      "RaileatsStatus",
+      "IsIrctcApproved",
+      "FSSAINumber",
+      "FSSAIExpiryDate",
+    ];
 
     const updates: any = {};
     for (const key of allowedFields) {
       if (body[key] !== undefined) {
         updates[key] = body[key];
       }
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json(
-        { error: "No valid fields to update" },
-        { status: 400 }
-      );
     }
 
     const { data, error } = await supabaseServer
@@ -138,7 +122,6 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // 🔴 Minimum required fields
     if (!body.RestroName || !body.StationCode || !body.StationName) {
       return NextResponse.json(
         { error: "RestroName, StationCode and StationName are required" },
@@ -146,30 +129,22 @@ export async function POST(req: Request) {
       );
     }
 
-    /* 🔥 STEP 1: Get LAST RestroCode */
+    // 🔥 LAST RestroCode (highest)
     const { data: lastRows, error: lastErr } = await supabaseServer
       .from(TABLE)
       .select("RestroCode")
-      .order("CreatedAt", { ascending: false })
-
+      .order("RestroCode", { ascending: false })
       .limit(1);
 
     if (lastErr) throw lastErr;
 
-    const lastCode = Number(lastRows?.[0]?.RestroCode ?? 1010);
-    const newRestroCode = lastCode + 1;
+    const newRestroCode = Number(lastRows?.[0]?.RestroCode ?? 1010) + 1;
 
-    /* 🔥 STEP 2: Insert new restro */
     const insertPayload = {
-  ...body,
-  RestroCode: newRestroCode,
-
-  // ✅ DB column
-  RaileatsStatus: body.RaileatsStatus ?? 0,
-
-  // ❌ Status / CreatedAt / UpdatedAt कभी मत भेजो
-};
-
+      ...body,
+      RestroCode: newRestroCode,
+      RaileatsStatus: body.RaileatsStatus ?? 0,
+    };
 
     const { data, error } = await supabaseServer
       .from(TABLE)
