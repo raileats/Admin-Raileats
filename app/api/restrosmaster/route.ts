@@ -143,7 +143,8 @@ export async function POST(req: Request) {
     const { data: lastRows, error: lastErr } = await supabaseServer
       .from(TABLE)
       .select("RestroCode")
-      .order("RestroCode", { ascending: false })
+      .order("CreatedAt", { ascending: false })
+
       .limit(1);
 
     if (lastErr) throw lastErr;
