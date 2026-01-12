@@ -327,7 +327,13 @@ export default function RestroEditModal({
     return (email1 && validateEmailString(email1)) || (mobile1 && tenDigitRegex.test(mobile1));
   }, [local]);
 
-  const saveDisabled = saving || validationErrors.length > 0 || !primaryContactValid;
+ const isBasicTab = activeTab === "Basic Information";
+
+const saveDisabled =
+  saving ||
+  validationErrors.length > 0 ||
+  (!isBasicTab && !primaryContactValid);
+
 
   async function handleSave() {
     setNotification(null);
@@ -341,11 +347,6 @@ export default function RestroEditModal({
 
     if (!primaryContactValid) {
       setNotification({ type: "error", text: `Please provide a valid Email 1 or a 10-digit Mobile 1 before saving.` });
-      return;
-    }
-
-    if (!restroCode) {
-      setNotification({ type: "error", text: "Missing RestroCode — cannot save." });
       return;
     }
 
@@ -381,11 +382,29 @@ export default function RestroEditModal({
         return;
       }
 
-      const result = await defaultPatch(payload);
+     if (isNewRestro) {
+  const res = await fetch("/api/restrosmaster", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(local),
+  });
 
-      if (!result.ok) {
-        throw new Error(result.error ?? "Update failed");
-      }
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error || "Create failed");
+  }
+
+  // 🔥 New RestroCode (1011 etc) state में डालो
+  setRestro(json);
+  setLocal((s: any) => ({ ...s, ...json }));
+
+} else {
+  const result = await defaultPatch(payload);
+  if (!result.ok) {
+    throw new Error(result.error ?? "Update failed");
+  }
+}
+
 
       setNotification({ type: "success", text: "Changes saved successfully ✅" });
 
