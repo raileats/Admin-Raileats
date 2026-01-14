@@ -18,27 +18,7 @@ function makeEmpty(prefix: string, count: number): Item[] {
   }));
 }
 
-const inputStyle: React.CSSProperties = {
-  display: 'block',
-  width: '100%',
-  height: '42px',
-  padding: '8px 12px',
-  backgroundColor: '#ffffff',
-  border: '1px solid #d1d5db',
-  borderRadius: '6px',
-  outline: 'none',
-  appearance: 'auto',
-};
-
-export default function ContactsClient({
-  restroCode,
-  initialEmails,
-  initialWhatsapps,
-}: {
-  restroCode: string;
-  initialEmails: Item[];
-  initialWhatsapps: Item[];
-}) {
+export default function ContactsClient() {
   const [emails, setEmails] = useState<Item[]>([]);
   const [whatsapps, setWhatsapps] = useState<Item[]>([]);
 
@@ -47,28 +27,45 @@ export default function ContactsClient({
     setWhatsapps(makeEmpty('wa', 3));
   }, []);
 
+  /** 🔥 ADMIN CSS BREAKER */
+  const forceInput = {
+    all: 'unset' as const,
+    boxSizing: 'border-box' as const,
+    width: '100%',
+    height: '44px',
+    padding: '8px 12px',
+    border: '1px solid #cbd5e1',
+    borderRadius: '6px',
+    backgroundColor: '#fff',
+    color: '#000',
+    fontSize: '14px',
+    cursor: 'text',
+    pointerEvents: 'auto',
+    display: 'block',
+  };
+
+  const rowStyle = {
+    display: 'grid',
+    gridTemplateColumns: '1fr 2fr 120px',
+    gap: '16px',
+    alignItems: 'center',
+    marginBottom: '14px',
+  };
+
   return (
-    <div style={{ paddingBottom: 20 }}>
+    <div style={{ paddingBottom: 30 }}>
 
       {/* EMAILS */}
-      <h3 style={{ fontWeight: 600, marginBottom: 16 }}>Emails (max 2)</h3>
+      <h3 style={{ fontWeight: 600, marginBottom: 16 }}>
+        Emails (max 2)
+      </h3>
 
       {emails.map((e, i) => (
-        <div
-          key={e.id}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 2fr 120px',
-            gap: 16,
-            marginBottom: 14,
-            alignItems: 'center',
-          }}
-        >
+        <div key={e.id} style={rowStyle}>
           <input
-            type="text"
+            style={forceInput}
             placeholder={`Name ${i + 1}`}
             value={e.name}
-            style={inputStyle}
             onChange={(ev) => {
               const v = [...emails];
               v[i].name = ev.target.value;
@@ -77,10 +74,9 @@ export default function ContactsClient({
           />
 
           <input
-            type="email"
+            style={forceInput}
             placeholder={`Email ${i + 1}`}
             value={e.value}
-            style={inputStyle}
             onChange={(ev) => {
               const v = [...emails];
               v[i].value = ev.target.value;
@@ -88,7 +84,7 @@ export default function ContactsClient({
             }}
           />
 
-          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: 6 }}>
             <input
               type="checkbox"
               checked={e.active}
@@ -111,21 +107,11 @@ export default function ContactsClient({
       </h3>
 
       {whatsapps.map((w, i) => (
-        <div
-          key={w.id}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 2fr 120px',
-            gap: 16,
-            marginBottom: 14,
-            alignItems: 'center',
-          }}
-        >
+        <div key={w.id} style={rowStyle}>
           <input
-            type="text"
+            style={forceInput}
             placeholder={`Name ${i + 1}`}
             value={w.name}
-            style={inputStyle}
             onChange={(ev) => {
               const v = [...whatsapps];
               v[i].name = ev.target.value;
@@ -134,10 +120,9 @@ export default function ContactsClient({
           />
 
           <input
-            type="text"
+            style={forceInput}
             placeholder={`Mobile ${i + 1}`}
             value={w.value}
-            style={inputStyle}
             onChange={(ev) => {
               const v = [...whatsapps];
               v[i].value = ev.target.value.replace(/\D/g, '').slice(0, 10);
@@ -145,7 +130,7 @@ export default function ContactsClient({
             }}
           />
 
-          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: 6 }}>
             <input
               type="checkbox"
               checked={w.active}
