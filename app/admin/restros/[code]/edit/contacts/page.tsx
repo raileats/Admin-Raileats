@@ -1,4 +1,5 @@
 'use client';
+
 import React, { useEffect, useState } from 'react';
 
 type Item = {
@@ -29,32 +30,22 @@ export default function ContactsClient({
   const [emails, setEmails] = useState<Item[]>([]);
   const [whatsapps, setWhatsapps] = useState<Item[]>([]);
 
-  // 🔥 IMPORTANT: ensure fixed rows
   useEffect(() => {
-    const baseEmails = makeEmpty('email', 2);
+    const emailBase = makeEmpty('email', 2);
     initialEmails.forEach((e, i) => {
-      if (baseEmails[i]) baseEmails[i] = { ...baseEmails[i], ...e };
+      if (emailBase[i]) emailBase[i] = { ...emailBase[i], ...e };
     });
-    setEmails(baseEmails);
+    setEmails(emailBase);
 
-    const baseWhats = makeEmpty('wa', 3);
+    const waBase = makeEmpty('wa', 3);
     initialWhatsapps.forEach((w, i) => {
-      if (baseWhats[i]) baseWhats[i] = { ...baseWhats[i], ...w };
+      if (waBase[i]) waBase[i] = { ...waBase[i], ...w };
     });
-    setWhatsapps(baseWhats);
+    setWhatsapps(waBase);
   }, [initialEmails, initialWhatsapps]);
 
-  function updateEmail(i: number, key: keyof Item, val: any) {
-    setEmails(prev =>
-      prev.map((r, idx) => (idx === i ? { ...r, [key]: val } : r))
-    );
-  }
-
-  function updateWhatsapp(i: number, key: keyof Item, val: any) {
-    setWhatsapps(prev =>
-      prev.map((r, idx) => (idx === i ? { ...r, [key]: val } : r))
-    );
-  }
+  const inputClass =
+    'w-full min-h-[40px] px-3 py-2 bg-white border border-gray-300 rounded outline-none focus:ring-2 focus:ring-blue-500 relative z-10';
 
   return (
     <div className="space-y-12">
@@ -64,28 +55,45 @@ export default function ContactsClient({
         <h3 className="font-semibold mb-6">Emails (max 2)</h3>
 
         {emails.map((e, i) => (
-          <div key={e.id} className="grid grid-cols-3 gap-6 mb-4 items-center">
+          <div
+            key={e.id}
+            className="grid grid-cols-12 gap-4 mb-4 items-center"
+          >
             <input
+              type="text"
               placeholder={`Name ${i + 1}`}
               value={e.name}
-              onChange={(ev) => updateEmail(i, 'name', ev.target.value)}
-              className="border p-2 rounded"
+              onChange={(ev) => {
+                const v = [...emails];
+                v[i].name = ev.target.value;
+                setEmails(v);
+              }}
+              className={`col-span-4 ${inputClass}`}
             />
 
             <input
+              type="email"
               placeholder={`Email ${i + 1}`}
               value={e.value}
-              onChange={(ev) => updateEmail(i, 'value', ev.target.value)}
-              className="border p-2 rounded"
+              onChange={(ev) => {
+                const v = [...emails];
+                v[i].value = ev.target.value;
+                setEmails(v);
+              }}
+              className={`col-span-6 ${inputClass}`}
             />
 
-            <label className="flex items-center gap-2">
+            <label className="col-span-2 flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={e.active}
-                onChange={(ev) => updateEmail(i, 'active', ev.target.checked)}
+                onChange={(ev) => {
+                  const v = [...emails];
+                  v[i].active = ev.target.checked;
+                  setEmails(v);
+                }}
               />
-              <span>{e.active ? 'ON' : 'OFF'}</span>
+              <span className="text-sm">{e.active ? 'ON' : 'OFF'}</span>
             </label>
           </div>
         ))}
@@ -96,39 +104,49 @@ export default function ContactsClient({
         <h3 className="font-semibold mb-6">WhatsApp numbers (max 3)</h3>
 
         {whatsapps.map((w, i) => (
-          <div key={w.id} className="grid grid-cols-3 gap-6 mb-4 items-center">
+          <div
+            key={w.id}
+            className="grid grid-cols-12 gap-4 mb-4 items-center"
+          >
             <input
+              type="text"
               placeholder={`Name ${i + 1}`}
               value={w.name}
-              onChange={(ev) => updateWhatsapp(i, 'name', ev.target.value)}
-              className="border p-2 rounded"
+              onChange={(ev) => {
+                const v = [...whatsapps];
+                v[i].name = ev.target.value;
+                setWhatsapps(v);
+              }}
+              className={`col-span-4 ${inputClass}`}
             />
 
             <input
+              type="text"
               placeholder={`Mobile ${i + 1}`}
               value={w.value}
-              onChange={(ev) =>
-                updateWhatsapp(
-                  i,
-                  'value',
-                  ev.target.value.replace(/\D/g, '').slice(0, 10)
-                )
-              }
-              className="border p-2 rounded"
+              onChange={(ev) => {
+                const v = [...whatsapps];
+                v[i].value = ev.target.value.replace(/\D/g, '').slice(0, 10);
+                setWhatsapps(v);
+              }}
+              className={`col-span-6 ${inputClass}`}
             />
 
-            <label className="flex items-center gap-2">
+            <label className="col-span-2 flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={w.active}
-                onChange={(ev) => updateWhatsapp(i, 'active', ev.target.checked)}
+                onChange={(ev) => {
+                  const v = [...whatsapps];
+                  v[i].active = ev.target.checked;
+                  setWhatsapps(v);
+                }}
               />
-              <span>{w.active ? 'ON' : 'OFF'}</span>
+              <span className="text-sm">{w.active ? 'ON' : 'OFF'}</span>
             </label>
           </div>
         ))}
       </div>
-
     </div>
   );
 }
