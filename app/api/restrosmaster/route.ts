@@ -15,45 +15,36 @@ function sanitizeSearch(q: string) {
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const qRaw = url.searchParams.get("q") || "";
-    const q = sanitizeSearch(qRaw);
+    const q = url.searchParams.get("q")?.trim();
 
     let query = supabaseServer
-      .from(TABLE)
+      .from("RestroMaster")
       .select("*")
-      .order("RestroCode", { ascending: false }) // ✅ BIG → SMALL
+      .order("RestroCode", { ascending: false }) // 🔥 MAIN FIX
       .limit(1000);
 
     if (q) {
       const pattern = `%${q}%`;
-      query = supabaseServer
-        .from(TABLE)
-        .select("*")
-        .or(
-          [
-            `RestroCode.ilike.${pattern}`,
-            `RestroName.ilike.${pattern}`,
-            `OwnerName.ilike.${pattern}`,
-            `StationCode.ilike.${pattern}`,
-            `StationName.ilike.${pattern}`,
-          ].join(",")
-        )
-        .order("RestroCode", { ascending: false }) // ✅ SAME ORDER
-        .limit(1000);
+      query = query.or(
+        [
+          `RestroCode.ilike.${pattern}`,
+          `RestroName.ilike.${pattern}`,
+          `OwnerName.ilike.${pattern}`,
+          `StationCode.ilike.${pattern}`,
+          `StationName.ilike.${pattern}`,
+        ].join(",")
+      );
     }
 
     const { data, error } = await query;
     if (error) throw error;
 
     return NextResponse.json(data ?? []);
-  } catch (err: any) {
-    console.error("GET RestroMaster error:", err);
-    return NextResponse.json(
-      { error: err?.message || String(err) },
-      { status: 500 }
-    );
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
+
 
 /* ============================
    PATCH : UPDATE RESTRO
