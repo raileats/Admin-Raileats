@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 type Item = {
   id: string;
@@ -7,6 +7,15 @@ type Item = {
   value: string;
   active: boolean;
 };
+
+function makeEmpty(prefix: string, count: number): Item[] {
+  return Array.from({ length: count }).map((_, i) => ({
+    id: `${prefix}-${i + 1}`,
+    name: '',
+    value: '',
+    active: false,
+  }));
+}
 
 export default function ContactsClient({
   restroCode,
@@ -17,26 +26,45 @@ export default function ContactsClient({
   initialEmails: Item[];
   initialWhatsapps: Item[];
 }) {
-  const [emails, setEmails] = useState<Item[]>(initialEmails);
-  const [whatsapps, setWhatsapps] = useState<Item[]>(initialWhatsapps);
+  const [emails, setEmails] = useState<Item[]>([]);
+  const [whatsapps, setWhatsapps] = useState<Item[]>([]);
+
+  // 🔥 IMPORTANT: ensure fixed rows
+  useEffect(() => {
+    const baseEmails = makeEmpty('email', 2);
+    initialEmails.forEach((e, i) => {
+      if (baseEmails[i]) baseEmails[i] = { ...baseEmails[i], ...e };
+    });
+    setEmails(baseEmails);
+
+    const baseWhats = makeEmpty('wa', 3);
+    initialWhatsapps.forEach((w, i) => {
+      if (baseWhats[i]) baseWhats[i] = { ...baseWhats[i], ...w };
+    });
+    setWhatsapps(baseWhats);
+  }, [initialEmails, initialWhatsapps]);
 
   function updateEmail(i: number, key: keyof Item, val: any) {
-    setEmails(prev => prev.map((r, idx) => idx === i ? { ...r, [key]: val } : r));
+    setEmails(prev =>
+      prev.map((r, idx) => (idx === i ? { ...r, [key]: val } : r))
+    );
   }
 
   function updateWhatsapp(i: number, key: keyof Item, val: any) {
-    setWhatsapps(prev => prev.map((r, idx) => idx === i ? { ...r, [key]: val } : r));
+    setWhatsapps(prev =>
+      prev.map((r, idx) => (idx === i ? { ...r, [key]: val } : r))
+    );
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
 
       {/* EMAILS */}
       <div>
-        <h3 className="font-semibold mb-4">Emails (max 2)</h3>
+        <h3 className="font-semibold mb-6">Emails (max 2)</h3>
 
         {emails.map((e, i) => (
-          <div key={e.id} className="grid grid-cols-3 gap-4 mb-4 items-center">
+          <div key={e.id} className="grid grid-cols-3 gap-6 mb-4 items-center">
             <input
               placeholder={`Name ${i + 1}`}
               value={e.name}
@@ -65,10 +93,10 @@ export default function ContactsClient({
 
       {/* WHATSAPP */}
       <div>
-        <h3 className="font-semibold mb-4">WhatsApp numbers (max 3)</h3>
+        <h3 className="font-semibold mb-6">WhatsApp numbers (max 3)</h3>
 
         {whatsapps.map((w, i) => (
-          <div key={w.id} className="grid grid-cols-3 gap-4 mb-4 items-center">
+          <div key={w.id} className="grid grid-cols-3 gap-6 mb-4 items-center">
             <input
               placeholder={`Name ${i + 1}`}
               value={w.name}
@@ -80,7 +108,11 @@ export default function ContactsClient({
               placeholder={`Mobile ${i + 1}`}
               value={w.value}
               onChange={(ev) =>
-                updateWhatsapp(i, 'value', ev.target.value.replace(/\D/g, '').slice(0, 10))
+                updateWhatsapp(
+                  i,
+                  'value',
+                  ev.target.value.replace(/\D/g, '').slice(0, 10)
+                )
               }
               className="border p-2 rounded"
             />
