@@ -27,11 +27,9 @@ export default function ContactsClient() {
     setWhatsapps(makeEmpty('wa', 3));
   }, []);
 
-  /** 🔥 ADMIN CSS OVERRIDE (TYPE-SAFE) */
-  const forceInput: React.CSSProperties = {
-    // TS does not like `all`, so cast
+  // 🔥 RailEats Admin CSS Breaker
+  const inputStyle: React.CSSProperties = {
     ...( { all: 'unset' } as React.CSSProperties ),
-
     boxSizing: 'border-box',
     width: '100%',
     height: '44px',
@@ -42,7 +40,7 @@ export default function ContactsClient() {
     color: '#000000',
     fontSize: '14px',
     cursor: 'text',
-    pointerEvents: 'auto', // ✅ now valid
+    pointerEvents: 'auto',
     display: 'block',
   };
 
@@ -64,7 +62,7 @@ export default function ContactsClient() {
       {emails.map((e, i) => (
         <div key={e.id} style={rowStyle}>
           <input
-            style={forceInput}
+            style={inputStyle}
             placeholder={`Name ${i + 1}`}
             value={e.name}
             onChange={(ev) => {
@@ -75,7 +73,7 @@ export default function ContactsClient() {
           />
 
           <input
-            style={forceInput}
+            style={inputStyle}
             placeholder={`Email ${i + 1}`}
             value={e.value}
             onChange={(ev) => {
@@ -109,7 +107,7 @@ export default function ContactsClient() {
       {whatsapps.map((w, i) => (
         <div key={w.id} style={rowStyle}>
           <input
-            style={forceInput}
+            style={inputStyle}
             placeholder={`Name ${i + 1}`}
             value={w.name}
             onChange={(ev) => {
@@ -120,7 +118,7 @@ export default function ContactsClient() {
           />
 
           <input
-            style={forceInput}
+            style={inputStyle}
             placeholder={`Mobile ${i + 1}`}
             value={w.value}
             onChange={(ev) => {
