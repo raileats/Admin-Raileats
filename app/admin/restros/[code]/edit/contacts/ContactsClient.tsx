@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type Item = {
   id: string;
@@ -18,6 +18,18 @@ function makeEmpty(prefix: string, count: number): Item[] {
   }));
 }
 
+const inputStyle: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  height: '42px',
+  padding: '8px 12px',
+  backgroundColor: '#ffffff',
+  border: '1px solid #d1d5db',
+  borderRadius: '6px',
+  outline: 'none',
+  appearance: 'auto',
+};
+
 export default function ContactsClient({
   restroCode,
   initialEmails,
@@ -31,113 +43,122 @@ export default function ContactsClient({
   const [whatsapps, setWhatsapps] = useState<Item[]>([]);
 
   useEffect(() => {
-    const emailRows = makeEmpty('email', 2);
-    initialEmails.forEach((e, i) => {
-      if (emailRows[i]) emailRows[i] = { ...emailRows[i], ...e };
-    });
-    setEmails(emailRows);
-
-    const waRows = makeEmpty('wa', 3);
-    initialWhatsapps.forEach((w, i) => {
-      if (waRows[i]) waRows[i] = { ...waRows[i], ...w };
-    });
-    setWhatsapps(waRows);
-  }, [initialEmails, initialWhatsapps]);
-
-  const inputClass =
-    'w-full min-h-[40px] px-3 py-2 bg-white border border-gray-300 rounded outline-none focus:ring-2 focus:ring-blue-500';
+    setEmails(makeEmpty('email', 2));
+    setWhatsapps(makeEmpty('wa', 3));
+  }, []);
 
   return (
-    <div className="space-y-12">
+    <div style={{ paddingBottom: 20 }}>
 
       {/* EMAILS */}
-      <div>
-        <h3 className="font-semibold mb-6">Emails (max 2)</h3>
+      <h3 style={{ fontWeight: 600, marginBottom: 16 }}>Emails (max 2)</h3>
 
-        {emails.map((e, i) => (
-          <div key={e.id} className="grid grid-cols-12 gap-4 mb-4 items-center">
+      {emails.map((e, i) => (
+        <div
+          key={e.id}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 2fr 120px',
+            gap: 16,
+            marginBottom: 14,
+            alignItems: 'center',
+          }}
+        >
+          <input
+            type="text"
+            placeholder={`Name ${i + 1}`}
+            value={e.name}
+            style={inputStyle}
+            onChange={(ev) => {
+              const v = [...emails];
+              v[i].name = ev.target.value;
+              setEmails(v);
+            }}
+          />
+
+          <input
+            type="email"
+            placeholder={`Email ${i + 1}`}
+            value={e.value}
+            style={inputStyle}
+            onChange={(ev) => {
+              const v = [...emails];
+              v[i].value = ev.target.value;
+              setEmails(v);
+            }}
+          />
+
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input
-              className={`col-span-4 ${inputClass}`}
-              placeholder={`Name ${i + 1}`}
-              value={e.name}
+              type="checkbox"
+              checked={e.active}
               onChange={(ev) => {
                 const v = [...emails];
-                v[i].name = ev.target.value;
+                v[i].active = ev.target.checked;
                 setEmails(v);
               }}
             />
+            <span>{e.active ? 'ON' : 'OFF'}</span>
+          </label>
+        </div>
+      ))}
 
-            <input
-              className={`col-span-6 ${inputClass}`}
-              placeholder={`Email ${i + 1}`}
-              value={e.value}
-              onChange={(ev) => {
-                const v = [...emails];
-                v[i].value = ev.target.value;
-                setEmails(v);
-              }}
-            />
-
-            <label className="col-span-2 flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={e.active}
-                onChange={(ev) => {
-                  const v = [...emails];
-                  v[i].active = ev.target.checked;
-                  setEmails(v);
-                }}
-              />
-              <span>{e.active ? 'ON' : 'OFF'}</span>
-            </label>
-          </div>
-        ))}
-      </div>
+      <hr style={{ margin: '24px 0' }} />
 
       {/* WHATSAPP */}
-      <div>
-        <h3 className="font-semibold mb-6">WhatsApp numbers (max 3)</h3>
+      <h3 style={{ fontWeight: 600, marginBottom: 16 }}>
+        WhatsApp numbers (max 3)
+      </h3>
 
-        {whatsapps.map((w, i) => (
-          <div key={w.id} className="grid grid-cols-12 gap-4 mb-4 items-center">
+      {whatsapps.map((w, i) => (
+        <div
+          key={w.id}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 2fr 120px',
+            gap: 16,
+            marginBottom: 14,
+            alignItems: 'center',
+          }}
+        >
+          <input
+            type="text"
+            placeholder={`Name ${i + 1}`}
+            value={w.name}
+            style={inputStyle}
+            onChange={(ev) => {
+              const v = [...whatsapps];
+              v[i].name = ev.target.value;
+              setWhatsapps(v);
+            }}
+          />
+
+          <input
+            type="text"
+            placeholder={`Mobile ${i + 1}`}
+            value={w.value}
+            style={inputStyle}
+            onChange={(ev) => {
+              const v = [...whatsapps];
+              v[i].value = ev.target.value.replace(/\D/g, '').slice(0, 10);
+              setWhatsapps(v);
+            }}
+          />
+
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input
-              className={`col-span-4 ${inputClass}`}
-              placeholder={`Name ${i + 1}`}
-              value={w.name}
+              type="checkbox"
+              checked={w.active}
               onChange={(ev) => {
                 const v = [...whatsapps];
-                v[i].name = ev.target.value;
+                v[i].active = ev.target.checked;
                 setWhatsapps(v);
               }}
             />
-
-            <input
-              className={`col-span-6 ${inputClass}`}
-              placeholder={`Mobile ${i + 1}`}
-              value={w.value}
-              onChange={(ev) => {
-                const v = [...whatsapps];
-                v[i].value = ev.target.value.replace(/\D/g, '').slice(0, 10);
-                setWhatsapps(v);
-              }}
-            />
-
-            <label className="col-span-2 flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={w.active}
-                onChange={(ev) => {
-                  const v = [...whatsapps];
-                  v[i].active = ev.target.checked;
-                  setWhatsapps(v);
-                }}
-              />
-              <span>{w.active ? 'ON' : 'OFF'}</span>
-            </label>
-          </div>
-        ))}
-      </div>
+            <span>{w.active ? 'ON' : 'OFF'}</span>
+          </label>
+        </div>
+      ))}
     </div>
   );
 }
-
