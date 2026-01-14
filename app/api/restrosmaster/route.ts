@@ -1,4 +1,3 @@
-// app/api/restrosmaster/route.ts
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -11,16 +10,18 @@ function sanitizeSearch(q: string) {
 
 /* ============================
    GET : LIST / SEARCH RESTROS
+   Order: RestroCode DESC (BIGGEST ON TOP)
    ============================ */
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const q = url.searchParams.get("q")?.trim();
+    const qRaw = url.searchParams.get("q") || "";
+    const q = sanitizeSearch(qRaw);
 
     let query = supabaseServer
-      .from("RestroMaster")
+      .from(TABLE)
       .select("*")
-      .order("RestroCode", { ascending: false }) // 🔥 MAIN FIX
+      .order("RestroCode", { ascending: false }) // ✅ MAIN REQUIREMENT
       .limit(1000);
 
     if (q) {
@@ -40,14 +41,18 @@ export async function GET(req: Request) {
     if (error) throw error;
 
     return NextResponse.json(data ?? []);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (err: any) {
+    console.error("GET RestroMaster error:", err);
+    return NextResponse.json(
+      { error: err?.message || String(err) },
+      { status: 500 }
+    );
   }
 }
 
-
 /* ============================
    PATCH : UPDATE RESTRO
+   (Order NEVER changes on edit)
    ============================ */
 export async function PATCH(req: Request) {
   try {
@@ -108,6 +113,7 @@ export async function PATCH(req: Request) {
 
 /* ============================
    POST : ADD NEW RESTRO
+   (Auto highest RestroCode)
    ============================ */
 export async function POST(req: Request) {
   try {
@@ -120,7 +126,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🔥 LAST RestroCode (highest)
+    // 🔥 Get highest RestroCode
     const { data: lastRows, error: lastErr } = await supabaseServer
       .from(TABLE)
       .select("RestroCode")
@@ -129,7 +135,8 @@ export async function POST(req: Request) {
 
     if (lastErr) throw lastErr;
 
-    const newRestroCode = Number(lastRows?.[0]?.RestroCode ?? 1010) + 1;
+    const lastCode = Number(lastRows?.[0]?.RestroCode ?? 1010);
+    const newRestroCode = lastCode + 1;
 
     const insertPayload = {
       ...body,
