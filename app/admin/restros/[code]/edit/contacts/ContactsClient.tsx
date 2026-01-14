@@ -27,24 +27,26 @@ export default function ContactsClient() {
     setWhatsapps(makeEmpty('wa', 3));
   }, []);
 
-  /** 🔥 ADMIN CSS BREAKER */
-  const forceInput = {
-    all: 'unset' as const,
-    boxSizing: 'border-box' as const,
+  /** 🔥 ADMIN CSS OVERRIDE (TYPE-SAFE) */
+  const forceInput: React.CSSProperties = {
+    // TS does not like `all`, so cast
+    ...( { all: 'unset' } as React.CSSProperties ),
+
+    boxSizing: 'border-box',
     width: '100%',
     height: '44px',
     padding: '8px 12px',
     border: '1px solid #cbd5e1',
     borderRadius: '6px',
-    backgroundColor: '#fff',
-    color: '#000',
+    backgroundColor: '#ffffff',
+    color: '#000000',
     fontSize: '14px',
     cursor: 'text',
-    pointerEvents: 'auto',
+    pointerEvents: 'auto', // ✅ now valid
     display: 'block',
   };
 
-  const rowStyle = {
+  const rowStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: '1fr 2fr 120px',
     gap: '16px',
@@ -55,7 +57,6 @@ export default function ContactsClient() {
   return (
     <div style={{ paddingBottom: 30 }}>
 
-      {/* EMAILS */}
       <h3 style={{ fontWeight: 600, marginBottom: 16 }}>
         Emails (max 2)
       </h3>
@@ -101,7 +102,6 @@ export default function ContactsClient() {
 
       <hr style={{ margin: '24px 0' }} />
 
-      {/* WHATSAPP */}
       <h3 style={{ fontWeight: 600, marginBottom: 16 }}>
         WhatsApp numbers (max 3)
       </h3>
