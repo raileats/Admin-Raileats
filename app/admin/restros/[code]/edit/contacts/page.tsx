@@ -7,14 +7,15 @@ type Item = {
   active: boolean;
 };
 
-export default async function Page({
+export default function Page({
   params,
 }: {
   params: { code: string };
 }) {
   const restroCode = params.code;
 
-  // 🔹 TEMP: empty data (API later connect kar sakte ho)
+  // Abhi ke liye empty data
+  // baad me yahan API call lagegi
   const initialEmails: Item[] = [];
   const initialWhatsapps: Item[] = [];
 
