@@ -4,21 +4,17 @@ import React, { useCallback } from "react";
 import UI from "@/components/AdminUI";
 const { FormRow, FormField, Toggle } = UI;
 
-type CommonProps = {
-  local: any;
-  updateField: (k: string, v: any) => void;
-};
-
-export default function ContactsTab({ local = {}, updateField }: CommonProps) {
-
-  /* ===== Stable Input (NO cursor jump) ===== */
-  const ForceInput = ({
-    value,
-    onChange,
-    placeholder,
-    maxLength,
-    type = "text",
-  }: any) => (
+/* ================================
+   ✅ MUST BE OUTSIDE COMPONENT
+================================ */
+function ForceInput({
+  value,
+  onChange,
+  placeholder,
+  maxLength,
+  type = "text",
+}: any) {
+  return (
     <input
       value={value ?? ""}
       placeholder={placeholder}
@@ -41,7 +37,14 @@ export default function ContactsTab({ local = {}, updateField }: CommonProps) {
       }}
     />
   );
+}
 
+type CommonProps = {
+  local: any;
+  updateField: (k: string, v: any) => void;
+};
+
+export default function ContactsTab({ local = {}, updateField }: CommonProps) {
   const sanitizePhone = useCallback((raw: any) => {
     return String(raw ?? "").replace(/\D/g, "").slice(0, 10);
   }, []);
@@ -60,7 +63,6 @@ export default function ContactsTab({ local = {}, updateField }: CommonProps) {
       <h3 className="text-lg font-semibold mb-4">Emails (max 2)</h3>
 
       <FormRow cols={3} gap={6}>
-        {/* Email 1 */}
         <FormField label="Name 1">
           <ForceInput
             value={local.EmailAddressName1}
@@ -85,7 +87,6 @@ export default function ContactsTab({ local = {}, updateField }: CommonProps) {
           />
         </FormField>
 
-        {/* Email 2 */}
         <FormField label="Name 2">
           <ForceInput
             value={local.EmailAddressName2}
