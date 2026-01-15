@@ -383,19 +383,26 @@ const saveDisabled =
       ];
 
       const payload: any = {};
-      for (const k of allowed) {
-        let v = local && local[k];
-        if (v === undefined || v === null) continue;
-        if (typeof v === "string") {
-          v = v.trim();
-          if (v === "") continue;
-        }
-        if (k.toLowerCase().includes("whatsapp") && k.toLowerCase().includes("orderdetails")) {
-          v = String(v).replace(/\D/g, "").slice(0, 10);
-          if (v === "") continue;
-        }
-        payload[k] = v;
-      }
+
+for (const k of allowed) {
+  let v = local[k];
+
+  if (v === undefined) continue;
+
+  if (typeof v === "string") {
+    v = v.trim();
+  }
+
+  if (
+    k.toLowerCase().includes("whatsapp") &&
+    k.toLowerCase().includes("orderdetails")
+  ) {
+    v = String(v ?? "").replace(/\D/g, "").slice(0, 10);
+  }
+
+  payload[k] = v ?? null;
+}
+
 
     if (isNewRestro) {
   const createPayload = {
