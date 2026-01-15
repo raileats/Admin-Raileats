@@ -1,42 +1,30 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback } from "react";
 import UI from "@/components/AdminUI";
 const { FormRow, FormField, Toggle } = UI;
 
-type Props = {
+type CommonProps = {
   local: any;
   updateField: (k: string, v: any) => void;
 };
 
-/** ✅ UNCONTROLLED INPUT (NO CURSOR JUMP) */
-function StableInput({
-  defaultValue,
-  placeholder,
-  maxLength,
-  type = "text",
-  onCommit,
-}: {
-  defaultValue?: string;
-  placeholder?: string;
-  maxLength?: number;
-  type?: string;
-  onCommit: (v: string) => void;
-}) {
-  const [val, setVal] = useState(defaultValue ?? "");
+export default function ContactsTab({ local = {}, updateField }: CommonProps) {
 
-  useEffect(() => {
-    setVal(defaultValue ?? "");
-  }, [defaultValue]);
-
-  return (
+  /* ===== Stable Input (NO cursor jump) ===== */
+  const ForceInput = ({
+    value,
+    onChange,
+    placeholder,
+    maxLength,
+    type = "text",
+  }: any) => (
     <input
-      value={val}
+      value={value ?? ""}
       placeholder={placeholder}
       maxLength={maxLength}
       inputMode={type === "phone" ? "numeric" : "text"}
-      onChange={(e) => setVal(e.target.value)}
-      onBlur={() => onCommit(val)}
+      onChange={(e) => onChange(e.target.value)}
       style={{
         all: "unset",
         boxSizing: "border-box",
@@ -45,122 +33,189 @@ function StableInput({
         padding: "8px 12px",
         border: "1px solid #cbd5e1",
         borderRadius: "6px",
-        backgroundColor: "#fff",
-        color: "#000",
+        backgroundColor: "#ffffff",
+        color: "#000000",
         fontSize: "14px",
         display: "block",
         cursor: "text",
       }}
     />
   );
-}
 
-export default function ContactsTab({ local = {}, updateField }: Props) {
-  const sanitizePhone = useCallback(
-    (v: string) => v.replace(/\D/g, "").slice(0, 10),
-    []
+  const sanitizePhone = useCallback((raw: any) => {
+    return String(raw ?? "").replace(/\D/g, "").slice(0, 10);
+  }, []);
+
+  const handleToggle = useCallback(
+    (field: string, checked: boolean) => {
+      updateField(field, checked ? "ON" : "OFF");
+    },
+    [updateField]
   );
-
-  const toggle = (k: string, c: boolean) =>
-    updateField(k, c ? "ON" : "OFF");
 
   return (
     <div className="px-4 pb-8 max-w-5xl">
+
+      {/* ================= EMAILS ================= */}
       <h3 className="text-lg font-semibold mb-4">Emails (max 2)</h3>
 
       <FormRow cols={3} gap={6}>
+        {/* Email 1 */}
         <FormField label="Name 1">
-          <StableInput
-            defaultValue={local.EmailAddressName1}
+          <ForceInput
+            value={local.EmailAddressName1}
+            onChange={(v: any) => updateField("EmailAddressName1", v)}
             placeholder="Name 1"
-            onCommit={(v) => updateField("EmailAddressName1", v)}
           />
         </FormField>
 
         <FormField label="Email 1">
-          <StableInput
-            defaultValue={local.EmailsforOrdersReceiving1}
+          <ForceInput
+            value={local.EmailsforOrdersReceiving1}
+            onChange={(v: any) => updateField("EmailsforOrdersReceiving1", v)}
             placeholder="email1@example.com"
-            onCommit={(v) => updateField("EmailsforOrdersReceiving1", v)}
           />
         </FormField>
 
         <FormField label="Status">
           <Toggle
-            checked={local.EmailsforOrdersStatus1 === "ON"}
-            onChange={(c: boolean) =>
-              toggle("EmailsforOrdersStatus1", c)
-            }
-            label={local.EmailsforOrdersStatus1 === "ON" ? "ON" : "OFF"}
+            checked={String(local.EmailsforOrdersStatus1) === "ON"}
+            onChange={(c: boolean) => handleToggle("EmailsforOrdersStatus1", c)}
+            label={String(local.EmailsforOrdersStatus1) === "ON" ? "ON" : "OFF"}
           />
         </FormField>
 
+        {/* Email 2 */}
         <FormField label="Name 2">
-          <StableInput
-            defaultValue={local.EmailAddressName2}
+          <ForceInput
+            value={local.EmailAddressName2}
+            onChange={(v: any) => updateField("EmailAddressName2", v)}
             placeholder="Name 2"
-            onCommit={(v) => updateField("EmailAddressName2", v)}
           />
         </FormField>
 
         <FormField label="Email 2">
-          <StableInput
-            defaultValue={local.EmailsforOrdersReceiving2}
+          <ForceInput
+            value={local.EmailsforOrdersReceiving2}
+            onChange={(v: any) => updateField("EmailsforOrdersReceiving2", v)}
             placeholder="email2@example.com"
-            onCommit={(v) => updateField("EmailsforOrdersReceiving2", v)}
           />
         </FormField>
 
         <FormField label="Status">
           <Toggle
-            checked={local.EmailsforOrdersStatus2 === "ON"}
-            onChange={(c: boolean) =>
-              toggle("EmailsforOrdersStatus2", c)
-            }
-            label={local.EmailsforOrdersStatus2 === "ON" ? "ON" : "OFF"}
+            checked={String(local.EmailsforOrdersStatus2) === "ON"}
+            onChange={(c: boolean) => handleToggle("EmailsforOrdersStatus2", c)}
+            label={String(local.EmailsforOrdersStatus2) === "ON" ? "ON" : "OFF"}
           />
         </FormField>
       </FormRow>
 
       <hr className="my-6" />
 
-      <h3 className="text-lg font-semibold mb-4">
-        WhatsApp numbers (max 3)
-      </h3>
+      {/* ================= WHATSAPP ================= */}
+      <h3 className="text-lg font-semibold mb-4">WhatsApp numbers (max 3)</h3>
 
       <FormRow cols={3} gap={6}>
+        {/* WA 1 */}
         <FormField label="Name 1">
-          <StableInput
-            defaultValue={local.WhatsappMobileNumberName1}
+          <ForceInput
+            value={local.WhatsappMobileNumberName1}
+            onChange={(v: any) => updateField("WhatsappMobileNumberName1", v)}
             placeholder="Name 1"
-            onCommit={(v) =>
-              updateField("WhatsappMobileNumberName1", v)
-            }
           />
         </FormField>
 
         <FormField label="Mobile 1">
-          <StableInput
-            defaultValue={local.WhatsappMobileNumberforOrderDetails1}
-            placeholder="10-digit mobile"
-            type="phone"
-            maxLength={10}
-            onCommit={(v) =>
+          <ForceInput
+            value={local.WhatsappMobileNumberforOrderDetails1}
+            onChange={(v: any) =>
               updateField(
                 "WhatsappMobileNumberforOrderDetails1",
                 sanitizePhone(v)
               )
             }
+            placeholder="10-digit mobile"
+            maxLength={10}
+            type="phone"
           />
         </FormField>
 
         <FormField label="Status">
           <Toggle
-            checked={local.WhatsappMobileNumberStatus1 === "ON"}
+            checked={String(local.WhatsappMobileNumberStatus1) === "ON"}
             onChange={(c: boolean) =>
-              toggle("WhatsappMobileNumberStatus1", c)
+              handleToggle("WhatsappMobileNumberStatus1", c)
             }
-            label={local.WhatsappMobileNumberStatus1 === "ON" ? "ON" : "OFF"}
+            label={String(local.WhatsappMobileNumberStatus1) === "ON" ? "ON" : "OFF"}
+          />
+        </FormField>
+
+        {/* WA 2 */}
+        <FormField label="Name 2">
+          <ForceInput
+            value={local.WhatsappMobileNumberName2}
+            onChange={(v: any) => updateField("WhatsappMobileNumberName2", v)}
+            placeholder="Name 2"
+          />
+        </FormField>
+
+        <FormField label="Mobile 2">
+          <ForceInput
+            value={local.WhatsappMobileNumberforOrderDetails2}
+            onChange={(v: any) =>
+              updateField(
+                "WhatsappMobileNumberforOrderDetails2",
+                sanitizePhone(v)
+              )
+            }
+            placeholder="10-digit mobile"
+            maxLength={10}
+            type="phone"
+          />
+        </FormField>
+
+        <FormField label="Status">
+          <Toggle
+            checked={String(local.WhatsappMobileNumberStatus2) === "ON"}
+            onChange={(c: boolean) =>
+              handleToggle("WhatsappMobileNumberStatus2", c)
+            }
+            label={String(local.WhatsappMobileNumberStatus2) === "ON" ? "ON" : "OFF"}
+          />
+        </FormField>
+
+        {/* WA 3 */}
+        <FormField label="Name 3">
+          <ForceInput
+            value={local.WhatsappMobileNumberName3}
+            onChange={(v: any) => updateField("WhatsappMobileNumberName3", v)}
+            placeholder="Name 3"
+          />
+        </FormField>
+
+        <FormField label="Mobile 3">
+          <ForceInput
+            value={local.WhatsappMobileNumberforOrderDetails3}
+            onChange={(v: any) =>
+              updateField(
+                "WhatsappMobileNumberforOrderDetails3",
+                sanitizePhone(v)
+              )
+            }
+            placeholder="10-digit mobile"
+            maxLength={10}
+            type="phone"
+          />
+        </FormField>
+
+        <FormField label="Status">
+          <Toggle
+            checked={String(local.WhatsappMobileNumberStatus3) === "ON"}
+            onChange={(c: boolean) =>
+              handleToggle("WhatsappMobileNumberStatus3", c)
+            }
+            label={String(local.WhatsappMobileNumberStatus3) === "ON" ? "ON" : "OFF"}
           />
         </FormField>
       </FormRow>
