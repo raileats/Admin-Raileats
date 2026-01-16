@@ -1,6 +1,70 @@
 async function handleSave() {
   setNotification(null);
   setError(null);
+  setSavingInternal(true);
+
+  try {
+    const allowed = [
+      "EmailAddressName1",
+      "EmailsforOrdersReceiving1",
+      "EmailsforOrdersStatus1",
+      "EmailAddressName2",
+      "EmailsforOrdersReceiving2",
+      "EmailsforOrdersStatus2",
+      "WhatsappMobileNumberName1",
+      "WhatsappMobileNumberforOrderDetails1",
+      "WhatsappMobileNumberStatus1",
+      "WhatsappMobileNumberName2",
+      "WhatsappMobileNumberforOrderDetails2",
+      "WhatsappMobileNumberStatus2",
+      "WhatsappMobileNumberName3",
+      "WhatsappMobileNumberforOrderDetails3",
+      "WhatsappMobileNumberStatus3",
+    ];
+
+    const payload: any = {};
+
+    for (const k of allowed) {
+      let v = local[k];
+
+      if (typeof v === "string") v = v.trim();
+
+      if (
+        k.toLowerCase().includes("whatsapp") &&
+        k.toLowerCase().includes("orderdetails")
+      ) {
+        v = String(v ?? "").replace(/\D/g, "").slice(0, 10);
+      }
+
+      payload[k] = v ?? null;
+    }
+
+    // ✅ यही line SUPABASE को CALL करती है
+    const res = await defaultPatch(payload);
+
+    if (!res?.ok) {
+      throw new Error(res?.error || "Contacts update failed");
+    }
+
+    setNotification({
+      type: "success",
+      text: "Contacts saved successfully ✅",
+    });
+
+    setActiveTab("Station Settings");
+  } catch (err: any) {
+    console.error("Contacts save error:", err);
+    setNotification({
+      type: "error",
+      text: err?.message || "Save failed",
+    });
+  } finally {
+    setSavingInternal(false);
+  }
+}
+
+  setNotification(null);
+  setError(null);
 
   const validationErrorsNow = collectValidationErrors(local);
   if (validationErrorsNow.length) {
