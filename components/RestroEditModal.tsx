@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import UI from "@/components/AdminUI";
@@ -57,6 +57,12 @@ export default function RestroEditModal({
     restro?.RestroCode ||
     restro?.restro_code ||
     "";
+
+  /* ================= STATION DISPLAY (🔥 FIX) ================= */
+  const stationDisplay =
+    (local?.StationName || "") +
+    (local?.StationCode ? ` (${local.StationCode})` : "") +
+    (local?.State ? ` - ${local.State}` : "");
 
   /* ================= UPDATE FIELD ================= */
   const updateField = useCallback((key: string, value: any) => {
@@ -123,7 +129,7 @@ export default function RestroEditModal({
         payload[k] = v ?? null;
       }
 
-      // 🔥🔥🔥 MAIN FIX — ACTUAL SUPABASE CALL
+      // ✅ SUPABASE SAVE
       await defaultPatch(payload);
 
       setNotification({
@@ -144,11 +150,12 @@ export default function RestroEditModal({
     }
   }
 
-  /* ================= COMMON PROPS ================= */
+  /* ================= COMMON PROPS (🔥 FIX) ================= */
   const common = {
     local,
     updateField,
-    restroCode, // 🔥 REQUIRED — FIXES BUILD ERROR
+    restroCode,
+    stationDisplay, // ✅ REQUIRED PROP
     Select,
     Toggle,
   };
