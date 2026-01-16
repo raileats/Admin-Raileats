@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import UI from "@/components/AdminUI";
@@ -12,15 +12,8 @@ import BankTab from "./restro-edit/BankTab";
 import FutureClosedTab from "./restro-edit/FutureClosedTab";
 import MenuTab from "./restro-edit/MenuTab";
 
-const {
-  AdminForm,
-  SubmitButton,
-  SecondaryButton,
-  Select,
-  Toggle,
-} = UI;
+const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
 
-/* ================= TABS ================= */
 const TAB_NAMES = [
   "Basic Information",
   "Station Settings",
@@ -31,17 +24,24 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ================= HELPERS ================= */
-const emailRegex = /^\S+@\S+\.\S+$/;
-const tenDigitRegex = /^\d{10}$/;
-
-function validateEmailString(s: string) {
-  if (!s) return false;
-  return s.split(",").every((e) => emailRegex.test(e.trim()));
+/* =========================
+   🔧 HELPERS
+========================= */
+function buildStationDisplay(obj: any) {
+  const name = obj?.StationName || "";
+  const code = obj?.StationCode || "";
+  const state = obj?.State || "";
+  let out = "";
+  if (name) out += name;
+  if (code) out += ` (${code})`;
+  if (state) out += ` - ${state}`;
+  return out || "—";
 }
 
-/* ================= COMPONENT ================= */
-function RestroEditModal({
+/* =========================
+   COMPONENT
+========================= */
+export default function RestroEditModal({
   restro: restroProp,
   onClose,
   initialTab = "Basic Information",
@@ -54,7 +54,7 @@ function RestroEditModal({
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<any>(null);
 
-  /* ===== INIT LOCAL STATE ===== */
+  /* ---------- INIT ---------- */
   useEffect(() => {
     if (restroProp) {
       setRestro(restroProp);
@@ -62,17 +62,17 @@ function RestroEditModal({
     }
   }, [restroProp]);
 
-  /* ===== FIELD UPDATE (NO TYPING BUG) ===== */
+  /* ---------- FIELD UPDATE (typing FIX) ---------- */
   const updateField = useCallback((key: string, value: any) => {
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }, []);
 
-  /* ===== PATCH API ===== */
+  /* ---------- PATCH API ---------- */
   async function defaultPatch(payload: any) {
-    const code = restro?.RestroCode;
+    const code = local?.RestroCode;
     if (!code) throw new Error("Missing RestroCode");
 
-    const res = await fetch(`/api/restros/${encodeURIComponent(code)}`, {
+    const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -85,7 +85,7 @@ function RestroEditModal({
     return json;
   }
 
-  /* ================= SAVE ================= */
+  /* ---------- SAVE (CONTACTS + ALL) ---------- */
   async function handleSave() {
     setSaving(true);
     setNotification(null);
@@ -113,7 +113,6 @@ function RestroEditModal({
 
       for (const k of allowed) {
         let v = local[k];
-
         if (typeof v === "string") v = v.trim();
 
         if (
@@ -126,16 +125,18 @@ function RestroEditModal({
         payload[k] = v ?? null;
       }
 
-      // 🔥 SUPABASE UPDATE
-      await defaultPatch(payload);
+      await defaultPatch(payload); // 🔥 MAIN FIX
 
       setNotification({
         type: "success",
-        text: "Contacts saved successfully ✅",
+        text: "Saved successfully ✅",
       });
 
       setActiveTab("Station Settings");
-      router.refresh?.();
+
+      setTimeout(() => {
+        if ((router as any).refresh) router.refresh();
+      }, 500);
     } catch (err: any) {
       console.error("Save error:", err);
       setNotification({
@@ -147,15 +148,17 @@ function RestroEditModal({
     }
   }
 
-  /* ================= COMMON PROPS ================= */
+  /* ---------- REQUIRED PROP (FIXED) ---------- */
+  const stationDisplay = buildStationDisplay(local);
+
   const common = {
     local,
     updateField,
     Select,
     Toggle,
+    stationDisplay, // ✅ REQUIRED — THIS FIXES BUILD ERROR
   };
 
-  /* ================= RENDER TAB ================= */
   function renderTab() {
     switch (activeTab) {
       case "Basic Information":
@@ -177,11 +180,10 @@ function RestroEditModal({
     }
   }
 
-  /* ================= JSX ================= */
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1100]">
       <div className="bg-white w-[98%] h-[98%] rounded-lg flex flex-col">
-        {/* TABS */}
+        {/* Tabs */}
         <div className="flex gap-4 border-b px-6 py-3">
           {TAB_NAMES.map((t) => (
             <button
@@ -198,25 +200,19 @@ function RestroEditModal({
           ))}
         </div>
 
-        {/* NOTIFICATION */}
+        {/* Notification */}
         {notification && (
-          <div
-            className={`text-center py-2 font-semibold ${
-              notification.type === "error"
-                ? "text-red-600"
-                : "text-green-600"
-            }`}
-          >
+          <div className="text-center py-2 font-semibold">
             {notification.text}
           </div>
         )}
 
-        {/* CONTENT */}
+        {/* Content */}
         <div className="flex-1 overflow-auto p-6">
           <AdminForm>{renderTab()}</AdminForm>
         </div>
 
-        {/* FOOTER */}
+        {/* Footer */}
         <div className="border-t p-4 flex justify-end gap-3">
           <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
           <SubmitButton onClick={handleSave} disabled={saving}>
@@ -227,5 +223,3 @@ function RestroEditModal({
     </div>
   );
 }
-
-export default RestroEditModal;
