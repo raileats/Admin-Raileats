@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
 import UI from "@/components/AdminUI";
@@ -12,7 +12,13 @@ import BankTab from "./restro-edit/BankTab";
 import FutureClosedTab from "./restro-edit/FutureClosedTab";
 import MenuTab from "./restro-edit/MenuTab";
 
-const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
+const {
+  AdminForm,
+  SubmitButton,
+  SecondaryButton,
+  Select,
+  Toggle,
+} = UI;
 
 const TAB_NAMES = [
   "Basic Information",
@@ -24,23 +30,6 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* =========================
-   🔧 HELPERS
-========================= */
-function buildStationDisplay(obj: any) {
-  const name = obj?.StationName || "";
-  const code = obj?.StationCode || "";
-  const state = obj?.State || "";
-  let out = "";
-  if (name) out += name;
-  if (code) out += ` (${code})`;
-  if (state) out += ` - ${state}`;
-  return out || "—";
-}
-
-/* =========================
-   COMPONENT
-========================= */
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
@@ -54,7 +43,7 @@ export default function RestroEditModal({
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<any>(null);
 
-  /* ---------- INIT ---------- */
+  /* ================= INIT ================= */
   useEffect(() => {
     if (restroProp) {
       setRestro(restroProp);
@@ -62,30 +51,38 @@ export default function RestroEditModal({
     }
   }, [restroProp]);
 
-  /* ---------- FIELD UPDATE (typing FIX) ---------- */
+  /* ================= REQUIRED ID ================= */
+  const restroCode =
+    local?.RestroCode ||
+    restro?.RestroCode ||
+    restro?.restro_code ||
+    "";
+
+  /* ================= UPDATE FIELD ================= */
   const updateField = useCallback((key: string, value: any) => {
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }, []);
 
-  /* ---------- PATCH API ---------- */
+  /* ================= API PATCH ================= */
   async function defaultPatch(payload: any) {
-    const code = local?.RestroCode;
-    if (!code) throw new Error("Missing RestroCode");
+    if (!restroCode) {
+      throw new Error("Missing RestroCode");
+    }
 
-    const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
+    const res = await fetch(`/api/restros/${restroCode}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
     const json = await res.json().catch(() => ({}));
-    if (!res.ok || json?.ok === false) {
+    if (!res.ok) {
       throw new Error(json?.error || "Update failed");
     }
     return json;
   }
 
-  /* ---------- SAVE (CONTACTS + ALL) ---------- */
+  /* ================= SAVE ================= */
   async function handleSave() {
     setSaving(true);
     setNotification(null);
@@ -113,6 +110,7 @@ export default function RestroEditModal({
 
       for (const k of allowed) {
         let v = local[k];
+
         if (typeof v === "string") v = v.trim();
 
         if (
@@ -125,18 +123,16 @@ export default function RestroEditModal({
         payload[k] = v ?? null;
       }
 
-      await defaultPatch(payload); // 🔥 MAIN FIX
+      // 🔥🔥🔥 MAIN FIX — ACTUAL SUPABASE CALL
+      await defaultPatch(payload);
 
       setNotification({
         type: "success",
-        text: "Saved successfully ✅",
+        text: "Contacts saved successfully ✅",
       });
 
       setActiveTab("Station Settings");
-
-      setTimeout(() => {
-        if ((router as any).refresh) router.refresh();
-      }, 500);
+      router.refresh();
     } catch (err: any) {
       console.error("Save error:", err);
       setNotification({
@@ -148,17 +144,16 @@ export default function RestroEditModal({
     }
   }
 
-  /* ---------- REQUIRED PROP (FIXED) ---------- */
-  const stationDisplay = buildStationDisplay(local);
-
+  /* ================= COMMON PROPS ================= */
   const common = {
     local,
     updateField,
+    restroCode, // 🔥 REQUIRED — FIXES BUILD ERROR
     Select,
     Toggle,
-    stationDisplay, // ✅ REQUIRED — THIS FIXES BUILD ERROR
   };
 
+  /* ================= RENDER TAB ================= */
   function renderTab() {
     switch (activeTab) {
       case "Basic Information":
@@ -180,6 +175,7 @@ export default function RestroEditModal({
     }
   }
 
+  /* ================= UI ================= */
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1100]">
       <div className="bg-white w-[98%] h-[98%] rounded-lg flex flex-col">
