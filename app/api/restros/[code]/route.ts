@@ -15,9 +15,9 @@ export async function PATCH(
   { params }: { params: { code: string } }
 ) {
   try {
-    /* -------------------------------
-       STEP 1: RestroCode FIX (number)
-    -------------------------------- */
+    /* ===============================
+       STEP 1: RestroCode
+    =============================== */
     const codeRaw = params.code;
     if (!codeRaw) {
       return NextResponse.json(
@@ -30,9 +30,9 @@ export async function PATCH(
       ? Number(codeRaw)
       : codeRaw;
 
-    /* -------------------------------
-       STEP 2: Read request body
-    -------------------------------- */
+    /* ===============================
+       STEP 2: Read body
+    =============================== */
     const body = await req.json().catch(() => ({}));
     if (!body || typeof body !== "object") {
       return NextResponse.json(
@@ -41,63 +41,70 @@ export async function PATCH(
       );
     }
 
-    /* -------------------------------
+    /* ===============================
        STEP 3: Build payload
-       (MATCHES DB COLUMN NAMES)
-    -------------------------------- */
+       (100% MATCHES DB COLUMNS)
+    =============================== */
     const payload: any = {};
 
     // ===== EMAILS =====
-    payload.EmailAddressName1 =
-      body.EmailAddressName1 ?? null;
+    payload.EmailAddressName1 = body.EmailAddressName1 ?? null;
     payload.EmailsforOrdersReceiving1 =
       body.EmailsforOrdersReceiving1 ?? null;
     payload.EmailsforOrdersStatus1 =
       body.EmailsforOrdersStatus1 ?? "OFF";
 
-    payload.EmailAddressName2 =
-      body.EmailAddressName2 ?? null;
+    payload.EmailAddressName2 = body.EmailAddressName2 ?? null;
     payload.EmailsforOrdersReceiving2 =
       body.EmailsforOrdersReceiving2 ?? null;
     payload.EmailsforOrdersStatus2 =
       body.EmailsforOrdersStatus2 ?? "OFF";
 
-    // ===== WHATSAPP =====
-    // DB has SINGLE column for names
-    payload.WhatsappMobileNumberNames = [
-      body.WhatsappMobileNumberName1,
-      body.WhatsappMobileNumberName2,
-      body.WhatsappMobileNumberName3,
-    ]
-      .filter(Boolean)
-      .join(", ");
-
+    // ===== WHATSAPP 1 =====
+    payload.WhatsappMobileNumberName1 =
+      body.WhatsappMobileNumberName1 ?? null;
     payload.WhatsappMobileNumberforOrderDetails1 =
       body.WhatsappMobileNumberforOrderDetails1 ?? null;
-
-    payload.WhatsappMobileNumberStatus =
+    payload.WhatsappMobileNumberStatus1 =
       body.WhatsappMobileNumberStatus1 ?? "OFF";
 
-    /* -------------------------------
-       STEP 4: Remove empty payload
-    -------------------------------- */
-    const hasData = Object.values(payload).some(
-      (v) => v !== null && v !== undefined && v !== ""
-    );
+    // ===== WHATSAPP 2 =====
+    payload.WhatsappMobileNumberName2 =
+      body.WhatsappMobileNumberName2 ?? null;
+    payload.WhatsappMobileNumberforOrderDetails2 =
+      body.WhatsappMobileNumberforOrderDetails2 ?? null;
+    payload.WhatsappMobileNumberStatus2 =
+      body.WhatsappMobileNumberStatus2 ?? "OFF";
 
-    if (!hasData) {
+    // ===== WHATSAPP 3 =====
+    payload.WhatsappMobileNumberName3 =
+      body.WhatsappMobileNumberName3 ?? null;
+    payload.WhatsappMobileNumberforOrderDetails3 =
+      body.WhatsappMobileNumberforOrderDetails3 ?? null;
+    payload.WhatsappMobileNumberStatus3 =
+      body.WhatsappMobileNumberStatus3 ?? "OFF";
+
+    /* ===============================
+       STEP 4: Remove empty payload
+    =============================== */
+    const cleanedPayload: any = {};
+    for (const [k, v] of Object.entries(payload)) {
+      if (v !== undefined) cleanedPayload[k] = v;
+    }
+
+    if (Object.keys(cleanedPayload).length === 0) {
       return NextResponse.json({
         ok: true,
         message: "Nothing to update",
       });
     }
 
-    /* -------------------------------
+    /* ===============================
        STEP 5: Update Supabase
-    -------------------------------- */
+    =============================== */
     const { data, error } = await supabaseAdmin
       .from("RestroMaster")
-      .update(payload)
+      .update(cleanedPayload)
       .eq("RestroCode", RestroCode)
       .select()
       .single();
