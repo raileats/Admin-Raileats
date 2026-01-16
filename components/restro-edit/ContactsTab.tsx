@@ -5,7 +5,7 @@ import UI from "@/components/AdminUI";
 const { FormRow, FormField, Toggle } = UI;
 
 /* ================================
-   ✅ MUST BE OUTSIDE COMPONENT
+   INPUT (must be outside component)
 ================================ */
 function ForceInput({
   value,
@@ -39,12 +39,12 @@ function ForceInput({
   );
 }
 
-type CommonProps = {
+type Props = {
   local: any;
   updateField: (k: string, v: any) => void;
 };
 
-export default function ContactsTab({ local = {}, updateField }: CommonProps) {
+export default function ContactsTab({ local = {}, updateField }: Props) {
   const sanitizePhone = useCallback((raw: any) => {
     return String(raw ?? "").replace(/\D/g, "").slice(0, 10);
   }, []);
@@ -118,107 +118,50 @@ export default function ContactsTab({ local = {}, updateField }: CommonProps) {
       <h3 className="text-lg font-semibold mb-4">WhatsApp numbers (max 3)</h3>
 
       <FormRow cols={3} gap={6}>
-        {/* WA 1 */}
-        <FormField label="Name 1">
-          <ForceInput
-            value={local.WhatsappMobileNumberName1}
-            onChange={(v: any) => updateField("WhatsappMobileNumberName1", v)}
-            placeholder="Name 1"
-          />
-        </FormField>
+        {[1, 2, 3].map((i) => (
+          <React.Fragment key={i}>
+            <FormField label={`Name ${i}`}>
+              <ForceInput
+                value={local[`WhatsappMobileNumberName${i}`]}
+                onChange={(v: any) =>
+                  updateField(`WhatsappMobileNumberName${i}`, v)
+                }
+                placeholder={`Name ${i}`}
+              />
+            </FormField>
 
-        <FormField label="Mobile 1">
-          <ForceInput
-            value={local.WhatsappMobileNumberforOrderDetails1}
-            onChange={(v: any) =>
-              updateField(
-                "WhatsappMobileNumberforOrderDetails1",
-                sanitizePhone(v)
-              )
-            }
-            placeholder="10-digit mobile"
-            maxLength={10}
-            type="phone"
-          />
-        </FormField>
+            <FormField label={`Mobile ${i}`}>
+              <ForceInput
+                value={local[`WhatsappMobileNumberforOrderDetails${i}`]}
+                onChange={(v: any) =>
+                  updateField(
+                    `WhatsappMobileNumberforOrderDetails${i}`,
+                    sanitizePhone(v)
+                  )
+                }
+                placeholder="10-digit mobile"
+                maxLength={10}
+                type="phone"
+              />
+            </FormField>
 
-        <FormField label="Status">
-          <Toggle
-            checked={String(local.WhatsappMobileNumberStatus1) === "ON"}
-            onChange={(c: boolean) =>
-              handleToggle("WhatsappMobileNumberStatus1", c)
-            }
-            label={String(local.WhatsappMobileNumberStatus1) === "ON" ? "ON" : "OFF"}
-          />
-        </FormField>
-
-        {/* WA 2 */}
-        <FormField label="Name 2">
-          <ForceInput
-            value={local.WhatsappMobileNumberName2}
-            onChange={(v: any) => updateField("WhatsappMobileNumberName2", v)}
-            placeholder="Name 2"
-          />
-        </FormField>
-
-        <FormField label="Mobile 2">
-          <ForceInput
-            value={local.WhatsappMobileNumberforOrderDetails2}
-            onChange={(v: any) =>
-              updateField(
-                "WhatsappMobileNumberforOrderDetails2",
-                sanitizePhone(v)
-              )
-            }
-            placeholder="10-digit mobile"
-            maxLength={10}
-            type="phone"
-          />
-        </FormField>
-
-        <FormField label="Status">
-          <Toggle
-            checked={String(local.WhatsappMobileNumberStatus2) === "ON"}
-            onChange={(c: boolean) =>
-              handleToggle("WhatsappMobileNumberStatus2", c)
-            }
-            label={String(local.WhatsappMobileNumberStatus2) === "ON" ? "ON" : "OFF"}
-          />
-        </FormField>
-
-        {/* WA 3 */}
-        <FormField label="Name 3">
-          <ForceInput
-            value={local.WhatsappMobileNumberName3}
-            onChange={(v: any) => updateField("WhatsappMobileNumberName3", v)}
-            placeholder="Name 3"
-          />
-        </FormField>
-
-        <FormField label="Mobile 3">
-          <ForceInput
-            value={local.WhatsappMobileNumberforOrderDetails3}
-            onChange={(v: any) =>
-              updateField(
-                "WhatsappMobileNumberforOrderDetails3",
-                sanitizePhone(v)
-              )
-            }
-            placeholder="10-digit mobile"
-            maxLength={10}
-            type="phone"
-          />
-        </FormField>
-
-        <FormField label="Status">
-          <Toggle
-            checked={String(local.WhatsappMobileNumberStatus3) === "ON"}
-            onChange={(c: boolean) =>
-              handleToggle("WhatsappMobileNumberStatus3", c)
-            }
-            label={String(local.WhatsappMobileNumberStatus3) === "ON" ? "ON" : "OFF"}
-          />
-        </FormField>
+            <FormField label="Status">
+              <Toggle
+                checked={
+                  String(local[`WhatsappMobileNumberStatus${i}`]) === "ON"
+                }
+                onChange={(c: boolean) =>
+                  handleToggle(`WhatsappMobileNumberStatus${i}`, c)
+                }
+                label={
+                  String(local[`WhatsappMobileNumberStatus${i}`]) === "ON"
+                    ? "ON"
+                    : "OFF"
+                }
+              />
+            </FormField>
+          </React.Fragment>
+        ))}
       </FormRow>
     </div>
   );
