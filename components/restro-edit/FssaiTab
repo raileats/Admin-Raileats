@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+
+type Props = {
+  restroCode: string | number;
+};
 
 type FssaiRow = {
   id: string;
@@ -11,27 +15,43 @@ type FssaiRow = {
   created_at: string;
 };
 
-export default function FssaiTab({ restroCode }: { restroCode: string | number }) {
+export default function FssaiTab({ restroCode }: Props) {
   const [rows, setRows] = useState<FssaiRow[]>([]);
-  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const [showAdd, setShowAdd] = useState(false);
   const [number, setNumber] = useState("");
   const [expiry, setExpiry] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
-  async function load() {
-    const res = await fetch(`/api/restros/${restroCode}/fssai`);
-    const json = await res.json();
-    setRows(json.data || []);
+  /* ================= FETCH ================= */
+  async function loadData() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/restros/${restroCode}/fssai`);
+      const json = await res.json();
+      if (json.ok) setRows(json.rows || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    load();
+    if (restroCode) loadData();
   }, [restroCode]);
 
-  async function save() {
+  /* ================= ADD NEW ================= */
+  async function saveNew() {
+    if (!number) {
+      alert("Enter FSSAI number");
+      return;
+    }
+
     const form = new FormData();
     form.append("fssai_number", number);
-    form.append("expiry_date", expiry);
+    if (expiry) form.append("expiry_date", expiry);
     if (file) form.append("file", file);
 
     const res = await fetch(`/api/restros/${restroCode}/fssai`, {
@@ -39,76 +59,113 @@ export default function FssaiTab({ restroCode }: { restroCode: string | number }
       body: form,
     });
 
-    if (!res.ok) {
-      alert("Save failed");
+    const json = await res.json();
+    if (!json.ok) {
+      alert(json.error || "Save failed");
       return;
     }
 
-    setOpen(false);
+    setShowAdd(false);
     setNumber("");
     setExpiry("");
     setFile(null);
-    load();
+    loadData();
+  }
+
+  /* ================= TOGGLE ================= */
+  async function toggleStatus(id: string, status: "active" | "inactive") {
+    await fetch(`/api/restros/${restroCode}/fssai`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id,
+        status: status === "active" ? "inactive" : "active",
+      }),
+    });
+    loadData();
   }
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
         <h4>FSSAI</h4>
-        <button onClick={() => setOpen(true)}>Add New FSSAI</button>
+        <button
+          onClick={() => setShowAdd(true)}
+          style={{ background: "#06b6d4", color: "#fff", padding: "6px 12px", borderRadius: 6 }}
+        >
+          Add New FSSAI
+        </button>
       </div>
 
-      <table width="100%" border={1} cellPadding={8}>
-        <thead>
-          <tr>
-            <th>Number</th>
-            <th>Expiry</th>
-            <th>File</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(r => (
-            <tr key={r.id} style={{ background: r.status === "active" ? "#eaffea" : "#ffeaea" }}>
-              <td>{r.fssai_number}</td>
-              <td>{r.expiry_date || "—"}</td>
-              <td>
-                {r.file_url ? <a href={r.file_url} target="_blank">View</a> : "—"}
-              </td>
-              <td>{r.status}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {loading && <div>Loading...</div>}
 
-      {open && (
-        <div style={{ marginTop: 16, border: "1px solid #ccc", padding: 12 }}>
-          <h4>Add New FSSAI</h4>
+      {!loading && rows.length === 0 && (
+        <div style={{ color: "#666" }}>No FSSAI added yet</div>
+      )}
+
+      {rows.map((r) => (
+        <div
+          key={r.id}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "2fr 1fr 1fr 120px",
+            gap: 12,
+            padding: 10,
+            borderBottom: "1px solid #eee",
+          }}
+        >
+          <div>{r.fssai_number}</div>
+          <div>{r.expiry_date || "—"}</div>
+          <div>{r.file_url ? "Uploaded" : "—"}</div>
+          <button
+            onClick={() => toggleStatus(r.id, r.status)}
+            style={{
+              padding: "4px 8px",
+              borderRadius: 6,
+              background: r.status === "active" ? "#16a34a" : "#9ca3af",
+              color: "#fff",
+            }}
+          >
+            {r.status === "active" ? "Active" : "Inactive"}
+          </button>
+        </div>
+      ))}
+
+      {/* ADD MODAL */}
+      {showAdd && (
+        <div style={{ background: "#f9fafb", padding: 12, marginTop: 12 }}>
+          <h4>Add FSSAI</h4>
 
           <input
             placeholder="FSSAI Number"
             value={number}
-            onChange={e => setNumber(e.target.value)}
+            onChange={(e) => setNumber(e.target.value)}
+            className="w-full p-2 border rounded mb-2"
           />
 
           <input
             type="date"
             value={expiry}
-            onChange={e => setExpiry(e.target.value)}
+            onChange={(e) => setExpiry(e.target.value)}
+            className="w-full p-2 border rounded mb-2"
           />
 
           <input
             type="file"
-            onChange={e => setFile(e.target.files?.[0] || null)}
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            className="mb-2"
           />
 
-          <div style={{ marginTop: 10 }}>
-            <button onClick={save}>Save</button>
-            <button onClick={() => setOpen(false)}>Cancel</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={saveNew} className="px-3 py-2 bg-cyan-500 text-white rounded">
+              Save
+            </button>
+            <button onClick={() => setShowAdd(false)} className="px-3 py-2 border rounded">
+              Cancel
+            </button>
           </div>
         </div>
       )}
     </div>
   );
 }
-
