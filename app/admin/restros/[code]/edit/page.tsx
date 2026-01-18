@@ -57,7 +57,7 @@ export default function RestroEditRoutePage({
         if (mounted) {
           setRestro({
             ...data,
-            RestroCode: restroCode, // 🔥 VERY IMPORTANT
+            RestroCode: restroCode,
           });
         }
       } catch (e: any) {
@@ -106,7 +106,7 @@ export default function RestroEditRoutePage({
   return (
     <RestroEditModal
       restro={restro}
-      restroCode={restro.RestroCode}   {/* 🔥 PASS THIS */}
+      restroCode={restro.RestroCode}
       initialTab="Basic Information"
       onClose={() => router.back()}
       onSave={async (payload: any) => {
