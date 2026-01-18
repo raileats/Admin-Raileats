@@ -1,1 +1,114 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+type FssaiRow = {
+  id: string;
+  fssai_number: string;
+  expiry_date: string | null;
+  file_url: string | null;
+  status: "active" | "inactive";
+  created_at: string;
+};
+
+export default function FssaiTab({ restroCode }: { restroCode: string | number }) {
+  const [rows, setRows] = useState<FssaiRow[]>([]);
+  const [open, setOpen] = useState(false);
+  const [number, setNumber] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+
+  async function load() {
+    const res = await fetch(`/api/restros/${restroCode}/fssai`);
+    const json = await res.json();
+    setRows(json.data || []);
+  }
+
+  useEffect(() => {
+    load();
+  }, [restroCode]);
+
+  async function save() {
+    const form = new FormData();
+    form.append("fssai_number", number);
+    form.append("expiry_date", expiry);
+    if (file) form.append("file", file);
+
+    const res = await fetch(`/api/restros/${restroCode}/fssai`, {
+      method: "POST",
+      body: form,
+    });
+
+    if (!res.ok) {
+      alert("Save failed");
+      return;
+    }
+
+    setOpen(false);
+    setNumber("");
+    setExpiry("");
+    setFile(null);
+    load();
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+        <h4>FSSAI</h4>
+        <button onClick={() => setOpen(true)}>Add New FSSAI</button>
+      </div>
+
+      <table width="100%" border={1} cellPadding={8}>
+        <thead>
+          <tr>
+            <th>Number</th>
+            <th>Expiry</th>
+            <th>File</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.id} style={{ background: r.status === "active" ? "#eaffea" : "#ffeaea" }}>
+              <td>{r.fssai_number}</td>
+              <td>{r.expiry_date || "—"}</td>
+              <td>
+                {r.file_url ? <a href={r.file_url} target="_blank">View</a> : "—"}
+              </td>
+              <td>{r.status}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {open && (
+        <div style={{ marginTop: 16, border: "1px solid #ccc", padding: 12 }}>
+          <h4>Add New FSSAI</h4>
+
+          <input
+            placeholder="FSSAI Number"
+            value={number}
+            onChange={e => setNumber(e.target.value)}
+          />
+
+          <input
+            type="date"
+            value={expiry}
+            onChange={e => setExpiry(e.target.value)}
+          />
+
+          <input
+            type="file"
+            onChange={e => setFile(e.target.files?.[0] || null)}
+          />
+
+          <div style={{ marginTop: 10 }}>
+            <button onClick={save}>Save</button>
+            <button onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
