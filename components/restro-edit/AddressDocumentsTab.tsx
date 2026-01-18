@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import UI from "@/components/AdminUI";
 import FssaiTab from "./FssaiTab";
 
-const { AdminForm, FormRow, FormField, SubmitButton } = UI;
+const { FormRow, FormField, SubmitButton } = UI;
 
 type Props = {
   local: any;
@@ -18,15 +18,13 @@ export default function AddressDocumentsTab({
   restroCode,
 }: Props) {
   /* ================= ADDRESS STATE ================= */
-  const [restroAddress, setRestroAddress] = useState(local?.RestroAddress ?? "");
-  const [stateVal, setStateVal] = useState(local?.State ?? "");
-  const [city, setCity] = useState(local?.["City/Village"] ?? local?.City ?? "");
-  const [district, setDistrict] = useState(local?.District ?? "");
-  const [pin, setPin] = useState(local?.PinCode ?? "");
-  const [lat, setLat] = useState(local?.RestroLatitude ?? "");
-  const [lng, setLng] = useState(
-    local?.RestroLongituden ?? local?.RestroLongitude ?? ""
-  );
+  const [restroAddress, setRestroAddress] = useState("");
+  const [stateVal, setStateVal] = useState("");
+  const [city, setCity] = useState("");
+  const [district, setDistrict] = useState("");
+  const [pin, setPin] = useState("");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
 
   /* ================= SYNC FROM PARENT ================= */
   useEffect(() => {
@@ -41,6 +39,11 @@ export default function AddressDocumentsTab({
 
   /* ================= SAVE ADDRESS ================= */
   const saveAddress = () => {
+    if (!restroCode) {
+      alert("Missing restroCode – cannot save");
+      return;
+    }
+
     updateField("RestroAddress", restroAddress);
     updateField("State", stateVal);
     updateField("City/Village", city);
@@ -49,11 +52,11 @@ export default function AddressDocumentsTab({
     updateField("RestroLatitude", lat);
     updateField("RestroLongituden", lng);
 
-    alert("Address saved (Documents are handled separately)");
+    alert("Address saved successfully");
   };
 
   return (
-    <AdminForm>
+    <div>
       <h3 style={{ textAlign: "center", marginTop: 0 }}>
         Address & Documents
       </h3>
@@ -157,12 +160,12 @@ export default function AddressDocumentsTab({
             Documents
           </h4>
 
-          {/* 🔥 BANK-LIKE FSSAI TAB */}
+          {/* ✅ BANK-LIKE FSSAI SYSTEM */}
           <FssaiTab restroCode={restroCode} />
 
-          {/* GST & PAN next */}
+          {/* GST & PAN will be added same pattern */}
         </div>
       </div>
-    </AdminForm>
+    </div>
   );
 }
