@@ -1,4 +1,3 @@
-// app/admin/restros/[code]/edit/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -6,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import RestroEditModal from "@/components/RestroEditModal";
 
-type Restro = { [k: string]: any };
+type Restro = {
+  RestroCode: string | number;
+  [key: string]: any;
+};
 
 export default function RestroEditRoutePage({
   params,
@@ -14,7 +16,7 @@ export default function RestroEditRoutePage({
   params: { code: string };
 }) {
   const router = useRouter();
-  const { code } = params;
+  const restroCodeParam = params.code;
 
   const [restro, setRestro] = useState<Restro | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,114 +25,113 @@ export default function RestroEditRoutePage({
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-  // ✅ Memoize the client so its reference stays stable across renders
   const supabase: SupabaseClient | null = useMemo(() => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    // env vars are static at runtime; empty deps is fine
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* ================= LOAD RESTRO ================= */
   useEffect(() => {
     let mounted = true;
-    const load = async () => {
+
+    async function loadRestro() {
       setLoading(true);
       setErr(null);
-      try {
-        if (!supabase) throw new Error("Supabase client not configured");
 
-        const codeVal = /^\d+$/.test(String(code)) ? Number(code) : String(code);
+      try {
+        if (!supabase) throw new Error("Supabase not configured");
+
+        const restroCode =
+          /^\d+$/.test(restroCodeParam)
+            ? Number(restroCodeParam)
+            : restroCodeParam;
+
         const { data, error } = await supabase
           .from("RestroMaster")
           .select("*")
-          .eq("RestroCode", codeVal)
-          .limit(1);
+          .eq("RestroCode", restroCode)
+          .single();
 
         if (error) throw error;
-        const row = (data && data[0]) ?? null;
-        if (mounted) setRestro(row);
+
+        if (mounted) {
+          setRestro({
+            ...data,
+            RestroCode: restroCode, // 🔥 VERY IMPORTANT
+          });
+        }
       } catch (e: any) {
-        console.error("Load restro error:", e);
-        if (mounted) setErr(e?.message ?? "Failed to load restro");
+        console.error("Load restro failed:", e);
+        if (mounted) setErr(e?.message || "Failed to load restaurant");
       } finally {
         if (mounted) setLoading(false);
       }
-    };
+    }
 
-    // ✅ Only depend on code; supabase ref is stable now
-    load();
+    loadRestro();
     return () => {
       mounted = false;
     };
-  }, [code, supabase]); // supabase stable due to useMemo; optional to keep
+  }, [restroCodeParam, supabase]);
 
+  /* ================= STATES ================= */
   if (loading) {
     return (
-      <div
-        style={{
-          minHeight: "40vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        Loading...
+      <div style={{ padding: 40, textAlign: "center" }}>
+        Loading restaurant…
       </div>
     );
   }
 
   if (err) {
     return (
-      <div style={{ padding: 24 }}>
-        <div style={{ color: "crimson", marginBottom: 12 }}>Error: {err}</div>
-        <button onClick={() => router.back()} style={{ padding: "8px 12px" }}>
-          Back
-        </button>
+      <div style={{ padding: 40 }}>
+        <div style={{ color: "crimson", marginBottom: 12 }}>
+          Error: {err}
+        </div>
+        <button onClick={() => router.back()}>Go Back</button>
       </div>
     );
   }
 
   if (!restro) {
     return (
-      <div style={{ padding: 24 }}>
-        <div>No restro found for code: {code}</div>
-        <button
-          onClick={() => router.back()}
-          style={{ padding: "8px 12px", marginTop: 10 }}
-        >
-          Back
-        </button>
+      <div style={{ padding: 40 }}>
+        No restaurant found for code: {restroCodeParam}
       </div>
     );
   }
 
+  /* ================= RENDER MODAL ================= */
   return (
     <RestroEditModal
       restro={restro}
+      restroCode={restro.RestroCode}   {/* 🔥 PASS THIS */}
       initialTab="Basic Information"
-      onClose={() => {
-        router.back();
-      }}
+      onClose={() => router.back()}
       onSave={async (payload: any) => {
         try {
           const res = await fetch(
-            `/api/restros/${encodeURIComponent(String(code))}`,
+            `/api/restros/${encodeURIComponent(
+              String(restro.RestroCode)
+            )}`,
             {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             }
           );
+
           if (!res.ok) {
-            const txt = await res.text().catch(() => "");
-            throw new Error(txt || `Save failed (${res.status})`);
+            const text = await res.text();
+            throw new Error(text || "Save failed");
           }
-          const json = await res.json().catch(() => null);
-          router.back();
+
+          const json = await res.json();
           return { ok: true, row: json?.row ?? payload };
         } catch (e: any) {
-          console.error("save error:", e);
-          return { ok: false, error: e?.message ?? String(e) };
+          console.error("Save error:", e);
+          return { ok: false, error: e?.message || "Save failed" };
         }
       }}
     />
