@@ -3,8 +3,9 @@
 import React, { useEffect, useState } from "react";
 import UI from "@/components/AdminUI";
 import FssaiTab from "./FssaiTab";
+import GstTab from "./GstTab";
 
-const { FormRow, FormField, SubmitButton } = UI;
+const { AdminForm, FormRow, FormField, SubmitButton } = UI;
 
 type Props = {
   local: any;
@@ -17,33 +18,26 @@ export default function AddressDocumentsTab({
   updateField,
   restroCode,
 }: Props) {
-  /* ================= ADDRESS STATE ================= */
-  const [restroAddress, setRestroAddress] = useState("");
-  const [stateVal, setStateVal] = useState("");
-  const [city, setCity] = useState("");
-  const [district, setDistrict] = useState("");
-  const [pin, setPin] = useState("");
-  const [lat, setLat] = useState("");
-  const [lng, setLng] = useState("");
+  /* ================= ADDRESS ================= */
+  const [restroAddress, setRestroAddress] = useState(local?.RestroAddress ?? "");
+  const [stateVal, setStateVal] = useState(local?.State ?? "");
+  const [city, setCity] = useState(local?.["City/Village"] ?? "");
+  const [district, setDistrict] = useState(local?.District ?? "");
+  const [pin, setPin] = useState(local?.PinCode ?? "");
+  const [lat, setLat] = useState(local?.RestroLatitude ?? "");
+  const [lng, setLng] = useState(local?.RestroLongituden ?? "");
 
-  /* ================= SYNC FROM PARENT ================= */
   useEffect(() => {
     setRestroAddress(local?.RestroAddress ?? "");
     setStateVal(local?.State ?? "");
-    setCity(local?.["City/Village"] ?? local?.City ?? "");
+    setCity(local?.["City/Village"] ?? "");
     setDistrict(local?.District ?? "");
     setPin(local?.PinCode ?? "");
     setLat(local?.RestroLatitude ?? "");
-    setLng(local?.RestroLongituden ?? local?.RestroLongitude ?? "");
+    setLng(local?.RestroLongituden ?? "");
   }, [local]);
 
-  /* ================= SAVE ADDRESS ================= */
   const saveAddress = () => {
-    if (!restroCode) {
-      alert("Missing restroCode – cannot save");
-      return;
-    }
-
     updateField("RestroAddress", restroAddress);
     updateField("State", stateVal);
     updateField("City/Village", city);
@@ -51,121 +45,66 @@ export default function AddressDocumentsTab({
     updateField("PinCode", pin);
     updateField("RestroLatitude", lat);
     updateField("RestroLongituden", lng);
-
-    alert("Address saved successfully");
+    alert("Address saved");
   };
 
   return (
-    <div>
-      <h3 style={{ textAlign: "center", marginTop: 0 }}>
-        Address & Documents
-      </h3>
+    <AdminForm>
+      <h3 style={{ textAlign: "center" }}>Address & Documents</h3>
 
-      <div style={{ maxWidth: 1200, margin: "12px auto" }}>
-        {/* ================= ADDRESS ================= */}
-        <div
-          style={{
-            background: "#eef8ff",
-            padding: 16,
-            borderRadius: 10,
-            border: "1px solid #d6eaf8",
-            marginBottom: 20,
-          }}
-        >
-          <h4 style={{ textAlign: "center", marginBottom: 12 }}>
-            Address
-          </h4>
+      {/* ================= ADDRESS ================= */}
+      <div style={{ background: "#eef8ff", padding: 16, borderRadius: 10 }}>
+        <h4 style={{ textAlign: "center" }}>Address</h4>
 
-          <FormRow cols={3} gap={12}>
-            <FormField label="Restro Address" className="col-span-3">
-              <textarea
-                value={restroAddress}
-                onChange={(e) => setRestroAddress(e.target.value)}
-                style={{
-                  width: "100%",
-                  minHeight: 80,
-                  padding: 10,
-                  borderRadius: 6,
-                  border: "1px solid #e6eef6",
-                }}
-              />
-            </FormField>
+        <FormRow cols={3} gap={12}>
+          <FormField label="Restro Address" className="col-span-3">
+            <textarea
+              value={restroAddress}
+              onChange={(e) => setRestroAddress(e.target.value)}
+              className="w-full p-2 border rounded"
+            />
+          </FormField>
 
-            <FormField label="City / Village">
-              <input
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
+          <FormField label="City / Village">
+            <input value={city} onChange={(e) => setCity(e.target.value)} />
+          </FormField>
 
-            <FormField label="State">
-              <input
-                value={stateVal}
-                onChange={(e) => setStateVal(e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
+          <FormField label="State">
+            <input value={stateVal} onChange={(e) => setStateVal(e.target.value)} />
+          </FormField>
 
-            <FormField label="District">
-              <input
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
+          <FormField label="District">
+            <input value={district} onChange={(e) => setDistrict(e.target.value)} />
+          </FormField>
 
-            <FormField label="Pin Code">
-              <input
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
+          <FormField label="Pin Code">
+            <input value={pin} onChange={(e) => setPin(e.target.value)} />
+          </FormField>
 
-            <FormField label="Latitude">
-              <input
-                value={lat}
-                onChange={(e) => setLat(e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
+          <FormField label="Latitude">
+            <input value={lat} onChange={(e) => setLat(e.target.value)} />
+          </FormField>
 
-            <FormField label="Longitude">
-              <input
-                value={lng}
-                onChange={(e) => setLng(e.target.value)}
-                className="w-full p-2 rounded border"
-              />
-            </FormField>
-          </FormRow>
+          <FormField label="Longitude">
+            <input value={lng} onChange={(e) => setLng(e.target.value)} />
+          </FormField>
+        </FormRow>
 
-          <div style={{ textAlign: "center", marginTop: 12 }}>
-            <SubmitButton onClick={saveAddress}>
-              Save Address
-            </SubmitButton>
-          </div>
-        </div>
-
-        {/* ================= DOCUMENTS ================= */}
-        <div
-          style={{
-            background: "#fff",
-            padding: 16,
-            borderRadius: 10,
-            border: "1px solid #eee",
-          }}
-        >
-          <h4 style={{ textAlign: "center", marginBottom: 16 }}>
-            Documents
-          </h4>
-
-          {/* ✅ BANK-LIKE FSSAI SYSTEM */}
-          <FssaiTab restroCode={restroCode} />
-
-          {/* GST & PAN will be added same pattern */}
+        <div style={{ textAlign: "center", marginTop: 10 }}>
+          <SubmitButton onClick={saveAddress}>Save Address</SubmitButton>
         </div>
       </div>
-    </div>
+
+      {/* ================= DOCUMENTS ================= */}
+      <div style={{ marginTop: 30 }}>
+        {/* 🔥 BANK-LIKE FSSAI */}
+        <FssaiTab restroCode={restroCode} />
+
+        <hr style={{ margin: "30px 0" }} />
+
+        {/* 🔥 BANK-LIKE GST */}
+        <GstTab restroCode={restroCode} />
+      </div>
+    </AdminForm>
   );
 }
