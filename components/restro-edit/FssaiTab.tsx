@@ -26,6 +26,7 @@ export default function FssaiTab({ restroCode }: Props) {
 
   /* ================= FETCH ================= */
   async function loadData() {
+    if (!restroCode) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/restros/${restroCode}/fssai`);
@@ -39,10 +40,10 @@ export default function FssaiTab({ restroCode }: Props) {
   }
 
   useEffect(() => {
-    if (restroCode) loadData();
+    loadData();
   }, [restroCode]);
 
-  /* ================= ADD NEW ================= */
+  /* ================= SAVE NEW ================= */
   async function saveNew() {
     if (!number) {
       alert("Enter FSSAI number");
@@ -86,10 +87,11 @@ export default function FssaiTab({ restroCode }: Props) {
   }
 
   return (
-    <div>
+    <div style={{ marginTop: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
         <h4>FSSAI</h4>
         <button
+          type="button" // 🔥 VERY IMPORTANT
           onClick={() => setShowAdd(true)}
           style={{ background: "#06b6d4", color: "#fff", padding: "6px 12px", borderRadius: 6 }}
         >
@@ -118,6 +120,7 @@ export default function FssaiTab({ restroCode }: Props) {
           <div>{r.expiry_date || "—"}</div>
           <div>{r.file_url ? "Uploaded" : "—"}</div>
           <button
+            type="button" // 🔥 VERY IMPORTANT
             onClick={() => toggleStatus(r.id, r.status)}
             style={{
               padding: "4px 8px",
@@ -131,7 +134,7 @@ export default function FssaiTab({ restroCode }: Props) {
         </div>
       ))}
 
-      {/* ADD MODAL */}
+      {/* ================= ADD MODAL ================= */}
       {showAdd && (
         <div style={{ background: "#f9fafb", padding: 12, marginTop: 12 }}>
           <h4>Add FSSAI</h4>
@@ -152,15 +155,24 @@ export default function FssaiTab({ restroCode }: Props) {
 
           <input
             type="file"
+            onClick={(e) => e.stopPropagation()} // 🔥 FILE PICKER FIX
             onChange={(e) => setFile(e.target.files?.[0] || null)}
             className="mb-2"
           />
 
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={saveNew} className="px-3 py-2 bg-cyan-500 text-white rounded">
+            <button
+              type="button" // 🔥 IMPORTANT
+              onClick={saveNew}
+              className="px-3 py-2 bg-cyan-500 text-white rounded"
+            >
               Save
             </button>
-            <button onClick={() => setShowAdd(false)} className="px-3 py-2 border rounded">
+            <button
+              type="button" // 🔥 IMPORTANT
+              onClick={() => setShowAdd(false)}
+              className="px-3 py-2 border rounded"
+            >
               Cancel
             </button>
           </div>
