@@ -4,9 +4,10 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import UI from "@/components/AdminUI";
+
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
-import AddressDocsClient from "@/components/tabs/AddressDocsClient";
+import AddressDocumentsTab from "./restro-edit/AddressDocumentsTab"; // ✅ FIX
 import ContactsTab from "./restro-edit/ContactsTab";
 import BankTab from "./restro-edit/BankTab";
 import FutureClosedTab from "./restro-edit/FutureClosedTab";
@@ -51,14 +52,14 @@ export default function RestroEditModal({
     }
   }, [restroProp]);
 
-  /* ================= REQUIRED ID ================= */
+  /* ================= RESTRO CODE (🔥 VERY IMPORTANT) ================= */
   const restroCode =
     local?.RestroCode ||
     restro?.RestroCode ||
     restro?.restro_code ||
     "";
 
-  /* ================= STATION DISPLAY (🔥 FIX) ================= */
+  /* ================= STATION DISPLAY ================= */
   const stationDisplay =
     (local?.StationName || "") +
     (local?.StationCode ? ` (${local.StationCode})` : "") +
@@ -88,7 +89,7 @@ export default function RestroEditModal({
     return json;
   }
 
-  /* ================= SAVE ================= */
+  /* ================= SAVE (CONTACTS ONLY) ================= */
   async function handleSave() {
     setSaving(true);
     setNotification(null);
@@ -116,7 +117,6 @@ export default function RestroEditModal({
 
       for (const k of allowed) {
         let v = local[k];
-
         if (typeof v === "string") v = v.trim();
 
         if (
@@ -129,15 +129,13 @@ export default function RestroEditModal({
         payload[k] = v ?? null;
       }
 
-      // ✅ SUPABASE SAVE
       await defaultPatch(payload);
 
       setNotification({
         type: "success",
-        text: "Contacts saved successfully ✅",
+        text: "Saved successfully ✅",
       });
 
-      setActiveTab("Station Settings");
       router.refresh();
     } catch (err: any) {
       console.error("Save error:", err);
@@ -150,12 +148,12 @@ export default function RestroEditModal({
     }
   }
 
-  /* ================= COMMON PROPS (🔥 FIX) ================= */
+  /* ================= COMMON PROPS ================= */
   const common = {
     local,
     updateField,
     restroCode,
-    stationDisplay, // ✅ REQUIRED PROP
+    stationDisplay,
     Select,
     Toggle,
   };
@@ -165,18 +163,31 @@ export default function RestroEditModal({
     switch (activeTab) {
       case "Basic Information":
         return <BasicInformationTab {...common} />;
+
       case "Station Settings":
         return <StationSettingsTab {...common} />;
+
       case "Address & Documents":
-        return <AddressDocsClient initialData={restro} />;
+        return (
+          <AddressDocumentsTab
+            local={local}
+            updateField={updateField}
+            restroCode={restroCode} // 🔥 THIS ENABLES FSSAI / GST
+          />
+        );
+
       case "Contacts":
         return <ContactsTab {...common} />;
+
       case "Bank":
         return <BankTab {...common} />;
+
       case "Future Closed":
         return <FutureClosedTab {...common} />;
+
       case "Menu":
         return <MenuTab {...common} />;
+
       default:
         return null;
     }
