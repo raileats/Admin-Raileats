@@ -39,9 +39,17 @@ export default function FssaiTab({ restroCode }: Props) {
     }
   }
 
-  useEffect(() => {
-    loadData();
-  }, [restroCode]);
+  {rows
+  .filter(r => r.status === "active")
+  .map((r) => (
+    <div key={r.id}>
+      <div>FSSAI: {r.FssaiNumber}</div>
+      <div>Expiry: {r.expiry_date}</div>
+      {r.file_url && (
+        <a href={r.file_url} target="_blank">View Document</a>
+      )}
+    </div>
+))}
 
   /* ================= SAVE NEW ================= */
   async function saveNew() {
