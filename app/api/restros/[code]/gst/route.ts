@@ -11,7 +11,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  const restroCode = params.code;
+  // 🔥🔥🔥 CRITICAL FIX
+  const restroCode = Number(params.code);
 
   const { data, error } = await supabase
     .from("RestroGST")
@@ -30,19 +31,14 @@ export async function GET(
     return NextResponse.json({ ok: false, error: error.message });
   }
 
-  // 🔥 FINAL SAFE MAPPING (NULL-PROOF)
-  const rows = (data || []).map((r: any) => {
-    const rawStatus = r.Gststatus?.toLowerCase();
-
-    return {
-      id: r.id,
-      gst_number: r.GstNumber,
-      gst_type: r.GstType,
-      status: rawStatus === "active" ? "active" : "inactive", // ✅ FIX
-      created_at: r.createdDate,
-      file_url: r.fileurl ?? null,
-    };
-  });
+  const rows = (data || []).map((r: any) => ({
+    id: r.id,
+    gst_number: r.GstNumber,
+    gst_type: r.GstType,
+    status: r.Gststatus === "Active" ? "active" : "inactive",
+    created_at: r.createdDate,
+    file_url: r.fileurl || null,
+  }));
 
   return NextResponse.json({ ok: true, rows });
 }
@@ -52,7 +48,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  const restroCode = params.code;
+  // 🔥🔥🔥 SAME FIX HERE
+  const restroCode = Number(params.code);
   const form = await req.formData();
 
   const gst_number = form.get("gst_number") as string;
@@ -92,10 +89,10 @@ export async function POST(
   const { error } = await supabase.from("RestroGST").insert({
     RestroCode: restroCode,
     GstNumber: gst_number,
-    GstType: gst_type,
+    GstType: gst_type, // Regular / Composition
     Gststatus: "Active",
     fileurl,
-    // createdDate → DB default now()
+    // createdDate → default now()
   });
 
   if (error) {
