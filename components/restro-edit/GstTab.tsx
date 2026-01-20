@@ -12,7 +12,7 @@ type GstRow = {
   GstType: string | null;
   fileurl: string | null;
   Gststatus: "Active" | "Inactive";
-  createdDate: string;
+  createdDate: string | null;
 };
 
 export default function GstTab({ restroCode }: Props) {
@@ -73,14 +73,14 @@ export default function GstTab({ restroCode }: Props) {
     loadData();
   }
 
-  /* ================= SPLIT ================= */
-  const activeRows = rows.filter((r) => r.Gststatus === "Active");
-  const inactiveRows = rows.filter((r) => r.Gststatus === "Inactive");
-
-  function formatDate(d?: string) {
+  /* ================= HELPERS ================= */
+  function formatDate(d?: string | null) {
     if (!d) return "—";
     return new Date(d).toLocaleDateString("en-GB");
   }
+
+  const activeRows = rows.filter((r) => r.Gststatus === "Active");
+  const inactiveRows = rows.filter((r) => r.Gststatus === "Inactive");
 
   return (
     <div className="mt-6">
@@ -96,7 +96,7 @@ export default function GstTab({ restroCode }: Props) {
         </button>
       </div>
 
-      {/* Headings */}
+      {/* Table Head */}
       <div className="grid grid-cols-5 gap-3 text-xs font-semibold text-gray-600 mb-1">
         <div>GST No</div>
         <div>GST Type</div>
@@ -173,7 +173,7 @@ export default function GstTab({ restroCode }: Props) {
         </div>
       )}
 
-      {/* ================= ADD FORM ================= */}
+      {/* ADD FORM */}
       {showAdd && (
         <div className="mt-3 p-3 bg-gray-50 border rounded">
           <h5 className="font-semibold mb-2 text-sm">Add GST</h5>
