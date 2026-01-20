@@ -30,15 +30,19 @@ export async function GET(
     return NextResponse.json({ ok: false, error: error.message });
   }
 
-  // ✅ DB → UI mapping (FINAL)
-  const rows = (data || []).map((r: any) => ({
-    id: r.id,
-    gst_number: r.GstNumber,
-    gst_type: r.GstType,
-    status: r.Gststatus?.toLowerCase(), // active / inactive
-    created_at: r.createdDate,          // timestamptz → UI
-    file_url: r.fileurl ?? null,
-  }));
+  // 🔥 FINAL SAFE MAPPING (NULL-PROOF)
+  const rows = (data || []).map((r: any) => {
+    const rawStatus = r.Gststatus?.toLowerCase();
+
+    return {
+      id: r.id,
+      gst_number: r.GstNumber,
+      gst_type: r.GstType,
+      status: rawStatus === "active" ? "active" : "inactive", // ✅ FIX
+      created_at: r.createdDate,
+      file_url: r.fileurl ?? null,
+    };
+  });
 
   return NextResponse.json({ ok: true, rows });
 }
@@ -56,13 +60,10 @@ export async function POST(
   const file = form.get("file") as File | null;
 
   if (!gst_number) {
-    return NextResponse.json({
-      ok: false,
-      error: "Missing GST number",
-    });
+    return NextResponse.json({ ok: false, error: "Missing GST number" });
   }
 
-  /* 🔥 OLD GST → INACTIVE */
+  // 🔥 OLD GST → INACTIVE
   await supabase
     .from("RestroGST")
     .update({ Gststatus: "Inactive" })
@@ -70,7 +71,6 @@ export async function POST(
 
   let fileurl: string | null = null;
 
-  /* 🔥 FILE UPLOAD (OPTIONAL) */
   if (file) {
     const path = `${restroCode}/${Date.now()}-${file.name}`;
 
@@ -79,10 +79,7 @@ export async function POST(
       .upload(path, file, { upsert: true });
 
     if (uploadErr) {
-      return NextResponse.json({
-        ok: false,
-        error: uploadErr.message,
-      });
+      return NextResponse.json({ ok: false, error: uploadErr.message });
     }
 
     const { data } = supabase.storage
@@ -92,14 +89,13 @@ export async function POST(
     fileurl = data.publicUrl;
   }
 
-  /* 🔥 INSERT NEW GST (createdDate auto by DB) */
   const { error } = await supabase.from("RestroGST").insert({
     RestroCode: restroCode,
     GstNumber: gst_number,
-    GstType: gst_type,      // Regular / Composition
+    GstType: gst_type,
     Gststatus: "Active",
     fileurl,
-    // createdDate → DEFAULT now() (DB handles it)
+    // createdDate → DB default now()
   });
 
   if (error) {
