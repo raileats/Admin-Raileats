@@ -31,11 +31,9 @@ export default function FssaiTab({ restroCode }: Props) {
     try {
       const res = await fetch(`/api/restros/${restroCode}/fssai`);
       const json = await res.json();
-      if (json.ok) {
-        setRows(json.rows || []);
-      }
+      if (json.ok) setRows(json.rows || []);
     } catch (e) {
-      console.error("FSSAI load error:", e);
+      console.error(e);
     } finally {
       setLoading(false);
     }
@@ -45,7 +43,7 @@ export default function FssaiTab({ restroCode }: Props) {
     loadData();
   }, [restroCode]);
 
-  /* ================= SAVE NEW ================= */
+  /* ================= SAVE ================= */
   async function saveNew() {
     if (!number) {
       alert("Enter FSSAI number");
@@ -79,29 +77,26 @@ export default function FssaiTab({ restroCode }: Props) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  function isExpired(expiryDate: string | null) {
-    if (!expiryDate) return false;
-    const d = new Date(expiryDate);
-    d.setHours(0, 0, 0, 0);
-    return d < today;
-  }
+  const isExpired = (d: string | null) => {
+    if (!d) return false;
+    const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
+    return date < today;
+  };
 
-  // 🔥 show only latest active & non-expired
   const activeRow = rows.find(
     (r) => r.status === "active" && !isExpired(r.expiry_date)
   );
 
-  /* ================= RENDER ================= */
+  const inactiveRows = rows.filter(
+    (r) => r !== activeRow
+  );
+
+  /* ================= UI ================= */
   return (
     <div style={{ marginTop: 20 }}>
       {/* HEADER */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 12,
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
         <h4>FSSAI</h4>
         <button
           type="button"
@@ -117,79 +112,103 @@ export default function FssaiTab({ restroCode }: Props) {
         </button>
       </div>
 
-      {/* LOADING */}
       {loading && <div>Loading...</div>}
 
-      {/* EMPTY */}
-      {!loading && !activeRow && (
-        <div style={{ color: "#666" }}>No active FSSAI available</div>
-      )}
-
-      {/* ACTIVE FSSAI CARD */}
+      {/* ================= ACTIVE ================= */}
       {activeRow && (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 1fr 1fr 1fr",
-            gap: 12,
+            marginTop: 12,
             padding: 12,
-            border: "1px solid #e5e7eb",
+            border: "1px solid #bbf7d0",
+            background: "#ecfdf5",
             borderRadius: 8,
           }}
         >
-          <div>
-            <strong>FSSAI No:</strong> {activeRow.fssai_number}
+          <div style={{ fontWeight: 600 }}>
+            FSSAI No: {activeRow.fssai_number}
           </div>
-
-          <div>
-            <strong>Expiry:</strong> {activeRow.expiry_date || "—"}
-          </div>
-
-          <div>
-            <strong>Status:</strong>{" "}
-            <span style={{ color: "green", fontWeight: 700 }}>
-              Active
-            </span>
-          </div>
-
-          <div>
-            <strong>Created:</strong>{" "}
-            {new Date(activeRow.created_at).toLocaleDateString()}
-          </div>
-
-          <div style={{ gridColumn: "1 / -1" }}>
-            {activeRow.file_url ? (
-              <a
-                href={activeRow.file_url}
-                target="_blank"
-                rel="noreferrer"
-                style={{ color: "#2563eb" }}
-              >
-                View Document
-              </a>
-            ) : (
-              "No document"
-            )}
-          </div>
+          <div>Expiry: {activeRow.expiry_date}</div>
+          <div style={{ color: "green", fontWeight: 700 }}>Status: Active</div>
+          <div>Created: {new Date(activeRow.created_at).toLocaleDateString()}</div>
+          {activeRow.file_url && (
+            <a
+              href={activeRow.file_url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "#2563eb" }}
+            >
+              View Document
+            </a>
+          )}
         </div>
+      )}
+
+      {!activeRow && !loading && (
+        <div style={{ marginTop: 12, color: "#666" }}>
+          No active FSSAI
+        </div>
+      )}
+
+      {/* ================= INACTIVE ================= */}
+      {inactiveRows.length > 0 && (
+        <>
+          <h5 style={{ marginTop: 20, color: "#b91c1c" }}>
+            Inactive / Old FSSAI
+          </h5>
+
+          {inactiveRows.map((r) => (
+            <div
+              key={r.id}
+              style={{
+                marginTop: 8,
+                padding: 10,
+                border: "1px solid #fecaca",
+                background: "#fef2f2",
+                borderRadius: 6,
+              }}
+            >
+              <div>
+                <strong>FSSAI:</strong> {r.fssai_number}
+              </div>
+              <div>Expiry: {r.expiry_date || "—"}</div>
+              <div style={{ color: "red", fontWeight: 600 }}>
+                Status: Inactive
+              </div>
+              <div>
+                Created: {new Date(r.created_at).toLocaleDateString()}
+              </div>
+              {r.file_url && (
+                <a
+                  href={r.file_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "#dc2626" }}
+                >
+                  View Document
+                </a>
+              )}
+            </div>
+          ))}
+        </>
       )}
 
       {/* ================= ADD FORM ================= */}
       {showAdd && (
         <div
           style={{
-            background: "#f9fafb",
+            marginTop: 16,
             padding: 12,
-            marginTop: 14,
+            background: "#f9fafb",
             borderRadius: 8,
           }}
         >
           <h4>Add FSSAI</h4>
 
           <input
-            placeholder="FSSAI Number"
             value={number}
             onChange={(e) => setNumber(e.target.value)}
+            placeholder="FSSAI Number"
             className="w-full p-2 border rounded mb-2"
           />
 
