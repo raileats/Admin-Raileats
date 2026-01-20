@@ -27,6 +27,9 @@ export default function FssaiTab({ restroCode }: Props) {
   const [expiry, setExpiry] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
+  /* ================= VALIDATION ================= */
+  const isValidLength = number.length === 14;
+
   /* ================= LOAD ================= */
   async function loadData() {
     if (!restroCode) return;
@@ -43,7 +46,10 @@ export default function FssaiTab({ restroCode }: Props) {
 
   /* ================= SAVE ================= */
   async function saveNew() {
-    if (!number) return alert("Enter FSSAI number");
+    if (!isValidLength) {
+      alert("FSSAI number must be exactly 14 digits");
+      return;
+    }
 
     const fd = new FormData();
     fd.append("fssai_number", number);
@@ -77,7 +83,9 @@ export default function FssaiTab({ restroCode }: Props) {
           : "bg-red-50 border border-red-300"
       }`}
     >
-      <div><strong>{r.fssai_number}</strong></div>
+      <div>
+        <strong>{r.fssai_number}</strong>
+      </div>
       <div>{fmt(r.expiry_date)}</div>
       <div
         className={
@@ -151,12 +159,35 @@ export default function FssaiTab({ restroCode }: Props) {
         <div className="mt-4 p-4 bg-gray-50 border rounded">
           <h4 className="font-semibold mb-2">Add FSSAI</h4>
 
+          {/* FSSAI INPUT */}
           <input
             value={number}
-            onChange={(e) => setNumber(e.target.value)}
-            placeholder="FSSAI Number"
-            className="w-full p-2 border rounded mb-2"
+            maxLength={14} // 🔥 HARD LIMIT
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, ""); // 🔥 numeric only
+              setNumber(v.slice(0, 14));
+            }}
+            placeholder="14 Digit FSSAI Number"
+            className={`w-full p-2 rounded mb-1 border ${
+              number.length === 0
+                ? "border-gray-300"
+                : isValidLength
+                ? "border-green-500 bg-green-50"
+                : "border-red-500 bg-red-50"
+            }`}
           />
+
+          <div className="text-xs mb-2">
+            {!isValidLength ? (
+              <span className="text-red-600">
+                {14 - number.length} digits remaining
+              </span>
+            ) : (
+              <span className="text-green-600">
+                FSSAI number length valid
+              </span>
+            )}
+          </div>
 
           <input
             type="date"
@@ -174,7 +205,12 @@ export default function FssaiTab({ restroCode }: Props) {
           <div className="flex gap-2">
             <button
               onClick={saveNew}
-              className="bg-cyan-500 text-white px-4 py-2 rounded"
+              disabled={!isValidLength}
+              className={`px-4 py-2 rounded text-white ${
+                isValidLength
+                  ? "bg-cyan-500"
+                  : "bg-gray-400 cursor-not-allowed"
+              }`}
             >
               Save
             </button>
