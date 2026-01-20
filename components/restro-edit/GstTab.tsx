@@ -45,13 +45,19 @@ export default function GstTab({ restroCode }: Props) {
 
   /* ================= SAVE NEW ================= */
   async function saveNew() {
-    if (!gstNumber) {
-      alert("Enter GST number");
+    // ✅ OFFICIAL 15-DIGIT GST REGEX
+    const gstRegex =
+      /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+    const gst = gstNumber.toUpperCase().trim();
+
+    if (!gstRegex.test(gst)) {
+      alert("Invalid GST Number (15 digit GST required)");
       return;
     }
 
     const form = new FormData();
-    form.append("gst_number", gstNumber);
+    form.append("gst_number", gst);
     form.append("gst_type", gstType);
     if (file) form.append("file", file);
 
@@ -181,7 +187,7 @@ export default function GstTab({ restroCode }: Props) {
           <input
             placeholder="GST Number"
             value={gstNumber}
-            onChange={(e) => setGstNumber(e.target.value)}
+            onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
             className="w-full p-2 border rounded mb-2 text-sm"
           />
 
