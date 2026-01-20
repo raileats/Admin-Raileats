@@ -11,13 +11,13 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  // 🔥🔥🔥 CRITICAL FIX
+  // 🔥 BIGINT FIX (MOST IMPORTANT)
   const restroCode = Number(params.code);
 
   const { data, error } = await supabase
     .from("RestroGST")
     .select(`
-      id,
+      "RestroCode",
       "GstNumber",
       "GstType",
       "Gststatus",
@@ -31,13 +31,13 @@ export async function GET(
     return NextResponse.json({ ok: false, error: error.message });
   }
 
+  // 🔥 DB → UI mapping
   const rows = (data || []).map((r: any) => ({
-    id: r.id,
     gst_number: r.GstNumber,
     gst_type: r.GstType,
-    status: r.Gststatus === "Active" ? "active" : "inactive",
-    created_at: r.createdDate,
-    file_url: r.fileurl || null,
+    status: r.Gststatus?.toLowerCase() === "active" ? "active" : "inactive",
+    created_at: r.createdDate,     // ✅ NOW COMING
+    file_url: r.fileurl ?? null,   // ✅ VIEW BUTTON WORKS
   }));
 
   return NextResponse.json({ ok: true, rows });
@@ -48,7 +48,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  // 🔥🔥🔥 SAME FIX HERE
+  // 🔥 BIGINT FIX
   const restroCode = Number(params.code);
   const form = await req.formData();
 
@@ -89,10 +89,10 @@ export async function POST(
   const { error } = await supabase.from("RestroGST").insert({
     RestroCode: restroCode,
     GstNumber: gst_number,
-    GstType: gst_type, // Regular / Composition
+    GstType: gst_type,
     Gststatus: "Active",
     fileurl,
-    // createdDate → default now()
+    // createdDate → DB default now()
   });
 
   if (error) {
