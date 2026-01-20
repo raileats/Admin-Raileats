@@ -17,10 +17,10 @@ export async function GET(
     .from("RestroGST")
     .select(`
       id,
-      GstNumber,
-      GstType,
-      Gststatus,
-      createdDate,
+      "GstNumber",
+      "GstType",
+      "Gststatus",
+      "createdDate",
       fileurl
     `)
     .eq("RestroCode", restroCode)
@@ -30,14 +30,14 @@ export async function GET(
     return NextResponse.json({ ok: false, error: error.message });
   }
 
-  // 🔥 DB → UI mapping
+  // ✅ DB → UI mapping (FINAL)
   const rows = (data || []).map((r: any) => ({
     id: r.id,
     gst_number: r.GstNumber,
     gst_type: r.GstType,
     status: r.Gststatus?.toLowerCase(), // active / inactive
-    created_at: r.createdDate,          // ✅ FIXED
-    file_url: r.fileurl || null,         // ✅ FIXED
+    created_at: r.createdDate,          // timestamptz → UI
+    file_url: r.fileurl ?? null,
   }));
 
   return NextResponse.json({ ok: true, rows });
@@ -56,10 +56,13 @@ export async function POST(
   const file = form.get("file") as File | null;
 
   if (!gst_number) {
-    return NextResponse.json({ ok: false, error: "Missing GST number" });
+    return NextResponse.json({
+      ok: false,
+      error: "Missing GST number",
+    });
   }
 
-  // 🔥 OLD GST → INACTIVE
+  /* 🔥 OLD GST → INACTIVE */
   await supabase
     .from("RestroGST")
     .update({ Gststatus: "Inactive" })
@@ -67,6 +70,7 @@ export async function POST(
 
   let fileurl: string | null = null;
 
+  /* 🔥 FILE UPLOAD (OPTIONAL) */
   if (file) {
     const path = `${restroCode}/${Date.now()}-${file.name}`;
 
@@ -74,21 +78,28 @@ export async function POST(
       .from("gst-docs")
       .upload(path, file, { upsert: true });
 
-    if (!uploadErr) {
-      const { data } = supabase.storage
-        .from("gst-docs")
-        .getPublicUrl(path);
-      fileurl = data.publicUrl;
+    if (uploadErr) {
+      return NextResponse.json({
+        ok: false,
+        error: uploadErr.message,
+      });
     }
+
+    const { data } = supabase.storage
+      .from("gst-docs")
+      .getPublicUrl(path);
+
+    fileurl = data.publicUrl;
   }
 
+  /* 🔥 INSERT NEW GST (createdDate auto by DB) */
   const { error } = await supabase.from("RestroGST").insert({
     RestroCode: restroCode,
     GstNumber: gst_number,
-    GstType: gst_type,        // Regular / Composition
+    GstType: gst_type,      // Regular / Composition
     Gststatus: "Active",
-    fileurl,                 // ✅ correct column
-    createdDate: new Date().toISOString(), // ✅ NOW CREATED DATE SAVES
+    fileurl,
+    // createdDate → DEFAULT now() (DB handles it)
   });
 
   if (error) {
