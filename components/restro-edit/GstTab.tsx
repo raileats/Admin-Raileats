@@ -1,53 +1,59 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+
+type Props = {
+  restroCode: string | number;
+};
 
 type GstRow = {
   id: string;
   gst_number: string;
-  gst_type: string;
+  expiry_date: string | null;
   file_url: string | null;
   status: "active" | "inactive";
   created_at: string;
 };
 
-export default function GstTab({
-  restroCode,
-}: {
-  restroCode: string | number;
-}) {
+export default function GstTab({ restroCode }: Props) {
   const [rows, setRows] = useState<GstRow[]>([]);
-  const [showAdd, setShowAdd] = useState(false);
-  const [gstNumber, setGstNumber] = useState("");
-  const [gstType, setGstType] = useState("Regular");
-  const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [showAdd, setShowAdd] = useState(false);
+  const [number, setNumber] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+
+  /* ================= FETCH ================= */
   async function loadData() {
+    if (!restroCode) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/restros/${restroCode}/gst`);
       const json = await res.json();
       if (json.ok) setRows(json.rows || []);
+    } catch (e) {
+      console.error("GST load error:", e);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    if (restroCode) loadData();
+    loadData();
   }, [restroCode]);
 
+  /* ================= SAVE NEW ================= */
   async function saveNew() {
-    if (!gstNumber || !file) {
-      alert("GST Number and File required");
+    if (!number) {
+      alert("Enter GST number");
       return;
     }
 
     const form = new FormData();
-    form.append("gst_number", gstNumber);
-    form.append("gst_type", gstType);
-    form.append("file", file);
+    form.append("gst_number", number);
+    if (expiry) form.append("expiry_date", expiry);
+    if (file) form.append("file", file);
 
     const res = await fetch(`/api/restros/${restroCode}/gst`, {
       method: "POST",
@@ -61,103 +67,147 @@ export default function GstTab({
     }
 
     setShowAdd(false);
-    setGstNumber("");
+    setNumber("");
+    setExpiry("");
     setFile(null);
     loadData();
   }
 
-  async function toggleStatus(id: string, status: "active" | "inactive") {
-    await fetch(`/api/restros/${restroCode}/gst`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id,
-        status: status === "active" ? "inactive" : "active",
-      }),
-    });
-    loadData();
+  /* ================= SPLIT ================= */
+  const activeRows = rows.filter((r) => r.status === "active");
+  const inactiveRows = rows.filter((r) => r.status === "inactive");
+
+  function formatDate(d?: string | null) {
+    if (!d) return "—";
+    return new Date(d).toLocaleDateString("en-GB");
   }
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-        <h4>GST</h4>
+    <div className="mt-6">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="font-semibold">GST</h4>
         <button
+          type="button"
           onClick={() => setShowAdd(true)}
-          style={{ background: "#06b6d4", color: "#fff", padding: "6px 12px", borderRadius: 6 }}
+          className="bg-cyan-500 text-white px-3 py-1 rounded text-sm"
         >
           Add New GST
         </button>
       </div>
 
-      {loading && <div>Loading...</div>}
+      {/* Headings */}
+      <div className="grid grid-cols-5 gap-3 text-xs font-semibold text-gray-600 mb-1">
+        <div>GST No</div>
+        <div>Expiry</div>
+        <div>Status</div>
+        <div>Created</div>
+        <div>Document</div>
+      </div>
 
-      {!loading && rows.length === 0 && (
-        <div style={{ color: "#666" }}>No GST added yet</div>
-      )}
-
-      {rows.map((r) => (
+      {/* Active */}
+      {activeRows.map((r) => (
         <div
           key={r.id}
-          style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 1fr 1fr 120px",
-            gap: 12,
-            padding: 10,
-            borderBottom: "1px solid #eee",
-          }}
+          className="grid grid-cols-5 gap-3 text-sm items-center p-2 border border-green-300 bg-green-50 rounded mb-1"
         >
-          <div>{r.gst_number}</div>
-          <div>{r.gst_type}</div>
-          <div>{r.file_url ? "Uploaded" : "—"}</div>
-          <button
-            onClick={() => toggleStatus(r.id, r.status)}
-            style={{
-              padding: "4px 8px",
-              borderRadius: 6,
-              background: r.status === "active" ? "#16a34a" : "#9ca3af",
-              color: "#fff",
-            }}
-          >
-            {r.status === "active" ? "Active" : "Inactive"}
-          </button>
+          <div className="font-semibold">{r.gst_number}</div>
+          <div>{formatDate(r.expiry_date)}</div>
+          <div className="text-green-700 font-semibold">Active</div>
+          <div>{formatDate(r.created_at)}</div>
+          <div>
+            {r.file_url ? (
+              <a
+                href={r.file_url}
+                target="_blank"
+                className="text-blue-600 underline"
+              >
+                View
+              </a>
+            ) : (
+              "—"
+            )}
+          </div>
         </div>
       ))}
 
+      {/* Inactive */}
+      {inactiveRows.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs font-semibold text-red-600 mb-1">
+            Old / Inactive GST
+          </div>
+
+          {inactiveRows.map((r) => (
+            <div
+              key={r.id}
+              className="grid grid-cols-5 gap-3 text-sm items-center p-2 border border-red-300 bg-red-50 rounded mb-1"
+            >
+              <div className="font-semibold">{r.gst_number}</div>
+              <div>{formatDate(r.expiry_date)}</div>
+              <div className="text-red-600 font-semibold">Inactive</div>
+              <div>{formatDate(r.created_at)}</div>
+              <div>
+                {r.file_url ? (
+                  <a
+                    href={r.file_url}
+                    target="_blank"
+                    className="text-red-600 underline"
+                  >
+                    View
+                  </a>
+                ) : (
+                  "—"
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && rows.length === 0 && (
+        <div className="text-gray-500 text-sm mt-2">
+          No GST added yet
+        </div>
+      )}
+
+      {/* ================= ADD FORM ================= */}
       {showAdd && (
-        <div style={{ marginTop: 12, padding: 12, background: "#f9fafb" }}>
+        <div className="mt-3 p-3 bg-gray-50 border rounded">
+          <h5 className="font-semibold mb-2 text-sm">Add GST</h5>
+
           <input
             placeholder="GST Number"
-            value={gstNumber}
-            onChange={(e) => setGstNumber(e.target.value)}
-            className="w-full p-2 border rounded mb-2"
+            value={number}
+            onChange={(e) => setNumber(e.target.value)}
+            className="w-full p-2 border rounded mb-2 text-sm"
           />
 
-          <select
-            value={gstType}
-            onChange={(e) => setGstType(e.target.value)}
-            className="w-full p-2 border rounded mb-2"
-          >
-            <option value="Regular">Regular</option>
-            <option value="Composition">Composition</option>
-          </select>
+          <input
+            type="date"
+            value={expiry}
+            onChange={(e) => setExpiry(e.target.value)}
+            className="w-full p-2 border rounded mb-2 text-sm"
+          />
 
           <input
             type="file"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
-            className="mb-2"
+            className="mb-2 text-sm"
           />
 
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex gap-2">
             <button
+              type="button"
               onClick={saveNew}
-              className="px-3 py-2 bg-cyan-500 text-white rounded"
+              className="px-3 py-1 bg-cyan-500 text-white rounded text-sm"
             >
               Save
             </button>
             <button
+              type="button"
               onClick={() => setShowAdd(false)}
-              className="px-3 py-2 border rounded"
+              className="px-3 py-1 border rounded text-sm"
             >
               Cancel
             </button>
@@ -167,4 +217,3 @@ export default function GstTab({
     </div>
   );
 }
-
