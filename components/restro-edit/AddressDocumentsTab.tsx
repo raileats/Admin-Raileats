@@ -1,103 +1,123 @@
-{/* ================= ADDRESS ================= */}
-<div
-  style={{
-    background: "#f0f9ff",
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 20,
-  }}
->
-  {/* Header */}
-  <div
-    style={{
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 10,
-    }}
-  >
-    <h4 style={{ margin: 0 }}>Address</h4>
-    <button
-      type="button"
-      onClick={saveAddress}
-      className="px-4 py-2 bg-blue-600 text-white rounded"
-    >
-      Save Address
-    </button>
-  </div>
+"use client";
 
-  {/* Full Address */}
-  <textarea
-    value={addr}
-    onChange={(e) => setAddr(e.target.value)}
-    placeholder="Full Restaurant Address"
-    style={{
-      width: "100%",
-      minHeight: 60,
-      padding: 10,
-      borderRadius: 6,
-      border: "1px solid #ddd",
-      marginBottom: 12,
-    }}
-  />
+import React, { useEffect, useState } from "react";
+import UI from "@/components/AdminUI";
+import FssaiTab from "./FssaiTab";
+import GstTab from "./GstTab";
 
-  {/* Column Headings */}
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: "1.2fr 1fr 1fr 1fr 1fr 1fr",
-      gap: 10,
-      fontSize: 13,
-      fontWeight: 600,
-      color: "#555",
-      marginBottom: 4,
-    }}
-  >
-    <div>City / Village</div>
-    <div>State</div>
-    <div>District</div>
-    <div>Pin Code</div>
-    <div>Latitude</div>
-    <div>Longitude</div>
-  </div>
+const { AdminForm, SubmitButton } = UI;
 
-  {/* Inputs */}
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: "1.2fr 1fr 1fr 1fr 1fr 1fr",
-      gap: 10,
-    }}
-  >
-    <input
-      value={city}
-      onChange={(e) => setCity(e.target.value)}
-      className="p-2 border rounded"
-    />
-    <input
-      value={state}
-      onChange={(e) => setState(e.target.value)}
-      className="p-2 border rounded"
-    />
-    <input
-      value={district}
-      onChange={(e) => setDistrict(e.target.value)}
-      className="p-2 border rounded"
-    />
-    <input
-      value={pin}
-      onChange={(e) => setPin(e.target.value)}
-      className="p-2 border rounded"
-    />
-    <input
-      value={lat}
-      onChange={(e) => setLat(e.target.value)}
-      className="p-2 border rounded"
-    />
-    <input
-      value={lng}
-      onChange={(e) => setLng(e.target.value)}
-      className="p-2 border rounded"
-    />
-  </div>
-</div>
+type Props = {
+  local: any;
+  updateField: (k: string, v: any) => void;
+  restroCode: string | number;
+};
+
+export default function AddressDocumentsTab({
+  local = {},
+  updateField,
+  restroCode,
+}: Props) {
+  const [addr, setAddr] = useState(local?.RestroAddress ?? "");
+  const [city, setCity] = useState(local?.["City/Village"] ?? local?.City ?? "");
+  const [state, setState] = useState(local?.State ?? "");
+  const [district, setDistrict] = useState(local?.District ?? "");
+  const [pin, setPin] = useState(local?.PinCode ?? "");
+  const [lat, setLat] = useState(local?.RestroLatitude ?? "");
+  const [lng, setLng] = useState(local?.RestroLongitude ?? "");
+
+  useEffect(() => {
+    setAddr(local?.RestroAddress ?? "");
+    setCity(local?.["City/Village"] ?? local?.City ?? "");
+    setState(local?.State ?? "");
+    setDistrict(local?.District ?? "");
+    setPin(local?.PinCode ?? "");
+    setLat(local?.RestroLatitude ?? "");
+    setLng(local?.RestroLongitude ?? "");
+  }, [local]);
+
+  function saveAddress() {
+    updateField("RestroAddress", addr);
+    updateField("City/Village", city);
+    updateField("State", state);
+    updateField("District", district);
+    updateField("PinCode", pin);
+    updateField("RestroLatitude", lat);
+    updateField("RestroLongitude", lng);
+    alert("Address saved");
+  }
+
+  return (
+    <AdminForm>
+      {/* ================= ADDRESS ================= */}
+      <div className="border rounded-md p-3 bg-sky-50 mb-6">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-2">
+          <h4 className="font-semibold text-sm">Address</h4>
+          <SubmitButton onClick={saveAddress}>Save Address</SubmitButton>
+        </div>
+
+        {/* Full address */}
+        <textarea
+          value={addr}
+          onChange={(e) => setAddr(e.target.value)}
+          placeholder="Restaurant full address"
+          className="w-full p-2 border rounded mb-3 text-sm"
+          rows={2}
+        />
+
+        {/* Headings row */}
+        <div className="grid grid-cols-6 gap-2 text-xs font-semibold text-gray-600 mb-1">
+          <div>City / Village</div>
+          <div>State</div>
+          <div>District</div>
+          <div>Pin Code</div>
+          <div>Latitude</div>
+          <div>Longitude</div>
+        </div>
+
+        {/* Inputs row */}
+        <div className="grid grid-cols-6 gap-2 text-sm">
+          <input
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            className="p-2 border rounded"
+          />
+          <input
+            value={state}
+            onChange={(e) => setState(e.target.value)}
+            className="p-2 border rounded"
+          />
+          <input
+            value={district}
+            onChange={(e) => setDistrict(e.target.value)}
+            className="p-2 border rounded"
+          />
+          <input
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            className="p-2 border rounded"
+          />
+          <input
+            value={lat}
+            onChange={(e) => setLat(e.target.value)}
+            className="p-2 border rounded"
+          />
+          <input
+            value={lng}
+            onChange={(e) => setLng(e.target.value)}
+            className="p-2 border rounded"
+          />
+        </div>
+      </div>
+
+      {/* ================= FSSAI ================= */}
+      <FssaiTab restroCode={restroCode} />
+
+      {/* ================= GST ================= */}
+      <div className="mt-6">
+        <GstTab restroCode={restroCode} />
+      </div>
+    </AdminForm>
+  );
+}
