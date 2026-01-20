@@ -30,14 +30,14 @@ export async function GET(
     return NextResponse.json({ ok: false, error: error.message });
   }
 
-  // 🔥 MAP DB → UI KEYS
+  // 🔥 DB → UI mapping
   const rows = (data || []).map((r: any) => ({
     id: r.id,
     gst_number: r.GstNumber,
     gst_type: r.GstType,
     status: r.Gststatus?.toLowerCase(), // active / inactive
-    created_at: r.createdDate,          // ✅ THIS FIXES IT
-    file_url: r.fileurl,
+    created_at: r.createdDate,          // ✅ FIXED
+    file_url: r.fileurl || null,         // ✅ FIXED
   }));
 
   return NextResponse.json({ ok: true, rows });
@@ -69,9 +69,10 @@ export async function POST(
 
   if (file) {
     const path = `${restroCode}/${Date.now()}-${file.name}`;
+
     const { error: uploadErr } = await supabase.storage
       .from("gst-docs")
-      .upload(path, file);
+      .upload(path, file, { upsert: true });
 
     if (!uploadErr) {
       const { data } = supabase.storage
@@ -84,10 +85,10 @@ export async function POST(
   const { error } = await supabase.from("RestroGST").insert({
     RestroCode: restroCode,
     GstNumber: gst_number,
-    GstType: gst_type,
+    GstType: gst_type,        // Regular / Composition
     Gststatus: "Active",
-    fileurl,
-    createdDate: new Date().toISOString(), // ✅ IMPORTANT
+    fileurl,                 // ✅ correct column
+    createdDate: new Date().toISOString(), // ✅ NOW CREATED DATE SAVES
   });
 
   if (error) {
