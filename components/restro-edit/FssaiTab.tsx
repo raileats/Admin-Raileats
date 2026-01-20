@@ -72,15 +72,29 @@ export default function FssaiTab({ restroCode }: Props) {
     setNumber("");
     setExpiry("");
     setFile(null);
-    loadData(); // 🔥 reload list
+    loadData();
   }
 
-  /* ================= RENDER ================= */
-  const activeRows = rows.filter((r) => r.status === "active");
+  /* ================= HELPERS ================= */
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
+  function isExpired(expiryDate: string | null) {
+    if (!expiryDate) return false;
+    const d = new Date(expiryDate);
+    d.setHours(0, 0, 0, 0);
+    return d < today;
+  }
+
+  // 🔥 show only latest active & non-expired
+  const activeRow = rows.find(
+    (r) => r.status === "active" && !isExpired(r.expiry_date)
+  );
+
+  /* ================= RENDER ================= */
   return (
     <div style={{ marginTop: 20 }}>
-      {/* Header */}
+      {/* HEADER */}
       <div
         style={{
           display: "flex",
@@ -103,41 +117,62 @@ export default function FssaiTab({ restroCode }: Props) {
         </button>
       </div>
 
-      {/* List */}
+      {/* LOADING */}
       {loading && <div>Loading...</div>}
 
-      {!loading && activeRows.length === 0 && (
-        <div style={{ color: "#666" }}>No FSSAI added yet</div>
+      {/* EMPTY */}
+      {!loading && !activeRow && (
+        <div style={{ color: "#666" }}>No active FSSAI available</div>
       )}
 
-      {activeRows.map((r) => (
+      {/* ACTIVE FSSAI CARD */}
+      {activeRow && (
         <div
-          key={r.id}
           style={{
             display: "grid",
-            gridTemplateColumns: "2fr 1fr 1fr",
+            gridTemplateColumns: "2fr 1fr 1fr 1fr",
             gap: 12,
-            padding: 10,
-            borderBottom: "1px solid #eee",
+            padding: 12,
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
           }}
         >
           <div>
-            <strong>FSSAI:</strong> {r.fssai_number}
+            <strong>FSSAI No:</strong> {activeRow.fssai_number}
           </div>
+
           <div>
-            <strong>Expiry:</strong> {r.expiry_date || "—"}
+            <strong>Expiry:</strong> {activeRow.expiry_date || "—"}
           </div>
+
           <div>
-            {r.file_url ? (
-              <a href={r.file_url} target="_blank" rel="noreferrer">
+            <strong>Status:</strong>{" "}
+            <span style={{ color: "green", fontWeight: 700 }}>
+              Active
+            </span>
+          </div>
+
+          <div>
+            <strong>Created:</strong>{" "}
+            {new Date(activeRow.created_at).toLocaleDateString()}
+          </div>
+
+          <div style={{ gridColumn: "1 / -1" }}>
+            {activeRow.file_url ? (
+              <a
+                href={activeRow.file_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "#2563eb" }}
+              >
                 View Document
               </a>
             ) : (
-              "No file"
+              "No document"
             )}
           </div>
         </div>
-      ))}
+      )}
 
       {/* ================= ADD FORM ================= */}
       {showAdd && (
@@ -145,8 +180,8 @@ export default function FssaiTab({ restroCode }: Props) {
           style={{
             background: "#f9fafb",
             padding: 12,
-            marginTop: 12,
-            borderRadius: 6,
+            marginTop: 14,
+            borderRadius: 8,
           }}
         >
           <h4>Add FSSAI</h4>
