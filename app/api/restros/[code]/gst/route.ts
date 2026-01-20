@@ -6,21 +6,25 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-/* ================= GET ================= */
+/* ========================= GET ========================= */
 export async function GET(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  const restroCode = Number(params.code); // 🔥 IMPORTANT FIX
+  const restroCode = Number(params.code);
+
+  if (!restroCode) {
+    return NextResponse.json({ ok: false, error: "Invalid RestroCode" });
+  }
 
   const { data, error } = await supabase
     .from("RestroGST")
     .select(`
-      RestroCode,
-      GstNumber,
-      GstType,
-      Gststatus,
-      createdDate,
+      "RestroCode",
+      "GstNumber",
+      "GstType",
+      "Gststatus",
+      "createdDate",
       fileurl
     `)
     .eq("RestroCode", restroCode)
@@ -30,42 +34,54 @@ export async function GET(
     return NextResponse.json({ ok: false, error: error.message });
   }
 
-  const rows = (data || []).map((r: any, idx: number) => ({
-    // 🔥 React-safe key
-    id: `${r.RestroCode}-${r.GstNumber}-${idx}`,
+  // 🔥 UI-friendly mapping
+  const rows = (data || []).map((r: any, index: number) => ({
+    // React key (since no id column)
+    id: `${r.RestroCode}-${r.GstNumber}-${index}`,
 
     gst_number: r.GstNumber,
     gst_type: r.GstType,
-    status: r.Gststatus?.toLowerCase() === "active" ? "active" : "inactive",
+    status: r.Gststatus === "Active" ? "active" : "inactive",
     created_at: r.createdDate,
-    file_url: r.fileurl || null,
+    file_url: r.fileurl ?? null,
   }));
 
   return NextResponse.json({ ok: true, rows });
 }
 
-/* ================= POST ================= */
+/* ========================= POST ========================= */
 export async function POST(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  const restroCode = Number(params.code); // 🔥 IMPORTANT FIX
+  const restroCode = Number(params.code);
   const form = await req.formData();
 
   const gst_number = form.get("gst_number") as string;
   const gst_type = form.get("gst_type") as string;
   const file = form.get("file") as File | null;
 
-  if (!gst_number) {
-    return NextResponse.json({ ok: false, error: "Missing GST number" });
+  if (!restroCode || !gst_number) {
+    return NextResponse.json({
+      ok: false,
+      error: "Missing RestroCode or GST number",
+    });
   }
 
-  // 🔥 OLD GST → INACTIVE
-  await supabase
+  /* 🔥 STEP 1: OLD GST → INACTIVE */
+  const { error: deactivateError } = await supabase
     .from("RestroGST")
     .update({ Gststatus: "Inactive" })
     .eq("RestroCode", restroCode);
 
+  if (deactivateError) {
+    return NextResponse.json({
+      ok: false,
+      error: deactivateError.message,
+    });
+  }
+
+  /* 🔥 STEP 2: FILE UPLOAD (OPTIONAL) */
   let fileurl: string | null = null;
 
   if (file) {
@@ -86,17 +102,23 @@ export async function POST(
     fileurl = data.publicUrl;
   }
 
-  const { error } = await supabase.from("RestroGST").insert({
-    RestroCode: restroCode,
-    GstNumber: gst_number,
-    GstType: gst_type,
-    Gststatus: "Active",
-    fileurl,
-    // createdDate → default now()
-  });
+  /* 🔥 STEP 3: INSERT NEW GST (createdDate auto) */
+  const { error: insertError } = await supabase
+    .from("RestroGST")
+    .insert({
+      RestroCode: restroCode,
+      GstNumber: gst_number,
+      GstType: gst_type,
+      Gststatus: "Active",
+      fileurl,
+      // createdDate handled by DB default now()
+    });
 
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message });
+  if (insertError) {
+    return NextResponse.json({
+      ok: false,
+      error: insertError.message,
+    });
   }
 
   return NextResponse.json({ ok: true });
