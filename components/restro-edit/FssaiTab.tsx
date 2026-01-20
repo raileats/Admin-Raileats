@@ -31,25 +31,19 @@ export default function FssaiTab({ restroCode }: Props) {
     try {
       const res = await fetch(`/api/restros/${restroCode}/fssai`);
       const json = await res.json();
-      if (json.ok) setRows(json.rows || []);
+      if (json.ok) {
+        setRows(json.rows || []);
+      }
     } catch (e) {
-      console.error(e);
+      console.error("FSSAI load error:", e);
     } finally {
       setLoading(false);
     }
   }
 
-  {rows
-  .filter(r => r.status === "active")
-  .map((r) => (
-    <div key={r.id}>
-      <div>FSSAI: {r.FssaiNumber}</div>
-      <div>Expiry: {r.expiry_date}</div>
-      {r.file_url && (
-        <a href={r.file_url} target="_blank">View Document</a>
-      )}
-    </div>
-))}
+  useEffect(() => {
+    loadData();
+  }, [restroCode]);
 
   /* ================= SAVE NEW ================= */
   async function saveNew() {
@@ -78,73 +72,83 @@ export default function FssaiTab({ restroCode }: Props) {
     setNumber("");
     setExpiry("");
     setFile(null);
-    loadData();
+    loadData(); // 🔥 reload list
   }
 
-  /* ================= TOGGLE ================= */
-  async function toggleStatus(id: string, status: "active" | "inactive") {
-    await fetch(`/api/restros/${restroCode}/fssai`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id,
-        status: status === "active" ? "inactive" : "active",
-      }),
-    });
-    loadData();
-  }
+  /* ================= RENDER ================= */
+  const activeRows = rows.filter((r) => r.status === "active");
 
   return (
     <div style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 12,
+        }}
+      >
         <h4>FSSAI</h4>
         <button
-          type="button" // 🔥 VERY IMPORTANT
+          type="button"
           onClick={() => setShowAdd(true)}
-          style={{ background: "#06b6d4", color: "#fff", padding: "6px 12px", borderRadius: 6 }}
+          style={{
+            background: "#06b6d4",
+            color: "#fff",
+            padding: "6px 12px",
+            borderRadius: 6,
+          }}
         >
           Add New FSSAI
         </button>
       </div>
 
+      {/* List */}
       {loading && <div>Loading...</div>}
 
-      {!loading && rows.length === 0 && (
+      {!loading && activeRows.length === 0 && (
         <div style={{ color: "#666" }}>No FSSAI added yet</div>
       )}
 
-      {rows.map((r) => (
+      {activeRows.map((r) => (
         <div
           key={r.id}
           style={{
             display: "grid",
-            gridTemplateColumns: "2fr 1fr 1fr 120px",
+            gridTemplateColumns: "2fr 1fr 1fr",
             gap: 12,
             padding: 10,
             borderBottom: "1px solid #eee",
           }}
         >
-          <div>{r.fssai_number}</div>
-          <div>{r.expiry_date || "—"}</div>
-          <div>{r.file_url ? "Uploaded" : "—"}</div>
-          <button
-            type="button" // 🔥 VERY IMPORTANT
-            onClick={() => toggleStatus(r.id, r.status)}
-            style={{
-              padding: "4px 8px",
-              borderRadius: 6,
-              background: r.status === "active" ? "#16a34a" : "#9ca3af",
-              color: "#fff",
-            }}
-          >
-            {r.status === "active" ? "Active" : "Inactive"}
-          </button>
+          <div>
+            <strong>FSSAI:</strong> {r.fssai_number}
+          </div>
+          <div>
+            <strong>Expiry:</strong> {r.expiry_date || "—"}
+          </div>
+          <div>
+            {r.file_url ? (
+              <a href={r.file_url} target="_blank" rel="noreferrer">
+                View Document
+              </a>
+            ) : (
+              "No file"
+            )}
+          </div>
         </div>
       ))}
 
-      {/* ================= ADD MODAL ================= */}
+      {/* ================= ADD FORM ================= */}
       {showAdd && (
-        <div style={{ background: "#f9fafb", padding: 12, marginTop: 12 }}>
+        <div
+          style={{
+            background: "#f9fafb",
+            padding: 12,
+            marginTop: 12,
+            borderRadius: 6,
+          }}
+        >
           <h4>Add FSSAI</h4>
 
           <input
@@ -163,21 +167,20 @@ export default function FssaiTab({ restroCode }: Props) {
 
           <input
             type="file"
-            onClick={(e) => e.stopPropagation()} // 🔥 FILE PICKER FIX
             onChange={(e) => setFile(e.target.files?.[0] || null)}
             className="mb-2"
           />
 
           <div style={{ display: "flex", gap: 8 }}>
             <button
-              type="button" // 🔥 IMPORTANT
+              type="button"
               onClick={saveNew}
               className="px-3 py-2 bg-cyan-500 text-white rounded"
             >
               Save
             </button>
             <button
-              type="button" // 🔥 IMPORTANT
+              type="button"
               onClick={() => setShowAdd(false)}
               className="px-3 py-2 border rounded"
             >
