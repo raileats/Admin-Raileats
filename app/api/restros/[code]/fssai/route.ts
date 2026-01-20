@@ -2,118 +2,79 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-/* ================= GET : LIST ================= */
+/* ================= GET ================= */
 export async function GET(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  try {
-    const { code } = params;
+  const restroCode = params.code;
 
-    const { data, error } = await supabase
-      .from("RestroFSSAI")
-      .select("*")
-      .eq("restro_code", code)
-      .order("created_at", { ascending: false });
+  const { data, error } = await supabase
+    .from("RestroFSSAI")
+    .select("*")
+    .eq("RestroCode", restroCode)
+    .order("created_at", { ascending: false });
 
-    if (error) throw error;
-
-    return NextResponse.json({ ok: true, rows: data || [] });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e.message },
-      { status: 500 }
-    );
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message });
   }
+
+  return NextResponse.json({ ok: true, rows: data });
 }
 
-/* ================= POST : ADD NEW ================= */
+/* ================= POST ================= */
 export async function POST(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  try {
-    const { code } = params;
-    const form = await req.formData();
+  const restroCode = params.code;
+  const form = await req.formData();
 
-    const fssai_number = String(form.get("fssai_number") || "").trim();
-    const expiry_date = form.get("expiry_date") || null;
+  const fssai_number = form.get("fssai_number") as string;
+  const expiry_date = form.get("expiry_date") as string | null;
+  const file = form.get("file") as File | null;
 
-    if (!fssai_number) {
-      return NextResponse.json(
-        { ok: false, error: "FSSAI number required" },
-        { status: 400 }
-      );
-    }
-
-    /* 🔥 STEP 1: OLD RECORDS INACTIVE */
-    await supabase
-      .from("RestroFSSAI")
-      .update({ status: "inactive" })
-      .eq("restro_code", code);
-
-    /* 🔥 STEP 2: INSERT NEW */
-    const { error } = await supabase.from("RestroFSSAI").insert({
-      restro_code: code,
-      fssai_number,
-      expiry_date,
-      status: "active",
-    });
-
-    if (error) throw error;
-
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e.message },
-      { status: 500 }
-    );
+  if (!fssai_number) {
+    return NextResponse.json({ ok: false, error: "Missing FSSAI number" });
   }
-}
 
-/* ================= PATCH : TOGGLE ================= */
-export async function PATCH(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { id, status } = body;
+  /* 🔥 OLD ENTRIES INACTIVE */
+  await supabase
+    .from("RestroFSSAI")
+    .update({ status: "inactive" })
+    .eq("RestroCode", restroCode);
 
-    if (!id || !status) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid payload" },
-        { status: 400 }
-      );
+  let file_url: string | null = null;
+
+  if (file) {
+    const path = `${restroCode}/${Date.now()}-${file.name}`;
+    const { error: uploadErr } = await supabase.storage
+      .from("fssai-docs")
+      .upload(path, file);
+
+    if (!uploadErr) {
+      const { data } = supabase.storage
+        .from("fssai-docs")
+        .getPublicUrl(path);
+      file_url = data.publicUrl;
     }
-
-    /* 🔥 MAKE OTHERS INACTIVE */
-    if (status === "active") {
-      const { data } = await supabase
-        .from("RestroFSSAI")
-        .select("restro_code")
-        .eq("id", id)
-        .single();
-
-      if (data?.restro_code) {
-        await supabase
-          .from("RestroFSSAI")
-          .update({ status: "inactive" })
-          .eq("restro_code", data.restro_code);
-      }
-    }
-
-    await supabase
-      .from("RestroFSSAI")
-      .update({ status })
-      .eq("id", id);
-
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e.message },
-      { status: 500 }
-    );
   }
+
+  const { error } = await supabase.from("RestroFSSAI").insert({
+    RestroCode: restroCode,
+    FssaiNumber: fssai_number,
+    expiry_date,
+    file_url,
+    status: "active",
+  });
+
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message });
+  }
+
+  return NextResponse.json({ ok: true });
 }
