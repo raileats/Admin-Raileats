@@ -8,11 +8,11 @@ type Props = {
 
 type GstRow = {
   id: string;
-  gst_number: string;
-  gst_type: string | null;
-  file_url: string | null;
-  status: "active" | "inactive";
-  created_at: string;
+  GstNumber: string;
+  GstType: string | null;
+  fileurl: string | null;
+  Gststatus: "Active" | "Inactive";
+  createdDate: string;
 };
 
 export default function GstTab({ restroCode }: Props) {
@@ -31,9 +31,7 @@ export default function GstTab({ restroCode }: Props) {
     try {
       const res = await fetch(`/api/restros/${restroCode}/gst`);
       const json = await res.json();
-      if (json.ok) {
-        setRows(json.rows || []);
-      }
+      if (json.ok) setRows(json.rows || []);
     } catch (e) {
       console.error("GST load error:", e);
     } finally {
@@ -76,10 +74,10 @@ export default function GstTab({ restroCode }: Props) {
   }
 
   /* ================= SPLIT ================= */
-  const activeRows = rows.filter((r) => r.status === "active");
-  const inactiveRows = rows.filter((r) => r.status === "inactive");
+  const activeRows = rows.filter((r) => r.Gststatus === "Active");
+  const inactiveRows = rows.filter((r) => r.Gststatus === "Inactive");
 
-  function formatDate(d?: string | null) {
+  function formatDate(d?: string) {
     if (!d) return "—";
     return new Date(d).toLocaleDateString("en-GB");
   }
@@ -113,14 +111,14 @@ export default function GstTab({ restroCode }: Props) {
           key={r.id}
           className="grid grid-cols-5 gap-3 text-sm items-center p-2 border border-green-300 bg-green-50 rounded mb-1"
         >
-          <div className="font-semibold">{r.gst_number}</div>
-          <div>{r.gst_type || "—"}</div>
+          <div className="font-semibold">{r.GstNumber}</div>
+          <div>{r.GstType || "—"}</div>
           <div className="text-green-700 font-semibold">Active</div>
-          <div>{formatDate(r.created_at)}</div>
+          <div>{formatDate(r.createdDate)}</div>
           <div>
-            {r.file_url ? (
+            {r.fileurl ? (
               <a
-                href={r.file_url}
+                href={r.fileurl}
                 target="_blank"
                 rel="noreferrer"
                 className="text-blue-600 underline"
@@ -146,14 +144,14 @@ export default function GstTab({ restroCode }: Props) {
               key={r.id}
               className="grid grid-cols-5 gap-3 text-sm items-center p-2 border border-red-300 bg-red-50 rounded mb-1"
             >
-              <div className="font-semibold">{r.gst_number}</div>
-              <div>{r.gst_type || "—"}</div>
+              <div className="font-semibold">{r.GstNumber}</div>
+              <div>{r.GstType || "—"}</div>
               <div className="text-red-600 font-semibold">Inactive</div>
-              <div>{formatDate(r.created_at)}</div>
+              <div>{formatDate(r.createdDate)}</div>
               <div>
-                {r.file_url ? (
+                {r.fileurl ? (
                   <a
-                    href={r.file_url}
+                    href={r.fileurl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-red-600 underline"
