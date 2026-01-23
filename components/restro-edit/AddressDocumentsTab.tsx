@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import UI from "@/components/AdminUI";
+
 import FssaiTab from "./FssaiTab";
 import GstTab from "./GstTab";
+import PanTab from "./PanTab"; // ✅ PAN TAB ADDED
 
 const { AdminForm, SubmitButton } = UI;
 
@@ -19,13 +21,16 @@ export default function AddressDocumentsTab({
   restroCode,
 }: Props) {
   const [addr, setAddr] = useState(local?.RestroAddress ?? "");
-  const [city, setCity] = useState(local?.["City/Village"] ?? local?.City ?? "");
+  const [city, setCity] = useState(
+    local?.["City/Village"] ?? local?.City ?? ""
+  );
   const [state, setState] = useState(local?.State ?? "");
   const [district, setDistrict] = useState(local?.District ?? "");
   const [pin, setPin] = useState(local?.PinCode ?? "");
   const [lat, setLat] = useState(local?.RestroLatitude ?? "");
   const [lng, setLng] = useState(local?.RestroLongitude ?? "");
 
+  /* ================= SYNC ================= */
   useEffect(() => {
     setAddr(local?.RestroAddress ?? "");
     setCity(local?.["City/Village"] ?? local?.City ?? "");
@@ -36,6 +41,7 @@ export default function AddressDocumentsTab({
     setLng(local?.RestroLongitude ?? "");
   }, [local]);
 
+  /* ================= SAVE ADDRESS ================= */
   function saveAddress() {
     updateField("RestroAddress", addr);
     updateField("City/Village", city);
@@ -66,7 +72,7 @@ export default function AddressDocumentsTab({
           rows={2}
         />
 
-        {/* Headings row */}
+        {/* Headings */}
         <div className="grid grid-cols-6 gap-2 text-xs font-semibold text-gray-600 mb-1">
           <div>City / Village</div>
           <div>State</div>
@@ -76,7 +82,7 @@ export default function AddressDocumentsTab({
           <div>Longitude</div>
         </div>
 
-        {/* Inputs row */}
+        {/* Inputs */}
         <div className="grid grid-cols-6 gap-2 text-sm">
           <input
             value={city}
@@ -111,12 +117,19 @@ export default function AddressDocumentsTab({
         </div>
       </div>
 
-      {/* ================= FSSAI ================= */}
+      {/* ================= DOCUMENTS ================= */}
+
+      {/* FSSAI */}
       <FssaiTab restroCode={restroCode} />
 
-      {/* ================= GST ================= */}
+      {/* GST */}
       <div className="mt-6">
         <GstTab restroCode={restroCode} />
+      </div>
+
+      {/* PAN */}
+      <div className="mt-6">
+        <PanTab restroCode={restroCode} />
       </div>
     </AdminForm>
   );
