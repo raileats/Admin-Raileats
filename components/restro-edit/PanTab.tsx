@@ -31,10 +31,15 @@ export default function PanTab({ restroCode }: Props) {
   async function loadData() {
     if (!restroCode) return;
     setLoading(true);
-    const res = await fetch(`/api/restros/${restroCode}/pan`);
-    const json = await res.json();
-    if (json.ok) setRows(json.rows || []);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/restros/${restroCode}/pan`);
+      const json = await res.json();
+      if (json.ok) setRows(json.rows || []);
+    } catch (e) {
+      console.error("PAN load error:", e);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -58,7 +63,10 @@ export default function PanTab({ restroCode }: Props) {
     });
 
     const json = await res.json();
-    if (!json.ok) return alert(json.error || "Save failed");
+    if (!json.ok) {
+      alert(json.error || "Save failed");
+      return;
+    }
 
     setShowAdd(false);
     setPan("");
@@ -97,6 +105,7 @@ export default function PanTab({ restroCode }: Props) {
           <a
             href={r.file_url}
             target="_blank"
+            rel="noreferrer"
             className="text-blue-600 underline"
           >
             View
@@ -181,22 +190,23 @@ export default function PanTab({ restroCode }: Props) {
 
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={saveNew}
               className="bg-cyan-500 text-white px-4 py-2 rounded"
             >
-             <button
-  type="button"
-  onClick={saveNew}
-  className="bg-cyan-500 text-white px-3 py-1 rounded text-sm"
->
-  Save
-</button>
+              Save
+            </button>
 
-<button
-  type="button"
-  onClick={() => setShowAdd(false)}
-  className="border px-3 py-1 rounded text-sm"
->
-  Cancel
-</button>
-
+            <button
+              type="button"
+              onClick={() => setShowAdd(false)}
+              className="border px-4 py-2 rounded"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
