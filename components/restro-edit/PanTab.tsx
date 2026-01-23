@@ -184,18 +184,19 @@ export default function PanTab({ restroCode }: Props) {
               onClick={saveNew}
               className="bg-cyan-500 text-white px-4 py-2 rounded"
             >
-              Save
-            </button>
-            <button
-              onClick={() => setShowAdd(false)}
-              className="border px-4 py-2 rounded"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+             <button
+  type="button"
+  onClick={saveNew}
+  className="bg-cyan-500 text-white px-3 py-1 rounded text-sm"
+>
+  Save
+</button>
+
+<button
+  type="button"
+  onClick={() => setShowAdd(false)}
+  className="border px-3 py-1 rounded text-sm"
+>
+  Cancel
+</button>
 
