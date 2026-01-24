@@ -5,7 +5,8 @@ import UI from "@/components/AdminUI";
 
 import FssaiTab from "./FssaiTab";
 import GstTab from "./GstTab";
-import PanTab from "./PanTab"; // ✅ PAN TAB ADDED
+import PanTab from "./PanTab";
+import AdminSection from "@/components/AdminSection"; // ✅ COMMON SECTION
 
 const { AdminForm, SubmitButton } = UI;
 
@@ -20,15 +21,13 @@ export default function AddressDocumentsTab({
   updateField,
   restroCode,
 }: Props) {
-  const [addr, setAddr] = useState(local?.RestroAddress ?? "");
-  const [city, setCity] = useState(
-    local?.["City/Village"] ?? local?.City ?? ""
-  );
-  const [state, setState] = useState(local?.State ?? "");
-  const [district, setDistrict] = useState(local?.District ?? "");
-  const [pin, setPin] = useState(local?.PinCode ?? "");
-  const [lat, setLat] = useState(local?.RestroLatitude ?? "");
-  const [lng, setLng] = useState(local?.RestroLongitude ?? "");
+  const [addr, setAddr] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [district, setDistrict] = useState("");
+  const [pin, setPin] = useState("");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
 
   /* ================= SYNC ================= */
   useEffect(() => {
@@ -56,13 +55,10 @@ export default function AddressDocumentsTab({
   return (
     <AdminForm>
       {/* ================= ADDRESS ================= */}
-      <div className="border rounded-md p-3 bg-sky-50 mb-6">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-2">
-          <h4 className="font-semibold text-sm">Address</h4>
-          <SubmitButton onClick={saveAddress}>Save Address</SubmitButton>
-        </div>
-
+      <AdminSection
+        title="Address"
+        action={<SubmitButton onClick={saveAddress}>Save Address</SubmitButton>}
+      >
         {/* Full address */}
         <textarea
           value={addr}
@@ -115,22 +111,21 @@ export default function AddressDocumentsTab({
             className="p-2 border rounded"
           />
         </div>
-      </div>
+      </AdminSection>
 
       {/* ================= DOCUMENTS ================= */}
 
-      {/* FSSAI */}
-      <FssaiTab restroCode={restroCode} />
+      <AdminSection title="FSSAI">
+        <FssaiTab restroCode={restroCode} />
+      </AdminSection>
 
-      {/* GST */}
-      <div className="mt-6">
+      <AdminSection title="GST">
         <GstTab restroCode={restroCode} />
-      </div>
+      </AdminSection>
 
-      {/* PAN */}
-      <div className="mt-6">
+      <AdminSection title="PAN Card">
         <PanTab restroCode={restroCode} />
-      </div>
+      </AdminSection>
     </AdminForm>
   );
 }
