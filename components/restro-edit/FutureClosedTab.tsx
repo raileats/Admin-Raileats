@@ -42,9 +42,10 @@ export default function FutureClosedTab({ restroCode }: Props) {
 
   return (
     <AdminForm>
-      <div className="border rounded-md p-4 bg-white">
+      {/* 🔵 SAME WRAPPER AS ADDRESS */}
+      <div className="border rounded-md p-3 bg-sky-50 mb-6">
         {/* Header */}
-        <div className="flex justify-between items-center mb-3">
+        <div className="flex justify-between items-center mb-2">
           <div>
             <h4 className="font-semibold text-sm">Future Closed</h4>
             <p className="text-xs text-gray-500">
@@ -61,40 +62,44 @@ export default function FutureClosedTab({ restroCode }: Props) {
           </button>
         </div>
 
-        {/* Table Header */}
-        <div className="grid grid-cols-6 gap-3 px-3 py-2 text-xs font-semibold text-gray-600 border-b bg-gray-50 rounded-t">
-          <div>Holiday Start</div>
-          <div>Holiday End</div>
-          <div>Comment</div>
-          <div>Applied By</div>
-          <div>Status</div>
-          <div>Action</div>
+        {/* TABLE */}
+        <div className="bg-white border rounded">
+          {/* Table Header */}
+          <div className="grid grid-cols-6 gap-3 px-3 py-2 text-xs font-semibold text-gray-600 border-b bg-gray-50">
+            <div>Holiday Start</div>
+            <div>Holiday End</div>
+            <div>Comment</div>
+            <div>Applied By</div>
+            <div>Status</div>
+            <div>Action</div>
+          </div>
+
+          {/* Empty */}
+          {holidays.length === 0 && (
+            <div className="px-3 py-4 text-sm text-gray-500">
+              No holidays yet.
+            </div>
+          )}
+
+          {/* Rows */}
+          {holidays.map((h, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-6 gap-3 px-3 py-2 text-sm border-t"
+            >
+              <div>{h.start}</div>
+              <div>{h.end}</div>
+              <div>{h.comment || "—"}</div>
+              <div>Admin</div>
+              <div className="text-green-700 font-semibold">Active</div>
+              <div className="text-red-600 cursor-pointer">Remove</div>
+            </div>
+          ))}
         </div>
-
-        {/* Rows */}
-        {holidays.length === 0 && (
-          <div className="px-3 py-6 text-sm text-gray-500 border border-t-0 rounded-b">
-            No holidays yet.
-          </div>
-        )}
-
-        {holidays.map((h, i) => (
-          <div
-            key={i}
-            className="grid grid-cols-6 gap-3 px-3 py-2 text-sm border border-t-0"
-          >
-            <div>{h.start}</div>
-            <div>{h.end}</div>
-            <div>{h.comment || "—"}</div>
-            <div>Admin</div>
-            <div className="text-green-700 font-semibold">Active</div>
-            <div className="text-red-600 cursor-pointer">Remove</div>
-          </div>
-        ))}
 
         {/* ADD FORM */}
         {showAdd && (
-          <div className="mt-4 p-4 bg-sky-50 border rounded">
+          <div className="mt-4 p-4 bg-white border rounded">
             <h5 className="font-semibold text-sm mb-3">
               Add Holiday
             </h5>
