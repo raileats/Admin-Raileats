@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import UI from "@/components/AdminUI";
 import AdminSection from "@/components/AdminSection";
+import { createClient } from "@supabase/supabase-js";
 
 const { AdminForm } = UI;
 
@@ -11,29 +12,48 @@ type Props = {
   updateField: (k: string, v: any) => void;
 };
 
-export default function BasicInformationTab({
-  local = {},
-  updateField,
-}: Props) {
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-  /**
-   * IMPORTANT:
-   * If RestroCode already exists (edit case),
-   * ensure it is always pushed to parent state
-   * so SAVE never throws "Missing RestroCode"
-   */
+export default function BasicInformationTab({ local = {}, updateField }: Props) {
+  const [loadingCode, setLoadingCode] = useState(false);
+
+  /* ================= AUTO GENERATE RESTRO CODE ================= */
   useEffect(() => {
-    if (local?.RestroCode) {
-      updateField("RestroCode", local.RestroCode);
+    async function generateRestroCode() {
+      // Agar already hai to dobara mat banao
+      if (local?.RestroCode) return;
+
+      setLoadingCode(true);
+
+      const { data, error } = await supabase
+        .from("Restros")
+        .select("RestroCode")
+        .order("RestroCode", { ascending: false })
+        .limit(1);
+
+      let nextCode = 1001; // default start
+
+      if (!error && data && data.length > 0) {
+        nextCode = Number(data[0].RestroCode) + 1;
+      }
+
+      updateField("RestroCode", nextCode);
+      setLoadingCode(false);
     }
-  }, [local?.RestroCode, updateField]);
+
+    generateRestroCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <AdminForm>
       <AdminSection title="Basic Information">
         <div className="grid grid-cols-3 gap-4 text-sm">
 
-          {/* ================= STATION (READ ONLY) ================= */}
+          {/* ================= STATION (NON EDITABLE) ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Station *
@@ -41,7 +61,7 @@ export default function BasicInformationTab({
             <input
               value={local.Station || ""}
               disabled
-              className="w-full p-2 border rounded bg-gray-100 cursor-not-allowed"
+              className="w-full p-2 border rounded bg-gray-100"
             />
           </div>
 
@@ -51,10 +71,13 @@ export default function BasicInformationTab({
               Restro Code
             </label>
             <input
-              value={local.RestroCode || ""}
+              value={
+                loadingCode
+                  ? "Generating..."
+                  : local.RestroCode || ""
+              }
               disabled
-              placeholder="Auto generated"
-              className="w-full p-2 border rounded bg-gray-100 cursor-not-allowed"
+              className="w-full p-2 border rounded bg-gray-100 font-semibold"
             />
           </div>
 
@@ -72,7 +95,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* ================= BRAND NAME ================= */}
+          {/* Brand Name */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Brand Name
@@ -86,7 +109,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* ================= RAIL EATS STATUS ================= */}
+          {/* RailEats Status */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               RailEats Status
@@ -103,7 +126,7 @@ export default function BasicInformationTab({
             </select>
           </div>
 
-          {/* ================= IRCTC APPROVAL ================= */}
+          {/* IRCTC */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Is IRCTC Approved
@@ -120,7 +143,7 @@ export default function BasicInformationTab({
             </select>
           </div>
 
-          {/* ================= RATING ================= */}
+          {/* Rating */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Restro Rating
@@ -134,7 +157,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* ================= DISPLAY PHOTO ================= */}
+          {/* Display Photo */}
           <div className="col-span-2">
             <label className="text-xs font-semibold text-gray-600">
               Display Photo (path)
@@ -148,7 +171,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* ================= OWNER NAME ================= */}
+          {/* Owner */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Owner Name
@@ -162,7 +185,6 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* ================= OWNER EMAIL ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Owner Email
@@ -176,7 +198,6 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* ================= OWNER PHONE ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Owner Phone
@@ -190,7 +211,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* ================= RESTRO EMAIL ================= */}
+          {/* Restro Email */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Restro Email
@@ -204,7 +225,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* ================= RESTRO PHONE ================= */}
+          {/* Restro Phone */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Restro Phone
