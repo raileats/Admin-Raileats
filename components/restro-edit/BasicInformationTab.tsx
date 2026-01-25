@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import UI from "@/components/AdminUI";
 import AdminSection from "@/components/AdminSection";
 
@@ -15,25 +15,37 @@ export default function BasicInformationTab({
   local = {},
   updateField,
 }: Props) {
+
+  /**
+   * IMPORTANT:
+   * If RestroCode already exists (edit case),
+   * ensure it is always pushed to parent state
+   * so SAVE never throws "Missing RestroCode"
+   */
+  useEffect(() => {
+    if (local?.RestroCode) {
+      updateField("RestroCode", local.RestroCode);
+    }
+  }, [local?.RestroCode, updateField]);
+
   return (
     <AdminForm>
       <AdminSection title="Basic Information">
         <div className="grid grid-cols-3 gap-4 text-sm">
 
-          {/* ================= STATION (EDITABLE) ================= */}
+          {/* ================= STATION (READ ONLY) ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Station *
             </label>
             <input
               value={local.Station || ""}
-              onChange={(e) => updateField("Station", e.target.value)}
-              placeholder="Type station name (e.g. Surat (ST) - Gujarat)"
-              className="w-full p-2 border rounded"
+              disabled
+              className="w-full p-2 border rounded bg-gray-100 cursor-not-allowed"
             />
           </div>
 
-          {/* ================= RESTRO CODE (READ ONLY) ================= */}
+          {/* ================= RESTRO CODE (AUTO GENERATED) ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Restro Code
@@ -41,7 +53,8 @@ export default function BasicInformationTab({
             <input
               value={local.RestroCode || ""}
               disabled
-              className="w-full p-2 border rounded bg-gray-100"
+              placeholder="Auto generated"
+              className="w-full p-2 border rounded bg-gray-100 cursor-not-allowed"
             />
           </div>
 
@@ -113,8 +126,6 @@ export default function BasicInformationTab({
               Restro Rating
             </label>
             <input
-              type="number"
-              step="0.1"
               value={local.RestroRating || ""}
               onChange={(e) =>
                 updateField("RestroRating", e.target.value)
@@ -157,7 +168,6 @@ export default function BasicInformationTab({
               Owner Email
             </label>
             <input
-              type="email"
               value={local.OwnerEmail || ""}
               onChange={(e) =>
                 updateField("OwnerEmail", e.target.value)
@@ -186,7 +196,6 @@ export default function BasicInformationTab({
               Restro Email
             </label>
             <input
-              type="email"
               value={local.RestroEmail || ""}
               onChange={(e) =>
                 updateField("RestroEmail", e.target.value)
@@ -208,7 +217,6 @@ export default function BasicInformationTab({
               className="w-full p-2 border rounded"
             />
           </div>
-
         </div>
       </AdminSection>
     </AdminForm>
