@@ -19,19 +19,21 @@ export default function BasicInformationTab({
     <AdminForm>
       <AdminSection title="Basic Information">
         <div className="grid grid-cols-3 gap-4 text-sm">
-          {/* Station */}
+
+          {/* ================= STATION (EDITABLE) ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Station *
             </label>
             <input
               value={local.Station || ""}
-              disabled
-              className="w-full p-2 border rounded bg-gray-100"
+              onChange={(e) => updateField("Station", e.target.value)}
+              placeholder="Type station name (e.g. Surat (ST) - Gujarat)"
+              className="w-full p-2 border rounded"
             />
           </div>
 
-          {/* Restro Code */}
+          {/* ================= RESTRO CODE (READ ONLY) ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Restro Code
@@ -43,7 +45,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* Restro Name */}
+          {/* ================= RESTRO NAME ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Restro Name *
@@ -57,7 +59,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* Brand Name */}
+          {/* ================= BRAND NAME ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Brand Name
@@ -71,7 +73,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* RailEats Status */}
+          {/* ================= RAIL EATS STATUS ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               RailEats Status
@@ -88,7 +90,7 @@ export default function BasicInformationTab({
             </select>
           </div>
 
-          {/* IRCTC Approved */}
+          {/* ================= IRCTC APPROVAL ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Is IRCTC Approved
@@ -105,12 +107,14 @@ export default function BasicInformationTab({
             </select>
           </div>
 
-          {/* Rating */}
+          {/* ================= RATING ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Restro Rating
             </label>
             <input
+              type="number"
+              step="0.1"
               value={local.RestroRating || ""}
               onChange={(e) =>
                 updateField("RestroRating", e.target.value)
@@ -119,7 +123,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* Display Photo Path */}
+          {/* ================= DISPLAY PHOTO ================= */}
           <div className="col-span-2">
             <label className="text-xs font-semibold text-gray-600">
               Display Photo (path)
@@ -133,7 +137,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* Owner Name */}
+          {/* ================= OWNER NAME ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Owner Name
@@ -147,12 +151,13 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* Owner Email */}
+          {/* ================= OWNER EMAIL ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Owner Email
             </label>
             <input
+              type="email"
               value={local.OwnerEmail || ""}
               onChange={(e) =>
                 updateField("OwnerEmail", e.target.value)
@@ -161,7 +166,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* Owner Phone */}
+          {/* ================= OWNER PHONE ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Owner Phone
@@ -175,12 +180,13 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* Restro Email */}
+          {/* ================= RESTRO EMAIL ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Restro Email
             </label>
             <input
+              type="email"
               value={local.RestroEmail || ""}
               onChange={(e) =>
                 updateField("RestroEmail", e.target.value)
@@ -189,7 +195,7 @@ export default function BasicInformationTab({
             />
           </div>
 
-          {/* Restro Phone */}
+          {/* ================= RESTRO PHONE ================= */}
           <div>
             <label className="text-xs font-semibold text-gray-600">
               Restro Phone
@@ -202,6 +208,7 @@ export default function BasicInformationTab({
               className="w-full p-2 border rounded"
             />
           </div>
+
         </div>
       </AdminSection>
     </AdminForm>
