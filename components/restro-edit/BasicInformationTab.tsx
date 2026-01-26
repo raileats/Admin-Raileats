@@ -1,257 +1,290 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import UI from "@/components/AdminUI";
-import AdminSection from "@/components/AdminSection";
 
-const { AdminForm } = UI;
+const { FormRow, FormField, Toggle } = UI;
+
+type StationOption = {
+  label: string;
+  value: string; // StationCode
+};
 
 type Props = {
   local: any;
   updateField: (k: string, v: any) => void;
+  stations?: StationOption[];
+  loadingStations?: boolean;
 };
 
 export default function BasicInformationTab({
-  local = {},
+  local,
   updateField,
+  stations = [],
+  loadingStations = false,
 }: Props) {
-  const supabase = useMemo(
-    () =>
-      createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      ),
-    []
-  );
+  /* ---------------- Station Search Dropdown ---------------- */
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
-  const [loadingCode, setLoadingCode] = useState(false);
-
-  /* ================= AUTO GENERATE RESTRO CODE ================= */
+  // when station already selected (edit mode), show it in input
   useEffect(() => {
-    async function generateRestroCode() {
-      // Edit mode me already code hai → dobara generate mat karo
-      if (local?.RestroCode) return;
-
-      setLoadingCode(true);
-
-      const { data, error } = await supabase
-        .from("Restros") // ⚠️ confirm table name
-        .select("RestroCode")
-        .not("RestroCode", "is", null)
-        .order("RestroCode", { ascending: false })
-        .limit(1);
-
-      let nextCode: number;
-
-      if (!error && data && data.length > 0) {
-        nextCode = Number(data[0].RestroCode) + 1;
-      } else {
-        // Agar first time create ho raha ho
-        nextCode = 1001;
-      }
-
-      updateField("RestroCode", nextCode);
-      setLoadingCode(false);
+    if (local?.StationName && local?.StationCode) {
+      const label = `${local.StationName} (${local.StationCode})${local.State ? ` - ${local.State}` : ""}`;
+      setQuery(label);
     }
+  }, [local?.StationName, local?.StationCode, local?.State]);
 
-    generateRestroCode();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const filteredStations = useMemo(() => {
+    if (!query) return stations;
+    const q = query.toLowerCase();
+    return stations.filter(
+      (s) =>
+        s.label.toLowerCase().includes(q) ||
+        s.value.toLowerCase().includes(q)
+    );
+  }, [query, stations]);
+
+  function handleSelectStation(opt: StationOption) {
+    // label format already: Station Name (CODE) - STATE
+    setQuery(opt.label);
+    setOpen(false);
+
+    // extract values safely
+    const match = opt.label.match(/^(.*?)\s*\((.*?)\)\s*(?:-\s*(.*))?$/);
+
+    updateField("StationName", match?.[1]?.trim() ?? "");
+    updateField("StationCode", opt.value);
+    updateField("State", match?.[3]?.trim() ?? "");
+  }
+
+  /* ---------------- Raileats Status ---------------- */
+  const isActive = Number(local?.RaileatsStatus ?? 0) === 1;
+  const [savingStatus, setSavingStatus] = useState(false);
+
+  async function toggleStatus(value: boolean) {
+    const newStatus = value ? 1 : 0;
+    const prev = local?.RaileatsStatus;
+
+    updateField("RaileatsStatus", newStatus);
+
+    try {
+      setSavingStatus(true);
+      const code = local?.RestroCode;
+      if (!code) return;
+
+      const res = await fetch(
+        `/api/admin/restros/${encodeURIComponent(code)}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ raileatsStatus: newStatus }),
+        }
+      );
+
+      if (!res.ok) {
+        updateField("RaileatsStatus", prev ?? 0);
+        alert("Failed to update Raileats status");
+      }
+    } catch {
+      updateField("RaileatsStatus", prev ?? 0);
+    } finally {
+      setSavingStatus(false);
+    }
+  }
+
+  /* ---------------- UI ---------------- */
   return (
-    <AdminForm>
-      <AdminSection title="Basic Information">
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          {/* ================= Station (NON-EDITABLE) ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Station *
-            </label>
-            <input
-              value={local.Station || ""}
-              disabled
-              className="w-full p-2 border rounded bg-gray-100"
-            />
-          </div>
+    <div className="px-4 py-2">
+      <h3 className="text-center text-lg font-bold mb-4">Basic Information</h3>
 
-          {/* ================= Restro Code (AUTO) ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Restro Code
-            </label>
-            <input
-              value={
-                loadingCode
-                  ? "Generating…"
-                  : local.RestroCode || ""
-              }
-              disabled
-              className="w-full p-2 border rounded bg-gray-100"
-            />
-          </div>
+      <div className="max-w-6xl mx-auto bg-white rounded shadow-sm p-6">
+        <FormRow cols={3} gap={6}>
+          {/* STATION SEARCH DROPDOWN */}
+          <FormField label="Station" required>
+            <div ref={wrapperRef} className="relative">
+              <input
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setOpen(true);
+                }}
+                onFocus={() => setOpen(true)}
+                placeholder="Type station name or code"
+                className="w-full p-2 rounded border border-slate-200"
+              />
 
-          {/* ================= Restro Name ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Restro Name *
-            </label>
-            <input
-              value={local.RestroName || ""}
-              onChange={(e) =>
-                updateField("RestroName", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
+              {open && (
+                <div className="absolute z-20 mt-1 w-full max-h-60 overflow-auto rounded border bg-white shadow">
+                  {loadingStations && (
+                    <div className="p-2 text-sm text-gray-500">
+                      Loading stations…
+                    </div>
+                  )}
 
-          {/* ================= Brand Name ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Brand Name
-            </label>
-            <input
-              value={local.BrandName || ""}
-              onChange={(e) =>
-                updateField("BrandName", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
+                  {!loadingStations && filteredStations.length === 0 && (
+                    <div className="p-2 text-sm text-gray-500">
+                      No station found
+                    </div>
+                  )}
 
-          {/* ================= RailEats Status ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              RailEats Status
-            </label>
+                  {!loadingStations &&
+                    filteredStations.map((opt) => (
+                      <div
+                        key={opt.value}
+                        onClick={() => handleSelectStation(opt)}
+                        className="cursor-pointer px-3 py-2 text-sm hover:bg-sky-50"
+                      >
+                        {opt.label}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </FormField>
+
+          {/* RESTRO CODE */}
+          <FormField label="Restro Code">
+            <div className="rounded border border-slate-100 bg-slate-50 p-2 text-sm">
+              {local?.RestroCode ?? "—"}
+            </div>
+          </FormField>
+
+          {/* RESTRO NAME */}
+          <FormField label="Restro Name" required>
+            <input
+              value={local?.RestroName ?? ""}
+              onChange={(e) => updateField("RestroName", e.target.value)}
+              className="w-full p-2 rounded border border-slate-200"
+            />
+          </FormField>
+
+          <FormField label="Brand Name">
+            <input
+              value={local?.BrandName ?? ""}
+              onChange={(e) => updateField("BrandName", e.target.value)}
+              className="w-full p-2 rounded border border-slate-200"
+            />
+          </FormField>
+
+          <FormField label="Raileats Status">
+            <div className="flex items-center gap-3">
+              <Toggle
+                checked={isActive}
+                onChange={(v) => toggleStatus(v)}
+                label={isActive ? "On" : "Off"}
+              />
+              {savingStatus && (
+                <span className="text-xs text-gray-500">Updating…</span>
+              )}
+            </div>
+          </FormField>
+
+          <FormField label="Is IRCTC Approved">
             <select
-              value={local.RailEatsStatus ? "on" : "off"}
+              value={local?.IsIrctcApproved ? "1" : "0"}
               onChange={(e) =>
-                updateField("RailEatsStatus", e.target.value === "on")
+                updateField("IsIrctcApproved", e.target.value === "1")
               }
-              className="w-full p-2 border rounded"
+              className="w-full p-2 rounded border border-slate-200"
             >
-              <option value="on">On</option>
-              <option value="off">Off</option>
+              <option value="1">Yes</option>
+              <option value="0">No</option>
             </select>
-          </div>
+          </FormField>
 
-          {/* ================= IRCTC Approved ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Is IRCTC Approved
-            </label>
-            <select
-              value={local.IsIRCTCApproved || "No"}
-              onChange={(e) =>
-                updateField("IsIRCTCApproved", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-            >
-              <option value="Yes">Yes</option>
-              <option value="No">No</option>
-            </select>
-          </div>
-
-          {/* ================= Rating ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Restro Rating
-            </label>
+          <FormField label="Restro Rating">
             <input
-              value={local.RestroRating || ""}
-              onChange={(e) =>
-                updateField("RestroRating", e.target.value)
-              }
-              className="w-full p-2 border rounded"
+              type="number"
+              step="0.1"
+              value={local?.RestroRating ?? ""}
+              onChange={(e) => updateField("RestroRating", e.target.value)}
+              className="w-full p-2 rounded border border-slate-200"
             />
-          </div>
+          </FormField>
 
-          {/* ================= Display Photo ================= */}
-          <div className="col-span-2">
-            <label className="text-xs font-semibold text-gray-600">
-              Display Photo (path)
-            </label>
+          <FormField label="Restro Display Photo (path)">
             <input
-              value={local.RestroDisplayPhoto || ""}
+              value={local?.RestroDisplayPhoto ?? ""}
               onChange={(e) =>
                 updateField("RestroDisplayPhoto", e.target.value)
               }
-              className="w-full p-2 border rounded"
+              className="w-full p-2 rounded border border-slate-200"
             />
-          </div>
+          </FormField>
 
-          {/* ================= Owner Name ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Owner Name
-            </label>
-            <input
-              value={local.OwnerName || ""}
-              onChange={(e) =>
-                updateField("OwnerName", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
+          <FormField label="Display Preview">
+            {local?.RestroDisplayPhoto ? (
+              <img
+                src={
+                  (process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "") +
+                  local.RestroDisplayPhoto
+                }
+                className="h-20 rounded border object-cover"
+                onError={(e) =>
+                  ((e.target as HTMLImageElement).style.display = "none")
+                }
+              />
+            ) : (
+              <div className="rounded border bg-slate-50 p-2 text-sm">
+                No image
+              </div>
+            )}
+          </FormField>
 
-          {/* ================= Owner Email ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Owner Email
-            </label>
+          <FormField label="Owner Name">
             <input
-              value={local.OwnerEmail || ""}
-              onChange={(e) =>
-                updateField("OwnerEmail", e.target.value)
-              }
-              className="w-full p-2 border rounded"
+              value={local?.OwnerName ?? ""}
+              onChange={(e) => updateField("OwnerName", e.target.value)}
+              className="w-full p-2 rounded border"
             />
-          </div>
+          </FormField>
 
-          {/* ================= Owner Phone ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Owner Phone
-            </label>
+          <FormField label="Owner Email">
             <input
-              value={local.OwnerPhone || ""}
-              onChange={(e) =>
-                updateField("OwnerPhone", e.target.value)
-              }
-              className="w-full p-2 border rounded"
+              value={local?.OwnerEmail ?? ""}
+              onChange={(e) => updateField("OwnerEmail", e.target.value)}
+              className="w-full p-2 rounded border"
             />
-          </div>
+          </FormField>
 
-          {/* ================= Restro Email ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Restro Email
-            </label>
+          <FormField label="Owner Phone">
             <input
-              value={local.RestroEmail || ""}
-              onChange={(e) =>
-                updateField("RestroEmail", e.target.value)
-              }
-              className="w-full p-2 border rounded"
+              value={local?.OwnerPhone ?? ""}
+              onChange={(e) => updateField("OwnerPhone", e.target.value)}
+              className="w-full p-2 rounded border"
             />
-          </div>
+          </FormField>
 
-          {/* ================= Restro Phone ================= */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Restro Phone
-            </label>
+          <FormField label="Restro Email">
             <input
-              value={local.RestroPhone || ""}
-              onChange={(e) =>
-                updateField("RestroPhone", e.target.value)
-              }
-              className="w-full p-2 border rounded"
+              value={local?.RestroEmail ?? ""}
+              onChange={(e) => updateField("RestroEmail", e.target.value)}
+              className="w-full p-2 rounded border"
             />
-          </div>
-        </div>
-      </AdminSection>
-    </AdminForm>
+          </FormField>
+
+          <FormField label="Restro Phone">
+            <input
+              value={local?.RestroPhone ?? ""}
+              onChange={(e) => updateField("RestroPhone", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+        </FormRow>
+      </div>
+    </div>
   );
 }
