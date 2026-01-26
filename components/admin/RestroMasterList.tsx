@@ -1,5 +1,4 @@
 'use client';
-
 import React, { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import RestroModal from '../admin/RestroModal';
@@ -12,9 +11,7 @@ export default function RestroMasterList() {
   const [editing, setEditing] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
 
-  /* =========================
-     FETCH + SORT (RestroCode DESC)
-     ========================= */
+  /* ================= FETCH ================= */
   async function fetchList(search = '') {
     setLoading(true);
     try {
@@ -22,13 +19,11 @@ export default function RestroMasterList() {
       if (search) url.searchParams.set('q', search);
 
       const res = await fetch(url.toString());
-      const rows = await res.json();
+      const json = await res.json();
 
-      const sorted = [...rows].sort(
-        (a, b) => Number(b.RestroCode) - Number(a.RestroCode)
-      );
-
-      setList(sorted);
+      const rows = Array.isArray(json) ? json : [];
+      rows.sort((a, b) => Number(b.RestroCode) - Number(a.RestroCode));
+      setList(rows);
     } catch (e) {
       console.error(e);
       setList([]);
@@ -41,9 +36,20 @@ export default function RestroMasterList() {
     fetchList();
   }, []);
 
-  function openAdd() {
-    setEditing(null);
-    setModalOpen(true);
+  /* ================= STATUS TOGGLE ================= */
+  async function toggleStatus(r: any) {
+    const next = r.RaileatsStatus === 'On' ? 'Off' : 'On';
+
+    await fetch('/api/restromaster', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RestroCode: r.RestroCode,
+        RaileatsStatus: next,
+      }),
+    });
+
+    fetchList(q); // refresh
   }
 
   function openEdit(r: any) {
@@ -51,67 +57,17 @@ export default function RestroMasterList() {
     setModalOpen(true);
   }
 
-  async function toggleStatus(r: any) {
-    const updated = {
-      ...r,
-      RaileatsStatus: r.RaileatsStatus === 'On' ? 'Off' : 'On',
-    };
-
-    const res = await fetch('/api/restromaster', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
-    });
-
-    if (res.ok) {
-      setList(prev =>
-        prev.map(x => (x.RestroCode === r.RestroCode ? updated : x))
-      );
-    } else {
-      alert('Status update failed');
-    }
-  }
-
-  async function handleSave(payload: any) {
-    setSaving(true);
-    try {
-      const res = await fetch('/api/restromaster', {
-        method: editing ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const json = await res.json();
-
-      if (res.ok) {
-        fetchList();
-        setModalOpen(false);
-      } else {
-        alert('Save failed');
-      }
-    } catch {
-      alert('Save error');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <div>
-      {/* SEARCH + ADD */}
+      {/* SEARCH */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <input
-          placeholder="Search code / name / owner / station"
           value={q}
-          onChange={e => setQ(e.target.value)}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search restro"
           style={input}
         />
-        <button onClick={() => fetchList(q)} style={btn}>
-          Search
-        </button>
-        <button onClick={openAdd} style={addBtn}>
-          + Add New Restro
-        </button>
+        <button onClick={() => fetchList(q)}>Search</button>
       </div>
 
       {/* TABLE */}
@@ -124,129 +80,105 @@ export default function RestroMasterList() {
               <tr>
                 <th style={th}>Code</th>
                 <th style={th}>Name</th>
+                <th style={th}>Station</th>
                 <th style={th}>Owner</th>
-                <th style={th}>Station Code</th>
-                <th style={th}>Station Name</th>
                 <th style={th}>Phone</th>
-                <th style={th}>FSSAI</th>
-                <th style={th}>RailEats</th>
-                <th style={th}>IRCTC</th>
-                <th style={th}>Status</th>
-                <th style={th}>Action</th>
+                <th style={th}>Raileats</th>
+                <th style={th}>Actions</th>
               </tr>
             </thead>
 
             <tbody>
-              {list.length === 0 && (
-                <tr>
-                  <td style={cell} colSpan={11}>
-                    No restros found
-                  </td>
-                </tr>
-              )}
+              {list.map((r) => {
+                const on = r.RaileatsStatus === 'On';
 
-              {list.map(r => (
-                <tr key={r.RestroCode}>
-                  <td style={cell}>{r.RestroCode}</td>
-                  <td style={cell}>{r.RestroName}</td>
-                  <td style={cell}>{r.OwnerName}</td>
-                  <td style={cell}>{r.StationCode}</td>
-                  <td style={cell}>{r.StationName}</td>
-                  <td style={cell}>{r.OwnerPhone}</td>
-                  <td style={cell}>{r.FSSAINumber}</td>
-                  <td style={cell}>{r.RaileatsStatus}</td>
-                  <td style={cell}>
-                    {r.IsIrctcApproved ? 'Yes' : 'No'}
-                  </td>
+                return (
+                  <tr key={r.RestroCode}>
+                    <td style={cell}>{r.RestroCode}</td>
+                    <td style={cell}>{r.RestroName}</td>
+                    <td style={cell}>{r.StationName}</td>
+                    <td style={cell}>{r.OwnerName}</td>
+                    <td style={cell}>{r.OwnerPhone}</td>
 
-                  {/* STATUS TOGGLE */}
-                  <td style={cell}>
-                    <button
-                      onClick={() => toggleStatus(r)}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: 6,
-                        border: '1px solid #ddd',
-                        background:
-                          r.RaileatsStatus === 'On'
-                            ? '#dcfce7'
-                            : '#fee2e2',
-                        color:
-                          r.RaileatsStatus === 'On'
-                            ? '#166534'
-                            : '#991b1b',
-                      }}
-                    >
-                      {r.RaileatsStatus === 'On' ? 'ON' : 'OFF'}
-                    </button>
-                  </td>
+                    {/* 🔵 SLIDER */}
+                    <td style={cell}>
+                      <div
+                        onClick={() => toggleStatus(r)}
+                        style={{
+                          width: 44,
+                          height: 22,
+                          borderRadius: 999,
+                          background: on ? '#2563eb' : '#9ca3af',
+                          cursor: 'pointer',
+                          position: 'relative',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 18,
+                            height: 18,
+                            background: '#fff',
+                            borderRadius: '50%',
+                            position: 'absolute',
+                            top: 2,
+                            left: on ? 24 : 2,
+                            transition: 'left 0.2s',
+                          }}
+                        />
+                      </div>
+                    </td>
 
-                  {/* EDIT */}
-                  <td style={cell}>
-                    <button
-                      onClick={() => openEdit(r)}
-                      style={editBtn}
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    {/* ACTION */}
+                    <td style={cell}>
+                      <button
+                        onClick={() => openEdit(r)}
+                        style={editBtn}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* MODAL */}
       <RestroModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
         initial={editing}
-        onSave={handleSave}
+        onClose={() => setModalOpen(false)}
+        onSave={() => fetchList(q)}
         saving={saving}
       />
     </div>
   );
 }
 
-/* =========================
-   STYLES (TS SAFE)
-   ========================= */
-
+/* ================= STYLES ================= */
 const th: CSSProperties = {
   textAlign: 'left',
-  padding: '8px',
-  borderBottom: '1px solid #eee',
+  padding: 8,
   background: '#fafafa',
+  borderBottom: '1px solid #eee',
 };
 
 const cell: CSSProperties = {
-  padding: '8px',
+  padding: 8,
   borderBottom: '1px solid #f3f3f3',
 };
 
 const input: CSSProperties = {
   flex: 1,
-  padding: '8px',
+  padding: 8,
   border: '1px solid #ddd',
-  borderRadius: '6px',
-};
-
-const btn: CSSProperties = {
-  padding: '8px 12px',
-};
-
-const addBtn: CSSProperties = {
-  padding: '8px 12px',
-  background: '#16a34a',
-  color: '#fff',
-  borderRadius: '6px',
-  border: 'none',
+  borderRadius: 6,
 };
 
 const editBtn: CSSProperties = {
-  padding: '6px 10px',
-  borderRadius: '6px',
-  background: '#f59e0b',
+  background: '#facc15',
   border: 'none',
+  padding: '6px 10px',
+  borderRadius: 6,
 };
