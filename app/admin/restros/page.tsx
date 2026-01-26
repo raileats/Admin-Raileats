@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import AdminTable, { Column } from "@/components/AdminTable";
 import RestroEditModal from "@/components/RestroEditModal";
 
-const supabase: SupabaseClient = createClient(
+const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
@@ -31,19 +31,41 @@ export default function RestroMasterPage() {
       .select("*")
       .order("RestroCode", { ascending: false });
 
-    setResults((data ?? []).map((r: any) => ({ id: r.RestroCode, ...r })));
+    setResults(
+      (data ?? []).map((r: any) => ({
+        id: r.RestroCode,
+        ...r,
+      }))
+    );
     setLoading(false);
   }
 
-  async function toggleStatus(row: Restro) {
-    const next = row.RaileatsStatus === "On" ? "Off" : "On";
+  /* 🔥 SAME API AS BasicInformationTab */
+  async function toggleRaileats(row: Restro) {
+    const current = Number(row.RaileatsStatus ?? 0);
+    const next = current === 1 ? 0 : 1;
 
-    await supabase
-      .from("RestroMaster")
-      .update({ RaileatsStatus: next })
-      .eq("RestroCode", row.RestroCode);
+    try {
+      const res = await fetch(
+        `/api/admin/restros/${encodeURIComponent(
+          row.RestroCode
+        )}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ raileatsStatus: next }),
+        }
+      );
 
-    fetchRestros(); // 🔄 refresh list
+      if (!res.ok) {
+        alert("Failed to update Raileats status");
+        return;
+      }
+
+      fetchRestros(); // 🔄 refresh list
+    } catch (e) {
+      alert("Network error while updating status");
+    }
   }
 
   function openEdit(code: string | number) {
@@ -58,20 +80,20 @@ export default function RestroMasterPage() {
     { key: "OwnerName", title: "Owner Name" },
     { key: "OwnerPhone", title: "Owner Phone", width: "140px" },
 
-    // 🔵 ON / OFF SLIDER COLUMN
+    /* ✅ SAME LOOK + LOGIC AS EDIT PAGE */
     {
       key: "RaileatsStatus",
       title: "Raileats",
       render: (row) => {
-        const on = row.RaileatsStatus === "On";
+        const on = Number(row.RaileatsStatus ?? 0) === 1;
         return (
           <div
-            onClick={() => toggleStatus(row)}
+            onClick={() => toggleRaileats(row)}
             style={{
-              width: 42,
+              width: 44,
               height: 22,
               borderRadius: 999,
-              background: on ? "#2563eb" : "#9ca3af",
+              backgroundColor: on ? "#0ea5e9" : "#9ca3af",
               cursor: "pointer",
               position: "relative",
             }}
@@ -84,8 +106,8 @@ export default function RestroMasterPage() {
                 borderRadius: "50%",
                 position: "absolute",
                 top: 2,
-                left: on ? 22 : 2,
-                transition: "left 0.2s",
+                left: on ? 24 : 2,
+                transition: "left 0.2s ease",
               }}
             />
           </div>
@@ -117,7 +139,7 @@ export default function RestroMasterPage() {
         actions={(row) => (
           <button
             onClick={() => openEdit(row.RestroCode)}
-            className="px-3 py-1 rounded-md bg-amber-400"
+            className="px-3 py-1 rounded-md bg-amber-400 text-black"
           >
             Edit
           </button>
