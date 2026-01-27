@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
+import { useAdminUser } from "@/components/admin/AdminUserContext"; // ✅ ADD
 
 type Props = {
   open: boolean;
   restroCode: string | number;
-  currentUserId?: string | number | null;
-  currentUserName?: string | null;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -14,11 +13,11 @@ type Props = {
 export default function FutureClosedFormModal({
   open,
   restroCode,
-  currentUserId,
-  currentUserName,
   onClose,
   onSaved,
 }: Props) {
+  const admin = useAdminUser(); // ✅ LOGGED-IN ADMIN
+
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [comment, setComment] = useState("");
@@ -27,27 +26,27 @@ export default function FutureClosedFormModal({
 
   if (!open) return null;
 
-  const handleClose = () => {
-    if (!saving) onClose();
-  };
-
   const save = async () => {
     try {
       setSaving(true);
       setErr(null);
 
       if (!start || !end) {
-        throw new Error("Please select start & end date/time.");
+        throw new Error("Please select start & end date/time");
+      }
+
+      if (!admin?.id || !admin?.name) {
+        throw new Error("Admin session missing");
       }
 
       const payload = {
         start_at: new Date(start).toISOString(),
         end_at: new Date(end).toISOString(),
-        comment: comment.trim(),
+        comment: comment?.trim() || null,
 
-        // ✅ REAL FIX (NO system override)
-        created_by_id: currentUserId ?? null,
-        created_by_name: currentUserName ?? null,
+        // ✅ FINAL FIX
+        applied_by: String(admin.id),
+        applied_by_name: admin.name,
       };
 
       const res = await fetch(
@@ -59,17 +58,17 @@ export default function FutureClosedFormModal({
         }
       );
 
-      const json = await res.json().catch(() => ({}));
+      const json = await res.json();
 
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || `Save failed (${res.status})`);
+        throw new Error(json?.error || "Save failed");
       }
 
       onSaved();
-      handleClose();
+      onClose();
     } catch (e: any) {
-      console.error("holiday save error:", e);
-      setErr(e?.message ?? "Failed to save");
+      console.error("Holiday save error:", e);
+      setErr(e?.message || "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -79,67 +78,40 @@ export default function FutureClosedFormModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" />
 
-      <div className="relative z-10 w-[820px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Add New Holiday</h2>
-          <button
-            type="button"
-            className="rounded-md border px-3 py-1 text-sm"
-            onClick={handleClose}
-          >
-            ✕
-          </button>
-        </div>
+      <div className="relative z-10 w-[800px] rounded-xl bg-white p-6">
+        <h2 className="mb-4 text-xl font-semibold">Add New Holiday</h2>
 
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm">Holiday Start</label>
-            <input
-              type="datetime-local"
-              className="w-full rounded-md border px-3 py-2"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm">Holiday End</label>
-            <input
-              type="datetime-local"
-              className="w-full rounded-md border px-3 py-2"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
-            />
-          </div>
-
-          <div className="col-span-2">
-            <label className="mb-1 block text-sm">Comment</label>
-            <textarea
-              className="w-full rounded-md border px-3 py-2"
-              rows={3}
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Why is the restaurant closed?"
-            />
-          </div>
+          <input
+            type="datetime-local"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            className="rounded border px-3 py-2"
+          />
+          <input
+            type="datetime-local"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+            className="rounded border px-3 py-2"
+          />
+          <textarea
+            className="col-span-2 rounded border px-3 py-2"
+            placeholder="Comment"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
         </div>
 
-        {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
+        {err && <p className="mt-3 text-red-600">{err}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={handleClose}
-            className="rounded-md border px-4 py-2"
-          >
+          <button onClick={onClose} disabled={saving} className="border px-4 py-2">
             Cancel
           </button>
           <button
-            type="button"
-            disabled={saving}
             onClick={save}
-            className="rounded-md bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
+            disabled={saving}
+            className="bg-blue-600 px-4 py-2 text-white"
           >
             {saving ? "Saving…" : "Save"}
           </button>
