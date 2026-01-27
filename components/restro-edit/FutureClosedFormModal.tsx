@@ -146,3 +146,13 @@ export default function FutureClosedFormModal({
     </div>
   );
 }
+<FutureClosedFormModal
+  open={open}
+  restroCode={codeStr}
+  currentUserId={String(window.__USER__?.id ?? "")}
+  onClose={() => setOpen(false)}
+  onSaved={() => {
+    setOpen(false);
+    load();
+  }}
+/>
