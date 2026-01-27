@@ -25,7 +25,6 @@ export default function FutureClosedTab({ restroCode }: Props) {
 
   const codeStr = String(restroCode ?? "");
 
-  // ✅ SSR safe user id
   const currentUserId =
     typeof window !== "undefined"
       ? String((window as any).__USER__?.id ?? "")
@@ -35,8 +34,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/restros/${encodeURIComponent(codeStr)}/holidays`,
-        { method: "GET" }
+        `/api/restros/${encodeURIComponent(codeStr)}/holidays`
       );
       const json = await res.json();
       setRows(Array.isArray(json?.rows) ? json.rows : []);
@@ -80,10 +78,8 @@ export default function FutureClosedTab({ restroCode }: Props) {
     }
   };
 
-  // 🔴 FIXED: explicit return
-  const fmt = (iso?: string) => {
-    return iso ? new Date(iso).toLocaleString() : "—";
-  };
+  const fmt = (iso?: string) =>
+    iso ? new Date(iso).toLocaleString() : "—";
 
   return (
     <div className="px-4">
@@ -135,7 +131,8 @@ export default function FutureClosedTab({ restroCode }: Props) {
                 <div>{fmt(r.end_at)}</div>
                 <div className="truncate">{r.comment || "—"}</div>
                 <div className="truncate">
-                  {r.created_by_name || r.created_by_id || "—"}
+                  {r.created_by_name ||
+                    (r.created_by_id ? `User #${r.created_by_id}` : "system")}
                 </div>
                 <div className="text-right">
                   <span
