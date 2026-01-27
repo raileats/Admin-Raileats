@@ -1,167 +1,177 @@
 "use client";
 
-import React, { useState } from "react";
-import UI from "@/components/AdminUI";
+import React, { useEffect, useState } from "react";
+import FutureClosedFormModal from "./FutureClosedFormModal";
 
-const { AdminForm } = UI;
+type Row = {
+  id: number;
+  restro_code: string;
+  start_at: string;
+  end_at: string;
+  comment?: string | null;
+  created_by_id?: string | null;
+  created_by_name?: string | null;
+  deleted_at?: string | null;
+};
 
 type Props = {
   restroCode: string | number;
 };
 
-type Holiday = {
-  start: string;
-  end: string;
-  comment: string;
-};
-
 export default function FutureClosedTab({ restroCode }: Props) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const codeStr = String(restroCode ?? "");
 
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
-  const [comment, setComment] = useState("");
-
-  function saveHoliday() {
-    if (!start || !end) {
-      alert("Please select holiday start and end date");
-      return;
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/restros/${encodeURIComponent(codeStr)}/holidays`,
+        { method: "GET" }
+      );
+      const json = await res.json();
+      setRows(Array.isArray(json?.rows) ? json.rows : []);
+    } catch (e) {
+      setRows([]);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setHolidays((prev) => [
-      ...prev,
-      { start, end, comment },
-    ]);
+  useEffect(() => {
+    load(); /* on mount */
+  }, [codeStr]);
 
-    setStart("");
-    setEnd("");
-    setComment("");
-    setShowAdd(false);
-  }
+  const statusOf = (r: Row) => {
+    if (r.deleted_at) return "Deleted";
+    const now = Date.now();
+    const s = new Date(r.start_at).getTime();
+    const e = new Date(r.end_at).getTime();
+    if (now < s) return "Upcoming";
+    if (now >= s && now <= e) return "Active";
+    return "Inactive";
+  };
+
+  const doDelete = async (id: number) => {
+    if (!confirm("Delete this holiday?")) return;
+    try {
+      const res = await fetch(
+        `/api/restros/${encodeURIComponent(codeStr)}/holidays`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        }
+      );
+      const json = await res.json();
+      if (!json?.ok) throw new Error(json?.error || "Delete failed");
+      await load(); // refresh list immediately
+    } catch (e: any) {
+      alert(e?.message ?? "Delete failed");
+    }
+  };
+
+  const fmt = (iso?: string) =>
+    iso ? new Date(iso).toLocaleString() : "—";
 
   return (
-    <AdminForm>
-      {/* 🔵 SAME WRAPPER AS ADDRESS */}
-      <div className="border rounded-md p-3 bg-sky-50 mb-6">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-2">
-          <div>
-            <h4 className="font-semibold text-sm">Future Closed</h4>
-            <p className="text-xs text-gray-500">
-              Schedule restaurant holiday / closure windows
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            className="bg-orange-500 text-white px-3 py-1.5 rounded text-sm"
-          >
-            Add New Holiday
-          </button>
+    <div className="px-4">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Future Closed</h3>
+          <p className="text-sm text-gray-500">
+            Schedule restaurant holiday/closure windows.
+          </p>
         </div>
 
-        {/* TABLE */}
-        <div className="bg-white border rounded">
-          {/* Table Header */}
-          <div className="grid grid-cols-6 gap-3 px-3 py-2 text-xs font-semibold text-gray-600 border-b bg-gray-50">
-            <div>Holiday Start</div>
-            <div>Holiday End</div>
-            <div>Comment</div>
-            <div>Applied By</div>
-            <div>Status</div>
-            <div>Action</div>
-          </div>
+        {/* 🔴 FIXED BUTTON */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault(); // stop parent form submit
+            setOpen(true);
+          }}
+          className="rounded-md bg-orange-600 px-4 py-2 text-white"
+        >
+          Add New Holiday
+        </button>
+      </div>
 
-          {/* Empty */}
-          {holidays.length === 0 && (
-            <div className="px-3 py-4 text-sm text-gray-500">
-              No holidays yet.
-            </div>
-          )}
-
-          {/* Rows */}
-          {holidays.map((h, i) => (
-            <div
-              key={i}
-              className="grid grid-cols-6 gap-3 px-3 py-2 text-sm border-t"
-            >
-              <div>{h.start}</div>
-              <div>{h.end}</div>
-              <div>{h.comment || "—"}</div>
-              <div>Admin</div>
-              <div className="text-green-700 font-semibold">Active</div>
-              <div className="text-red-600 cursor-pointer">Remove</div>
-            </div>
-          ))}
+      <div className="overflow-hidden rounded-xl border">
+        <div className="grid grid-cols-6 bg-gray-50 px-4 py-3 text-sm font-medium">
+          <div>Holiday Start</div>
+          <div>Holiday End</div>
+          <div>Comment</div>
+          <div>Applied By</div>
+          <div className="text-right">Status</div>
+          <div className="text-right">Action</div>
         </div>
 
-        {/* ADD FORM */}
-        {showAdd && (
-          <div className="mt-4 p-4 bg-white border rounded">
-            <h5 className="font-semibold text-sm mb-3">
-              Add Holiday
-            </h5>
-
-            <div className="grid grid-cols-3 gap-3 mb-3">
-              <div>
-                <label className="text-xs font-semibold text-gray-600">
-                  Holiday Start
-                </label>
-                <input
-                  type="date"
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
-                  className="w-full p-2 border rounded text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-gray-600">
-                  Holiday End
-                </label>
-                <input
-                  type="date"
-                  value={end}
-                  onChange={(e) => setEnd(e.target.value)}
-                  className="w-full p-2 border rounded text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-gray-600">
-                  Comment
-                </label>
-                <input
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Optional"
-                  className="w-full p-2 border rounded text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={saveHoliday}
-                className="bg-orange-500 text-white px-4 py-2 rounded text-sm"
-              >
-                Save Holiday
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowAdd(false)}
-                className="border px-4 py-2 rounded text-sm"
-              >
-                Cancel
-              </button>
-            </div>
+        {loading ? (
+          <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
+        ) : rows.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-gray-600">
+            No holidays yet.
           </div>
+        ) : (
+          rows.map((r) => {
+            const st = statusOf(r);
+            return (
+              <div
+                key={r.id}
+                className="grid grid-cols-6 border-t px-4 py-3 text-sm"
+              >
+                <div>{fmt(r.start_at)}</div>
+                <div>{fmt(r.end_at)}</div>
+                <div className="truncate">
+                  {r.comment || "—"}
+                </div>
+                <div className="truncate">
+                  {r.created_by_name || r.created_by_id || "—"}
+                </div>
+                <div className="text-right">
+                  <span
+                    className={
+                      st === "Active"
+                        ? "rounded bg-green-100 px-2 py-1 text-green-700"
+                        : st === "Upcoming"
+                        ? "rounded bg-blue-100 px-2 py-1 text-blue-700"
+                        : st === "Deleted"
+                        ? "rounded bg-gray-100 px-2 py-1 text-gray-700"
+                        : "rounded bg-zinc-100 px-2 py-1 text-zinc-700"
+                    }
+                  >
+                    {st}
+                  </span>
+                </div>
+                <div className="text-right">
+                  {!r.deleted_at && (
+                    <button
+                      type="button" // also prevent submit here
+                      onClick={() => doDelete(r.id)}
+                      className="rounded border px-2 py-1 text-xs"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
-    </AdminForm>
+
+      <FutureClosedFormModal
+        open={open}
+        restroCode={codeStr}
+        onClose={() => setOpen(false)}
+        onSaved={() => {
+          setOpen(false);
+          load(); // refresh without page reload
+        }}
+      />
+    </div>
   );
 }
