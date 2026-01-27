@@ -3,15 +3,15 @@
 import React, { useState } from "react";
 
 type Props = {
-  open: boolean;
+  isOpen: boolean; // 🔴 renamed from open → isOpen
   restroCode: string | number;
-  currentUserId?: string | number | null; // optional
+  currentUserId?: string | number | null;
   onClose: () => void;
   onSaved: () => void;
 };
 
 export default function FutureClosedFormModal({
-  open,
+  isOpen,
   restroCode,
   currentUserId,
   onClose,
@@ -23,7 +23,8 @@ export default function FutureClosedFormModal({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  if (!open) return null;
+  // 🔴 important fix
+  if (!isOpen) return null;
 
   const handleClose = () => {
     if (!saving) onClose();
@@ -76,7 +77,7 @@ export default function FutureClosedFormModal({
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center"
     >
-      {/* backdrop only visual, no click handler */}
+      {/* backdrop */}
       <div className="absolute inset-0 bg-black/40" />
 
       <div className="relative z-10 w-[820px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
@@ -101,6 +102,7 @@ export default function FutureClosedFormModal({
               onChange={(e) => setStart(e.target.value)}
             />
           </div>
+
           <div>
             <label className="mb-1 block text-sm">Holiday End</label>
             <input
@@ -110,6 +112,7 @@ export default function FutureClosedFormModal({
               onChange={(e) => setEnd(e.target.value)}
             />
           </div>
+
           <div className="col-span-2">
             <label className="mb-1 block text-sm">Comment</label>
             <textarea
@@ -133,6 +136,7 @@ export default function FutureClosedFormModal({
           >
             Cancel
           </button>
+
           <button
             type="button"
             disabled={saving}
@@ -146,13 +150,3 @@ export default function FutureClosedFormModal({
     </div>
   );
 }
-<FutureClosedFormModal
-  open={open}
-  restroCode={codeStr}
-  currentUserId={String(window.__USER__?.id ?? "")}
-  onClose={() => setOpen(false)}
-  onSaved={() => {
-    setOpen(false);
-    load();
-  }}
-/>
