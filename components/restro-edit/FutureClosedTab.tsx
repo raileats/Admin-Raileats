@@ -24,6 +24,12 @@ export default function FutureClosedTab({ restroCode }: Props) {
   const [loading, setLoading] = useState(false);
   const codeStr = String(restroCode ?? "");
 
+  // ✅ SSR-safe current user id
+  const currentUserId =
+    typeof window !== "undefined"
+      ? String((window as any).__USER__?.id ?? "")
+      : "";
+
   const load = async () => {
     setLoading(true);
     try {
@@ -41,7 +47,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
   };
 
   useEffect(() => {
-    load(); /* on mount */
+    load(); // on mount
   }, [codeStr]);
 
   const statusOf = (r: Row) => {
@@ -86,11 +92,10 @@ export default function FutureClosedTab({ restroCode }: Props) {
           </p>
         </div>
 
-        {/* 🔴 FIXED BUTTON */}
         <button
           type="button"
           onClick={(e) => {
-            e.preventDefault(); // stop parent form submit
+            e.preventDefault();
             setOpen(true);
           }}
           className="rounded-md bg-orange-600 px-4 py-2 text-white"
@@ -125,9 +130,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
               >
                 <div>{fmt(r.start_at)}</div>
                 <div>{fmt(r.end_at)}</div>
-                <div className="truncate">
-                  {r.comment || "—"}
-                </div>
+                <div className="truncate">{r.comment || "—"}</div>
                 <div className="truncate">
                   {r.created_by_name || r.created_by_id || "—"}
                 </div>
@@ -149,7 +152,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
                 <div className="text-right">
                   {!r.deleted_at && (
                     <button
-                      type="button" // also prevent submit here
+                      type="button"
                       onClick={() => doDelete(r.id)}
                       className="rounded border px-2 py-1 text-xs"
                     >
@@ -164,12 +167,13 @@ export default function FutureClosedTab({ restroCode }: Props) {
       </div>
 
       <FutureClosedFormModal
-        open={open}
+        isOpen={open}          {/* 🔴 fixed */}
         restroCode={codeStr}
+        currentUserId={currentUserId}
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
-          load(); // refresh without page reload
+          load();
         }}
       />
     </div>
