@@ -7,9 +7,8 @@ type HolidayRow = {
   start_at: string;
   end_at: string;
   comment: string | null;
-  created_by_id: number | null;
+  created_by_id: string | null;
   created_by_name: string | null;
-  created_at?: string | null;
   updated_at?: string | null;
   deleted_at?: string | null;
 };
@@ -21,11 +20,7 @@ function srv() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-/**
- * GET: list holidays for a restro
- * - joins users table to get created_by_name
- * - returns updated_at for UI
- */
+/** GET: list holidays (NO FK join – SAFE) */
 export async function GET(
   _: Request,
   { params }: { params: { code: string } }
@@ -44,11 +39,9 @@ export async function GET(
         end_at,
         comment,
         created_by_id,
+        created_by_name,
         updated_at,
-        deleted_at,
-        users (
-          name
-        )
+        deleted_at
       `
       )
       .eq("restro_code", codeStr)
@@ -56,20 +49,10 @@ export async function GET(
 
     if (error) throw error;
 
-    const rows: HolidayRow[] =
-      (data ?? []).map((r: any) => ({
-        id: r.id,
-        restro_code: r.restro_code,
-        start_at: r.start_at,
-        end_at: r.end_at,
-        comment: r.comment,
-        created_by_id: r.created_by_id,
-        created_by_name: r.users?.name ?? null,
-        updated_at: r.updated_at ?? null,
-        deleted_at: r.deleted_at ?? null,
-      })) ?? [];
-
-    return NextResponse.json({ ok: true, rows });
+    return NextResponse.json({
+      ok: true,
+      rows: (data ?? []) as HolidayRow[],
+    });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: e?.message ?? String(e) },
@@ -78,11 +61,7 @@ export async function GET(
   }
 }
 
-/**
- * POST: create holiday
- * - saves created_by_id
- * - sets updated_at
- */
+/** POST: create holiday */
 export async function POST(
   req: Request,
   { params }: { params: { code: string } }
@@ -92,10 +71,6 @@ export async function POST(
     const codeStr = String(params.code ?? "");
     const body = (await req.json().catch(() => ({}))) as any;
 
-    if (!body.start_at || !body.end_at) {
-      throw new Error("Missing start_at or end_at");
-    }
-
     const insert = {
       restro_code: codeStr,
       start_at: new Date(body.start_at).toISOString(),
@@ -103,8 +78,9 @@ export async function POST(
       comment: (body.comment ?? "").toString() || null,
       created_by_id:
         body.applied_by && body.applied_by !== "system"
-          ? Number(body.applied_by)
+          ? String(body.applied_by)
           : null,
+      created_by_name: null, // FK nahi hai, later fill hoga
       updated_at: new Date().toISOString(),
     };
 
@@ -123,10 +99,7 @@ export async function POST(
   }
 }
 
-/**
- * DELETE: soft delete holiday by id
- * - updates deleted_at + updated_at
- */
+/** DELETE: soft delete */
 export async function DELETE(
   req: Request,
   { params }: { params: { code: string } }
