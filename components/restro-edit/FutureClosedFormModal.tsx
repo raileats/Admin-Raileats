@@ -1,31 +1,30 @@
+
 "use client";
 
 import React, { useState } from "react";
 
 type Props = {
-  isOpen: boolean;
+  open: boolean;
   restroCode: string | number;
-  currentUserId?: string | number | null;
-  currentUserName?: string | null;
+  currentUserId?: string | number | null; // optional
   onClose: () => void;
   onSaved: () => void;
 };
 
 export default function FutureClosedFormModal({
-  isOpen,
+  open,
   restroCode,
   currentUserId,
-  currentUserName,
   onClose,
   onSaved,
 }: Props) {
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
-  const [comment, setComment] = useState("");
+  const [start, setStart] = useState<string>("");
+  const [end, setEnd] = useState<string>("");
+  const [comment, setComment] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  if (!open) return null;
 
   const handleClose = () => {
     if (!saving) onClose();
@@ -37,15 +36,14 @@ export default function FutureClosedFormModal({
       setErr(null);
 
       if (!start || !end) {
-        throw new Error("Please select start & end date/time");
+        throw new Error("Please select start & end date/time.");
       }
 
       const payload = {
         start_at: new Date(start).toISOString(),
         end_at: new Date(end).toISOString(),
-        comment: comment.trim() || null,
-        applied_by: currentUserId ?? null,
-        applied_by_name: currentUserName ?? null,
+        comment: (comment ?? "").trim(),
+        applied_by: currentUserId ? String(currentUserId) : "system",
       };
 
       const res = await fetch(
@@ -57,15 +55,16 @@ export default function FutureClosedFormModal({
         }
       );
 
-      const json = await res.json();
+      const json = await res.json().catch(() => ({} as any));
 
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || "Save failed");
+        throw new Error(json?.error || `Save failed (${res.status})`);
       }
 
       onSaved();
       handleClose();
     } catch (e: any) {
+      console.error("holiday save error:", e);
       setErr(e?.message ?? "Failed to save");
     } finally {
       setSaving(false);
@@ -73,7 +72,12 @@ export default function FutureClosedFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center"
+    >
+      {/* backdrop only visual, no click handler */}
       <div className="absolute inset-0 bg-black/40" />
 
       <div className="relative z-10 w-[820px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
@@ -98,7 +102,6 @@ export default function FutureClosedFormModal({
               onChange={(e) => setStart(e.target.value)}
             />
           </div>
-
           <div>
             <label className="mb-1 block text-sm">Holiday End</label>
             <input
@@ -108,12 +111,11 @@ export default function FutureClosedFormModal({
               onChange={(e) => setEnd(e.target.value)}
             />
           </div>
-
           <div className="col-span-2">
             <label className="mb-1 block text-sm">Comment</label>
             <textarea
-              rows={3}
               className="w-full rounded-md border px-3 py-2"
+              rows={3}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Why is the restaurant closed?"
@@ -121,22 +123,21 @@ export default function FutureClosedFormModal({
           </div>
         </div>
 
-        {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
+        {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
-            onClick={handleClose}
             disabled={saving}
+            onClick={handleClose}
             className="rounded-md border px-4 py-2"
           >
             Cancel
           </button>
-
           <button
             type="button"
-            onClick={save}
             disabled={saving}
+            onClick={save}
             className="rounded-md bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save"}
