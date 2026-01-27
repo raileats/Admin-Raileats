@@ -22,9 +22,10 @@ export default function FutureClosedTab({ restroCode }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
   const codeStr = String(restroCode ?? "");
 
-  // ✅ SSR-safe current user id
+  // ✅ SSR safe user id
   const currentUserId =
     typeof window !== "undefined"
       ? String((window as any).__USER__?.id ?? "")
@@ -39,7 +40,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
       );
       const json = await res.json();
       setRows(Array.isArray(json?.rows) ? json.rows : []);
-    } catch (e) {
+    } catch {
       setRows([]);
     } finally {
       setLoading(false);
@@ -47,7 +48,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
   };
 
   useEffect(() => {
-    load(); // on mount
+    load();
   }, [codeStr]);
 
   const statusOf = (r: Row) => {
@@ -73,14 +74,16 @@ export default function FutureClosedTab({ restroCode }: Props) {
       );
       const json = await res.json();
       if (!json?.ok) throw new Error(json?.error || "Delete failed");
-      await load(); // refresh list immediately
+      await load();
     } catch (e: any) {
       alert(e?.message ?? "Delete failed");
     }
   };
 
-  const fmt = (iso?: string) =>
-    iso ? new Date(iso).toLocaleString() : "—";
+  // 🔴 FIXED: explicit return
+  const fmt = (iso?: string) => {
+    return iso ? new Date(iso).toLocaleString() : "—";
+  };
 
   return (
     <div className="px-4">
@@ -167,7 +170,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
       </div>
 
       <FutureClosedFormModal
-        isOpen={open}          {/* 🔴 fixed */}
+        isOpen={open}
         restroCode={codeStr}
         currentUserId={currentUserId}
         onClose={() => setOpen(false)}
