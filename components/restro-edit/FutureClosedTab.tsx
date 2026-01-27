@@ -25,10 +25,14 @@ export default function FutureClosedTab({ restroCode }: Props) {
 
   const codeStr = String(restroCode ?? "");
 
-  const currentUserId =
+  // ✅ SINGLE SOURCE OF TRUTH FOR USER
+  const currentUser =
     typeof window !== "undefined"
-      ? String((window as any).__USER__?.id ?? "")
-      : "";
+      ? {
+          id: (window as any).__USER__?.id ?? null,
+          name: (window as any).__USER__?.name ?? "system",
+        }
+      : { id: null, name: "system" };
 
   const load = async () => {
     setLoading(true);
@@ -72,7 +76,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
       );
       const json = await res.json();
       if (!json?.ok) throw new Error(json?.error || "Delete failed");
-      await load();
+      load();
     } catch (e: any) {
       alert(e?.message ?? "Delete failed");
     }
@@ -93,10 +97,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
 
         <button
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            setOpen(true);
-          }}
+          onClick={() => setOpen(true)}
           className="rounded-md bg-orange-600 px-4 py-2 text-white"
         >
           Add New Holiday
@@ -131,8 +132,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
                 <div>{fmt(r.end_at)}</div>
                 <div className="truncate">{r.comment || "—"}</div>
                 <div className="truncate">
-                  {r.created_by_name ||
-                    (r.created_by_id ? `User #${r.created_by_id}` : "system")}
+                  {r.created_by_name || r.created_by_id || "system"}
                 </div>
                 <div className="text-right">
                   <span
@@ -141,8 +141,6 @@ export default function FutureClosedTab({ restroCode }: Props) {
                         ? "rounded bg-green-100 px-2 py-1 text-green-700"
                         : st === "Upcoming"
                         ? "rounded bg-blue-100 px-2 py-1 text-blue-700"
-                        : st === "Deleted"
-                        ? "rounded bg-gray-100 px-2 py-1 text-gray-700"
                         : "rounded bg-zinc-100 px-2 py-1 text-zinc-700"
                     }
                   >
@@ -169,7 +167,8 @@ export default function FutureClosedTab({ restroCode }: Props) {
       <FutureClosedFormModal
         isOpen={open}
         restroCode={codeStr}
-        currentUserId={currentUserId}
+        currentUserId={currentUser.id}
+        currentUserName={currentUser.name}
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
