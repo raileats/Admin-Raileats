@@ -6,6 +6,7 @@ type Props = {
   isOpen: boolean;
   restroCode: string | number;
   currentUserId?: string | number | null;
+  currentUserName?: string | null;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -14,6 +15,7 @@ export default function FutureClosedFormModal({
   isOpen,
   restroCode,
   currentUserId,
+  currentUserName,
   onClose,
   onSaved,
 }: Props) {
@@ -35,20 +37,15 @@ export default function FutureClosedFormModal({
       setErr(null);
 
       if (!start || !end) {
-        throw new Error("Please select start & end date/time.");
+        throw new Error("Please select start & end date/time");
       }
-
-      const userName =
-        typeof window !== "undefined"
-          ? (window as any).__USER__?.name ?? "system"
-          : "system";
 
       const payload = {
         start_at: new Date(start).toISOString(),
         end_at: new Date(end).toISOString(),
-        comment: (comment ?? "").trim(),
-        applied_by: currentUserId ? String(currentUserId) : "system",
-        applied_by_name: userName,
+        comment: comment.trim() || null,
+        applied_by: currentUserId ?? null,
+        applied_by_name: currentUserName ?? null,
       };
 
       const res = await fetch(
@@ -60,16 +57,15 @@ export default function FutureClosedFormModal({
         }
       );
 
-      const json = await res.json().catch(() => ({}));
+      const json = await res.json();
 
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || `Save failed (${res.status})`);
+        throw new Error(json?.error || "Save failed");
       }
 
       onSaved();
       handleClose();
     } catch (e: any) {
-      console.error("holiday save error:", e);
       setErr(e?.message ?? "Failed to save");
     } finally {
       setSaving(false);
@@ -116,8 +112,8 @@ export default function FutureClosedFormModal({
           <div className="col-span-2">
             <label className="mb-1 block text-sm">Comment</label>
             <textarea
-              className="w-full rounded-md border px-3 py-2"
               rows={3}
+              className="w-full rounded-md border px-3 py-2"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Why is the restaurant closed?"
@@ -125,13 +121,13 @@ export default function FutureClosedFormModal({
           </div>
         </div>
 
-        {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
+        {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
-            disabled={saving}
             onClick={handleClose}
+            disabled={saving}
             className="rounded-md border px-4 py-2"
           >
             Cancel
@@ -139,8 +135,8 @@ export default function FutureClosedFormModal({
 
           <button
             type="button"
-            disabled={saving}
             onClick={save}
+            disabled={saving}
             className="rounded-md bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save"}
