@@ -1,110 +1,110 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import FutureClosedFormModal from "./FutureClosedFormModal";
 
-type Props = {
-  isOpen: boolean;
+export type FutureClosedTabProps = {
   restroCode: string | number;
-  currentUserId?: string | number | null;
-  onClose: () => void;
-  onSaved: () => void;
 };
 
-export default function FutureClosedFormModal({
-  isOpen,
-  restroCode,
-  currentUserId,
-  onClose,
-  onSaved,
-}: Props) {
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
-  const [comment, setComment] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+type Row = {
+  id: number;
+  restro_code: string;
+  start_at: string;
+  end_at: string;
+  comment?: string | null;
+  created_by_id?: string | null;
+  created_by_name?: string | null;
+  deleted_at?: string | null;
+};
 
-  if (!isOpen) return null;
+export default function FutureClosedTab({ restroCode }: FutureClosedTabProps) {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const save = async () => {
+  const codeStr = String(restroCode ?? "");
+
+  const currentUserId =
+    typeof window !== "undefined"
+      ? String((window as any).__USER__?.id ?? "")
+      : "";
+
+  const load = async () => {
+    setLoading(true);
     try {
-      setSaving(true);
-      setErr(null);
-
-      if (!start || !end) {
-        throw new Error("Please select start & end date/time");
-      }
-
-      const payload = {
-        start_at: new Date(start).toISOString(),
-        end_at: new Date(end).toISOString(),
-        comment: comment.trim() || null,
-        applied_by: currentUserId ?? null, // ✅ ONLY ID
-      };
-
       const res = await fetch(
-        `/api/restros/${encodeURIComponent(String(restroCode))}/holidays`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
+        `/api/restros/${encodeURIComponent(codeStr)}/holidays`
       );
-
       const json = await res.json();
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || "Save failed");
-      }
-
-      onSaved();
-      onClose();
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to save");
+      setRows(Array.isArray(json?.rows) ? json.rows : []);
+    } catch {
+      setRows([]);
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (codeStr) load();
+  }, [codeStr]);
+
+  const fmt = (iso?: string) =>
+    iso ? new Date(iso).toLocaleString() : "—";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" />
-      <div className="relative w-[800px] rounded-xl bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold">Add New Holiday</h2>
+    <div className="px-4">
+      <div className="mb-4 flex justify-between items-center">
+        <h3 className="text-lg font-semibold">Future Closed</h3>
 
-        <input
-          type="datetime-local"
-          className="mb-3 w-full border p-2"
-          value={start}
-          onChange={(e) => setStart(e.target.value)}
-        />
-
-        <input
-          type="datetime-local"
-          className="mb-3 w-full border p-2"
-          value={end}
-          onChange={(e) => setEnd(e.target.value)}
-        />
-
-        <textarea
-          className="mb-3 w-full border p-2"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-        />
-
-        {err && <p className="text-sm text-red-600">{err}</p>}
-
-        <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="border px-4 py-2">
-            Cancel
-          </button>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="bg-blue-600 px-4 py-2 text-white"
-          >
-            Save
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded bg-orange-600 px-4 py-2 text-white"
+        >
+          Add New Holiday
+        </button>
       </div>
+
+      <div className="border rounded-xl overflow-hidden">
+        <div className="grid grid-cols-5 bg-gray-50 px-4 py-3 text-sm font-medium">
+          <div>Start</div>
+          <div>End</div>
+          <div>Comment</div>
+          <div>Applied By</div>
+          <div>Status</div>
+        </div>
+
+        {loading ? (
+          <div className="p-4 text-sm">Loading…</div>
+        ) : rows.length === 0 ? (
+          <div className="p-4 text-sm">No holidays yet.</div>
+        ) : (
+          rows.map((r) => (
+            <div
+              key={r.id}
+              className="grid grid-cols-5 border-t px-4 py-3 text-sm"
+            >
+              <div>{fmt(r.start_at)}</div>
+              <div>{fmt(r.end_at)}</div>
+              <div>{r.comment || "—"}</div>
+              <div>{r.created_by_name || r.created_by_id || "—"}</div>
+              <div>{r.deleted_at ? "Deleted" : "Active"}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <FutureClosedFormModal
+        isOpen={open}
+        restroCode={codeStr}
+        currentUserId={currentUserId}
+        onClose={() => setOpen(false)}
+        onSaved={() => {
+          setOpen(false);
+          load();
+        }}
+      />
     </div>
   );
 }
