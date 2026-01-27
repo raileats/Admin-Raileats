@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from "react";
@@ -6,7 +5,8 @@ import React, { useState } from "react";
 type Props = {
   open: boolean;
   restroCode: string | number;
-  currentUserId?: string | number | null; // optional
+  currentUserId?: string | number | null;
+  currentUserName?: string | null;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -15,12 +15,13 @@ export default function FutureClosedFormModal({
   open,
   restroCode,
   currentUserId,
+  currentUserName,
   onClose,
   onSaved,
 }: Props) {
-  const [start, setStart] = useState<string>("");
-  const [end, setEnd] = useState<string>("");
-  const [comment, setComment] = useState<string>("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -42,8 +43,11 @@ export default function FutureClosedFormModal({
       const payload = {
         start_at: new Date(start).toISOString(),
         end_at: new Date(end).toISOString(),
-        comment: (comment ?? "").trim(),
-        applied_by: currentUserId ? String(currentUserId) : "system",
+        comment: comment.trim(),
+
+        // ✅ REAL FIX (NO system override)
+        created_by_id: currentUserId ?? null,
+        created_by_name: currentUserName ?? null,
       };
 
       const res = await fetch(
@@ -55,7 +59,7 @@ export default function FutureClosedFormModal({
         }
       );
 
-      const json = await res.json().catch(() => ({} as any));
+      const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || `Save failed (${res.status})`);
@@ -72,12 +76,7 @@ export default function FutureClosedFormModal({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center"
-    >
-      {/* backdrop only visual, no click handler */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" />
 
       <div className="relative z-10 w-[820px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
@@ -102,6 +101,7 @@ export default function FutureClosedFormModal({
               onChange={(e) => setStart(e.target.value)}
             />
           </div>
+
           <div>
             <label className="mb-1 block text-sm">Holiday End</label>
             <input
@@ -111,6 +111,7 @@ export default function FutureClosedFormModal({
               onChange={(e) => setEnd(e.target.value)}
             />
           </div>
+
           <div className="col-span-2">
             <label className="mb-1 block text-sm">Comment</label>
             <textarea
