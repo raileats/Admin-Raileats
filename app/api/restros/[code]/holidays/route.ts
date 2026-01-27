@@ -8,73 +8,93 @@ function srv() {
 }
 
 /* ================= GET ================= */
-export async function GET(_: Request, { params }: { params: { code: string } }) {
+export async function GET(
+  _: Request,
+  { params }: { params: { code: string } }
+) {
   try {
     const supabase = srv();
 
     const { data, error } = await supabase
       .from("RestroHolidays")
-      .select(`
-        id,
-        restro_code,
-        start_at,
-        end_at,
-        comment,
-        created_at,
-        updated_at,
-        deleted_at,
-        created_by_id,
-        created_by_name
-      `)
-      .eq("restro_code", params.code)
+      .select("*")
+      .eq("restro_code", String(params.code))
+      .eq("is_deleted", false)
       .order("start_at", { ascending: false });
 
     if (error) throw error;
+
     return NextResponse.json({ ok: true, rows: data ?? [] });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: e.message },
+      { status: 400 }
+    );
   }
 }
 
 /* ================= POST ================= */
-export async function POST(req: Request, { params }: { params: { code: string } }) {
+export async function POST(
+  req: Request,
+  { params }: { params: { code: string } }
+) {
   try {
     const supabase = srv();
     const body = await req.json();
 
-    /* 🔐 get logged-in user from Supabase auth */
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    let createdById: number | null = null;
-    let createdByName = "System";
-
-    if (user?.id) {
-      const { data: u } = await supabase
-        .from("users")
-        .select("id, name")
-        .eq("id", user.id)
-        .single();
-
-      if (u) {
-        createdById = u.id;
-        createdByName = u.name;
-      }
-    }
-
-    const { error } = await supabase.from("RestroHolidays").insert({
-      restro_code: params.code,
-      start_at: body.start_at,
-      end_at: body.end_at,
+    const insert = {
+      restro_code: String(params.code),
+      start_at: new Date(body.start_at).toISOString(),
+      end_at: new Date(body.end_at).toISOString(),
       comment: body.comment || null,
-      created_by_id: createdById,
-      created_by_name: createdByName,
-    });
+
+      // 🔥 REAL FIX
+      created_by_id: body.created_by_id ?? null,
+      created_by_name: body.created_by_name ?? "system",
+
+      created_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from("RestroHolidays")
+      .insert(insert);
 
     if (error) throw error;
+
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: e.message },
+      { status: 400 }
+    );
+  }
+}
+
+/* ================= DELETE (soft) ================= */
+export async function DELETE(
+  req: Request,
+  { params }: { params: { code: string } }
+) {
+  try {
+    const supabase = srv();
+    const { id } = await req.json();
+
+    const { error } = await supabase
+      .from("RestroHolidays")
+      .update({
+        is_deleted: true,
+        deleted_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("restro_code", String(params.code));
+
+    if (error) throw error;
+
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, error: e.message },
+      { status: 400 }
+    );
   }
 }
