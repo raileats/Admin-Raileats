@@ -4,21 +4,31 @@ import React, { useEffect, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import AdminTable, { Column } from "@/components/AdminTable";
-import RestroEditModal from "@/components/RestroEditModal"; // 🔥 ADD THIS
+import RestroEditModal from "@/components/RestroEditModal";
 
+/* ------------------ Supabase ------------------ */
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
-}
-const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error(
+    "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
+  );
+}
+
+const supabase: SupabaseClient = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
+
+/* ------------------ Types ------------------ */
 type Restro = { [k: string]: any; id?: string | number };
 
+/* ------------------ Component ------------------ */
 export default function RestroMasterPage(): JSX.Element {
   const router = useRouter();
 
-  // 🔥 ADD NEW RESTRO MODAL STATE
+  // modal state
   const [openAddRestro, setOpenAddRestro] = useState(false);
 
   // filters
@@ -30,7 +40,7 @@ export default function RestroMasterPage(): JSX.Element {
   const [ownerPhone, setOwnerPhone] = useState("");
   const [fssaiNumber, setFssaiNumber] = useState("");
 
-  // states
+  // data states
   const [results, setResults] = useState<Restro[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +50,7 @@ export default function RestroMasterPage(): JSX.Element {
     fetchRestros();
   }, []);
 
+  /* ------------------ Fetch ------------------ */
   async function fetchRestros(filters?: { [k: string]: any }) {
     setLoading(true);
     setError(null);
@@ -58,7 +69,7 @@ export default function RestroMasterPage(): JSX.Element {
       const ilikeIf = (col: string, v?: string) => {
         if (!v) return;
         const s = String(v).trim();
-        if (s.length === 0) return;
+        if (!s) return;
         query = query.ilike(col, `%${s}%`);
       };
 
@@ -69,15 +80,15 @@ export default function RestroMasterPage(): JSX.Element {
       ilikeIf("OwnerPhone", filters?.ownerPhone);
       ilikeIf("FSSAINumber", filters?.fssaiNumber);
 
-      const { data, error: e } = await query;
-      if (e) throw e;
+      const { data, error } = await query;
+      if (error) throw error;
 
       const normalized = (data ?? []).map((r: any, idx: number) => ({
         id: r.RestroCode ?? r.RestroId ?? idx,
         ...r,
       }));
 
-      setResults(normalized as Restro[]);
+      setResults(normalized);
     } catch (err: any) {
       console.error("fetchRestros error:", err);
       setError(err?.message ?? String(err));
@@ -87,19 +98,7 @@ export default function RestroMasterPage(): JSX.Element {
     }
   }
 
-  function onSearchForm(e?: React.FormEvent) {
-    if (e) e.preventDefault();
-    fetchRestros({
-      restroCode,
-      restroName,
-      ownerName,
-      stationCode,
-      stationName,
-      ownerPhone,
-      fssaiNumber,
-    });
-  }
-
+  /* ------------------ Actions ------------------ */
   function onClear() {
     setRestroCode("");
     setRestroName("");
@@ -116,7 +115,9 @@ export default function RestroMasterPage(): JSX.Element {
       setExporting(true);
       setError(null);
 
-      const { data, error } = await supabase.from("RestroMaster").select("*");
+      const { data, error } = await supabase
+        .from("RestroMaster")
+        .select("*");
       if (error) throw error;
 
       const rows = data ?? [];
@@ -131,10 +132,18 @@ export default function RestroMasterPage(): JSX.Element {
         headers.join(",") +
         "\n" +
         rows
-          .map((r: any) => headers.map((h) => `"${String(r[h] ?? "").replace(/"/g, '""')}"`).join(","))
+          .map((r: any) =>
+            headers
+              .map((h) =>
+                `"${String(r[h] ?? "").replace(/"/g, '""')}"`
+              )
+              .join(",")
+          )
           .join("\n");
 
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const blob = new Blob([csv], {
+        type: "text/csv;charset=utf-8;",
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -149,9 +158,12 @@ export default function RestroMasterPage(): JSX.Element {
   }
 
   function openEditRoute(code: string | number) {
-    router.push(`/admin/restros/${encodeURIComponent(String(code))}/edit`);
+    router.push(
+      `/admin/restros/${encodeURIComponent(String(code))}/edit`
+    );
   }
 
+  /* ------------------ Table ------------------ */
   const columns: Column<Restro>[] = [
     { key: "RestroCode", title: "Restro Code", width: "110px" },
     { key: "RestroName", title: "Restro Name" },
@@ -162,11 +174,11 @@ export default function RestroMasterPage(): JSX.Element {
     { key: "FSSAINumber", title: "FSSAI Number" },
   ];
 
+  /* ------------------ Render ------------------ */
   return (
     <main className="mx-6 my-4 max-w-full">
       <h2 className="text-xl font-semibold mb-6">Restro Master</h2>
 
-      {/* ACTION BUTTONS */}
       <div className="flex justify-end gap-3 mb-3">
         <button
           onClick={handleExportAll}
@@ -203,10 +215,10 @@ export default function RestroMasterPage(): JSX.Element {
         )}
       />
 
-      {/* 🔥 ADD NEW RESTRO MODAL */}
+      {/* ADD NEW RESTRO */}
       {openAddRestro && (
         <RestroEditModal
-          restro={null}                    // ⭐ NEW MODE
+          restro={null}
           initialTab="Basic Information"
           onClose={() => setOpenAddRestro(false)}
         />
