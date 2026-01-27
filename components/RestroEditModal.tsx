@@ -26,6 +26,7 @@ const {
 
 type Props = {
   restro?: any;
+  restroCode?: string | number;
   onClose?: () => void;
   onSave?: (payload: any) => Promise<{ ok: boolean; row?: any; error?: any }>;
   saving?: boolean;
