@@ -1,75 +1,155 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import AdminTable, { Column } from "@/components/AdminTable";
-import RestroEditModal from "@/components/RestroEditModal";
+import RestroEditModal from "@/components/RestroEditModal"; // 🔥 ADD THIS
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+}
+const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 type Restro = { [k: string]: any; id?: string | number };
 
-export default function RestroMasterPage() {
+export default function RestroMasterPage(): JSX.Element {
   const router = useRouter();
 
+  // 🔥 ADD NEW RESTRO MODAL STATE
+  const [openAddRestro, setOpenAddRestro] = useState(false);
+
+  // filters
+  const [restroCode, setRestroCode] = useState("");
+  const [restroName, setRestroName] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [stationCode, setStationCode] = useState("");
+  const [stationName, setStationName] = useState("");
+  const [ownerPhone, setOwnerPhone] = useState("");
+  const [fssaiNumber, setFssaiNumber] = useState("");
+
+  // states
   const [results, setResults] = useState<Restro[]>([]);
   const [loading, setLoading] = useState(false);
-  const [openAddRestro, setOpenAddRestro] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetchRestros();
   }, []);
 
-  async function fetchRestros() {
+  async function fetchRestros(filters?: { [k: string]: any }) {
     setLoading(true);
-    const { data } = await supabase
-      .from("RestroMaster")
-      .select("*")
-      .order("RestroCode", { ascending: false });
-
-    setResults(
-      (data ?? []).map((r: any) => ({
-        id: r.RestroCode,
-        ...r,
-      }))
-    );
-    setLoading(false);
-  }
-
-  /* 🔥 SAME API AS BasicInformationTab */
-  async function toggleRaileats(row: Restro) {
-    const current = Number(row.RaileatsStatus ?? 0);
-    const next = current === 1 ? 0 : 1;
-
+    setError(null);
     try {
-      const res = await fetch(
-        `/api/admin/restros/${encodeURIComponent(
-          row.RestroCode
-        )}/status`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ raileatsStatus: next }),
-        }
-      );
+      let query: any = supabase.from("RestroMaster").select("*").limit(500);
 
-      if (!res.ok) {
-        alert("Failed to update Raileats status");
-        return;
+      if (filters?.restroCode) {
+        const rc = String(filters.restroCode).trim();
+        if (/^\d+$/.test(rc)) {
+          query = query.eq("RestroCode", Number(rc));
+        } else {
+          query = query.ilike("RestroName", `%${rc}%`);
+        }
       }
 
-      fetchRestros(); // 🔄 refresh list
-    } catch (e) {
-      alert("Network error while updating status");
+      const ilikeIf = (col: string, v?: string) => {
+        if (!v) return;
+        const s = String(v).trim();
+        if (s.length === 0) return;
+        query = query.ilike(col, `%${s}%`);
+      };
+
+      ilikeIf("RestroName", filters?.restroName);
+      ilikeIf("OwnerName", filters?.ownerName);
+      ilikeIf("StationCode", filters?.stationCode);
+      ilikeIf("StationName", filters?.stationName);
+      ilikeIf("OwnerPhone", filters?.ownerPhone);
+      ilikeIf("FSSAINumber", filters?.fssaiNumber);
+
+      const { data, error: e } = await query;
+      if (e) throw e;
+
+      const normalized = (data ?? []).map((r: any, idx: number) => ({
+        id: r.RestroCode ?? r.RestroId ?? idx,
+        ...r,
+      }));
+
+      setResults(normalized as Restro[]);
+    } catch (err: any) {
+      console.error("fetchRestros error:", err);
+      setError(err?.message ?? String(err));
+      setResults([]);
+    } finally {
+      setLoading(false);
     }
   }
 
-  function openEdit(code: string | number) {
-    router.push(`/admin/restros/${code}/edit`);
+  function onSearchForm(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    fetchRestros({
+      restroCode,
+      restroName,
+      ownerName,
+      stationCode,
+      stationName,
+      ownerPhone,
+      fssaiNumber,
+    });
+  }
+
+  function onClear() {
+    setRestroCode("");
+    setRestroName("");
+    setOwnerName("");
+    setStationCode("");
+    setStationName("");
+    setOwnerPhone("");
+    setFssaiNumber("");
+    fetchRestros();
+  }
+
+  async function handleExportAll() {
+    try {
+      setExporting(true);
+      setError(null);
+
+      const { data, error } = await supabase.from("RestroMaster").select("*");
+      if (error) throw error;
+
+      const rows = data ?? [];
+      if (!rows.length) {
+        setError("No data found in RestroMaster table.");
+        return;
+      }
+
+      const headers = Object.keys(rows[0]);
+      const csv =
+        "\uFEFF" +
+        headers.join(",") +
+        "\n" +
+        rows
+          .map((r: any) => headers.map((h) => `"${String(r[h] ?? "").replace(/"/g, '""')}"`).join(","))
+          .join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `restro_master_${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err?.message ?? "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function openEditRoute(code: string | number) {
+    router.push(`/admin/restros/${encodeURIComponent(String(code))}/edit`);
   }
 
   const columns: Column<Restro>[] = [
@@ -79,48 +159,23 @@ export default function RestroMasterPage() {
     { key: "StationName", title: "Station Name" },
     { key: "OwnerName", title: "Owner Name" },
     { key: "OwnerPhone", title: "Owner Phone", width: "140px" },
-
-    /* ✅ SAME LOOK + LOGIC AS EDIT PAGE */
-    {
-      key: "RaileatsStatus",
-      title: "Raileats",
-      render: (row) => {
-        const on = Number(row.RaileatsStatus ?? 0) === 1;
-        return (
-          <div
-            onClick={() => toggleRaileats(row)}
-            style={{
-              width: 44,
-              height: 22,
-              borderRadius: 999,
-              backgroundColor: on ? "#0ea5e9" : "#9ca3af",
-              cursor: "pointer",
-              position: "relative",
-            }}
-          >
-            <div
-              style={{
-                width: 18,
-                height: 18,
-                background: "#fff",
-                borderRadius: "50%",
-                position: "absolute",
-                top: 2,
-                left: on ? 24 : 2,
-                transition: "left 0.2s ease",
-              }}
-            />
-          </div>
-        );
-      },
-    },
+    { key: "FSSAINumber", title: "FSSAI Number" },
   ];
 
   return (
     <main className="mx-6 my-4 max-w-full">
       <h2 className="text-xl font-semibold mb-6">Restro Master</h2>
 
+      {/* ACTION BUTTONS */}
       <div className="flex justify-end gap-3 mb-3">
+        <button
+          onClick={handleExportAll}
+          disabled={exporting}
+          className="px-4 py-2 bg-sky-500 text-white rounded-lg"
+        >
+          {exporting ? "Exporting..." : "Download Restro Master"}
+        </button>
+
         <button
           onClick={() => setOpenAddRestro(true)}
           className="px-4 py-2 bg-green-600 text-white rounded-lg"
@@ -128,6 +183,8 @@ export default function RestroMasterPage() {
           + Add New Restro
         </button>
       </div>
+
+      {error && <div className="text-red-600 mb-4">{error}</div>}
 
       <AdminTable
         title=""
@@ -138,7 +195,7 @@ export default function RestroMasterPage() {
         pageSize={10}
         actions={(row) => (
           <button
-            onClick={() => openEdit(row.RestroCode)}
+            onClick={() => openEditRoute(row.RestroCode)}
             className="px-3 py-1 rounded-md bg-amber-400 text-black"
           >
             Edit
@@ -146,9 +203,10 @@ export default function RestroMasterPage() {
         )}
       />
 
+      {/* 🔥 ADD NEW RESTRO MODAL */}
       {openAddRestro && (
         <RestroEditModal
-          restro={null}
+          restro={null}                    // ⭐ NEW MODE
           initialTab="Basic Information"
           onClose={() => setOpenAddRestro(false)}
         />
