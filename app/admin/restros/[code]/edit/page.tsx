@@ -28,7 +28,7 @@ export default function RestroEditRoutePage({
   const supabase: SupabaseClient | null = useMemo(() => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }, []);
+  }, [SUPABASE_URL, SUPABASE_ANON_KEY]);
 
   /* ================= LOAD RESTRO ================= */
   useEffect(() => {
@@ -106,7 +106,6 @@ export default function RestroEditRoutePage({
   return (
     <RestroEditModal
       restro={restro}
-      restroCode={restro.RestroCode}
       initialTab="Basic Information"
       onClose={() => router.back()}
       onSave={async (payload: any) => {
