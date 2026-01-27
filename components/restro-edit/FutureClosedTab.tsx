@@ -1,180 +1,110 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import FutureClosedFormModal from "./FutureClosedFormModal";
-
-type Row = {
-  id: number;
-  restro_code: string;
-  start_at: string;
-  end_at: string;
-  comment?: string | null;
-  created_by_id?: string | null;
-  created_by_name?: string | null;
-  deleted_at?: string | null;
-};
+import React, { useState } from "react";
 
 type Props = {
+  isOpen: boolean;
   restroCode: string | number;
+  currentUserId?: string | number | null;
+  onClose: () => void;
+  onSaved: () => void;
 };
 
-export default function FutureClosedTab({ restroCode }: Props) {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+export default function FutureClosedFormModal({
+  isOpen,
+  restroCode,
+  currentUserId,
+  onClose,
+  onSaved,
+}: Props) {
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [comment, setComment] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const codeStr = String(restroCode ?? "");
+  if (!isOpen) return null;
 
-  // ✅ SINGLE SOURCE OF TRUTH FOR USER
-  const currentUser =
-    typeof window !== "undefined"
-      ? {
-          id: (window as any).__USER__?.id ?? null,
-          name: (window as any).__USER__?.name ?? "system",
-        }
-      : { id: null, name: "system" };
-
-  const load = async () => {
-    setLoading(true);
+  const save = async () => {
     try {
+      setSaving(true);
+      setErr(null);
+
+      if (!start || !end) {
+        throw new Error("Please select start & end date/time");
+      }
+
+      const payload = {
+        start_at: new Date(start).toISOString(),
+        end_at: new Date(end).toISOString(),
+        comment: comment.trim() || null,
+        applied_by: currentUserId ?? null, // ✅ ONLY ID
+      };
+
       const res = await fetch(
-        `/api/restros/${encodeURIComponent(codeStr)}/holidays`
-      );
-      const json = await res.json();
-      setRows(Array.isArray(json?.rows) ? json.rows : []);
-    } catch {
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, [codeStr]);
-
-  const statusOf = (r: Row) => {
-    if (r.deleted_at) return "Deleted";
-    const now = Date.now();
-    const s = new Date(r.start_at).getTime();
-    const e = new Date(r.end_at).getTime();
-    if (now < s) return "Upcoming";
-    if (now >= s && now <= e) return "Active";
-    return "Inactive";
-  };
-
-  const doDelete = async (id: number) => {
-    if (!confirm("Delete this holiday?")) return;
-    try {
-      const res = await fetch(
-        `/api/restros/${encodeURIComponent(codeStr)}/holidays`,
+        `/api/restros/${encodeURIComponent(String(restroCode))}/holidays`,
         {
-          method: "DELETE",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id }),
+          body: JSON.stringify(payload),
         }
       );
+
       const json = await res.json();
-      if (!json?.ok) throw new Error(json?.error || "Delete failed");
-      load();
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Save failed");
+      }
+
+      onSaved();
+      onClose();
     } catch (e: any) {
-      alert(e?.message ?? "Delete failed");
+      setErr(e?.message ?? "Failed to save");
+    } finally {
+      setSaving(false);
     }
   };
-
-  const fmt = (iso?: string) =>
-    iso ? new Date(iso).toLocaleString() : "—";
 
   return (
-    <div className="px-4">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">Future Closed</h3>
-          <p className="text-sm text-gray-500">
-            Schedule restaurant holiday/closure windows.
-          </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" />
+      <div className="relative w-[800px] rounded-xl bg-white p-6">
+        <h2 className="mb-4 text-lg font-semibold">Add New Holiday</h2>
+
+        <input
+          type="datetime-local"
+          className="mb-3 w-full border p-2"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+        />
+
+        <input
+          type="datetime-local"
+          className="mb-3 w-full border p-2"
+          value={end}
+          onChange={(e) => setEnd(e.target.value)}
+        />
+
+        <textarea
+          className="mb-3 w-full border p-2"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+        />
+
+        {err && <p className="text-sm text-red-600">{err}</p>}
+
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="border px-4 py-2">
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="bg-blue-600 px-4 py-2 text-white"
+          >
+            Save
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="rounded-md bg-orange-600 px-4 py-2 text-white"
-        >
-          Add New Holiday
-        </button>
       </div>
-
-      <div className="overflow-hidden rounded-xl border">
-        <div className="grid grid-cols-6 bg-gray-50 px-4 py-3 text-sm font-medium">
-          <div>Holiday Start</div>
-          <div>Holiday End</div>
-          <div>Comment</div>
-          <div>Applied By</div>
-          <div className="text-right">Status</div>
-          <div className="text-right">Action</div>
-        </div>
-
-        {loading ? (
-          <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
-        ) : rows.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-gray-600">
-            No holidays yet.
-          </div>
-        ) : (
-          rows.map((r) => {
-            const st = statusOf(r);
-            return (
-              <div
-                key={r.id}
-                className="grid grid-cols-6 border-t px-4 py-3 text-sm"
-              >
-                <div>{fmt(r.start_at)}</div>
-                <div>{fmt(r.end_at)}</div>
-                <div className="truncate">{r.comment || "—"}</div>
-                <div className="truncate">
-                  {r.created_by_name || r.created_by_id || "system"}
-                </div>
-                <div className="text-right">
-                  <span
-                    className={
-                      st === "Active"
-                        ? "rounded bg-green-100 px-2 py-1 text-green-700"
-                        : st === "Upcoming"
-                        ? "rounded bg-blue-100 px-2 py-1 text-blue-700"
-                        : "rounded bg-zinc-100 px-2 py-1 text-zinc-700"
-                    }
-                  >
-                    {st}
-                  </span>
-                </div>
-                <div className="text-right">
-                  {!r.deleted_at && (
-                    <button
-                      type="button"
-                      onClick={() => doDelete(r.id)}
-                      className="rounded border px-2 py-1 text-xs"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <FutureClosedFormModal
-        isOpen={open}
-        restroCode={codeStr}
-        currentUserId={currentUser.id}
-        currentUserName={currentUser.name}
-        onClose={() => setOpen(false)}
-        onSaved={() => {
-          setOpen(false);
-          load();
-        }}
-      />
     </div>
   );
 }
