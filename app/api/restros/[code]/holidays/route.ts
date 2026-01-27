@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 function srv() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
 }
 
 /** GET: list holidays */
@@ -14,12 +16,11 @@ export async function GET(
 ) {
   try {
     const supabase = srv();
-    const codeStr = String(params.code ?? "");
 
     const { data, error } = await supabase
       .from("RestroHolidays")
       .select("*")
-      .eq("restro_code", codeStr)
+      .eq("restro_code", String(params.code))
       .order("start_at", { ascending: false });
 
     if (error) throw error;
@@ -33,37 +34,43 @@ export async function GET(
   }
 }
 
-/** POST: create holiday */
+/** POST: create holiday (USER RESOLVED FROM users TABLE) */
 export async function POST(
   req: Request,
   { params }: { params: { code: string } }
 ) {
   try {
     const supabase = srv();
-    const codeStr = String(params.code ?? "");
     const body = await req.json();
 
-    const isSystem =
-      !body.applied_by ||
-      body.applied_by === "system" ||
-      body.applied_by === "";
+    let createdById: string | null = null;
+    let createdByName = "system";
 
-    const insert = {
-      restro_code: codeStr,
+    // 🔥 MAIN FIX: resolve user from users table
+    if (body.applied_by) {
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("id, name")
+        .eq("id", body.applied_by)
+        .single();
+
+      if (!userError && user) {
+        createdById = String(user.id);
+        createdByName = user.name;
+      }
+    }
+
+    const { error } = await supabase.from("RestroHolidays").insert({
+      restro_code: String(params.code),
       start_at: new Date(body.start_at).toISOString(),
       end_at: new Date(body.end_at).toISOString(),
       comment: body.comment || null,
 
-      // ✅ FINAL FIX
-      created_by_id: isSystem ? null : String(body.applied_by),
-      created_by_name: isSystem ? "system" : String(body.applied_by_name),
+      created_by_id: createdById,
+      created_by_name: createdByName,
 
       updated_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabase
-      .from("RestroHolidays")
-      .insert(insert);
+    });
 
     if (error) throw error;
 
@@ -87,7 +94,10 @@ export async function DELETE(
 
     const { error } = await supabase
       .from("RestroHolidays")
-      .update({ deleted_at: new Date().toISOString() })
+      .update({
+        deleted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", id)
       .eq("restro_code", String(params.code));
 
