@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 
 type Props = {
-  isOpen: boolean; // 🔴 renamed from open → isOpen
+  isOpen: boolean;
   restroCode: string | number;
   currentUserId?: string | number | null;
   onClose: () => void;
@@ -17,13 +17,12 @@ export default function FutureClosedFormModal({
   onClose,
   onSaved,
 }: Props) {
-  const [start, setStart] = useState<string>("");
-  const [end, setEnd] = useState<string>("");
-  const [comment, setComment] = useState<string>("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // 🔴 important fix
   if (!isOpen) return null;
 
   const handleClose = () => {
@@ -39,11 +38,17 @@ export default function FutureClosedFormModal({
         throw new Error("Please select start & end date/time.");
       }
 
+      const userName =
+        typeof window !== "undefined"
+          ? (window as any).__USER__?.name ?? "system"
+          : "system";
+
       const payload = {
         start_at: new Date(start).toISOString(),
         end_at: new Date(end).toISOString(),
         comment: (comment ?? "").trim(),
         applied_by: currentUserId ? String(currentUserId) : "system",
+        applied_by_name: userName,
       };
 
       const res = await fetch(
@@ -55,7 +60,7 @@ export default function FutureClosedFormModal({
         }
       );
 
-      const json = await res.json().catch(() => ({} as any));
+      const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || `Save failed (${res.status})`);
@@ -72,12 +77,7 @@ export default function FutureClosedFormModal({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center"
-    >
-      {/* backdrop */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" />
 
       <div className="relative z-10 w-[820px] max-w-[95vw] rounded-2xl bg-white p-6 shadow-xl">
