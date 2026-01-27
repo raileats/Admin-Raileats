@@ -117,6 +117,7 @@ function validatePhoneString(s: string) {
 /* ---------- component ---------- */
 export default function RestroEditModal({
   restro: restroProp,
+  restroCode: restroCodeProp,
   onClose,
   onSave,
   saving: parentSaving,
