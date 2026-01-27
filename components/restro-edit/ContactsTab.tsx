@@ -1,10 +1,43 @@
 "use client";
 
-import React from "react";
+import React, { useCallback } from "react";
 import UI from "@/components/AdminUI";
-import AdminSection from "@/components/AdminSection";
+const { FormRow, FormField, Toggle } = UI;
 
-const { AdminForm } = UI;
+/* ================================
+   INPUT (must be outside component)
+================================ */
+function ForceInput({
+  value,
+  onChange,
+  placeholder,
+  maxLength,
+  type = "text",
+}: any) {
+  return (
+    <input
+      value={value ?? ""}
+      placeholder={placeholder}
+      maxLength={maxLength}
+      inputMode={type === "phone" ? "numeric" : "text"}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        all: "unset",
+        boxSizing: "border-box",
+        width: "100%",
+        height: "44px",
+        padding: "8px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "6px",
+        backgroundColor: "#ffffff",
+        color: "#000000",
+        fontSize: "14px",
+        display: "block",
+        cursor: "text",
+      }}
+    />
+  );
+}
 
 type Props = {
   local: any;
@@ -12,226 +45,124 @@ type Props = {
 };
 
 export default function ContactsTab({ local = {}, updateField }: Props) {
+  const sanitizePhone = useCallback((raw: any) => {
+    return String(raw ?? "").replace(/\D/g, "").slice(0, 10);
+  }, []);
+
+  const handleToggle = useCallback(
+    (field: string, checked: boolean) => {
+      updateField(field, checked ? "ON" : "OFF");
+    },
+    [updateField]
+  );
+
   return (
-    <AdminForm>
+    <div className="px-4 pb-8 max-w-5xl">
+
       {/* ================= EMAILS ================= */}
-      <AdminSection title="Emails (max 2)">
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          {/* Email 1 */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Name 1
-            </label>
-            <input
-              value={local.EmailName1 || ""}
-              onChange={(e) =>
-                updateField("EmailName1", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-              placeholder="Name 1"
-            />
-          </div>
+      <h3 className="text-lg font-semibold mb-4">Emails (max 2)</h3>
 
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Email 1
-            </label>
-            <input
-              value={local.Email1 || ""}
-              onChange={(e) =>
-                updateField("Email1", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-              placeholder="email@example.com"
-            />
-          </div>
+      <FormRow cols={3} gap={6}>
+        <FormField label="Name 1">
+          <ForceInput
+            value={local.EmailAddressName1}
+            onChange={(v: any) => updateField("EmailAddressName1", v)}
+            placeholder="Name 1"
+          />
+        </FormField>
 
-          <div className="flex items-end gap-2">
-            <label className="text-xs font-semibold text-gray-600">
-              Status
-            </label>
-            <input
-              type="checkbox"
-              checked={local.Email1Active || false}
-              onChange={(e) =>
-                updateField("Email1Active", e.target.checked)
-              }
-              className="h-5 w-5"
-            />
-          </div>
+        <FormField label="Email 1">
+          <ForceInput
+            value={local.EmailsforOrdersReceiving1}
+            onChange={(v: any) => updateField("EmailsforOrdersReceiving1", v)}
+            placeholder="email1@example.com"
+          />
+        </FormField>
 
-          {/* Email 2 */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Name 2
-            </label>
-            <input
-              value={local.EmailName2 || ""}
-              onChange={(e) =>
-                updateField("EmailName2", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-              placeholder="Name 2"
-            />
-          </div>
+        <FormField label="Status">
+          <Toggle
+            checked={String(local.EmailsforOrdersStatus1) === "ON"}
+            onChange={(c: boolean) => handleToggle("EmailsforOrdersStatus1", c)}
+            label={String(local.EmailsforOrdersStatus1) === "ON" ? "ON" : "OFF"}
+          />
+        </FormField>
 
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Email 2
-            </label>
-            <input
-              value={local.Email2 || ""}
-              onChange={(e) =>
-                updateField("Email2", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-              placeholder="email@example.com"
-            />
-          </div>
+        <FormField label="Name 2">
+          <ForceInput
+            value={local.EmailAddressName2}
+            onChange={(v: any) => updateField("EmailAddressName2", v)}
+            placeholder="Name 2"
+          />
+        </FormField>
 
-          <div className="flex items-end gap-2">
-            <label className="text-xs font-semibold text-gray-600">
-              Status
-            </label>
-            <input
-              type="checkbox"
-              checked={local.Email2Active || false}
-              onChange={(e) =>
-                updateField("Email2Active", e.target.checked)
-              }
-              className="h-5 w-5"
-            />
-          </div>
-        </div>
-      </AdminSection>
+        <FormField label="Email 2">
+          <ForceInput
+            value={local.EmailsforOrdersReceiving2}
+            onChange={(v: any) => updateField("EmailsforOrdersReceiving2", v)}
+            placeholder="email2@example.com"
+          />
+        </FormField>
+
+        <FormField label="Status">
+          <Toggle
+            checked={String(local.EmailsforOrdersStatus2) === "ON"}
+            onChange={(c: boolean) => handleToggle("EmailsforOrdersStatus2", c)}
+            label={String(local.EmailsforOrdersStatus2) === "ON" ? "ON" : "OFF"}
+          />
+        </FormField>
+      </FormRow>
+
+      <hr className="my-6" />
 
       {/* ================= WHATSAPP ================= */}
-      <AdminSection title="WhatsApp Numbers (max 3)">
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          {/* WhatsApp 1 */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Name 1
-            </label>
-            <input
-              value={local.WhatsappName1 || ""}
-              onChange={(e) =>
-                updateField("WhatsappName1", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
+      <h3 className="text-lg font-semibold mb-4">WhatsApp numbers (max 3)</h3>
 
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Mobile 1
-            </label>
-            <input
-              value={local.Whatsapp1 || ""}
-              onChange={(e) =>
-                updateField("Whatsapp1", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
+      <FormRow cols={3} gap={6}>
+        {[1, 2, 3].map((i) => (
+          <React.Fragment key={i}>
+            <FormField label={`Name ${i}`}>
+              <ForceInput
+                value={local[`WhatsappMobileNumberName${i}`]}
+                onChange={(v: any) =>
+                  updateField(`WhatsappMobileNumberName${i}`, v)
+                }
+                placeholder={`Name ${i}`}
+              />
+            </FormField>
 
-          <div className="flex items-end gap-2">
-            <label className="text-xs font-semibold text-gray-600">
-              Status
-            </label>
-            <input
-              type="checkbox"
-              checked={local.Whatsapp1Active || false}
-              onChange={(e) =>
-                updateField("Whatsapp1Active", e.target.checked)
-              }
-              className="h-5 w-5"
-            />
-          </div>
+            <FormField label={`Mobile ${i}`}>
+              <ForceInput
+                value={local[`WhatsappMobileNumberforOrderDetails${i}`]}
+                onChange={(v: any) =>
+                  updateField(
+                    `WhatsappMobileNumberforOrderDetails${i}`,
+                    sanitizePhone(v)
+                  )
+                }
+                placeholder="10-digit mobile"
+                maxLength={10}
+                type="phone"
+              />
+            </FormField>
 
-          {/* WhatsApp 2 */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Name 2
-            </label>
-            <input
-              value={local.WhatsappName2 || ""}
-              onChange={(e) =>
-                updateField("WhatsappName2", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Mobile 2
-            </label>
-            <input
-              value={local.Whatsapp2 || ""}
-              onChange={(e) =>
-                updateField("Whatsapp2", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
-
-          <div className="flex items-end gap-2">
-            <label className="text-xs font-semibold text-gray-600">
-              Status
-            </label>
-            <input
-              type="checkbox"
-              checked={local.Whatsapp2Active || false}
-              onChange={(e) =>
-                updateField("Whatsapp2Active", e.target.checked)
-              }
-              className="h-5 w-5"
-            />
-          </div>
-
-          {/* WhatsApp 3 */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Name 3
-            </label>
-            <input
-              value={local.WhatsappName3 || ""}
-              onChange={(e) =>
-                updateField("WhatsappName3", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600">
-              Mobile 3
-            </label>
-            <input
-              value={local.Whatsapp3 || ""}
-              onChange={(e) =>
-                updateField("Whatsapp3", e.target.value)
-              }
-              className="w-full p-2 border rounded"
-            />
-          </div>
-
-          <div className="flex items-end gap-2">
-            <label className="text-xs font-semibold text-gray-600">
-              Status
-            </label>
-            <input
-              type="checkbox"
-              checked={local.Whatsapp3Active || false}
-              onChange={(e) =>
-                updateField("Whatsapp3Active", e.target.checked)
-              }
-              className="h-5 w-5"
-            />
-          </div>
-        </div>
-      </AdminSection>
-    </AdminForm>
+            <FormField label="Status">
+              <Toggle
+                checked={
+                  String(local[`WhatsappMobileNumberStatus${i}`]) === "ON"
+                }
+                onChange={(c: boolean) =>
+                  handleToggle(`WhatsappMobileNumberStatus${i}`, c)
+                }
+                label={
+                  String(local[`WhatsappMobileNumberStatus${i}`]) === "ON"
+                    ? "ON"
+                    : "OFF"
+                }
+              />
+            </FormField>
+          </React.Fragment>
+        ))}
+      </FormRow>
+    </div>
   );
 }
