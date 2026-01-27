@@ -10,8 +10,8 @@ type Row = {
   end_at: string;
   comment?: string | null;
 
-  created_at?: string | null;        // ✅ ADD
-  updated_at?: string | null;        // ✅ ADD
+  created_at?: string | null;
+  updated_at?: string | null;
 
   created_by_id?: string | null;
   created_by_name?: string | null;
@@ -114,7 +114,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
           <div>Holiday End</div>
           <div>Comment</div>
           <div>Applied By</div>
-          <div>Applied At</div>   {/* ✅ NEW */}
+          <div>Applied At</div>
           <div className="text-right">Status</div>
           <div className="text-right">Action</div>
         </div>
@@ -138,7 +138,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
                 <div className="truncate">{r.comment || "—"}</div>
 
                 {/* Applied By */}
-                <div className="truncate">
+                <div className="truncate font-medium text-sky-700">
                   {r.created_by_name || r.created_by_id || "System"}
                 </div>
 
@@ -183,6 +183,8 @@ export default function FutureClosedTab({ restroCode }: Props) {
       <FutureClosedFormModal
         open={open}
         restroCode={codeStr}
+        currentUserId="admin-1001"
+        currentUserName="Test Admin"
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
