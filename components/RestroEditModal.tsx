@@ -14,19 +14,15 @@ import MenuTab from "./restro-edit/MenuTab";
 
 const {
   AdminForm,
-  FormRow,
-  FormField,
-  FormActions,
   SubmitButton,
   SecondaryButton,
   Select,
   Toggle,
-  SearchBar,
 } = UI;
 
+/* ================== TYPES ================== */
 type Props = {
   restro?: any;
-  restroCode?: string | number;
   onClose?: () => void;
   onSave?: (payload: any) => Promise<{ ok: boolean; row?: any; error?: any }>;
   saving?: boolean;
@@ -44,144 +40,81 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ---------- helpers (unchanged) ---------- */
+/* ================== HELPERS ================== */
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
-    if (!obj) continue;
-    if (
-      Object.prototype.hasOwnProperty.call(obj, k) &&
-      obj[k] !== undefined &&
-      obj[k] !== null
-    )
-      return obj[k];
+    if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
   }
   return undefined;
 }
 
 function buildStationDisplay(obj: any) {
-  const sName = (
-    safeGet(obj, "StationName", "station_name", "station", "name") ?? ""
-  )
-    .toString()
-    .trim();
-  const sCode = (
-    safeGet(obj, "StationCode", "station_code", "Station_Code", "stationCode") ??
-    ""
-  )
-    .toString()
-    .trim();
-  const state = (
-    safeGet(obj, "State", "state", "state_name", "StateName") ?? ""
-  )
-    .toString()
-    .trim();
-  const parts: string[] = [];
-  if (sName) parts.push(sName);
-  if (sCode) parts.push(`(${sCode})`);
-  let left = parts.join(" ");
-  if (left && state) left = `${left} - ${state}`;
-  else if (!left && state) left = state;
-  return left || "—";
+  const name = (safeGet(obj, "StationName", "station_name") ?? "").trim();
+  const code = (safeGet(obj, "StationCode", "station_code") ?? "").trim();
+  const state = (safeGet(obj, "State", "state") ?? "").trim();
+  return `${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}` || "—";
 }
 
-/* ---------- validators (unchanged) ---------- */
-const emailRegex = /^\S+@\S+\.\S+$/;
-const tenDigitRegex = /^\d{10}$/;
-
-function validateEmailString(s: string) {
-  if (!s) return false;
-  const parts = s
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (!parts.length) return false;
-  for (const p of parts) {
-    if (!emailRegex.test(p)) return false;
-  }
-  return true;
-}
-
-function validatePhoneString(s: string) {
-  if (!s) return false;
-  const parts = s
-    .split(",")
-    .map((p) => p.replace(/\s+/g, "").trim())
-    .filter(Boolean);
-  if (!parts.length) return false;
-  for (const p of parts) {
-    if (!tenDigitRegex.test(p)) return false;
-  }
-  return true;
-}
-
-/* ---------- component ---------- */
+/* ================== COMPONENT ================== */
 export default function RestroEditModal({
   restro: restroProp,
-  restroCode: restroCodeProp,
   onClose,
-  onSave,
   saving: parentSaving,
   stationsOptions = [],
   initialTab,
 }: Props) {
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<string>(
-    initialTab ?? TAB_NAMES[0]
-  );
-  const [restro, setRestro] = useState<any | undefined>(restroProp);
+  const [activeTab, setActiveTab] = useState(initialTab ?? TAB_NAMES[0]);
+  const [restro, setRestro] = useState<any>(restroProp);
   const [local, setLocal] = useState<any>({});
-  const [stations, setStations] =
-    useState<{ label: string; value: string }[]>(stationsOptions ?? []);
-  const [loadingStations, setLoadingStations] = useState(false);
+  const [stations, setStations] = useState(stationsOptions);
   const [savingInternal, setSavingInternal] = useState(false);
-  const [notification, setNotification] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  /* ---- effects & logic ABOVE remain EXACTLY SAME ---- */
-  /* ---- (no change in your business logic) ---- */
+  useEffect(() => {
+    if (restroProp) setRestro(restroProp);
+  }, [restroProp]);
 
-  const stationDisplay = buildStationDisplay({ ...restro, ...local });
+  useEffect(() => {
+    if (!restro) return;
+    setLocal({ ...restro });
+  }, [restro]);
 
   const restroCode =
-    (local &&
-      (local.RestroCode ??
-        local.restro_code ??
-        local.id ??
-        local.code)) ||
-    (restro &&
-      (restro.RestroCode ??
-        restro.restro_code ??
-        restro.RestroId ??
-        restro.restro_id ??
-        restro.code)) ||
+    local?.RestroCode ??
+    restro?.RestroCode ??
+    restro?.restro_code ??
     "";
 
-  const common = {
-    local,
-    updateField: (k: string, v: any) =>
-      setLocal((s: any) => ({ ...s, [k]: v })),
-    stationDisplay,
-    stations,
-    loadingStations,
-    restroCode,
-    Select,
-    Toggle,
-    validators: {
-      validateEmailString,
-      validatePhoneString,
-    },
-  };
+  const stationDisplay = buildStationDisplay({ ...restro, ...local });
+  const saving = parentSaving ?? savingInternal;
 
+  const updateField = useCallback((k: string, v: any) => {
+    setLocal((s: any) => ({ ...s, [k]: v }));
+  }, []);
+
+  function doClose() {
+    onClose ? onClose() : router.push("/admin/restros");
+  }
+
+  /* ================== TAB RENDER ================== */
   const renderTab = () => {
+    const common = {
+      local,
+      updateField,
+      stations,
+      restroCode,
+      Select,
+      Toggle,
+    };
+
     switch (activeTab) {
       case "Basic Information":
         return <BasicInformationTab {...common} />;
+
       case "Station Settings":
         return <StationSettingsTab {...common} />;
+
       case "Address & Documents":
         return (
           <AddressDocsClient
@@ -189,20 +122,26 @@ export default function RestroEditModal({
             imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}
           />
         );
+
       case "Contacts":
         return <ContactsTab {...common} />;
+
       case "Bank":
         return <BankTab {...common} />;
+
+      /* ✅ ONLY restroCode is passed */
       case "Future Closed":
-        // ✅ ONLY FIX IS HERE
         return <FutureClosedTab restroCode={restroCode} />;
+
       case "Menu":
         return <MenuTab {...common} />;
+
       default:
-        return <div>Unknown tab</div>;
+        return null;
     }
   };
 
+  /* ================== UI ================== */
   return (
     <div
       style={{
@@ -212,11 +151,8 @@ export default function RestroEditModal({
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        padding: 16,
         zIndex: 1100,
       }}
-      role="dialog"
-      aria-modal="true"
     >
       <div
         style={{
@@ -227,11 +163,55 @@ export default function RestroEditModal({
           borderRadius: 8,
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
         }}
       >
-        {/* header + tabs + content + footer — unchanged */}
-        <AdminForm className="min-h-[480px]">{renderTab()}</AdminForm>
+        {/* HEADER */}
+        <div style={{ borderBottom: "1px solid #eee", padding: 16 }}>
+          <b>{restroCode}</b> — {local?.RestroName}
+          <div style={{ fontSize: 13, color: "#0b7285" }}>
+            {stationDisplay}
+          </div>
+        </div>
+
+        {/* TABS */}
+        <div style={{ display: "flex", gap: 8, padding: 8, overflowX: "auto" }}>
+          {TAB_NAMES.map((t) => (
+            <div
+              key={t}
+              onClick={() => setActiveTab(t)}
+              style={{
+                padding: "8px 12px",
+                cursor: "pointer",
+                borderBottom:
+                  activeTab === t ? "3px solid #0ea5e9" : "3px solid transparent",
+                fontWeight: activeTab === t ? 700 : 500,
+              }}
+            >
+              {t}
+            </div>
+          ))}
+        </div>
+
+        {/* CONTENT */}
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+          <AdminForm>{renderTab()}</AdminForm>
+        </div>
+
+        {/* FOOTER */}
+        <div
+          style={{
+            borderTop: "1px solid #eee",
+            padding: 12,
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 8,
+          }}
+        >
+          <SecondaryButton onClick={doClose}>Cancel</SecondaryButton>
+          <SubmitButton disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </SubmitButton>
+        </div>
       </div>
     </div>
   );
