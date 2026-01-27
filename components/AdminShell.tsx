@@ -1,10 +1,10 @@
-// components/AdminShell.tsx
 "use client";
 
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AuthGuard from "@/components/admin/AuthGuard";
+import { AdminUserProvider } from "@/components/admin/AdminUserContext"; // ✅ ADD
 
 type User = {
   id?: string;
@@ -19,17 +19,20 @@ type User = {
 type Props = {
   children: React.ReactNode;
   currentUser?: User;
-  requireAuth?: boolean; // optional prop passed from layout
+  requireAuth?: boolean;
 };
 
-export default function AdminShell({ children, currentUser, requireAuth = true }: Props) {
+export default function AdminShell({
+  children,
+  currentUser,
+  requireAuth = true,
+}: Props) {
   const pathname = usePathname() || "";
 
   // Paths where we DON'T want to show admin chrome
   const hideFor = ["/admin/login", "/admin/login/"];
   const hide = hideFor.some((p) => pathname === p || pathname.startsWith(p));
 
-  // Shared style for logout links to match previous button look
   const logoutLinkStyle: React.CSSProperties = {
     display: "inline-block",
     width: "72px",
@@ -44,15 +47,16 @@ export default function AdminShell({ children, currentUser, requireAuth = true }
     fontSize: 14,
   };
 
-  // Use POST logout so cookie clearing happens and we can replace history
   const handleLogout = async (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
     } catch (err) {
       console.error("Logout failed", err);
     } finally {
-      // replace to avoid back-button reopening protected page
       try {
         window.location.replace("/admin/login");
       } catch {
@@ -62,136 +66,116 @@ export default function AdminShell({ children, currentUser, requireAuth = true }
   };
 
   if (hide) {
-    // On login page: render children only (no sidebar/topbar)
     return <>{children}</>;
   }
 
   const shell = (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#fafafa" }}>
-      {/* Sidebar */}
-      <aside
-        aria-label="Admin sidebar"
-        style={{
-          width: 96,
-          background: "#ffffff",
-          borderRight: "1px solid #eee",
-          paddingTop: 20,
-          boxSizing: "border-box",
-        }}
-      >
-        <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <img src="/logo.png" alt="RailEats logo" style={{ width: 48, height: 48 }} />
-        </div>
-
-        <nav style={{ display: "flex", flexDirection: "column", gap: 14, paddingLeft: 12 }}>
-          <Link href="/admin/home" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
-            Dashboard
-          </Link>
-          <Link href="/admin/orders" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
-            Orders
-          </Link>
-          <Link href="/admin/restros" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
-            Restro Master
-          </Link>
-          <Link href="/admin/menu" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
-            Menu
-          </Link>
-          <Link href="/admin/trains" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
-            Trains
-          </Link>
-          <Link href="/admin/stations" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
-            Stations
-          </Link>
-          <Link href="/admin/users" style={{ display: "block", fontSize: 14, color: "#111", textDecoration: "none", padding: "6px 8px", borderRadius: 6 }}>
-            Users
-          </Link>
-
-          <div style={{ marginTop: 20 }}>
-            {/* Use a button-like element that calls POST logout */}
-            <a
-              href="#logout"
-              onClick={handleLogout}
-              style={logoutLinkStyle}
-              role="button"
-              aria-label="Logout"
-            >
-              Logout
-            </a>
-          </div>
-        </nav>
-      </aside>
-
-      {/* Main area */}
-      <main style={{ flex: 1, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-        <header
+    // ✅ HERE IS THE MAGIC
+    <AdminUserProvider user={currentUser ?? null}>
+      <div style={{ display: "flex", minHeight: "100vh", background: "#fafafa" }}>
+        {/* Sidebar */}
+        <aside
+          aria-label="Admin sidebar"
           style={{
-            height: 64,
-            display: "flex",
-            alignItems: "center",
-            paddingLeft: 20,
-            paddingRight: 24,
-            gap: 12,
-            borderBottom: "1px solid #f0f0f0",
-            background: "#fff",
+            width: 96,
+            background: "#ffffff",
+            borderRight: "1px solid #eee",
+            paddingTop: 20,
+            boxSizing: "border-box",
           }}
         >
-          <img src="/logo.png" alt="logo small" style={{ width: 28, height: 28 }} />
-          <div style={{ fontWeight: 700, fontSize: 18 }}>RailEats Admin</div>
+          <div style={{ textAlign: "center", marginBottom: 18 }}>
+            <img src="/logo.png" alt="RailEats logo" style={{ width: 48, height: 48 }} />
+          </div>
 
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-            {currentUser ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 13, color: "#111", fontWeight: 600 }}>
-                    {currentUser.name ?? currentUser.mobile ?? currentUser.email}
-                  </div>
-                  <div style={{ fontSize: 12 }}>
-                    {/* Use fetch-based logout to clear cookies and replace history */}
+          <nav style={{ display: "flex", flexDirection: "column", gap: 14, paddingLeft: 12 }}>
+            <Link href="/admin/home">Dashboard</Link>
+            <Link href="/admin/orders">Orders</Link>
+            <Link href="/admin/restros">Restro Master</Link>
+            <Link href="/admin/menu">Menu</Link>
+            <Link href="/admin/trains">Trains</Link>
+            <Link href="/admin/stations">Stations</Link>
+            <Link href="/admin/users">Users</Link>
+
+            <div style={{ marginTop: 20 }}>
+              <a
+                href="#logout"
+                onClick={handleLogout}
+                style={logoutLinkStyle}
+                role="button"
+              >
+                Logout
+              </a>
+            </div>
+          </nav>
+        </aside>
+
+        {/* Main area */}
+        <main style={{ flex: 1, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+          <header
+            style={{
+              height: 64,
+              display: "flex",
+              alignItems: "center",
+              paddingLeft: 20,
+              paddingRight: 24,
+              gap: 12,
+              borderBottom: "1px solid #f0f0f0",
+              background: "#fff",
+            }}
+          >
+            <img src="/logo.png" alt="logo small" style={{ width: 28, height: 28 }} />
+            <div style={{ fontWeight: 700, fontSize: 18 }}>RailEats Admin</div>
+
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+              {currentUser ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      {currentUser.name ?? currentUser.mobile ?? currentUser.email}
+                    </div>
                     <a
                       href="#logout"
                       onClick={handleLogout}
-                      style={{ fontSize: 12, color: "#0070f3", textDecoration: "underline" }}
+                      style={{ fontSize: 12, color: "#0070f3" }}
                     >
                       Logout
                     </a>
                   </div>
-                </div>
 
-                <div>
                   {currentUser.photo_url ? (
                     <img
                       src={currentUser.photo_url}
                       alt="avatar"
-                      style={{ width: 36, height: 36, borderRadius: 999, objectFit: "cover" }}
+                      style={{ width: 36, height: 36, borderRadius: 999 }}
                     />
                   ) : (
-                    <div style={{ width: 36, height: 36, borderRadius: 999, background: "#eee", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ fontSize: 12 }}>{(currentUser.name || "U").charAt(0)}</span>
+                    <div
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 999,
+                        background: "#eee",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {(currentUser.name || "U").charAt(0)}
                     </div>
                   )}
                 </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 13, color: "#111" }}>Not signed in</div>
-                <Link href="/admin/login" style={{ fontSize: 12, color: "#0070f3", textDecoration: "underline" }}>
-                  Login
-                </Link>
-              </div>
-            )}
-          </div>
-        </header>
+              ) : (
+                <Link href="/admin/login">Login</Link>
+              )}
+            </div>
+          </header>
 
-        <section style={{ padding: 24, flex: 1 }}>{children}</section>
-      </main>
-    </div>
+          <section style={{ padding: 24, flex: 1 }}>{children}</section>
+        </main>
+      </div>
+    </AdminUserProvider>
   );
 
-  // If requireAuth is true, wrap shell with AuthGuard so session is verified and inactivity handled.
-  if (requireAuth) {
-    return <AuthGuard>{shell}</AuthGuard>;
-  }
-
-  // otherwise render shell directly (useful for pages that want custom behavior)
-  return shell;
+  return requireAuth ? <AuthGuard>{shell}</AuthGuard> : shell;
 }
