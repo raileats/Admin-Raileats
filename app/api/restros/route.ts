@@ -1,55 +1,19 @@
 // app/api/restros/route.ts
+import { NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabaseServer";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-/* ---------------- SUPABASE ---------------- */
-function makeSupabase() {
-  const url =
-    process.env.SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-  const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceKey) return null;
-
-  return createClient(url, serviceKey, {
-    auth: { persistSession: false },
-  });
-}
-
-/* ---------------- HELPERS ---------------- */
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
-
-/* =========================================================
-   POST  → CREATE NEW RESTRO (AUTO RESTROCODE)
-   PATCH → UPDATE EXISTING RESTRO
-========================================================= */
-
-/* =========================
-   CREATE NEW RESTRO
-========================= */
+/* --------------------------------------------------
+   POST = CREATE RESTRO (AUTO RestroCode)
+-------------------------------------------------- */
 export async function POST(req: Request) {
   try {
-    const supabase = makeSupabase();
-    if (!supabase) {
-      return jsonError("Server misconfigured (Supabase)", 500);
-    }
-
     const body = await req.json().catch(() => ({}));
 
-    if (!body?.RestroName) {
-      return jsonError("RestroName is required");
-    }
-
-    /* ---- AUTO RESTROCODE (MAX + 1) ---- */
-    const { data: maxRow, error: maxErr } = await supabase
+    /* ---------- 1. FIND MAX RestroCode ---------- */
+    const { data: maxRow, error: maxErr } = await supabaseServer
       .from("RestroMaster")
       .select("RestroCode")
       .order("RestroCode", { ascending: false })
@@ -57,131 +21,102 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (maxErr) {
-      return jsonError(maxErr.message, 500);
+      console.error("Max RestroCode error", maxErr);
+      return NextResponse.json(
+        { ok: false, error: "Failed to generate RestroCode" },
+        { status: 500 }
+      );
     }
 
     const nextRestroCode =
-      (Number(maxRow?.RestroCode) || 1000) + 1;
+      (Number(maxRow?.RestroCode || 1000) || 1000) + 1;
 
-    /* ---- ALLOWED FIELDS ---- */
-    const allowed = [
-      "RestroName",
-      "BrandNameifAny",
-      "StationCode",
-      "StationName",
-      "State",
-      "District",
-      "City",
-      "RestroAddress",
-      "RestroEmail",
-      "RestroPhone",
-      "OwnerName",
-      "OwnerEmail",
-      "OwnerPhone",
-      "RestroRating",
-      "RestroDisplayPhoto",
-      "IsIrctcApproved",
-      "RaileatsStatus",
-    ];
-
+    /* ---------- 2. BUILD INSERT ROW ---------- */
     const row: any = {
       RestroCode: nextRestroCode,
+      RestroName: body.RestroName ?? "New Restro",
+      BrandName: body.BrandName ?? null,
+      StationCode: body.StationCode ?? null,
+      StationName: body.StationName ?? null,
+      State: body.State ?? null,
+      RestroRating: body.RestroRating ?? null,
+      RestroDisplayPhoto: body.RestroDisplayPhoto ?? null,
+      OwnerName: body.OwnerName ?? null,
+      OwnerEmail: body.OwnerEmail ?? null,
+      OwnerPhone: body.OwnerPhone ?? null,
+      RestroEmail: body.RestroEmail ?? null,
+      RestroPhone: body.RestroPhone ?? null,
+      IsIrctcApproved: body.IsIrctcApproved ?? false,
+      RaileatsStatus: body.RaileatsStatus ?? 0,
     };
 
-    for (const k of allowed) {
-      if (k in body) row[k] = body[k] === "" ? null : body[k];
-    }
-
-    const { data, error } = await supabase
+    /* ---------- 3. INSERT ---------- */
+    const { data, error } = await supabaseServer
       .from("RestroMaster")
       .insert(row)
       .select()
       .single();
 
     if (error) {
-      return jsonError(error.message, 500);
+      console.error("Insert error", error);
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
     }
 
+    /* ---------- 4. SUCCESS ---------- */
     return NextResponse.json({
       ok: true,
-      mode: "create",
       row: data,
     });
   } catch (err: any) {
-    console.error("POST /api/restros", err);
-    return jsonError(err.message || "Server error", 500);
+    console.error("POST /api/restros failed", err);
+    return NextResponse.json(
+      { ok: false, error: String(err) },
+      { status: 500 }
+    );
   }
 }
 
-/* =========================
-   UPDATE EXISTING RESTRO
-========================= */
+/* --------------------------------------------------
+   PATCH = UPDATE EXISTING RESTRO
+-------------------------------------------------- */
 export async function PATCH(req: Request) {
   try {
-    const supabase = makeSupabase();
-    if (!supabase) {
-      return jsonError("Server misconfigured (Supabase)", 500);
-    }
-
     const body = await req.json().catch(() => ({}));
+    const code = body?.RestroCode;
 
-    const restroCode = Number(body?.RestroCode);
-    if (!restroCode) {
-      return jsonError("RestroCode is required");
+    if (!code) {
+      return NextResponse.json(
+        { ok: false, error: "RestroCode is required" },
+        { status: 400 }
+      );
     }
 
-    /* ---- ALLOWED UPDATE FIELDS ---- */
-    const allowed = [
-      "RestroName",
-      "BrandNameifAny",
-      "StationCode",
-      "StationName",
-      "State",
-      "District",
-      "City",
-      "RestroAddress",
-      "RestroEmail",
-      "RestroPhone",
-      "OwnerName",
-      "OwnerEmail",
-      "OwnerPhone",
-      "RestroRating",
-      "RestroDisplayPhoto",
-      "IsIrctcApproved",
-      "RaileatsStatus",
-    ];
+    delete body.RestroCode;
 
-    const update: any = {};
-    for (const k of allowed) {
-      if (k in body) update[k] = body[k] === "" ? null : body[k];
-    }
-
-    if (Object.keys(update).length === 0) {
-      return jsonError("No fields to update");
-    }
-
-    const { data, error } = await supabase
+    const { data, error } = await supabaseServer
       .from("RestroMaster")
-      .update(update)
-      .eq("RestroCode", restroCode)
+      .update(body)
+      .eq("RestroCode", code)
       .select()
-      .maybeSingle();
+      .single();
 
     if (error) {
-      return jsonError(error.message, 500);
+      console.error("Update error", error);
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
     }
 
-    if (!data) {
-      return jsonError("Restro not found", 404);
-    }
-
-    return NextResponse.json({
-      ok: true,
-      mode: "update",
-      row: data,
-    });
+    return NextResponse.json({ ok: true, row: data });
   } catch (err: any) {
-    console.error("PATCH /api/restros", err);
-    return jsonError(err.message || "Server error", 500);
+    console.error("PATCH /api/restros failed", err);
+    return NextResponse.json(
+      { ok: false, error: String(err) },
+      { status: 500 }
+    );
   }
 }
