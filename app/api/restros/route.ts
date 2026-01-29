@@ -1,19 +1,41 @@
 // app/api/restros/route.ts
-import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer";
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/* --------------------------------------------------
-   POST = CREATE RESTRO (AUTO RestroCode)
--------------------------------------------------- */
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+function supabaseAdmin() {
+  const url =
+    process.env.SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
+
+/* ======================================================
+   POST  → CREATE NEW RESTRO (AUTO RESTROCODE)
+   PATCH → UPDATE EXISTING RESTRO (BY RESTROCODE)
+====================================================== */
+
 export async function POST(req: Request) {
   try {
+    const supabase = supabaseAdmin();
+    if (!supabase) {
+      return NextResponse.json(
+        { ok: false, error: "Supabase not configured" },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
 
-    /* ---------- 1. FIND MAX RestroCode ---------- */
-    const { data: maxRow, error: maxErr } = await supabaseServer
+    /* --------- 1. GET NEXT RESTROCODE ---------- */
+    const { data: maxRow, error: maxErr } = await supabase
       .from("RestroMaster")
       .select("RestroCode")
       .order("RestroCode", { ascending: false })
@@ -21,57 +43,54 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (maxErr) {
-      console.error("Max RestroCode error", maxErr);
       return NextResponse.json(
-        { ok: false, error: "Failed to generate RestroCode" },
+        { ok: false, error: maxErr.message },
         { status: 500 }
       );
     }
 
     const nextRestroCode =
-      (Number(maxRow?.RestroCode || 1000) || 1000) + 1;
+      Number(maxRow?.RestroCode || 1000) + 1;
 
-    /* ---------- 2. BUILD INSERT ROW ---------- */
+    /* --------- 2. BUILD INSERT ROW ---------- */
     const row: any = {
       RestroCode: nextRestroCode,
       RestroName: body.RestroName ?? "New Restro",
-      BrandName: body.BrandName ?? null,
+      BrandNameifAny: body.BrandNameifAny ?? null,
       StationCode: body.StationCode ?? null,
       StationName: body.StationName ?? null,
       State: body.State ?? null,
-      RestroRating: body.RestroRating ?? null,
-      RestroDisplayPhoto: body.RestroDisplayPhoto ?? null,
+      RestroEmail: body.RestroEmail ?? null,
+      RestroPhone: body.RestroPhone ?? null,
       OwnerName: body.OwnerName ?? null,
       OwnerEmail: body.OwnerEmail ?? null,
       OwnerPhone: body.OwnerPhone ?? null,
-      RestroEmail: body.RestroEmail ?? null,
-      RestroPhone: body.RestroPhone ?? null,
+      RestroRating: body.RestroRating ?? null,
+      RestroDisplayPhoto: body.RestroDisplayPhoto ?? null,
       IsIrctcApproved: body.IsIrctcApproved ?? false,
       RaileatsStatus: body.RaileatsStatus ?? 0,
     };
 
-    /* ---------- 3. INSERT ---------- */
-    const { data, error } = await supabaseServer
+    /* --------- 3. INSERT ---------- */
+    const { data, error } = await supabase
       .from("RestroMaster")
       .insert(row)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
-      console.error("Insert error", error);
       return NextResponse.json(
         { ok: false, error: error.message },
         { status: 500 }
       );
     }
 
-    /* ---------- 4. SUCCESS ---------- */
     return NextResponse.json({
       ok: true,
+      message: "Restro created",
       row: data,
     });
   } catch (err: any) {
-    console.error("POST /api/restros failed", err);
     return NextResponse.json(
       { ok: false, error: String(err) },
       { status: 500 }
@@ -79,41 +98,50 @@ export async function POST(req: Request) {
   }
 }
 
-/* --------------------------------------------------
-   PATCH = UPDATE EXISTING RESTRO
--------------------------------------------------- */
+/* ======================================================
+   UPDATE EXISTING RESTRO
+====================================================== */
 export async function PATCH(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const code = body?.RestroCode;
+    const supabase = supabaseAdmin();
+    if (!supabase) {
+      return NextResponse.json(
+        { ok: false, error: "Supabase not configured" },
+        { status: 500 }
+      );
+    }
 
-    if (!code) {
+    const body = await req.json().catch(() => ({}));
+
+    if (!body.RestroCode) {
       return NextResponse.json(
         { ok: false, error: "RestroCode is required" },
         { status: 400 }
       );
     }
 
-    delete body.RestroCode;
+    const code = Number(body.RestroCode);
 
-    const { data, error } = await supabaseServer
+    const { data, error } = await supabase
       .from("RestroMaster")
       .update(body)
       .eq("RestroCode", code)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
-      console.error("Update error", error);
       return NextResponse.json(
         { ok: false, error: error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ ok: true, row: data });
+    return NextResponse.json({
+      ok: true,
+      message: "Restro updated",
+      row: data,
+    });
   } catch (err: any) {
-    console.error("PATCH /api/restros failed", err);
     return NextResponse.json(
       { ok: false, error: String(err) },
       { status: 500 }
