@@ -5,41 +5,38 @@ import UI from "@/components/AdminUI";
 
 const { FormRow, FormField, Toggle } = UI;
 
-type StationRow = {
-  id: number;
-  station_name: string;
-  station_code: string;
-  state?: string;
+type StationOption = {
+  label: string;
+  value: string; // StationCode
 };
 
 type Props = {
   local: any;
   updateField: (k: string, v: any) => void;
+  stations?: StationOption[];
+  loadingStations?: boolean;
 };
 
 export default function BasicInformationTab({
   local,
   updateField,
+  stations = [],
+  loadingStations = false,
 }: Props) {
-  /* ---------------- Station Search (LIVE) ---------------- */
+  /* ---------------- Station Search Dropdown ---------------- */
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [stations, setStations] = useState<StationRow[]>([]);
-  const [loading, setLoading] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  /* preload selected station */
+  // when station already selected (edit mode), show it in input
   useEffect(() => {
     if (local?.StationName && local?.StationCode) {
-      setQuery(
-        `${local.StationName} (${local.StationCode})${
-          local.State ? ` - ${local.State}` : ""
-        }`
-      );
+      const label = `${local.StationName} (${local.StationCode})${local.State ? ` - ${local.State}` : ""}`;
+      setQuery(label);
     }
   }, [local?.StationName, local?.StationCode, local?.State]);
 
-  /* close dropdown on outside click */
+  // close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -47,53 +44,33 @@ export default function BasicInformationTab({
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () =>
-      document.removeEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  /* live search */
-  useEffect(() => {
-    if (!query || query.length < 2) {
-      setStations([]);
-      return;
-    }
-
-    let active = true;
-    setLoading(true);
-
-    fetch(`/api/stations/search?q=${encodeURIComponent(query)}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (!active) return;
-        setStations(Array.isArray(j?.rows) ? j.rows : []);
-      })
-      .catch(() => {
-        if (active) setStations([]);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [query]);
-
-  function handleSelectStation(st: StationRow) {
-    setQuery(
-      `${st.station_name} (${st.station_code})${
-        st.state ? ` - ${st.state}` : ""
-      }`
+  const filteredStations = useMemo(() => {
+    if (!query) return stations;
+    const q = query.toLowerCase();
+    return stations.filter(
+      (s) =>
+        s.label.toLowerCase().includes(q) ||
+        s.value.toLowerCase().includes(q)
     );
+  }, [query, stations]);
+
+  function handleSelectStation(opt: StationOption) {
+    // label format already: Station Name (CODE) - STATE
+    setQuery(opt.label);
     setOpen(false);
 
-    updateField("StationName", st.station_name);
-    updateField("StationCode", st.station_code);
-    updateField("State", st.state ?? "");
-    updateField("station_id", st.id);
+    // extract values safely
+    const match = opt.label.match(/^(.*?)\s*\((.*?)\)\s*(?:-\s*(.*))?$/);
+
+    updateField("StationName", match?.[1]?.trim() ?? "");
+    updateField("StationCode", opt.value);
+    updateField("State", match?.[3]?.trim() ?? "");
   }
 
-  /* ---------------- Raileats Status (UNCHANGED) ---------------- */
+  /* ---------------- Raileats Status ---------------- */
   const isActive = Number(local?.RaileatsStatus ?? 0) === 1;
   const [savingStatus, setSavingStatus] = useState(false);
 
@@ -130,139 +107,183 @@ export default function BasicInformationTab({
 
   /* ---------------- UI ---------------- */
   return (
-    <div className="px-6 py-4">
-      <h3 className="text-center text-xl font-semibold mb-6">
-        Basic Information
-      </h3>
+    <div className="px-4 py-2">
+      <h3 className="text-center text-lg font-bold mb-4">Basic Information</h3>
 
-      <div className="max-w-6xl mx-auto bg-white rounded-xl border border-slate-200 shadow-sm p-8 space-y-10">
+      <div className="max-w-6xl mx-auto bg-white rounded shadow-sm p-6">
+        <FormRow cols={3} gap={6}>
+          {/* STATION SEARCH DROPDOWN */}
+          <FormField label="Station" required>
+            <div ref={wrapperRef} className="relative">
+              <input
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setOpen(true);
+                }}
+                onFocus={() => setOpen(true)}
+                placeholder="Type station name or code"
+                className="w-full p-2 rounded border border-slate-200"
+              />
 
-        {/* ===== RESTRO DETAILS ===== */}
-        <section>
-          <h4 className="text-xs font-semibold tracking-wide text-slate-500 uppercase mb-4">
-            Restaurant Details
-          </h4>
+              {open && (
+                <div className="absolute z-20 mt-1 w-full max-h-60 overflow-auto rounded border bg-white shadow">
+                  {loadingStations && (
+                    <div className="p-2 text-sm text-gray-500">
+                      Loading stations…
+                    </div>
+                  )}
 
-          <FormRow cols={3} gap={6}>
-            <FormField label="Station" required>
-              <div ref={wrapperRef} className="relative">
-                <input
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setOpen(true);
-                  }}
-                  onFocus={() => setOpen(true)}
-                  placeholder="Search station name or code"
-                  className="w-full h-11 px-3 rounded-md border border-slate-200 focus:ring-2 focus:ring-sky-200"
-                />
+                  {!loadingStations && filteredStations.length === 0 && (
+                    <div className="p-2 text-sm text-gray-500">
+                      No station found
+                    </div>
+                  )}
 
-                {open && (
-                  <div className="absolute z-30 mt-1 w-full max-h-60 overflow-auto rounded-md border bg-white shadow-lg">
-                    {loading && (
-                      <div className="p-3 text-sm text-gray-500">
-                        Searching…
+                  {!loadingStations &&
+                    filteredStations.map((opt) => (
+                      <div
+                        key={opt.value}
+                        onClick={() => handleSelectStation(opt)}
+                        className="cursor-pointer px-3 py-2 text-sm hover:bg-sky-50"
+                      >
+                        {opt.label}
                       </div>
-                    )}
+                    ))}
+                </div>
+              )}
+            </div>
+          </FormField>
 
-                    {!loading && stations.length === 0 && (
-                      <div className="p-3 text-sm text-gray-400">
-                        No stations found
-                      </div>
-                    )}
+          {/* RESTRO CODE */}
+          <FormField label="Restro Code">
+            <div className="rounded border border-slate-100 bg-slate-50 p-2 text-sm">
+              {local?.RestroCode ?? "—"}
+            </div>
+          </FormField>
 
-                    {!loading &&
-                      stations.map((st) => (
-                        <div
-                          key={st.id}
-                          onClick={() => handleSelectStation(st)}
-                          className="px-3 py-2 text-sm cursor-pointer hover:bg-sky-50"
-                        >
-                          <div className="font-medium">
-                            {st.station_name} ({st.station_code})
-                          </div>
-                          {st.state && (
-                            <div className="text-xs text-slate-500">
-                              {st.state}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </FormField>
+          {/* RESTRO NAME */}
+          <FormField label="Restro Name" required>
+            <input
+              value={local?.RestroName ?? ""}
+              onChange={(e) => updateField("RestroName", e.target.value)}
+              className="w-full p-2 rounded border border-slate-200"
+            />
+          </FormField>
 
-            <FormField label="Restro Code">
-              <div className="h-11 flex items-center px-3 rounded-md bg-slate-50 border text-sm text-slate-600">
-                {local?.RestroCode ?? "Auto Generated"}
-              </div>
-            </FormField>
+          <FormField label="Brand Name">
+            <input
+              value={local?.BrandName ?? ""}
+              onChange={(e) => updateField("BrandName", e.target.value)}
+              className="w-full p-2 rounded border border-slate-200"
+            />
+          </FormField>
 
-            <FormField label="Restro Name" required>
-              <input
-                value={local?.RestroName ?? ""}
-                onChange={(e) => updateField("RestroName", e.target.value)}
-                className="w-full h-11 px-3 rounded-md border"
+          <FormField label="Raileats Status">
+            <div className="flex items-center gap-3">
+              <Toggle
+                checked={isActive}
+                onChange={(v) => toggleStatus(v)}
+                label={isActive ? "On" : "Off"}
               />
-            </FormField>
+              {savingStatus && (
+                <span className="text-xs text-gray-500">Updating…</span>
+              )}
+            </div>
+          </FormField>
 
-            <FormField label="Brand Name">
-              <input
-                value={local?.BrandName ?? ""}
-                onChange={(e) => updateField("BrandName", e.target.value)}
-                className="w-full h-11 px-3 rounded-md border"
-              />
-            </FormField>
-          </FormRow>
-        </section>
+          <FormField label="Is IRCTC Approved">
+            <select
+              value={local?.IsIrctcApproved ? "1" : "0"}
+              onChange={(e) =>
+                updateField("IsIrctcApproved", e.target.value === "1")
+              }
+              className="w-full p-2 rounded border border-slate-200"
+            >
+              <option value="1">Yes</option>
+              <option value="0">No</option>
+            </select>
+          </FormField>
 
-        {/* ===== STATUS & APPROVAL ===== */}
-        <section>
-          <h4 className="text-xs font-semibold tracking-wide text-slate-500 uppercase mb-4">
-            Status & Approval
-          </h4>
+          <FormField label="Restro Rating">
+            <input
+              type="number"
+              step="0.1"
+              value={local?.RestroRating ?? ""}
+              onChange={(e) => updateField("RestroRating", e.target.value)}
+              className="w-full p-2 rounded border border-slate-200"
+            />
+          </FormField>
 
-          <FormRow cols={3} gap={6}>
-            <FormField label="Raileats Status">
-              <div className="flex items-center gap-4">
-                <Toggle
-                  checked={isActive}
-                  onChange={toggleStatus}
-                  label={isActive ? "On" : "Off"}
-                />
-                {savingStatus && (
-                  <span className="text-xs text-gray-400">Updating…</span>
-                )}
-              </div>
-            </FormField>
+          <FormField label="Restro Display Photo (path)">
+            <input
+              value={local?.RestroDisplayPhoto ?? ""}
+              onChange={(e) =>
+                updateField("RestroDisplayPhoto", e.target.value)
+              }
+              className="w-full p-2 rounded border border-slate-200"
+            />
+          </FormField>
 
-            <FormField label="IRCTC Approved">
-              <select
-                value={local?.IsIrctcApproved ? "1" : "0"}
-                onChange={(e) =>
-                  updateField("IsIrctcApproved", e.target.value === "1")
+          <FormField label="Display Preview">
+            {local?.RestroDisplayPhoto ? (
+              <img
+                src={
+                  (process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "") +
+                  local.RestroDisplayPhoto
                 }
-                className="w-full h-11 px-3 rounded-md border"
-              >
-                <option value="1">Yes</option>
-                <option value="0">No</option>
-              </select>
-            </FormField>
-
-            <FormField label="Restro Rating">
-              <input
-                type="number"
-                step="0.1"
-                value={local?.RestroRating ?? ""}
-                onChange={(e) =>
-                  updateField("RestroRating", e.target.value)
+                className="h-20 rounded border object-cover"
+                onError={(e) =>
+                  ((e.target as HTMLImageElement).style.display = "none")
                 }
-                className="w-full h-11 px-3 rounded-md border"
               />
-            </FormField>
-          </FormRow>
-        </section>
+            ) : (
+              <div className="rounded border bg-slate-50 p-2 text-sm">
+                No image
+              </div>
+            )}
+          </FormField>
+
+          <FormField label="Owner Name">
+            <input
+              value={local?.OwnerName ?? ""}
+              onChange={(e) => updateField("OwnerName", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Owner Email">
+            <input
+              value={local?.OwnerEmail ?? ""}
+              onChange={(e) => updateField("OwnerEmail", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Owner Phone">
+            <input
+              value={local?.OwnerPhone ?? ""}
+              onChange={(e) => updateField("OwnerPhone", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Restro Email">
+            <input
+              value={local?.RestroEmail ?? ""}
+              onChange={(e) => updateField("RestroEmail", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Restro Phone">
+            <input
+              value={local?.RestroPhone ?? ""}
+              onChange={(e) => updateField("RestroPhone", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+        </FormRow>
       </div>
     </div>
   );
