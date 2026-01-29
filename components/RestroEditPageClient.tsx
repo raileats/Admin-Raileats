@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import BasicInformationTab from "@/components/restro-edit/BasicInformationTab";
 
 type StationOption = {
@@ -27,31 +27,30 @@ export default function RestroEditPageClient({
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }
 
-  /* ---------------- SAVE (POST vs PATCH FIXED) ---------------- */
+  /* ---------------- SAVE (FIXED LOGIC) ---------------- */
   async function handleSave() {
     setSaving(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const isNewRestro =
-        !local?.RestroCode ||
-        local?.RestroCode === "" ||
-        local?.RestroCode === "—";
+      const restroCodeNum =
+        typeof local?.RestroCode === "number"
+          ? local.RestroCode
+          : Number(local?.RestroCode);
 
-      const url = "/api/restros";
-      const method = isNewRestro ? "POST" : "PATCH";
+      const isEdit = Number.isFinite(restroCodeNum) && restroCodeNum > 0;
 
-      const res = await fetch(url, {
-        method,
+      const res = await fetch("/api/restros", {
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(local),
+        body: JSON.stringify(
+          isEdit ? { ...local, RestroCode: restroCodeNum } : local
+        ),
       });
 
-      /* -------- SAFE RESPONSE PARSE -------- */
       const text = await res.text();
       let json: any = null;
-
       if (text) {
         try {
           json = JSON.parse(text);
@@ -62,19 +61,16 @@ export default function RestroEditPageClient({
 
       if (!res.ok || json?.ok === false) {
         setError(json?.error || "Save failed");
+        setSaving(false);
         return;
       }
 
-      /* -------- IMPORTANT: SET RestroCode AFTER CREATE -------- */
-      if (isNewRestro && json?.row?.RestroCode) {
-        setLocal((prev: any) => ({
-          ...prev,
-          RestroCode: json.row.RestroCode,
-        }));
+      // ✅ POST ke baad auto RestroCode backend se milega
+      if (!isEdit && json?.row?.RestroCode) {
+        setLocal(json.row);
       }
 
       setSuccess("Saved successfully");
-
     } catch (err) {
       console.error("Save error:", err);
       setError("Unexpected error while saving");
@@ -112,9 +108,7 @@ export default function RestroEditPageClient({
           onClick={handleSave}
           disabled={saving}
           className={`px-6 py-2 rounded text-white ${
-            saving
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700"
+            saving ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
           {saving ? "Saving..." : "Save"}
