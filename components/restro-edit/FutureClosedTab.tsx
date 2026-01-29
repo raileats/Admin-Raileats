@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import FutureClosedFormModal from "./FutureClosedFormModal";
+import Page from "@/components/ui/Page";
+import Card from "@/components/ui/Card";
 
 type Row = {
   id: number;
@@ -34,8 +36,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/restros/${encodeURIComponent(codeStr)}/holidays`,
-        { method: "GET" }
+        `/api/restros/${encodeURIComponent(codeStr)}/holidays`
       );
       const json = await res.json();
       setRows(Array.isArray(json?.rows) ? json.rows : []);
@@ -86,30 +87,22 @@ export default function FutureClosedTab({ restroCode }: Props) {
 
   /* ================= UI ================= */
   return (
-    <div className="px-4">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">Future Closed</h3>
-          <p className="text-sm text-gray-500">
-            Schedule restaurant holiday / closure windows.
-          </p>
-        </div>
-
+    <Page
+      title="Future Closed"
+      subtitle="Schedule restaurant holiday / closure windows"
+      actions={
         <button
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            setOpen(true);
-          }}
+          onClick={() => setOpen(true)}
           className="rounded-md bg-orange-600 px-4 py-2 text-white"
         >
           Add New Holiday
         </button>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border">
+      }
+    >
+      <Card>
         {/* HEADER */}
-        <div className="grid grid-cols-7 bg-gray-50 px-4 py-3 text-sm font-medium">
+        <div className="grid grid-cols-7 bg-gray-50 px-4 py-3 text-sm font-medium rounded-t-lg">
           <div>Holiday Start</div>
           <div>Holiday End</div>
           <div>Comment</div>
@@ -137,15 +130,12 @@ export default function FutureClosedTab({ restroCode }: Props) {
                 <div>{fmt(r.end_at)}</div>
                 <div className="truncate">{r.comment || "—"}</div>
 
-                {/* Applied By */}
                 <div className="truncate font-medium text-sky-700">
                   {r.created_by_name || "System"}
                 </div>
 
-                {/* Applied At */}
                 <div>{fmt(r.created_at)}</div>
 
-                {/* Status */}
                 <div className="text-right">
                   <span
                     className={
@@ -162,7 +152,6 @@ export default function FutureClosedTab({ restroCode }: Props) {
                   </span>
                 </div>
 
-                {/* Action */}
                 <div className="text-right">
                   {!r.deleted_at && (
                     <button
@@ -178,9 +167,8 @@ export default function FutureClosedTab({ restroCode }: Props) {
             );
           })
         )}
-      </div>
+      </Card>
 
-      {/* ✅ NO USER PROPS HERE */}
       <FutureClosedFormModal
         open={open}
         restroCode={codeStr}
@@ -190,6 +178,6 @@ export default function FutureClosedTab({ restroCode }: Props) {
           load();
         }}
       />
-    </div>
+    </Page>
   );
 }
