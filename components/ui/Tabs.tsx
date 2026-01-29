@@ -1,7 +1,7 @@
-import React from "react";
+"use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import clsx from "clsx";
 
 type Tab = {
   label: string;
@@ -16,24 +16,23 @@ export default function Tabs({ tabs }: Props) {
   const pathname = usePathname();
 
   return (
-    <div className="flex flex-wrap gap-2 border-b pb-2 mb-4">
+    <nav className="flex flex-wrap gap-2 border-b pb-3 mb-6 text-sm font-medium">
       {tabs.map((t) => {
-        const active = pathname?.includes(t.href);
+        const active = pathname?.endsWith(t.href.replace("./", ""));
         return (
           <Link
             key={t.href}
             href={t.href}
-            className={clsx(
-              "px-3 py-2 rounded text-sm font-medium",
+            className={`px-3 py-2 rounded-md transition ${
               active
-                ? "bg-blue-600 text-white"
-                : "text-gray-600 hover:bg-gray-100"
-            )}
+                ? "bg-sky-100 text-sky-700 font-semibold"
+                : "hover:bg-gray-100 text-gray-700"
+            }`}
           >
             {t.label}
           </Link>
         );
       })}
-    </div>
+    </nav>
   );
 }
