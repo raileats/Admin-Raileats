@@ -13,33 +13,38 @@ export type StationOption = {
 type Props = {
   local: any;
   updateField: (k: string, v: any) => void;
-  stations?: any;
+  stations?: any[];
   loadingStations?: boolean;
 };
 
 export default function BasicInformationTab({
   local,
   updateField,
-  stations,
+  stations = [],
   loadingStations = false,
 }: Props) {
   /* ===============================
      SAFE STATION LIST
-     =============================== */
+  =============================== */
   const safeStations: StationOption[] = useMemo(() => {
     if (!Array.isArray(stations)) return [];
-    return stations
-      .filter((s) => s && typeof s === "object")
-      .map((s) => ({
-        label: String(s.label ?? ""),
-        value: String(s.value ?? ""),
-      }))
-      .filter((s) => s.label && s.value);
+    const map = new Map<string, StationOption>();
+
+    stations.forEach((s) => {
+      if (!s || typeof s !== "object") return;
+      const label = String(s.label ?? "");
+      const value = String(s.value ?? "");
+      if (label && value && !map.has(value)) {
+        map.set(value, { label, value });
+      }
+    });
+
+    return Array.from(map.values());
   }, [stations]);
 
   /* ===============================
      STATION DROPDOWN
-     =============================== */
+  =============================== */
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -65,17 +70,13 @@ export default function BasicInformationTab({
   }, []);
 
   const filteredStations = useMemo(() => {
-    try {
-      if (!query) return safeStations;
-      const q = query.toLowerCase();
-      return safeStations.filter(
-        (s) =>
-          s.label.toLowerCase().includes(q) ||
-          s.value.toLowerCase().includes(q)
-      );
-    } catch {
-      return [];
-    }
+    if (!query) return safeStations;
+    const q = query.toLowerCase();
+    return safeStations.filter(
+      (s) =>
+        s.label.toLowerCase().includes(q) ||
+        s.value.toLowerCase().includes(q)
+    );
   }, [query, safeStations]);
 
   function selectStation(opt: StationOption) {
@@ -91,8 +92,8 @@ export default function BasicInformationTab({
   }
 
   /* ===============================
-     RAILEATS STATUS (OLD LOGIC)
-     =============================== */
+     STATUS (OLD WORKING LOGIC)
+  =============================== */
   const isActive = Number(local?.RaileatsStatus ?? 0) === 1;
   const [savingStatus, setSavingStatus] = useState(false);
 
@@ -127,8 +128,17 @@ export default function BasicInformationTab({
   }
 
   /* ===============================
+     VALIDATION HELPERS
+  =============================== */
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function onlyDigits10(v: string) {
+    return v.replace(/\D/g, "").slice(0, 10);
+  }
+
+  /* ===============================
      UI
-     =============================== */
+  =============================== */
   return (
     <div className="px-4 py-2">
       <h3 className="text-center text-lg font-bold mb-4">
@@ -196,6 +206,7 @@ export default function BasicInformationTab({
             />
           </FormField>
 
+          {/* BRAND NAME */}
           <FormField label="Brand Name">
             <input
               value={local?.BrandNameifAny ?? ""}
@@ -206,6 +217,7 @@ export default function BasicInformationTab({
             />
           </FormField>
 
+          {/* STATUS */}
           <FormField label="Raileats Status">
             <div className="flex items-center gap-3">
               <Toggle
@@ -219,6 +231,7 @@ export default function BasicInformationTab({
             </div>
           </FormField>
 
+          {/* IRCTC */}
           <FormField label="Is IRCTC Approved">
             <select
               value={local?.IsIrctcApproved ? "1" : "0"}
@@ -232,6 +245,7 @@ export default function BasicInformationTab({
             </select>
           </FormField>
 
+          {/* RATING */}
           <FormField label="Restro Rating">
             <input
               type="number"
@@ -242,6 +256,7 @@ export default function BasicInformationTab({
             />
           </FormField>
 
+          {/* IMAGE */}
           <FormField label="Restro Display Photo (path)">
             <input
               value={local?.RestroDisplayPhoto ?? ""}
@@ -271,6 +286,7 @@ export default function BasicInformationTab({
             )}
           </FormField>
 
+          {/* OWNER */}
           <FormField label="Owner Name">
             <input
               value={local?.OwnerName ?? ""}
@@ -283,14 +299,21 @@ export default function BasicInformationTab({
             <input
               value={local?.OwnerEmail ?? ""}
               onChange={(e) => updateField("OwnerEmail", e.target.value)}
-              className="w-full p-2 rounded border"
+              className={`w-full p-2 rounded border ${
+                local?.OwnerEmail &&
+                !emailRegex.test(local.OwnerEmail)
+                  ? "border-red-500"
+                  : ""
+              }`}
             />
           </FormField>
 
           <FormField label="Owner Phone">
             <input
               value={local?.OwnerPhone ?? ""}
-              onChange={(e) => updateField("OwnerPhone", e.target.value)}
+              onChange={(e) =>
+                updateField("OwnerPhone", onlyDigits10(e.target.value))
+              }
               className="w-full p-2 rounded border"
             />
           </FormField>
@@ -299,14 +322,21 @@ export default function BasicInformationTab({
             <input
               value={local?.RestroEmail ?? ""}
               onChange={(e) => updateField("RestroEmail", e.target.value)}
-              className="w-full p-2 rounded border"
+              className={`w-full p-2 rounded border ${
+                local?.RestroEmail &&
+                !emailRegex.test(local.RestroEmail)
+                  ? "border-red-500"
+                  : ""
+              }`}
             />
           </FormField>
 
           <FormField label="Restro Phone">
             <input
               value={local?.RestroPhone ?? ""}
-              onChange={(e) => updateField("RestroPhone", e.target.value)}
+              onChange={(e) =>
+                updateField("RestroPhone", onlyDigits10(e.target.value))
+              }
               className="w-full p-2 rounded border"
             />
           </FormField>
