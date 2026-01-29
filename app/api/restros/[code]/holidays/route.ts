@@ -48,9 +48,10 @@ export async function POST(
       end_at: new Date(body.end_at).toISOString(),
       comment: body.comment || null,
 
-      // 🔥 REAL FIX
-      created_by_id: body.created_by_id ?? null,
-      created_by_name: body.created_by_name ?? "system",
+      // ✅ FINAL & CORRECT
+      // API NEVER forces "system"
+      created_by_id: body.applied_by ?? body.created_by_id ?? null,
+      created_by_name: body.applied_by_name ?? body.created_by_name ?? null,
 
       created_at: new Date().toISOString(),
     };
