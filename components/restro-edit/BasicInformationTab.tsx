@@ -1,314 +1,191 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import UI from "@/components/AdminUI";
-
-const { FormRow, FormField, Toggle } = UI;
-
-type StationOption = {
-  label: string;
-  value: string;
-};
+import React, { useEffect, useState } from "react";
 
 type Props = {
   local: any;
   updateField: (k: string, v: any) => void;
-  stations?: StationOption[];
-  loadingStations?: boolean;
+  Select: any;
+  Toggle: any;
 };
 
 export default function BasicInformationTab({
   local,
   updateField,
-  stations = [],
-  loadingStations = false,
+  Select,
+  Toggle,
 }: Props) {
-  /* ---------------- Station Search ---------------- */
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [q, setQ] = useState("");
+  const [stations, setStations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
+  /* ================= STATION SEARCH ================= */
   useEffect(() => {
-    if (local?.StationName && local?.StationCode) {
-      setQuery(
-        `${local.StationName} (${local.StationCode})${
-          local.State ? ` - ${local.State}` : ""
-        }`
-      );
+    if (!q || q.length < 2) {
+      setStations([]);
+      return;
     }
-  }, [local?.StationName, local?.StationCode, local?.State]);
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    let active = true;
+    setLoading(true);
 
-  const filteredStations = useMemo(() => {
-    if (!query) return stations;
-    const q = query.toLowerCase();
-    return stations.filter(
-      (s) =>
-        s.label.toLowerCase().includes(q) ||
-        s.value.toLowerCase().includes(q)
-    );
-  }, [query, stations]);
+    fetch(`/api/stations/search?q=${encodeURIComponent(q)}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (active) setStations(Array.isArray(j?.rows) ? j.rows : []);
+      })
+      .catch(() => {
+        if (active) setStations([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
-  function handleSelectStation(opt: StationOption) {
-    setQuery(opt.label);
-    setOpen(false);
+    return () => {
+      active = false;
+    };
+  }, [q]);
 
-    const match = opt.label.match(/^(.*?)\s*\((.*?)\)\s*(?:-\s*(.*))?$/);
-    updateField("StationName", match?.[1]?.trim() ?? "");
-    updateField("StationCode", opt.value);
-    updateField("State", match?.[3]?.trim() ?? "");
+  /* ================= SELECT STATION ================= */
+  function selectStation(st: any) {
+    updateField("StationName", st.station_name);
+    updateField("StationCode", st.station_code);
+    updateField("State", st.state);
+    updateField("station_id", st.id);
+    setQ(`${st.station_name} (${st.station_code})`);
+    setStations([]);
   }
 
-  /* ---------------- Raileats Status (NO CHANGE) ---------------- */
-  const isActive = Number(local?.RaileatsStatus ?? 0) === 1;
-  const [savingStatus, setSavingStatus] = useState(false);
-
-  async function toggleStatus(value: boolean) {
-    const newStatus = value ? 1 : 0;
-    const prev = local?.RaileatsStatus;
-
-    updateField("RaileatsStatus", newStatus);
-
-    try {
-      setSavingStatus(true);
-      const code = local?.RestroCode;
-      if (!code) return;
-
-      const res = await fetch(
-        `/api/admin/restros/${encodeURIComponent(code)}/status`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ raileatsStatus: newStatus }),
-        }
-      );
-
-      if (!res.ok) {
-        updateField("RaileatsStatus", prev ?? 0);
-        alert("Failed to update Raileats status");
-      }
-    } catch {
-      updateField("RaileatsStatus", prev ?? 0);
-    } finally {
-      setSavingStatus(false);
-    }
-  }
-
-  /* ---------------- UI ---------------- */
   return (
-    <div className="px-6 py-4">
-      <h3 className="text-center text-xl font-semibold mb-6">
-        Basic Information
-      </h3>
+    <div className="space-y-8">
+      {/* ================= RESTAURANT DETAILS ================= */}
+      <section>
+        <h3 className="mb-4 text-sm font-semibold text-slate-500">
+          RESTAURANT DETAILS
+        </h3>
 
-      <div className="max-w-6xl mx-auto bg-white rounded-xl border border-slate-200 shadow-sm p-8 space-y-10">
+        <div className="grid grid-cols-3 gap-4">
+          {/* ===== Station Search ===== */}
+          <div className="col-span-1 relative">
+            <label className="mb-1 block text-sm font-medium">
+              Station <span className="text-red-500">*</span>
+            </label>
 
-        {/* ===== SECTION: RESTRO DETAILS ===== */}
-        <section>
-          <h4 className="text-xs font-semibold tracking-wide text-slate-500 uppercase mb-4">
-            Restaurant Details
-          </h4>
+            <input
+              value={q || local.StationName || ""}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search station name or code"
+              className="w-full rounded-md border px-3 py-2"
+            />
 
-          <FormRow cols={3} gap={6}>
-            <FormField label="Station" required>
-              <div ref={wrapperRef} className="relative">
-                <input
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setOpen(true);
-                  }}
-                  onFocus={() => setOpen(true)}
-                  placeholder="Search station name or code"
-                  className="w-full h-11 px-3 rounded-md border border-slate-200 focus:ring-2 focus:ring-sky-200"
-                />
+            {loading && (
+              <div className="absolute z-10 mt-1 w-full rounded border bg-white px-3 py-2 text-sm">
+                Searching…
+              </div>
+            )}
 
-                {open && (
-                  <div className="absolute z-30 mt-1 w-full max-h-60 overflow-auto rounded-md border bg-white shadow-lg">
-                    {loadingStations && (
-                      <div className="p-3 text-sm text-gray-500">
-                        Loading stations…
-                      </div>
-                    )}
-
-                    {!loadingStations &&
-                      filteredStations.map((opt) => (
-                        <div
-                          key={opt.value}
-                          onClick={() => handleSelectStation(opt)}
-                          className="px-3 py-2 text-sm cursor-pointer hover:bg-sky-50"
-                        >
-                          {opt.label}
-                        </div>
-                      ))}
+            {stations.length > 0 && (
+              <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded border bg-white shadow">
+                {stations.map((st) => (
+                  <div
+                    key={st.id}
+                    onClick={() => selectStation(st)}
+                    className="cursor-pointer px-3 py-2 text-sm hover:bg-slate-100"
+                  >
+                    <div className="font-medium">
+                      {st.station_name} ({st.station_code})
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {st.state}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
-            </FormField>
+            )}
+          </div>
 
-            <FormField label="Restro Code">
-              <div className="h-11 flex items-center px-3 rounded-md bg-slate-50 border text-sm text-slate-600">
-                {local?.RestroCode ?? "Auto Generated"}
-              </div>
-            </FormField>
+          {/* ===== Restro Code ===== */}
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              Restro Code
+            </label>
+            <input
+              disabled
+              value={local.RestroCode || "Auto Generated"}
+              className="w-full rounded-md border bg-slate-50 px-3 py-2"
+            />
+          </div>
 
-            <FormField label="Restro Name" required>
-              <input
-                value={local?.RestroName ?? ""}
-                onChange={(e) => updateField("RestroName", e.target.value)}
-                className="w-full h-11 px-3 rounded-md border"
-              />
-            </FormField>
+          {/* ===== Restro Name ===== */}
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              Restro Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              value={local.RestroName || ""}
+              onChange={(e) => updateField("RestroName", e.target.value)}
+              className="w-full rounded-md border px-3 py-2"
+            />
+          </div>
+        </div>
 
-            <FormField label="Brand Name">
-              <input
-                value={local?.BrandName ?? ""}
-                onChange={(e) => updateField("BrandName", e.target.value)}
-                className="w-full h-11 px-3 rounded-md border"
-              />
-            </FormField>
-          </FormRow>
-        </section>
+        {/* Brand Name */}
+        <div className="mt-4 w-1/3">
+          <label className="mb-1 block text-sm font-medium">
+            Brand Name
+          </label>
+          <input
+            value={local.BrandName || ""}
+            onChange={(e) => updateField("BrandName", e.target.value)}
+            className="w-full rounded-md border px-3 py-2"
+          />
+        </div>
+      </section>
 
-        {/* ===== SECTION: STATUS ===== */}
-        <section>
-          <h4 className="text-xs font-semibold tracking-wide text-slate-500 uppercase mb-4">
-            Status & Approval
-          </h4>
+      {/* ================= STATUS & APPROVAL ================= */}
+      <section>
+        <h3 className="mb-4 text-sm font-semibold text-slate-500">
+          STATUS & APPROVAL
+        </h3>
 
-          <FormRow cols={3} gap={6}>
-            <FormField label="Raileats Status">
-              <div className="flex items-center gap-4">
-                <Toggle
-                  checked={isActive}
-                  onChange={toggleStatus}
-                  label={isActive ? "On" : "Off"}
-                />
-                {savingStatus && (
-                  <span className="text-xs text-gray-400">Updating…</span>
-                )}
-              </div>
-            </FormField>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              Raileats Status
+            </label>
+            <Toggle
+              checked={!!local.RaileatsStatus}
+              onChange={(v: boolean) => updateField("RaileatsStatus", v)}
+            />
+          </div>
 
-            <FormField label="IRCTC Approved">
-              <select
-                value={local?.IsIrctcApproved ? "1" : "0"}
-                onChange={(e) =>
-                  updateField("IsIrctcApproved", e.target.value === "1")
-                }
-                className="w-full h-11 px-3 rounded-md border"
-              >
-                <option value="1">Yes</option>
-                <option value="0">No</option>
-              </select>
-            </FormField>
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              IRCTC Approved
+            </label>
+            <Select
+              value={local.IsIrctcApproved ? "Yes" : "No"}
+              onChange={(v: string) =>
+                updateField("IsIrctcApproved", v === "Yes" ? 1 : 0)
+              }
+              options={["Yes", "No"]}
+            />
+          </div>
 
-            <FormField label="Restro Rating">
-              <input
-                type="number"
-                step="0.1"
-                value={local?.RestroRating ?? ""}
-                onChange={(e) => updateField("RestroRating", e.target.value)}
-                className="w-full h-11 px-3 rounded-md border"
-              />
-            </FormField>
-          </FormRow>
-        </section>
-
-        {/* ===== SECTION: MEDIA ===== */}
-        <section>
-          <h4 className="text-xs font-semibold tracking-wide text-slate-500 uppercase mb-4">
-            Media
-          </h4>
-
-          <FormRow cols={3} gap={6}>
-            <FormField label="Display Photo Path">
-              <input
-                value={local?.RestroDisplayPhoto ?? ""}
-                onChange={(e) =>
-                  updateField("RestroDisplayPhoto", e.target.value)
-                }
-                className="w-full h-11 px-3 rounded-md border"
-              />
-            </FormField>
-
-            <FormField label="Preview">
-              {local?.RestroDisplayPhoto ? (
-                <img
-                  src={
-                    (process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "") +
-                    local.RestroDisplayPhoto
-                  }
-                  className="h-20 rounded-md border object-cover"
-                />
-              ) : (
-                <div className="h-20 flex items-center justify-center text-sm text-slate-400 border rounded-md bg-slate-50">
-                  No Image
-                </div>
-              )}
-            </FormField>
-          </FormRow>
-        </section>
-
-        {/* ===== SECTION: CONTACT ===== */}
-        <section>
-          <h4 className="text-xs font-semibold tracking-wide text-slate-500 uppercase mb-4">
-            Contact Details
-          </h4>
-
-          <FormRow cols={3} gap={6}>
-            <FormField label="Owner Name">
-              <input
-                value={local?.OwnerName ?? ""}
-                onChange={(e) => updateField("OwnerName", e.target.value)}
-                className="w-full h-11 px-3 rounded-md border"
-              />
-            </FormField>
-
-            <FormField label="Owner Email">
-              <input
-                value={local?.OwnerEmail ?? ""}
-                onChange={(e) => updateField("OwnerEmail", e.target.value)}
-                className="w-full h-11 px-3 rounded-md border"
-              />
-            </FormField>
-
-            <FormField label="Owner Phone">
-              <input
-                value={local?.OwnerPhone ?? ""}
-                onChange={(e) => updateField("OwnerPhone", e.target.value)}
-                className="w-full h-11 px-3 rounded-md border"
-              />
-            </FormField>
-
-            <FormField label="Restro Email">
-              <input
-                value={local?.RestroEmail ?? ""}
-                onChange={(e) => updateField("RestroEmail", e.target.value)}
-                className="w-full h-11 px-3 rounded-md border"
-              />
-            </FormField>
-
-            <FormField label="Restro Phone">
-              <input
-                value={local?.RestroPhone ?? ""}
-                onChange={(e) => updateField("RestroPhone", e.target.value)}
-                className="w-full h-11 px-3 rounded-md border"
-              />
-            </FormField>
-          </FormRow>
-        </section>
-
-      </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              Restro Rating
+            </label>
+            <input
+              value={local.RestroRating || ""}
+              onChange={(e) =>
+                updateField("RestroRating", e.target.value)
+              }
+              className="w-full rounded-md border px-3 py-2"
+            />
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
