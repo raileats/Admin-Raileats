@@ -16,9 +16,9 @@ export default async function RestroEditLayout({ params, children }: Props) {
   const headerCode = restro?.RestroCode ?? params.code;
   const headerName = restro?.RestroName ?? restro?.name ?? "";
   const stationText = restro?.StationName
-    ? `${restro.StationName}${restro.StationCode ? ` (${restro.StationCode})` : ""}${
-        restro.State ? ` - ${restro.State}` : ""
-      }`
+    ? `${restro.StationName}${
+        restro.StationCode ? ` (${restro.StationCode})` : ""
+      }${restro.State ? ` - ${restro.State}` : ""}`
     : "";
 
   return (
@@ -30,6 +30,7 @@ export default async function RestroEditLayout({ params, children }: Props) {
             {headerCode}
             {headerName ? ` / ${headerName}` : ""}
           </div>
+
           {stationText && (
             <div className="mt-1 text-sm font-medium text-sky-700">
               {stationText}
@@ -38,13 +39,17 @@ export default async function RestroEditLayout({ params, children }: Props) {
         </div>
 
         <Link href="/admin/restros">
-          <button className="rounded-md bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600">
+          <button
+            type="button"
+            className="rounded-md bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600"
+            title="Close"
+          >
             ✕
           </button>
         </Link>
       </Card>
 
-      {/* ===== TABS ===== */}
+      {/* ===== TABS + CONTENT ===== */}
       <Card>
         <Tabs
           tabs={[
@@ -58,6 +63,7 @@ export default async function RestroEditLayout({ params, children }: Props) {
           ]}
         />
 
+        {/* ===== ERRORS ===== */}
         {error && (
           <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             <strong>Error:</strong> {error}
@@ -70,6 +76,7 @@ export default async function RestroEditLayout({ params, children }: Props) {
           </div>
         )}
 
+        {/* ===== PAGE CONTENT ===== */}
         {children}
       </Card>
     </div>
