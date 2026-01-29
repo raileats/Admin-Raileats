@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import BasicInformationTab from "./tabs/BasicInformationTab";
-// import other tabs if needed
+import BasicInformationTab from "./admin/tabs/BasicInformationTab";
 
 type StationOption = {
   label: string;
@@ -18,35 +17,31 @@ export default function RestroEditPageClient({
   const [stations, setStations] = useState<StationOption[]>([]);
   const [loadingStations, setLoadingStations] = useState(false);
 
-  /* ---------------- UPDATE FIELD ---------------- */
   function updateField(key: string, value: any) {
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }
 
-  /* ---------------- FETCH STATIONS ---------------- */
   useEffect(() => {
     let alive = true;
 
     async function loadStations() {
       try {
         setLoadingStations(true);
-
         const res = await fetch("/api/stations");
         const json = await res.json();
 
-        if (!res.ok || !Array.isArray(json)) {
-          console.error("Stations API failed", json);
-          return;
-        }
+        if (!res.ok || !Array.isArray(json)) return;
 
-        const mapped: StationOption[] = json.map((s: any) => ({
+        const mapped = json.map((s: any) => ({
           value: String(s.StationCode),
-          label: `${s.StationName} (${s.StationCode})${s.State ? ` - ${s.State}` : ""}`,
+          label: `${s.StationName} (${s.StationCode})${
+            s.State ? ` - ${s.State}` : ""
+          }`,
         }));
 
         if (alive) setStations(mapped);
-      } catch (err) {
-        console.error("Stations fetch error", err);
+      } catch (e) {
+        console.error("Stations fetch error", e);
       } finally {
         if (alive) setLoadingStations(false);
       }
@@ -58,17 +53,14 @@ export default function RestroEditPageClient({
     };
   }, []);
 
-  /* ---------------- UI ---------------- */
   return (
     <div className="w-full">
       <BasicInformationTab
         local={local}
         updateField={updateField}
-        stations={stations}              // ✅ ALWAYS ARRAY
-        loadingStations={loadingStations} // ✅ PROPER FLAG
+        stations={stations}
+        loadingStations={loadingStations}
       />
-
-      {/* other tabs below if needed */}
     </div>
   );
 }
