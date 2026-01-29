@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import UI from "@/components/AdminUI";
@@ -14,13 +14,7 @@ import BankTab from "./restro-edit/BankTab";
 import FutureClosedTab from "./restro-edit/FutureClosedTab";
 import MenuTab from "./restro-edit/MenuTab";
 
-const {
-  AdminForm,
-  SubmitButton,
-  SecondaryButton,
-  Select,
-  Toggle,
-} = UI;
+const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
 
 /* ================= CONSTANTS ================= */
 const TAB_NAMES = [
@@ -33,7 +27,7 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ================= HELPERS (MERGED SAFE) ================= */
+/* ================= HELPERS ================= */
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
     if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
@@ -45,14 +39,12 @@ function buildStationDisplay(obj: any) {
   const name = (safeGet(obj, "StationName", "station_name") ?? "").toString().trim();
   const code = (safeGet(obj, "StationCode", "station_code") ?? "").toString().trim();
   const state = (safeGet(obj, "State", "state") ?? "").toString().trim();
+
   let out = name;
   if (code) out += ` (${code})`;
   if (state) out += ` - ${state}`;
   return out || "—";
 }
-
-const emailRegex = /^\S+@\S+\.\S+$/;
-const tenDigitRegex = /^\d{10}$/;
 
 /* ================= COMPONENT ================= */
 export default function RestroEditModal({
@@ -77,6 +69,19 @@ export default function RestroEditModal({
     }
   }, [restroProp]);
 
+  /* ================= CLOSE HANDLER (🔥 FIX) ================= */
+  function doClose() {
+    if (onClose) {
+      try {
+        onClose();
+      } catch {
+        router.back();
+      }
+    } else {
+      router.back();
+    }
+  }
+
   /* ================= ESC CLOSE ================= */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -94,7 +99,6 @@ export default function RestroEditModal({
     "";
 
   const isNewRestro = !restroCode;
-
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
   /* ================= UPDATE FIELD ================= */
@@ -106,10 +110,9 @@ export default function RestroEditModal({
 
   /* ================= PATCH API ================= */
   async function defaultPatch(payload: any) {
-    const code = restroCode;
-    if (!code) throw new Error("Missing RestroCode");
+    if (!restroCode) throw new Error("Missing RestroCode");
 
-    const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
+    const res = await fetch(`/api/restros/${encodeURIComponent(String(restroCode))}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -130,7 +133,7 @@ export default function RestroEditModal({
     setNotification(null);
 
     try {
-      /* ----- CONTACTS PAYLOAD (OLD + NEW SAFE) ----- */
+      /* ---------- CONTACTS PAYLOAD ---------- */
       const allowed = [
         "EmailAddressName1","EmailsforOrdersReceiving1","EmailsforOrdersStatus1",
         "EmailAddressName2","EmailsforOrdersReceiving2","EmailsforOrdersStatus2",
@@ -149,7 +152,7 @@ export default function RestroEditModal({
         payload[k] = v ?? null;
       }
 
-      /* ----- CREATE NEW RESTRO (13 JAN + NEW MERGE) ----- */
+      /* ---------- CREATE NEW RESTRO ---------- */
       if (isNewRestro) {
         const createPayload = {
           RestroName: local.RestroName,
@@ -247,7 +250,7 @@ export default function RestroEditModal({
         </div>
 
         <div className="border-t p-4 flex justify-end gap-3">
-          <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+          <SecondaryButton onClick={doClose}>Cancel</SecondaryButton>
           <SubmitButton onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : "Save"}
           </SubmitButton>
