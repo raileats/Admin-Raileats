@@ -1,13 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-
 import UI from "@/components/AdminUI";
 
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
-import AddressDocumentsTab from "./restro-edit/AddressDocumentsTab";
 import AddressDocsClient from "@/components/tabs/AddressDocsClient";
 import ContactsTab from "./restro-edit/ContactsTab";
 import BankTab from "./restro-edit/BankTab";
@@ -16,7 +14,6 @@ import MenuTab from "./restro-edit/MenuTab";
 
 const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
 
-/* ================= CONSTANTS ================= */
 const TAB_NAMES = [
   "Basic Information",
   "Station Settings",
@@ -27,41 +24,41 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ================= HELPERS ================= */
+/* ---------------- helpers ---------------- */
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
     if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
   }
-  return undefined;
+  return "";
 }
 
 function buildStationDisplay(obj: any) {
-  const name = (safeGet(obj, "StationName", "station_name") ?? "").toString().trim();
-  const code = (safeGet(obj, "StationCode", "station_code") ?? "").toString().trim();
-  const state = (safeGet(obj, "State", "state") ?? "").toString().trim();
-
-  let out = name;
-  if (code) out += ` (${code})`;
-  if (state) out += ` - ${state}`;
-  return out || "—";
+  const name = safeGet(obj, "StationName");
+  const code = safeGet(obj, "StationCode");
+  const state = safeGet(obj, "State");
+  return `${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}`;
 }
 
-/* ================= COMPONENT ================= */
+/* ---------------- component ---------------- */
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
-  initialTab = TAB_NAMES[0],
+  initialTab = "Basic Information",
 }: any) {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [restro, setRestro] = useState<any>(restroProp);
   const [local, setLocal] = useState<any>({});
+
+  /* 🔥 STATION STATE (THIS WAS MISSING) */
+  const [stations, setStations] = useState<{ label: string; value: string }[]>([]);
+  const [loadingStations, setLoadingStations] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  /* ================= INIT ================= */
+  /* ---------------- INIT ---------------- */
   useEffect(() => {
     if (restroProp) {
       setRestro(restroProp);
@@ -69,161 +66,115 @@ export default function RestroEditModal({
     }
   }, [restroProp]);
 
-  /* ================= CLOSE HANDLER (🔥 FIX) ================= */
-  function doClose() {
-    if (onClose) {
-      try {
-        onClose();
-      } catch {
-        router.back();
-      }
-    } else {
-      router.back();
-    }
-  }
-
-  /* ================= ESC CLOSE ================= */
+  /* ---------------- FETCH STATIONS (🔥 REQUIRED) ---------------- */
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") doClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  /* ================= RESTRO CODE ================= */
-  const restroCode =
-    local?.RestroCode ??
-    restro?.RestroCode ??
-    restro?.restro_code ??
-    "";
-
-  const isNewRestro = !restroCode;
-  const stationDisplay = buildStationDisplay({ ...restro, ...local });
-
-  /* ================= UPDATE FIELD ================= */
-  const updateField = useCallback((key: string, value: any) => {
-    setLocal((prev: any) => ({ ...prev, [key]: value }));
-    setError(null);
-    setNotification(null);
-  }, []);
-
-  /* ================= PATCH API ================= */
-  async function defaultPatch(payload: any) {
-    if (!restroCode) throw new Error("Missing RestroCode");
-
-    const res = await fetch(`/api/restros/${encodeURIComponent(String(restroCode))}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : null;
-
-    if (!res.ok) {
-      throw new Error(json?.error || text || "Update failed");
-    }
-    return json;
-  }
-
-  /* ================= SAVE ================= */
-  async function handleSave() {
-    setSaving(true);
-    setNotification(null);
-
-    try {
-      /* ---------- CONTACTS PAYLOAD ---------- */
-      const allowed = [
-        "EmailAddressName1","EmailsforOrdersReceiving1","EmailsforOrdersStatus1",
-        "EmailAddressName2","EmailsforOrdersReceiving2","EmailsforOrdersStatus2",
-        "WhatsappMobileNumberName1","WhatsappMobileNumberforOrderDetails1","WhatsappMobileNumberStatus1",
-        "WhatsappMobileNumberName2","WhatsappMobileNumberforOrderDetails2","WhatsappMobileNumberStatus2",
-        "WhatsappMobileNumberName3","WhatsappMobileNumberforOrderDetails3","WhatsappMobileNumberStatus3",
-      ];
-
-      const payload: any = {};
-      for (const k of allowed) {
-        let v = local[k];
-        if (typeof v === "string") v = v.trim();
-        if (k.toLowerCase().includes("whatsapp") && k.toLowerCase().includes("orderdetails")) {
-          v = String(v ?? "").replace(/\D/g, "").slice(0, 10);
-        }
-        payload[k] = v ?? null;
-      }
-
-      /* ---------- CREATE NEW RESTRO ---------- */
-      if (isNewRestro) {
-        const createPayload = {
-          RestroName: local.RestroName,
-          StationCode: local.StationCode,
-          StationName: local.StationName,
-          OwnerName: local.OwnerName,
-          OwnerEmail: local.OwnerEmail,
-          OwnerPhone: local.OwnerPhone,
-          RestroEmail: local.RestroEmail,
-          RestroPhone: local.RestroPhone,
-          BrandNameifAny: local.BrandName || null,
-          RaileatsStatus: local.RaileatsStatus ? 1 : 0,
-          IsIrctcApproved: local.IsIrctcApproved === "Yes" ? 1 : 0,
-        };
-
-        const res = await fetch("/api/restrosmaster", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(createPayload),
-        });
+    async function fetchStations() {
+      setLoadingStations(true);
+      try {
+        const res = await fetch("/api/stations");
+        if (!res.ok) return;
 
         const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || "Create failed");
+        const rows = json?.rows || json?.data || json || [];
 
-        setRestro(json);
-        setLocal((s: any) => ({ ...s, ...json }));
-        setActiveTab("Station Settings");
-      } else {
-        await defaultPatch(payload);
+        const opts = rows.map((r: any) => ({
+          value: r.StationCode,
+          label: `${r.StationName} (${r.StationCode})${r.State ? ` - ${r.State}` : ""}`,
+        }));
+
+        setStations(opts);
+      } catch (err) {
+        console.error("Stations fetch failed", err);
+      } finally {
+        setLoadingStations(false);
       }
+    }
+
+    fetchStations();
+  }, []);
+
+  /* ---------------- UPDATE FIELD ---------------- */
+  const updateField = useCallback((key: string, value: any) => {
+    setLocal((prev: any) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const restroCode = local?.RestroCode || restro?.RestroCode || "";
+  const stationDisplay = buildStationDisplay({ ...restro, ...local });
+
+  /* ---------------- SAVE ---------------- */
+  async function handleSave() {
+    try {
+      setSaving(true);
+      setNotification(null);
+
+      const res = await fetch(`/api/restros/${restroCode}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(local),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Save failed");
 
       setNotification({ type: "success", text: "Saved successfully ✅" });
       router.refresh();
     } catch (err: any) {
-      setNotification({ type: "error", text: err?.message || "Save failed" });
+      setNotification({ type: "error", text: err.message });
     } finally {
       setSaving(false);
     }
   }
 
-  /* ================= COMMON PROPS ================= */
+  /* ---------------- COMMON PROPS ---------------- */
   const common = {
     local,
     updateField,
     restroCode,
     stationDisplay,
+    stations,          // ✅ FIX
+    loadingStations,   // ✅ FIX
     Select,
     Toggle,
   };
 
-  /* ================= TAB RENDER ================= */
   function renderTab() {
     switch (activeTab) {
-      case "Basic Information": return <BasicInformationTab {...common} />;
-      case "Station Settings": return <StationSettingsTab {...common} />;
+      case "Basic Information":
+        return <BasicInformationTab {...common} />;
+
+      case "Station Settings":
+        return <StationSettingsTab {...common} />;
+
       case "Address & Documents":
-        return isNewRestro
-          ? <AddressDocumentsTab {...common} />
-          : <AddressDocsClient initialData={restro} />;
-      case "Contacts": return <ContactsTab {...common} />;
-      case "Bank": return <BankTab {...common} />;
-      case "Future Closed": return <FutureClosedTab {...common} />;
-      case "Menu": return <MenuTab {...common} />;
-      default: return null;
+        return (
+          <AddressDocsClient
+            initialData={restro}
+            imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}
+          />
+        );
+
+      case "Contacts":
+        return <ContactsTab {...common} />;
+
+      case "Bank":
+        return <BankTab {...common} />;
+
+      case "Future Closed":
+        return <FutureClosedTab {...common} />;
+
+      case "Menu":
+        return <MenuTab {...common} />;
+
+      default:
+        return null;
     }
   }
 
-  /* ================= UI ================= */
+  /* ---------------- UI ---------------- */
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1100]">
+    <div className="fixed inset-0 bg-black/40 z-[1100] flex items-center justify-center">
       <div className="bg-white w-[98%] h-[98%] rounded-lg flex flex-col">
+
         {/* Tabs */}
         <div className="flex gap-4 border-b px-6 py-3">
           {TAB_NAMES.map((t) => (
@@ -250,7 +201,7 @@ export default function RestroEditModal({
         </div>
 
         <div className="border-t p-4 flex justify-end gap-3">
-          <SecondaryButton onClick={doClose}>Cancel</SecondaryButton>
+          <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
           <SubmitButton onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : "Save"}
           </SubmitButton>
