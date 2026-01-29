@@ -1,8 +1,8 @@
 import React from "react";
 import Link from "next/link";
-import { safeGetRestro } from "@/lib/restroService";
-import Tabs from "@/components/ui/Tabs";
 import Card from "@/components/ui/Card";
+import Tabs from "@/components/ui/Tabs";
+import { safeGetRestro } from "@/lib/restroService";
 
 type Props = {
   params: { code: string };
@@ -16,13 +16,13 @@ export default async function RestroEditLayout({ params, children }: Props) {
   const headerCode = restro?.RestroCode ?? params.code;
   const headerName = restro?.RestroName ?? restro?.name ?? "";
   const stationText = restro?.StationName
-    ? `${restro.StationName}${
-        restro.StationCode ? ` (${restro.StationCode})` : ""
-      }${restro.State ? ` - ${restro.State}` : ""}`
+    ? `${restro.StationName}${restro.StationCode ? ` (${restro.StationCode})` : ""}${
+        restro.State ? ` - ${restro.State}` : ""
+      }`
     : "";
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       {/* ===== HEADER ===== */}
       <Card className="flex items-center justify-between">
         <div>
@@ -30,26 +30,21 @@ export default async function RestroEditLayout({ params, children }: Props) {
             {headerCode}
             {headerName ? ` / ${headerName}` : ""}
           </div>
-
           {stationText && (
-            <div className="mt-1 text-sm text-sky-700 font-medium">
+            <div className="mt-1 text-sm font-medium text-sky-700">
               {stationText}
             </div>
           )}
         </div>
 
         <Link href="/admin/restros">
-          <button
-            type="button"
-            className="rounded-md bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600"
-            title="Close"
-          >
+          <button className="rounded-md bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600">
             ✕
           </button>
         </Link>
       </Card>
 
-      {/* ===== TABS + CONTENT ===== */}
+      {/* ===== TABS ===== */}
       <Card>
         <Tabs
           tabs={[
@@ -63,14 +58,9 @@ export default async function RestroEditLayout({ params, children }: Props) {
           ]}
         />
 
-        {/* ===== CONTENT ===== */}
         {error && (
           <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             <strong>Error:</strong> {error}
-            <div className="mt-1 text-xs text-red-600">
-              (Check Supabase table <code>RestroMaster</code> for RestroCode{" "}
-              {params.code})
-            </div>
           </div>
         )}
 
