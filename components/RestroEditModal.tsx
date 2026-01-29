@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import UI from "@/components/AdminUI";
 
@@ -51,8 +51,10 @@ export default function RestroEditModal({
   const [restro, setRestro] = useState<any>(restroProp);
   const [local, setLocal] = useState<any>({});
 
-  /* 🔥 STATION STATE (THIS WAS MISSING) */
-  const [stations, setStations] = useState<{ label: string; value: string }[]>([]);
+  /* stations */
+  const [stations, setStations] = useState<
+    { label: string; value: string }[]
+  >([]);
   const [loadingStations, setLoadingStations] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -63,10 +65,13 @@ export default function RestroEditModal({
     if (restroProp) {
       setRestro(restroProp);
       setLocal({ ...restroProp });
+    } else {
+      setRestro(null);
+      setLocal({});
     }
   }, [restroProp]);
 
-  /* ---------------- FETCH STATIONS (🔥 REQUIRED) ---------------- */
+  /* ---------------- FETCH STATIONS ---------------- */
   useEffect(() => {
     async function fetchStations() {
       setLoadingStations(true);
@@ -77,14 +82,16 @@ export default function RestroEditModal({
         const json = await res.json();
         const rows = json?.rows || json?.data || json || [];
 
-        const opts = rows.map((r: any) => ({
-          value: r.StationCode,
-          label: `${r.StationName} (${r.StationCode})${r.State ? ` - ${r.State}` : ""}`,
-        }));
-
-        setStations(opts);
-      } catch (err) {
-        console.error("Stations fetch failed", err);
+        setStations(
+          rows.map((r: any) => ({
+            value: r.StationCode,
+            label: `${r.StationName} (${r.StationCode})${
+              r.State ? ` - ${r.State}` : ""
+            }`,
+          }))
+        );
+      } catch (e) {
+        console.error("Stations fetch failed", e);
       } finally {
         setLoadingStations(false);
       }
@@ -101,22 +108,39 @@ export default function RestroEditModal({
   const restroCode = local?.RestroCode || restro?.RestroCode || "";
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
-  /* ---------------- SAVE ---------------- */
+  /* ---------------- SAVE (🔥 MAIN FIX) ---------------- */
   async function handleSave() {
     try {
       setSaving(true);
       setNotification(null);
 
-      const res = await fetch(`/api/restros/${restroCode}`, {
-        method: "PATCH",
+      const isEdit = Boolean(restroCode);
+
+      const url = isEdit
+        ? `/api/restros/${encodeURIComponent(restroCode)}`
+        : `/api/restros`;
+
+      const method = isEdit ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(local),
       });
 
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Save failed");
+      const json = await res.json().catch(() => ({}));
 
-      setNotification({ type: "success", text: "Saved successfully ✅" });
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || "Save failed");
+      }
+
+      setNotification({
+        type: "success",
+        text: isEdit
+          ? "Updated successfully ✅"
+          : "Created successfully ✅",
+      });
+
       router.refresh();
     } catch (err: any) {
       setNotification({ type: "error", text: err.message });
@@ -131,8 +155,8 @@ export default function RestroEditModal({
     updateField,
     restroCode,
     stationDisplay,
-    stations,          // ✅ FIX
-    loadingStations,   // ✅ FIX
+    stations,
+    loadingStations,
     Select,
     Toggle,
   };
@@ -174,7 +198,6 @@ export default function RestroEditModal({
   return (
     <div className="fixed inset-0 bg-black/40 z-[1100] flex items-center justify-center">
       <div className="bg-white w-[98%] h-[98%] rounded-lg flex flex-col">
-
         {/* Tabs */}
         <div className="flex gap-4 border-b px-6 py-3">
           {TAB_NAMES.map((t) => (
@@ -182,7 +205,9 @@ export default function RestroEditModal({
               key={t}
               onClick={() => setActiveTab(t)}
               className={`px-3 py-2 font-semibold ${
-                activeTab === t ? "border-b-2 border-blue-500 text-blue-600" : ""
+                activeTab === t
+                  ? "border-b-2 border-blue-500 text-blue-600"
+                  : ""
               }`}
             >
               {t}
@@ -191,7 +216,13 @@ export default function RestroEditModal({
         </div>
 
         {notification && (
-          <div className="text-center py-2 font-semibold">
+          <div
+            className={`text-center py-2 font-semibold ${
+              notification.type === "error"
+                ? "text-red-600"
+                : "text-green-600"
+            }`}
+          >
             {notification.text}
           </div>
         )}
