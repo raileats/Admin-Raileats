@@ -1,28 +1,51 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import BasicInformationTab from "./admin/tabs/BasicInformationTab";
+import BasicInformationTab from "./restro-edit/BasicInformationTab";
+
+/* ================= TYPES ================= */
 
 type StationOption = {
   label: string;
-  value: string;
+  value: string; // StationCode
 };
 
+type Restro = {
+  RestroCode?: number;
+  RestroName?: string;
+  StationCode?: string;
+  StationName?: string;
+  State?: string;
+  RaileatsStatus?: number;
+  IsIrctcApproved?: boolean;
+  RestroRating?: number;
+  RestroDisplayPhoto?: string;
+  OwnerName?: string;
+  OwnerEmail?: string;
+  OwnerPhone?: string;
+  RestroEmail?: string;
+  RestroPhone?: string;
+};
+
+/* ================= COMPONENT ================= */
+
 export default function RestroEditPageClient({
-  initial,
+  initialRestro,
 }: {
-  initial: any;
+  initialRestro: Restro;
 }) {
-  const [local, setLocal] = useState<any>(initial ?? {});
+  const [local, setLocal] = useState<Restro>(initialRestro || {});
   const [stations, setStations] = useState<StationOption[]>([]);
   const [loadingStations, setLoadingStations] = useState(false);
 
-  function updateField(key: string, value: any) {
-    setLocal((prev: any) => ({ ...prev, [key]: value }));
+  /* ---------- UPDATE FIELD ---------- */
+  function updateField(key: keyof Restro, value: any) {
+    setLocal((prev) => ({ ...prev, [key]: value }));
   }
 
+  /* ---------- LOAD STATIONS ---------- */
   useEffect(() => {
-    let alive = true;
+    let ignore = false;
 
     async function loadStations() {
       try {
@@ -30,28 +53,30 @@ export default function RestroEditPageClient({
         const res = await fetch("/api/stations");
         const json = await res.json();
 
-        if (!res.ok || !Array.isArray(json)) return;
-
-        const mapped = json.map((s: any) => ({
-          value: String(s.StationCode),
-          label: `${s.StationName} (${s.StationCode})${
-            s.State ? ` - ${s.State}` : ""
-          }`,
-        }));
-
-        if (alive) setStations(mapped);
-      } catch (e) {
-        console.error("Stations fetch error", e);
+        if (!ignore && Array.isArray(json)) {
+          setStations(
+            json.map((s: any) => ({
+              value: s.StationCode,
+              label: `${s.StationName} (${s.StationCode})${
+                s.State ? ` - ${s.State}` : ""
+              }`,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load stations", err);
       } finally {
-        if (alive) setLoadingStations(false);
+        if (!ignore) setLoadingStations(false);
       }
     }
 
     loadStations();
     return () => {
-      alive = false;
+      ignore = true;
     };
   }, []);
+
+  /* ================= RENDER ================= */
 
   return (
     <div className="w-full">
