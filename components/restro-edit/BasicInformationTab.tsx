@@ -13,7 +13,7 @@ export type StationOption = {
 type Props = {
   local: any;
   updateField: (k: string, v: any) => void;
-  stations?: any; // intentionally loose (we sanitize)
+  stations?: any;
   loadingStations?: boolean;
 };
 
@@ -24,12 +24,10 @@ export default function BasicInformationTab({
   loadingStations = false,
 }: Props) {
   /* ===============================
-     🛡️ STATION DATA SANITIZATION
+     SAFE STATION LIST
      =============================== */
-
   const safeStations: StationOption[] = useMemo(() => {
     if (!Array.isArray(stations)) return [];
-
     return stations
       .filter((s) => s && typeof s === "object")
       .map((s) => ({
@@ -40,9 +38,8 @@ export default function BasicInformationTab({
   }, [stations]);
 
   /* ===============================
-     STATION DROPDOWN STATE
+     STATION DROPDOWN
      =============================== */
-
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -76,8 +73,7 @@ export default function BasicInformationTab({
           s.label.toLowerCase().includes(q) ||
           s.value.toLowerCase().includes(q)
       );
-    } catch (err) {
-      console.error("Station filter crash:", err);
+    } catch {
       return [];
     }
   }, [query, safeStations]);
@@ -95,15 +91,44 @@ export default function BasicInformationTab({
   }
 
   /* ===============================
-     STATUS
+     RAILEATS STATUS (OLD LOGIC)
      =============================== */
-
   const isActive = Number(local?.RaileatsStatus ?? 0) === 1;
+  const [savingStatus, setSavingStatus] = useState(false);
+
+  async function toggleStatus(v: boolean) {
+    const newStatus = v ? 1 : 0;
+    const prev = local?.RaileatsStatus;
+
+    updateField("RaileatsStatus", newStatus);
+
+    try {
+      setSavingStatus(true);
+      if (!local?.RestroCode) return;
+
+      const res = await fetch(
+        `/api/admin/restros/${encodeURIComponent(local.RestroCode)}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ raileatsStatus: newStatus }),
+        }
+      );
+
+      if (!res.ok) {
+        updateField("RaileatsStatus", prev ?? 0);
+        alert("Failed to update Raileats status");
+      }
+    } catch {
+      updateField("RaileatsStatus", prev ?? 0);
+    } finally {
+      setSavingStatus(false);
+    }
+  }
 
   /* ===============================
      UI
      =============================== */
-
   return (
     <div className="px-4 py-2">
       <h3 className="text-center text-lg font-bold mb-4">
@@ -155,12 +180,14 @@ export default function BasicInformationTab({
             </div>
           </FormField>
 
+          {/* RESTRO CODE */}
           <FormField label="Restro Code">
             <div className="rounded border bg-slate-50 p-2 text-sm">
               {local?.RestroCode ?? "—"}
             </div>
           </FormField>
 
+          {/* RESTRO NAME */}
           <FormField label="Restro Name" required>
             <input
               value={local?.RestroName ?? ""}
@@ -180,13 +207,16 @@ export default function BasicInformationTab({
           </FormField>
 
           <FormField label="Raileats Status">
-            <Toggle
-              checked={isActive}
-              onChange={(v) =>
-                updateField("RaileatsStatus", v ? 1 : 0)
-              }
-              label={isActive ? "On" : "Off"}
-            />
+            <div className="flex items-center gap-3">
+              <Toggle
+                checked={isActive}
+                onChange={toggleStatus}
+                label={isActive ? "On" : "Off"}
+              />
+              {savingStatus && (
+                <span className="text-xs text-gray-500">Updating…</span>
+              )}
+            </div>
           </FormField>
 
           <FormField label="Is IRCTC Approved">
@@ -200,6 +230,85 @@ export default function BasicInformationTab({
               <option value="1">Yes</option>
               <option value="0">No</option>
             </select>
+          </FormField>
+
+          <FormField label="Restro Rating">
+            <input
+              type="number"
+              step="0.1"
+              value={local?.RestroRating ?? ""}
+              onChange={(e) => updateField("RestroRating", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Restro Display Photo (path)">
+            <input
+              value={local?.RestroDisplayPhoto ?? ""}
+              onChange={(e) =>
+                updateField("RestroDisplayPhoto", e.target.value)
+              }
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Display Preview">
+            {local?.RestroDisplayPhoto ? (
+              <img
+                src={
+                  (process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "") +
+                  local.RestroDisplayPhoto
+                }
+                className="h-20 rounded border object-cover"
+                onError={(e) =>
+                  ((e.target as HTMLImageElement).style.display = "none")
+                }
+              />
+            ) : (
+              <div className="rounded border bg-slate-50 p-2 text-sm">
+                No image
+              </div>
+            )}
+          </FormField>
+
+          <FormField label="Owner Name">
+            <input
+              value={local?.OwnerName ?? ""}
+              onChange={(e) => updateField("OwnerName", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Owner Email">
+            <input
+              value={local?.OwnerEmail ?? ""}
+              onChange={(e) => updateField("OwnerEmail", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Owner Phone">
+            <input
+              value={local?.OwnerPhone ?? ""}
+              onChange={(e) => updateField("OwnerPhone", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Restro Email">
+            <input
+              value={local?.RestroEmail ?? ""}
+              onChange={(e) => updateField("RestroEmail", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Restro Phone">
+            <input
+              value={local?.RestroPhone ?? ""}
+              onChange={(e) => updateField("RestroPhone", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
           </FormField>
         </FormRow>
       </div>
