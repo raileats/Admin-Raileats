@@ -24,16 +24,17 @@ export default function BasicInformationTab({
   loadingStations = false,
 }: Props) {
   /* ===============================
-     SAFE STATION LIST (NO CRASH)
+     SAFE STATION LIST (NO DUPES / NO CRASH)
   =============================== */
   const safeStations: StationOption[] = useMemo(() => {
     if (!Array.isArray(stations)) return [];
+
     const map = new Map<string, StationOption>();
 
     stations.forEach((s) => {
       if (!s || typeof s !== "object") return;
-      const label = String(s.label ?? "");
-      const value = String(s.value ?? "");
+      const label = String(s.label ?? "").trim();
+      const value = String(s.value ?? "").trim();
       if (label && value && !map.has(value)) {
         map.set(value, { label, value });
       }
@@ -92,7 +93,7 @@ export default function BasicInformationTab({
   }
 
   /* ===============================
-     RAILEATS STATUS (SAFE PATCH)
+     RAILEATS STATUS (OLD WORKING LOGIC)
   =============================== */
   const isActive = Number(local?.RaileatsStatus ?? 0) === 1;
   const [savingStatus, setSavingStatus] = useState(false);
