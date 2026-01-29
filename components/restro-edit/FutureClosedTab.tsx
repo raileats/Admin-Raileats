@@ -139,7 +139,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
 
                 {/* Applied By */}
                 <div className="truncate font-medium text-sky-700">
-                  {r.created_by_name || r.created_by_id || "System"}
+                  {r.created_by_name || "System"}
                 </div>
 
                 {/* Applied At */}
@@ -180,11 +180,10 @@ export default function FutureClosedTab({ restroCode }: Props) {
         )}
       </div>
 
+      {/* ✅ NO USER PROPS HERE */}
       <FutureClosedFormModal
         open={open}
         restroCode={codeStr}
-        currentUserId="admin-1001"
-        currentUserName="Test Admin"
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
