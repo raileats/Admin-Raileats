@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useAdminUser } from "@/components/admin/AdminUserContext"; // ✅ ADD
+import { useAdminUser } from "@/components/admin/AdminUserContext";
 
 type Props = {
   open: boolean;
@@ -16,7 +16,7 @@ export default function FutureClosedFormModal({
   onClose,
   onSaved,
 }: Props) {
-  const admin = useAdminUser(); // ✅ LOGGED-IN ADMIN
+  const admin = useAdminUser(); // ✅ logged-in admin from context
 
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
@@ -44,9 +44,9 @@ export default function FutureClosedFormModal({
         end_at: new Date(end).toISOString(),
         comment: comment?.trim() || null,
 
-        // ✅ FINAL FIX
-        applied_by: String(admin.id),
-        applied_by_name: admin.name,
+        // ✅ EXACT DB COLUMN NAMES (THIS WAS THE BUG)
+        created_by_id: String(admin.id),
+        created_by_name: admin.name,
       };
 
       const res = await fetch(
@@ -75,10 +75,14 @@ export default function FutureClosedFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center"
+    >
       <div className="absolute inset-0 bg-black/40" />
 
-      <div className="relative z-10 w-[800px] rounded-xl bg-white p-6">
+      <div className="relative z-10 w-[800px] rounded-xl bg-white p-6 shadow-xl">
         <h2 className="mb-4 text-xl font-semibold">Add New Holiday</h2>
 
         <div className="grid grid-cols-2 gap-4">
@@ -102,16 +106,22 @@ export default function FutureClosedFormModal({
           />
         </div>
 
-        {err && <p className="mt-3 text-red-600">{err}</p>}
+        {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
-          <button onClick={onClose} disabled={saving} className="border px-4 py-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded border px-4 py-2"
+          >
             Cancel
           </button>
           <button
+            type="button"
             onClick={save}
             disabled={saving}
-            className="bg-blue-600 px-4 py-2 text-white"
+            className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save"}
           </button>
