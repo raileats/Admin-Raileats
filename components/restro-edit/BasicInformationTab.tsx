@@ -140,6 +140,13 @@ export default function BasicInformationTab({
             </div>
           </FormField>
 
+          {/* RESTRO CODE */}
+          <FormField label="Restro Code">
+            <div className="rounded border border-slate-100 bg-slate-50 p-2 text-sm">
+              {local?.RestroCode ?? "—"}
+            </div>
+          </FormField>
+
           {/* RESTRO NAME */}
           <FormField label="Restro Name" required>
             <input
@@ -151,20 +158,23 @@ export default function BasicInformationTab({
 
           <FormField label="Brand Name">
             <input
-              value={local?.BrandNameifAny ?? ""}
-              onChange={(e) =>
-                updateField("BrandNameifAny", e.target.value)
-              }
-              className="w-full p-2 rounded border"
+              value={local?.BrandName ?? ""}
+              onChange={(e) => updateField("BrandName", e.target.value)}
+              className="w-full p-2 rounded border border-slate-200"
             />
           </FormField>
 
           <FormField label="Raileats Status">
-            <Toggle
-              checked={isActive}
-              onChange={(v) => updateField("RaileatsStatus", v ? 1 : 0)}
-              label={isActive ? "On" : "Off"}
-            />
+            <div className="flex items-center gap-3">
+              <Toggle
+                checked={isActive}
+                onChange={(v) => toggleStatus(v)}
+                label={isActive ? "On" : "Off"}
+              />
+              {savingStatus && (
+                <span className="text-xs text-gray-500">Updating…</span>
+              )}
+            </div>
           </FormField>
 
           <FormField label="Is IRCTC Approved">
@@ -173,11 +183,58 @@ export default function BasicInformationTab({
               onChange={(e) =>
                 updateField("IsIrctcApproved", e.target.value === "1")
               }
-              className="w-full p-2 rounded border"
+              className="w-full p-2 rounded border border-slate-200"
             >
               <option value="1">Yes</option>
               <option value="0">No</option>
             </select>
+          </FormField>
+
+          <FormField label="Restro Rating">
+            <input
+              type="number"
+              step="0.1"
+              value={local?.RestroRating ?? ""}
+              onChange={(e) => updateField("RestroRating", e.target.value)}
+              className="w-full p-2 rounded border border-slate-200"
+            />
+          </FormField>
+
+          <FormField label="Restro Display Photo (path)">
+            <input
+              value={local?.RestroDisplayPhoto ?? ""}
+              onChange={(e) =>
+                updateField("RestroDisplayPhoto", e.target.value)
+              }
+              className="w-full p-2 rounded border border-slate-200"
+            />
+          </FormField>
+
+          <FormField label="Display Preview">
+            {local?.RestroDisplayPhoto ? (
+              <img
+                src={
+                  (process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? "") +
+                  local.RestroDisplayPhoto
+                }
+                className="h-20 rounded border object-cover"
+                onError={(e) =>
+                  ((e.target as HTMLImageElement).style.display = "none")
+                }
+              />
+            ) : (
+              <div className="rounded border bg-slate-50 p-2 text-sm">
+                No image
+              </div>
+            )}
+          </FormField>
+
+          <FormField label="Owner Name">
+            <input
+              value={local?.OwnerName ?? ""}
+              onChange={(e) => updateField("OwnerName", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
           </FormField>
 
           <FormField label="Owner Email">
@@ -192,6 +249,22 @@ export default function BasicInformationTab({
             <input
               value={local?.OwnerPhone ?? ""}
               onChange={(e) => updateField("OwnerPhone", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Restro Email">
+            <input
+              value={local?.RestroEmail ?? ""}
+              onChange={(e) => updateField("RestroEmail", e.target.value)}
+              className="w-full p-2 rounded border"
+            />
+          </FormField>
+
+          <FormField label="Restro Phone">
+            <input
+              value={local?.RestroPhone ?? ""}
+              onChange={(e) => updateField("RestroPhone", e.target.value)}
               className="w-full p-2 rounded border"
             />
           </FormField>
