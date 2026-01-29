@@ -1,7 +1,8 @@
-// app/admin/restros/[code]/edit/layout.tsx
 import React from "react";
 import Link from "next/link";
 import { safeGetRestro } from "@/lib/restroService";
+import Tabs from "@/components/ui/Tabs";
+import Card from "@/components/ui/Card";
 
 type Props = {
   params: { code: string };
@@ -15,17 +16,15 @@ export default async function RestroEditLayout({ params, children }: Props) {
   const headerCode = restro?.RestroCode ?? params.code;
   const headerName = restro?.RestroName ?? restro?.name ?? "";
   const stationText = restro?.StationName
-    ? `${restro.StationName}${restro.StationCode ? ` (${restro.StationCode})` : ""}${
-        restro.State ? ` - ${restro.State}` : ""
-      }`
+    ? `${restro.StationName}${
+        restro.StationCode ? ` (${restro.StationCode})` : ""
+      }${restro.State ? ` - ${restro.State}` : ""}`
     : "";
-
- "";
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ===== PAGE HEADER ===== */}
-      <div className="rounded-xl border bg-white px-6 py-4 flex items-center justify-between">
+      {/* ===== HEADER ===== */}
+      <Card className="flex items-center justify-between">
         <div>
           <div className="text-lg font-semibold">
             {headerCode}
@@ -48,55 +47,41 @@ export default async function RestroEditLayout({ params, children }: Props) {
             ✕
           </button>
         </Link>
-      </div>
+      </Card>
 
-      {/* ===== TABS ===== */}
-      <div className="rounded-xl border bg-white px-4">
-        <nav className="flex flex-wrap gap-2 border-b py-3 text-sm font-medium">
-          <Link className="px-3 py-2 rounded hover:bg-gray-100" href="./basic">
-            Basic Information
-          </Link>
-          <Link className="px-3 py-2 rounded hover:bg-gray-100" href="./station-settings">
-            Station Settings
-          </Link>
-          <Link className="px-3 py-2 rounded hover:bg-gray-100" href="./address-docs">
-            Address & Documents
-          </Link>
-          <Link className="px-3 py-2 rounded hover:bg-gray-100" href="./contacts">
-            Contacts
-          </Link>
-          <Link className="px-3 py-2 rounded hover:bg-gray-100" href="./bank">
-            Bank
-          </Link>
-          <Link className="px-3 py-2 rounded hover:bg-gray-100" href="./future-closed">
-            Future Closed
-          </Link>
-          <Link className="px-3 py-2 rounded hover:bg-gray-100" href="./menu">
-            Menu
-          </Link>
-        </nav>
+      {/* ===== TABS + CONTENT ===== */}
+      <Card>
+        <Tabs
+          tabs={[
+            { label: "Basic Information", href: "./basic" },
+            { label: "Station Settings", href: "./station-settings" },
+            { label: "Address & Documents", href: "./address-docs" },
+            { label: "Contacts", href: "./contacts" },
+            { label: "Bank", href: "./bank" },
+            { label: "Future Closed", href: "./future-closed" },
+            { label: "Menu", href: "./menu" },
+          ]}
+        />
 
         {/* ===== CONTENT ===== */}
-        <div className="p-6">
-          {error && (
-            <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              <strong>Error:</strong> {error}
-              <div className="mt-1 text-xs text-red-600">
-                (Check Supabase table <code>RestroMaster</code> for RestroCode{" "}
-                {params.code})
-              </div>
+        {error && (
+          <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <strong>Error:</strong> {error}
+            <div className="mt-1 text-xs text-red-600">
+              (Check Supabase table <code>RestroMaster</code> for RestroCode{" "}
+              {params.code})
             </div>
-          )}
+          </div>
+        )}
 
-          {!error && !restro && (
-            <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              Restro not found
-            </div>
-          )}
+        {!error && !restro && (
+          <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            Restro not found
+          </div>
+        )}
 
-          {children}
-        </div>
-      </div>
+        {children}
+      </Card>
     </div>
   );
 }
