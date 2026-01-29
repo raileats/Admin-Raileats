@@ -27,22 +27,31 @@ export default function RestroEditPageClient({
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }
 
-  /* ---------------- SAVE (SAFE JSON HANDLING) ---------------- */
+  /* ---------------- SAVE (POST vs PATCH FIXED) ---------------- */
   async function handleSave() {
     setSaving(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const res = await fetch("/api/restrosmaster", {
-        method: local?.RestroCode ? "PATCH" : "POST",
+      const isNewRestro =
+        !local?.RestroCode ||
+        local?.RestroCode === "" ||
+        local?.RestroCode === "—";
+
+      const url = "/api/restros";
+      const method = isNewRestro ? "POST" : "PATCH";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(local),
       });
 
-      /* ✅ SAFE JSON PARSE (MAIN FIX) */
-      let json: any = null;
+      /* -------- SAFE RESPONSE PARSE -------- */
       const text = await res.text();
+      let json: any = null;
+
       if (text) {
         try {
           json = JSON.parse(text);
@@ -51,10 +60,17 @@ export default function RestroEditPageClient({
         }
       }
 
-      if (!res.ok) {
+      if (!res.ok || json?.ok === false) {
         setError(json?.error || "Save failed");
-        setSaving(false);
         return;
+      }
+
+      /* -------- IMPORTANT: SET RestroCode AFTER CREATE -------- */
+      if (isNewRestro && json?.row?.RestroCode) {
+        setLocal((prev: any) => ({
+          ...prev,
+          RestroCode: json.row.RestroCode,
+        }));
       }
 
       setSuccess("Saved successfully");
@@ -96,7 +112,9 @@ export default function RestroEditPageClient({
           onClick={handleSave}
           disabled={saving}
           className={`px-6 py-2 rounded text-white ${
-            saving ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
+            saving
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-700"
           }`}
         >
           {saving ? "Saving..." : "Save"}
