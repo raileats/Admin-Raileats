@@ -4,7 +4,6 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AuthGuard from "@/components/admin/AuthGuard";
-import { AdminUserProvider } from "@/components/admin/AdminUserContext"; // ✅ ADD
 
 type User = {
   id?: string;
@@ -29,23 +28,11 @@ export default function AdminShell({
 }: Props) {
   const pathname = usePathname() || "";
 
-  // Paths where we DON'T want to show admin chrome
-  const hideFor = ["/admin/login", "/admin/login/"];
-  const hide = hideFor.some((p) => pathname === p || pathname.startsWith(p));
-
-  const logoutLinkStyle: React.CSSProperties = {
-    display: "inline-block",
-    width: "72px",
-    padding: "6px 8px",
-    borderRadius: 6,
-    border: "1px solid #ddd",
-    background: "#fff",
-    cursor: "pointer",
-    textDecoration: "none",
-    color: "#111",
-    textAlign: "center",
-    fontSize: 14,
-  };
+  // pages without chrome
+  const hideFor = ["/admin/login"];
+  const hide = hideFor.some(
+    (p) => pathname === p || pathname.startsWith(p)
+  );
 
   const handleLogout = async (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
@@ -57,11 +44,7 @@ export default function AdminShell({
     } catch (err) {
       console.error("Logout failed", err);
     } finally {
-      try {
-        window.location.replace("/admin/login");
-      } catch {
-        window.location.href = "/admin/login";
-      }
+      window.location.replace("/admin/login");
     }
   };
 
@@ -70,112 +53,108 @@ export default function AdminShell({
   }
 
   const shell = (
-    // ✅ HERE IS THE MAGIC
-    <AdminUserProvider user={currentUser ?? null}>
-      <div style={{ display: "flex", minHeight: "100vh", background: "#fafafa" }}>
-        {/* Sidebar */}
-        <aside
-          aria-label="Admin sidebar"
-          style={{
-            width: 96,
-            background: "#ffffff",
-            borderRight: "1px solid #eee",
-            paddingTop: 20,
-            boxSizing: "border-box",
-          }}
-        >
-          <div style={{ textAlign: "center", marginBottom: 18 }}>
-            <img src="/logo.png" alt="RailEats logo" style={{ width: 48, height: 48 }} />
+    <div className="flex min-h-screen bg-slate-50">
+      {/* ===== SIDEBAR ===== */}
+      <aside className="w-64 shrink-0 border-r bg-white">
+        <div className="flex items-center gap-3 px-6 py-5 border-b">
+          <img src="/logo.png" alt="RailEats" className="h-8 w-8" />
+          <div>
+            <div className="font-semibold">RailEats Admin</div>
+            <div className="text-xs text-gray-500">Operations</div>
           </div>
+        </div>
 
-          <nav style={{ display: "flex", flexDirection: "column", gap: 14, paddingLeft: 12 }}>
-            <Link href="/admin/home">Dashboard</Link>
-            <Link href="/admin/orders">Orders</Link>
-            <Link href="/admin/restros">Restro Master</Link>
-            <Link href="/admin/menu">Menu</Link>
-            <Link href="/admin/trains">Trains</Link>
-            <Link href="/admin/stations">Stations</Link>
-            <Link href="/admin/users">Users</Link>
+        <nav className="px-4 py-4 space-y-1 text-sm">
+          <SidebarLink href="/admin/home" label="Dashboard" />
+          <SidebarLink href="/admin/orders" label="Orders" />
+          <SidebarLink href="/admin/restros" label="Restro Master" />
+          <SidebarLink href="/admin/menu" label="Menu" />
+          <SidebarLink href="/admin/trains" label="Trains" />
+          <SidebarLink href="/admin/stations" label="Stations" />
+          <SidebarLink href="/admin/users" label="Users" />
 
-            <div style={{ marginTop: 20 }}>
-              <a
-                href="#logout"
-                onClick={handleLogout}
-                style={logoutLinkStyle}
-                role="button"
-              >
-                Logout
-              </a>
-            </div>
-          </nav>
-        </aside>
+          <div className="pt-4 mt-4 border-t">
+            <button
+              onClick={handleLogout}
+              className="w-full rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+            >
+              Logout
+            </button>
+          </div>
+        </nav>
+      </aside>
 
-        {/* Main area */}
-        <main style={{ flex: 1, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-          <header
-            style={{
-              height: 64,
-              display: "flex",
-              alignItems: "center",
-              paddingLeft: 20,
-              paddingRight: 24,
-              gap: 12,
-              borderBottom: "1px solid #f0f0f0",
-              background: "#fff",
-            }}
-          >
-            <img src="/logo.png" alt="logo small" style={{ width: 28, height: 28 }} />
-            <div style={{ fontWeight: 700, fontSize: 18 }}>RailEats Admin</div>
+      {/* ===== MAIN ===== */}
+      <div className="flex flex-1 flex-col">
+        {/* TOP BAR */}
+        <header className="h-16 border-b bg-white px-6 flex items-center justify-between">
+          <div className="font-semibold text-lg">Admin Panel</div>
 
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-              {currentUser ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>
-                      {currentUser.name ?? currentUser.mobile ?? currentUser.email}
-                    </div>
-                    <a
-                      href="#logout"
-                      onClick={handleLogout}
-                      style={{ fontSize: 12, color: "#0070f3" }}
-                    >
-                      Logout
-                    </a>
+          <div className="flex items-center gap-3">
+            {currentUser ? (
+              <>
+                <div className="text-right">
+                  <div className="text-sm font-medium">
+                    {currentUser.name ??
+                      currentUser.mobile ??
+                      currentUser.email}
                   </div>
-
-                  {currentUser.photo_url ? (
-                    <img
-                      src={currentUser.photo_url}
-                      alt="avatar"
-                      style={{ width: 36, height: 36, borderRadius: 999 }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 999,
-                        background: "#eee",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {(currentUser.name || "U").charAt(0)}
-                    </div>
-                  )}
+                  <button
+                    onClick={handleLogout}
+                    className="text-xs text-blue-600 underline"
+                  >
+                    Logout
+                  </button>
                 </div>
-              ) : (
-                <Link href="/admin/login">Login</Link>
-              )}
-            </div>
-          </header>
 
-          <section style={{ padding: 24, flex: 1 }}>{children}</section>
+                {currentUser.photo_url ? (
+                  <img
+                    src={currentUser.photo_url}
+                    alt="avatar"
+                    className="h-9 w-9 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="h-9 w-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium">
+                    {(currentUser.name || "U")[0]}
+                  </div>
+                )}
+              </>
+            ) : (
+              <Link
+                href="/admin/login"
+                className="text-sm text-blue-600 underline"
+              >
+                Login
+              </Link>
+            )}
+          </div>
+        </header>
+
+        {/* CONTENT */}
+        <main className="flex-1 p-6">
+          <div className="mx-auto max-w-[1400px]">{children}</div>
         </main>
       </div>
-    </AdminUserProvider>
+    </div>
   );
 
   return requireAuth ? <AuthGuard>{shell}</AuthGuard> : shell;
+}
+
+/* ===== SMALL HELPER ===== */
+function SidebarLink({
+  href,
+  label,
+}: {
+  href: string;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="block rounded-md px-3 py-2 hover:bg-slate-100 text-gray-800"
+    >
+      {label}
+    </Link>
+  );
 }
