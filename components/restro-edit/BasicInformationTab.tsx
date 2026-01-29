@@ -24,7 +24,7 @@ export default function BasicInformationTab({
   loadingStations = false,
 }: Props) {
   /* ===============================
-     SAFE STATION LIST
+     SAFE STATION LIST (NO CRASH)
   =============================== */
   const safeStations: StationOption[] = useMemo(() => {
     if (!Array.isArray(stations)) return [];
@@ -92,7 +92,7 @@ export default function BasicInformationTab({
   }
 
   /* ===============================
-     STATUS (OLD WORKING LOGIC)
+     RAILEATS STATUS (SAFE PATCH)
   =============================== */
   const isActive = Number(local?.RaileatsStatus ?? 0) === 1;
   const [savingStatus, setSavingStatus] = useState(false);
@@ -131,10 +131,7 @@ export default function BasicInformationTab({
      VALIDATION HELPERS
   =============================== */
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  function onlyDigits10(v: string) {
-    return v.replace(/\D/g, "").slice(0, 10);
-  }
+  const onlyDigits10 = (v: string) => v.replace(/\D/g, "").slice(0, 10);
 
   /* ===============================
      UI
@@ -300,8 +297,7 @@ export default function BasicInformationTab({
               value={local?.OwnerEmail ?? ""}
               onChange={(e) => updateField("OwnerEmail", e.target.value)}
               className={`w-full p-2 rounded border ${
-                local?.OwnerEmail &&
-                !emailRegex.test(local.OwnerEmail)
+                local?.OwnerEmail && !emailRegex.test(local.OwnerEmail)
                   ? "border-red-500"
                   : ""
               }`}
@@ -323,8 +319,7 @@ export default function BasicInformationTab({
               value={local?.RestroEmail ?? ""}
               onChange={(e) => updateField("RestroEmail", e.target.value)}
               className={`w-full p-2 rounded border ${
-                local?.RestroEmail &&
-                !emailRegex.test(local.RestroEmail)
+                local?.RestroEmail && !emailRegex.test(local.RestroEmail)
                   ? "border-red-500"
                   : ""
               }`}
