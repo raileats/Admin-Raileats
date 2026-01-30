@@ -30,7 +30,7 @@ export default function StationSettingsTab({
             </div>
           </FormField>
 
-          {/* Delivery Charge */}
+          {/* Raileats Customer Delivery Charge */}
           <FormField label="Raileats Customer Delivery Charge">
             <input
               type="number"
@@ -49,14 +49,16 @@ export default function StationSettingsTab({
           <FormField label="Weekly Off">
             <select
               value={local?.WeeklyOff ?? "SUN"}
-              onChange={(e) =>
-                updateField("WeeklyOff", e.target.value)
-              }
+              onChange={(e) => updateField("WeeklyOff", e.target.value)}
               className="w-full p-2 rounded border"
             >
-              {["SUN","MON","TUE","WED","THU","FRI","SAT"].map(d => (
-                <option key={d} value={d}>{d}</option>
-              ))}
+              {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(
+                (d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                )
+              )}
             </select>
           </FormField>
 
@@ -75,19 +77,19 @@ export default function StationSettingsTab({
             />
           </FormField>
 
-          {/* OPEN TIME — ⚠ ZERO */}
+          {/* ✅ Open Time (FIXED SPELLING) */}
           <FormField label="Open Time">
             <input
               type="time"
-              value={local?.["0penTime"] ?? ""}
+              value={local?.OpenTime ?? ""}
               onChange={(e) =>
-                updateField("0penTime", e.target.value)
+                updateField("OpenTime", e.target.value)
               }
               className="w-full p-2 rounded border"
             />
           </FormField>
 
-          {/* CLOSED TIME */}
+          {/* Closed Time */}
           <FormField label="Closed Time">
             <input
               type="time"
@@ -118,7 +120,9 @@ export default function StationSettingsTab({
           <FormField label="Delivery Charge Total Incl GST">
             <input
               type="number"
-              value={local?.RaileatsCustomerDeliveryChargeTotalInclGST ?? ""}
+              value={
+                local?.RaileatsCustomerDeliveryChargeTotalInclGST ?? ""
+              }
               onChange={(e) =>
                 updateField(
                   "RaileatsCustomerDeliveryChargeTotalInclGST",
@@ -129,14 +133,14 @@ export default function StationSettingsTab({
             />
           </FormField>
 
-          {/* ⚠ MINIMUM ORDER m */}
+          {/* ✅ Minimum Order Value (FIXED SPELLING) */}
           <FormField label="Minimum Order Value">
             <input
               type="number"
-              value={local?.MinimumOrdermValue ?? ""}
+              value={local?.MinimumOrderValue ?? ""}
               onChange={(e) =>
                 updateField(
-                  "MinimumOrdermValue",
+                  "MinimumOrderValue",
                   Number(e.target.value || 0)
                 )
               }
@@ -144,7 +148,7 @@ export default function StationSettingsTab({
             />
           </FormField>
 
-          {/* Cut Off */}
+          {/* Cut Off Time */}
           <FormField label="Cut Off Time (mins)">
             <input
               type="number"
@@ -162,7 +166,10 @@ export default function StationSettingsTab({
           {/* Payment Options */}
           <FormField label="Raileats Orders Payment Option">
             <select
-              value={local?.RaileatsOrdersPaymentOptionforCustomer ?? "BOTH"}
+              value={
+                local?.RaileatsOrdersPaymentOptionforCustomer ??
+                "BOTH"
+              }
               onChange={(e) =>
                 updateField(
                   "RaileatsOrdersPaymentOptionforCustomer",
@@ -179,7 +186,10 @@ export default function StationSettingsTab({
 
           <FormField label="IRCTC Orders Payment Option">
             <select
-              value={local?.IRCTCOrdersPaymentOptionforCustomer ?? "BOTH"}
+              value={
+                local?.IRCTCOrdersPaymentOptionforCustomer ??
+                "BOTH"
+              }
               onChange={(e) =>
                 updateField(
                   "IRCTCOrdersPaymentOptionforCustomer",
@@ -197,7 +207,10 @@ export default function StationSettingsTab({
           {/* Delivery Type */}
           <FormField label="Restro Type of Delivery">
             <select
-              value={local?.RestroTypeofDeliveryRailEatsorVendor ?? "RAILEATS"}
+              value={
+                local?.RestroTypeofDeliveryRailEatsorVendor ??
+                "RAILEATS"
+              }
               onChange={(e) =>
                 updateField(
                   "RestroTypeofDeliveryRailEatsorVendor",
