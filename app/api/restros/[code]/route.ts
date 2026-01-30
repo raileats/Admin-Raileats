@@ -11,6 +11,7 @@ export async function PATCH(
   { params }: { params: { code: string } }
 ) {
   try {
+    /* ================= RestroCode ================= */
     const RestroCode = Number(params.code);
     if (!RestroCode) {
       return NextResponse.json(
@@ -19,21 +20,16 @@ export async function PATCH(
       );
     }
 
+    /* ================= Read body ================= */
     const body = await req.json();
 
-    /* ===============================
-       🔥 EXACT DB COLUMN MAPPING
-    =============================== */
+    /* ================= Payload (EXACT DB MATCH) ================= */
     const payload: any = {
+      // ---- Station Settings ----
       WeeklyOff: body.WeeklyOff ?? null,
-
-      // ❗ ZERO wali spelling
-      "0penTime": body.OpenTime ?? null,
+      OpenTime: body.OpenTime ?? null, // ✅ EXACT
       ClosedTime: body.ClosedTime ?? null,
-
-      // ❗ spelling mistake in DB
-      MinimumOrdermValue: body.MinimumOrderValue ?? null,
-
+      MinimumOrderValue: body.MinimumOrderValue ?? null,
       CutOffTime: body.CutOffTime ?? null,
 
       RaileatsCustomerDeliveryCharge:
@@ -49,36 +45,45 @@ export async function PATCH(
         body.RaileatsCustomerDeliveryChargeTotalInclGST ?? null,
 
       RaileatsOrdersPaymentOptionforCustomer:
-        body.RaileatsOrdersPaymentOptionForCustomer ?? null,
+        body.RaileatsOrdersPaymentOptionforCustomer ?? null,
 
       IRCTCOrdersPaymentOptionforCustomer:
-        body.IRCTCOrdersPaymentOptionForCustomer ?? null,
+        body.IRCTCOrdersPaymentOptionforCustomer ?? null,
 
       RestroTypeofDeliveryRailEatsorVendor:
-        body.RestroTypeOfDelivery ?? null,
+        body.RestroTypeofDeliveryRailEatsorVendor ?? null,
+
+      // ---- Basic Info (safe to include) ----
+      StationCode: body.StationCode ?? null,
+      StationName: body.StationName ?? null,
+      RestroName: body.RestroName ?? null,
+      OwnerName: body.OwnerName ?? null,
+      OwnerEmail: body.OwnerEmail ?? null,
+      OwnerPhone: body.OwnerPhone ?? null,
+      RestroEmail: body.RestroEmail ?? null,
+      RestroPhone: body.RestroPhone ?? null,
+      BrandNameifAny: body.BrandNameifAny ?? null,
+
+      RaileatsStatus: body.RaileatsStatus ?? null,
+      IsIrctcApproved: body.IsIrctcApproved ?? null,
+      RestroRating: body.RestroRating ?? null,
     };
 
-    /* ===============================
-       CLEAN NULL / UNDEFINED
-    =============================== */
-    const cleaned: any = {};
-    for (const [k, v] of Object.entries(payload)) {
-      if (v !== undefined) cleaned[k] = v;
-    }
+    /* ================= Remove undefined only ================= */
+    Object.keys(payload).forEach((k) => {
+      if (payload[k] === undefined) delete payload[k];
+    });
 
-    if (!Object.keys(cleaned).length) {
-      return NextResponse.json({ ok: true, message: "Nothing to update" });
-    }
-
+    /* ================= Update Supabase ================= */
     const { data, error } = await supabase
       .from("RestroMaster")
-      .update(cleaned)
+      .update(payload)
       .eq("RestroCode", RestroCode)
       .select()
       .single();
 
     if (error) {
-      console.error(error);
+      console.error("Supabase update error:", error);
       return NextResponse.json(
         { ok: false, error: error.message },
         { status: 500 }
@@ -86,10 +91,10 @@ export async function PATCH(
     }
 
     return NextResponse.json({ ok: true, row: data });
-  } catch (e: any) {
-    console.error(e);
+  } catch (err: any) {
+    console.error("PATCH /api/restros/[code] failed:", err);
     return NextResponse.json(
-      { ok: false, error: e.message },
+      { ok: false, error: err?.message || "Server error" },
       { status: 500 }
     );
   }
