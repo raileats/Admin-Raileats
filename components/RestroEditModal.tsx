@@ -52,7 +52,7 @@ export default function RestroEditModal({
   const [restro, setRestro] = useState<any>(restroProp);
   const [local, setLocal] = useState<any>({});
 
-  /* -------- Stations (for dropdown) -------- */
+  /* -------- Stations (dropdown) -------- */
   const [stations, setStations] = useState<
     { label: string; value: string }[]
   >([]);
@@ -88,10 +88,8 @@ export default function RestroEditModal({
       try {
         const res = await fetch("/api/stations");
         if (!res.ok) return;
-
         const json = await res.json();
         const rows = json?.rows || json?.data || json || [];
-
         setStations(
           rows.map((r: any) => ({
             value: r.StationCode,
@@ -106,7 +104,6 @@ export default function RestroEditModal({
         setLoadingStations(false);
       }
     }
-
     fetchStations();
   }, []);
 
@@ -116,44 +113,76 @@ export default function RestroEditModal({
   }, []);
 
   const restroCode = local?.RestroCode || restro?.RestroCode || "";
-  const isNewRestro = !restroCode;
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
-  /* ================= SAVE ================= */
+  /* ================= SAVE (🔥 FIXED) ================= */
   async function handleSave() {
     try {
       setSaving(true);
       setNotification(null);
 
-      const isEdit = Boolean(restroCode);
-      const url = isEdit
-        ? `/api/restros/${encodeURIComponent(restroCode)}`
-        : `/api/restrosmaster`;
+      if (!restroCode) {
+        throw new Error("Missing RestroCode");
+      }
 
-      const method = isEdit ? "PATCH" : "POST";
+      /* 🔥 DB-MAPPED PAYLOAD (MATCHES RestroMaster TABLE) */
+      const payload = {
+        WeeklyOff: local?.WeeklyOff ?? null,
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(local),
-      });
+        "0penTime": local?.OpenTime ?? null,
+        ClosedTime: local?.ClosedTime ?? null,
+
+        MinimumOrdermValue: local?.MinimumOrderValue ?? null,
+        CutOffTime: local?.CutOffTime ?? null,
+
+        RaileatsCustomerDeliveryCharge:
+          local?.RaileatsDeliveryCharge ?? null,
+
+        RaileatsCustomerDeliveryChargeGSTRate:
+          local?.RaileatsDeliveryChargeGSTRate ?? null,
+
+        RaileatsCustomerDeliveryChargeGST:
+          local?.RaileatsDeliveryChargeGST ?? null,
+
+        RaileatsCustomerDeliveryChargeTotalInclGST:
+          local?.RaileatsDeliveryChargeTotalInclGST ?? null,
+
+        RaileatsOrdersPaymentOptionforCustomer:
+          local?.OrdersPaymentOptionForCustomer ?? null,
+
+        IRCTCOrdersPaymentOptionforCustomer:
+          local?.IRCTCOrdersPaymentOptionForCustomer ?? null,
+
+        RestroTypeofDeliveryRailEatsorVendor:
+          local?.RestroTypeOfDelivery ?? null,
+      };
+
+      const res = await fetch(
+        `/api/restros/${encodeURIComponent(String(restroCode))}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || "Save failed");
+        throw new Error(json?.error || "Update failed");
       }
 
       setNotification({
         type: "success",
-        text: isEdit
-          ? "Updated successfully ✅"
-          : "Created successfully ✅",
+        text: "Updated successfully ✅",
       });
 
       router.refresh();
     } catch (err: any) {
-      setNotification({ type: "error", text: err.message });
+      setNotification({
+        type: "error",
+        text: err?.message || "Save failed",
+      });
     } finally {
       setSaving(false);
     }
@@ -176,25 +205,18 @@ export default function RestroEditModal({
     switch (activeTab) {
       case "Basic Information":
         return <BasicInformationTab {...common} />;
-
       case "Station Settings":
         return <StationSettingsTab {...common} />;
-
       case "Address & Documents":
-        return <AddressDocumentsTab {...common} />; // 🔥 OLD POWERFUL TAB
-
+        return <AddressDocumentsTab {...common} />;
       case "Contacts":
         return <ContactsTab {...common} />;
-
       case "Bank":
         return <BankTab {...common} />;
-
       case "Future Closed":
         return <FutureClosedTab {...common} />;
-
       case "Menu":
         return <MenuTab {...common} />;
-
       default:
         return null;
     }
@@ -204,7 +226,6 @@ export default function RestroEditModal({
   return (
     <div className="fixed inset-0 bg-black/40 z-[1100] flex items-center justify-center">
       <div className="bg-white w-[98%] h-[98%] rounded-lg flex flex-col">
-        {/* Tabs */}
         <div className="flex gap-4 border-b px-6 py-3">
           {TAB_NAMES.map((t) => (
             <button
