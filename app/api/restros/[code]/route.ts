@@ -1,13 +1,9 @@
-// app/api/restros/[code]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabaseAdmin = createClient(
-  SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 export async function PATCH(
@@ -15,102 +11,100 @@ export async function PATCH(
   { params }: { params: { code: string } }
 ) {
   try {
-    /* ===============================
-       STEP 1: RestroCode
-    =============================== */
-    const codeRaw = params.code;
-    if (!codeRaw) {
+    const RestroCode = Number(params.code);
+    if (!RestroCode) {
       return NextResponse.json(
-        { ok: false, error: "Missing RestroCode" },
+        { ok: false, error: "Invalid RestroCode" },
         { status: 400 }
       );
     }
 
-    const RestroCode = /^\d+$/.test(codeRaw)
-      ? Number(codeRaw)
-      : codeRaw;
+    const body = await req.json();
 
-    /* ===============================
-       STEP 2: Read body
-    =============================== */
-    const body = await req.json().catch(() => ({}));
-    if (!body || typeof body !== "object") {
-      return NextResponse.json(
-        { ok: false, error: "Invalid payload" },
-        { status: 400 }
-      );
-    }
+    /* =============================
+       MAP UI → DB COLUMN NAMES
+    ============================== */
+    const payload: any = {
+      /* -------- Station Settings -------- */
+      WeeklyOff: body.WeeklyOff ?? null,
+      "0penTime": body.OpenTime ?? null, // ❗ ZERO
+      ClosedTime: body.ClosedTime ?? null,
+      CutOffTime: body.CutOffTime ?? null,
+      MinimumOrdermValue: body.MinimumOrderValue ?? null,
 
-    /* ===============================
-       STEP 3: Build payload
-       (100% MATCHES DB COLUMNS)
-    =============================== */
-    const payload: any = {};
+      RaileatsCustomerDeliveryCharge:
+        body.RaileatsDeliveryCharge ?? null,
 
-    // ===== EMAILS =====
-    payload.EmailAddressName1 = body.EmailAddressName1 ?? null;
-    payload.EmailsforOrdersReceiving1 =
-      body.EmailsforOrdersReceiving1 ?? null;
-    payload.EmailsforOrdersStatus1 =
-      body.EmailsforOrdersStatus1 ?? "OFF";
+      RaileatsCustomerDeliveryChargeGSTRate:
+        body.RaileatsDeliveryChargeGSTRate ?? null,
 
-    payload.EmailAddressName2 = body.EmailAddressName2 ?? null;
-    payload.EmailsforOrdersReceiving2 =
-      body.EmailsforOrdersReceiving2 ?? null;
-    payload.EmailsforOrdersStatus2 =
-      body.EmailsforOrdersStatus2 ?? "OFF";
+      RaileatsCustomerDeliveryChargeGST:
+        body.RaileatsDeliveryChargeGST ?? null,
 
-    // ===== WHATSAPP 1 =====
-    payload.WhatsappMobileNumberName1 =
-      body.WhatsappMobileNumberName1 ?? null;
-    payload.WhatsappMobileNumberforOrderDetails1 =
-      body.WhatsappMobileNumberforOrderDetails1 ?? null;
-    payload.WhatsappMobileNumberStatus1 =
-      body.WhatsappMobileNumberStatus1 ?? "OFF";
+      RaileatsCustomerDeliveryChargeTotalInclGST:
+        body.RaileatsDeliveryChargeTotalInclGST ?? null,
 
-    // ===== WHATSAPP 2 =====
-    payload.WhatsappMobileNumberName2 =
-      body.WhatsappMobileNumberName2 ?? null;
-    payload.WhatsappMobileNumberforOrderDetails2 =
-      body.WhatsappMobileNumberforOrderDetails2 ?? null;
-    payload.WhatsappMobileNumberStatus2 =
-      body.WhatsappMobileNumberStatus2 ?? "OFF";
+      RaileatsOrdersPaymentOptionforCustomer:
+        body.OrdersPaymentOptionForCustomer ?? null,
 
-    // ===== WHATSAPP 3 =====
-    payload.WhatsappMobileNumberName3 =
-      body.WhatsappMobileNumberName3 ?? null;
-    payload.WhatsappMobileNumberforOrderDetails3 =
-      body.WhatsappMobileNumberforOrderDetails3 ?? null;
-    payload.WhatsappMobileNumberStatus3 =
-      body.WhatsappMobileNumberStatus3 ?? "OFF";
+      IRCTCOrdersPaymentOptionforCustomer:
+        body.IRCTCOrdersPaymentOptionForCustomer ?? null,
 
-    /* ===============================
-       STEP 4: Remove empty payload
-    =============================== */
-    const cleanedPayload: any = {};
+      RestroTypeofDeliveryRailEatsorVendor:
+        body.RestroTypeOfDelivery ?? null,
+
+      /* -------- Contacts (KEEP OLD LOGIC) -------- */
+      EmailAddressName1: body.EmailAddressName1 ?? null,
+      EmailsforOrdersReceiving1: body.EmailsforOrdersReceiving1 ?? null,
+      EmailsforOrdersStatus1: body.EmailsforOrdersStatus1 ?? null,
+
+      EmailAddressName2: body.EmailAddressName2 ?? null,
+      EmailsforOrdersReceiving2: body.EmailsforOrdersReceiving2 ?? null,
+      EmailsforOrdersStatus2: body.EmailsforOrdersStatus2 ?? null,
+
+      WhatsappMobileNumberName1: body.WhatsappMobileNumberName1 ?? null,
+      WhatsappMobileNumberforOrderDetails1:
+        body.WhatsappMobileNumberforOrderDetails1 ?? null,
+      WhatsappMobileNumberStatus1:
+        body.WhatsappMobileNumberStatus1 ?? null,
+
+      WhatsappMobileNumberName2: body.WhatsappMobileNumberName2 ?? null,
+      WhatsappMobileNumberforOrderDetails2:
+        body.WhatsappMobileNumberforOrderDetails2 ?? null,
+      WhatsappMobileNumberStatus2:
+        body.WhatsappMobileNumberStatus2 ?? null,
+
+      WhatsappMobileNumberName3: body.WhatsappMobileNumberName3 ?? null,
+      WhatsappMobileNumberforOrderDetails3:
+        body.WhatsappMobileNumberforOrderDetails3 ?? null,
+      WhatsappMobileNumberStatus3:
+        body.WhatsappMobileNumberStatus3 ?? null,
+    };
+
+    /* =============================
+       CLEAN UNDEFINED
+    ============================== */
+    const cleaned: any = {};
     for (const [k, v] of Object.entries(payload)) {
-      if (v !== undefined) cleanedPayload[k] = v;
+      if (v !== undefined) cleaned[k] = v;
     }
 
-    if (Object.keys(cleanedPayload).length === 0) {
-      return NextResponse.json({
-        ok: true,
-        message: "Nothing to update",
-      });
+    if (Object.keys(cleaned).length === 0) {
+      return NextResponse.json({ ok: true, message: "Nothing to update" });
     }
 
-    /* ===============================
-       STEP 5: Update Supabase
-    =============================== */
-    const { data, error } = await supabaseAdmin
+    /* =============================
+       UPDATE DB
+    ============================== */
+    const { data, error } = await supabase
       .from("RestroMaster")
-      .update(cleanedPayload)
+      .update(cleaned)
       .eq("RestroCode", RestroCode)
       .select()
       .single();
 
     if (error) {
-      console.error("Supabase update error:", error);
+      console.error("Supabase error:", error);
       return NextResponse.json(
         { ok: false, error: error.message },
         { status: 500 }
@@ -119,9 +113,9 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true, row: data });
   } catch (err: any) {
-    console.error("PATCH /api/restros/[code] error:", err);
+    console.error("PATCH error:", err);
     return NextResponse.json(
-      { ok: false, error: err?.message ?? String(err) },
+      { ok: false, error: err.message },
       { status: 500 }
     );
   }
