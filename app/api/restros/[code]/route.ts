@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
 );
 
 export async function PATCH(
@@ -11,8 +12,8 @@ export async function PATCH(
   { params }: { params: { code: string } }
 ) {
   try {
-    const RestroCode = Number(params.code);
-    if (!RestroCode) {
+    const code = Number(params.code);
+    if (!code) {
       return NextResponse.json(
         { ok: false, error: "Invalid RestroCode" },
         { status: 400 }
@@ -21,66 +22,87 @@ export async function PATCH(
 
     const body = await req.json();
 
-    /* ================= EXACT DB MAPPING ================= */
+    /* ===============================
+       🔥 EXACT DB COLUMN MAPPING
+       (deep-verified with schema)
+    =============================== */
     const payload: any = {
+      // ---------- Station / Status ----------
+      StationCode: body.StationCode ?? null,
+      StationName: body.StationName ?? null,
       WeeklyOff: body.WeeklyOff ?? null,
 
-      // ❗ ZERO not O
-      "0penTime": body.OpenTime || null,
-      ClosedTime: body.ClosedTime || null,
+      // ⚠️ DB COLUMN HAS ZERO (0)
+      "0penTime": body.OpenTime ?? null,
+      ClosedTime: body.ClosedTime ?? null,
 
-      MinimumOrderValue:
-        body.MinimumOrderValue != null
-          ? Number(body.MinimumOrderValue)
-          : null,
+      // ---------- Order Rules ----------
+      MinimumOrderValue: body.MinimumOrderValue ?? null,
+      CutOffTime: body.CutOffTime ?? null,
 
-      CutOffTime:
-        body.CutOffTime != null ? Number(body.CutOffTime) : null,
-
+      // ---------- Charges ----------
       RaileatsCustomerDeliveryCharge:
-        body.RaileatsDeliveryCharge != null
-          ? Number(body.RaileatsDeliveryCharge)
-          : null,
+        body.RaileatsDeliveryCharge ?? null,
 
       RaileatsCustomerDeliveryChargeGSTRate:
-        body.RaileatsDeliveryChargeGSTRate != null
-          ? String(body.RaileatsDeliveryChargeGSTRate)
-          : null,
+        body.RaileatsDeliveryChargeGSTRate ?? null,
 
       RaileatsCustomerDeliveryChargeGST:
-        body.RaileatsDeliveryChargeGST != null
-          ? String(body.RaileatsDeliveryChargeGST)
-          : null,
+        body.RaileatsDeliveryChargeGST ?? null,
 
       RaileatsCustomerDeliveryChargeTotalInclGST:
-        body.RaileatsDeliveryChargeTotalInclGST != null
-          ? String(body.RaileatsDeliveryChargeTotalInclGST)
-          : null,
+        body.RaileatsDeliveryChargeTotalInclGST ?? null,
 
+      // ---------- Payment Options ----------
       RaileatsOrdersPaymentOptionforCustomer:
         body.OrdersPaymentOptionForCustomer ?? null,
 
       IRCTCOrdersPaymentOptionforCustomer:
         body.IRCTCOrdersPaymentOptionForCustomer ?? null,
 
+      // ---------- Delivery Type ----------
       RestroTypeofDeliveryRailEatsorVendor:
         body.RestroTypeOfDelivery ?? null,
+
+      // ---------- Flags ----------
+      RaileatsStatus:
+        body.RaileatsStatus !== undefined
+          ? Number(body.RaileatsStatus)
+          : null,
+
+      IsIrctcApproved:
+        body.IsIrctcApproved !== undefined
+          ? String(body.IsIrctcApproved)
+          : null,
+
+      RestroRating:
+        body.RestroRating !== undefined
+          ? Number(body.RestroRating)
+          : null,
     };
 
-    /* ================= CLEAN PAYLOAD ================= */
+    /* ===============================
+       🧹 CLEAN NULL / UNDEFINED
+    =============================== */
     const cleaned: any = {};
     for (const [k, v] of Object.entries(payload)) {
       if (v !== undefined) cleaned[k] = v;
     }
 
     if (Object.keys(cleaned).length === 0) {
-      return NextResponse.json({ ok: true, message: "Nothing to update" });
+      return NextResponse.json({
+        ok: true,
+        message: "Nothing to update",
+      });
     }
 
+    /* ===============================
+       🚀 UPDATE SUPABASE
+    =============================== */
     const { data, error } = await supabase
       .from("RestroMaster")
       .update(cleaned)
-      .eq("RestroCode", RestroCode)
+      .eq("RestroCode", code)
       .select()
       .single();
 
@@ -92,7 +114,10 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ ok: true, row: data });
+    return NextResponse.json({
+      ok: true,
+      row: data,
+    });
   } catch (err: any) {
     console.error("PATCH error:", err);
     return NextResponse.json(
