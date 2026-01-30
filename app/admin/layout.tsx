@@ -42,10 +42,12 @@ export default async function AdminLayout({ children }: Props) {
           .eq("email", email)
           .single();
 
-        if (!error && row) currentUser = row;
+        if (!error && row) {
+          currentUser = row;
+        }
       }
     } catch {
-      // silent fallback
+      // silent fallback to JWT
     }
 
     /* ================= FALLBACK: admin_auth JWT ================= */
@@ -68,9 +70,11 @@ export default async function AdminLayout({ children }: Props) {
             else if (payload.uid) q = q.eq("id", payload.uid);
 
             const { data: row, error } = await q.single();
-            if (!error && row) currentUser = row;
-          } catch (e) {
-            console.warn("Invalid admin_auth JWT", e);
+            if (!error && row) {
+              currentUser = row;
+            }
+          } catch (err) {
+            console.warn("Invalid admin_auth JWT", err);
           }
         }
       }
@@ -80,10 +84,11 @@ export default async function AdminLayout({ children }: Props) {
     currentUser = null;
   }
 
-  /* ❗ VERY IMPORTANT:
-     ❌ DO NOT wrap html/body here
-     ✅ Let app/layout.tsx handle it
-  */
+  /**
+   * ❗ IMPORTANT
+   * - DO NOT render <html> or <body> here
+   * - app/layout.tsx already handles that
+   */
   return (
     <AdminShell currentUser={currentUser} requireAuth>
       {children}
