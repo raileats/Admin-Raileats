@@ -29,13 +29,18 @@ export async function PATCH(
       "0penTime": body.OpenTime || null,
       ClosedTime: body.ClosedTime || null,
 
-      CutOffTime: body.CutOffTime ?? null,
+      MinimumOrderValue:
+        body.MinimumOrderValue != null
+          ? Number(body.MinimumOrderValue)
+          : null,
 
-      // ❗ extra m in DB
-      MinimumOrdermValue: body.MinimumOrderValue ?? null,
+      CutOffTime:
+        body.CutOffTime != null ? Number(body.CutOffTime) : null,
 
       RaileatsCustomerDeliveryCharge:
-        body.RaileatsDeliveryCharge ?? null,
+        body.RaileatsDeliveryCharge != null
+          ? Number(body.RaileatsDeliveryCharge)
+          : null,
 
       RaileatsCustomerDeliveryChargeGSTRate:
         body.RaileatsDeliveryChargeGSTRate != null
@@ -62,10 +67,14 @@ export async function PATCH(
         body.RestroTypeOfDelivery ?? null,
     };
 
-    /* ============== CLEAN UNDEFINED ============== */
+    /* ================= CLEAN PAYLOAD ================= */
     const cleaned: any = {};
     for (const [k, v] of Object.entries(payload)) {
       if (v !== undefined) cleaned[k] = v;
+    }
+
+    if (Object.keys(cleaned).length === 0) {
+      return NextResponse.json({ ok: true, message: "Nothing to update" });
     }
 
     const { data, error } = await supabase
