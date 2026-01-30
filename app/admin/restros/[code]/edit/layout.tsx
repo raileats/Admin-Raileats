@@ -1,3 +1,4 @@
+// app/admin/restros/[code]/edit/layout.tsx
 import React from "react";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
@@ -65,19 +66,19 @@ export default async function RestroEditLayout({ params, children }: Props) {
 
         {/* ===== ERRORS ===== */}
         {error && (
-          <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             <strong>Error:</strong> {error}
           </div>
         )}
 
         {!error && !restro && (
-          <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             Restro not found
           </div>
         )}
 
         {/* ===== PAGE CONTENT ===== */}
-        {children}
+        <div className="mt-6">{children}</div>
       </Card>
     </div>
   );
