@@ -44,7 +44,11 @@ export async function PATCH(req: Request, { params }: { params: { code: string }
 
     // Update RestroMaster table — exact column names as in your DB
     const table = "RestroMaster"; // change only if your table has different name
-    const updatePayload = { RaileatsStatus: newStatus };
+    const updatePayload = {
+  RaileatsStatus: newStatus,
+  UpdatedAt: new Date().toISOString(), // 👈 ADD THIS
+};
+
 
     const { data, error } = await supabase
       .from(table)
