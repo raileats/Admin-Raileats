@@ -3,8 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 export async function PATCH(
@@ -12,8 +11,8 @@ export async function PATCH(
   { params }: { params: { code: string } }
 ) {
   try {
-    const code = Number(params.code);
-    if (!code) {
+    const RestroCode = Number(params.code);
+    if (!RestroCode) {
       return NextResponse.json(
         { ok: false, error: "Invalid RestroCode" },
         { status: 400 }
@@ -24,104 +23,73 @@ export async function PATCH(
 
     /* ===============================
        🔥 EXACT DB COLUMN MAPPING
-       (deep-verified with schema)
     =============================== */
     const payload: any = {
-      // ---------- Station / Status ----------
-      StationCode: body.StationCode ?? null,
-      StationName: body.StationName ?? null,
       WeeklyOff: body.WeeklyOff ?? null,
 
-      // ⚠️ DB COLUMN HAS ZERO (0)
+      // ❗ ZERO wali spelling
       "0penTime": body.OpenTime ?? null,
       ClosedTime: body.ClosedTime ?? null,
 
-      // ---------- Order Rules ----------
-      MinimumOrderValue: body.MinimumOrderValue ?? null,
+      // ❗ spelling mistake in DB
+      MinimumOrdermValue: body.MinimumOrderValue ?? null,
+
       CutOffTime: body.CutOffTime ?? null,
 
-      // ---------- Charges ----------
       RaileatsCustomerDeliveryCharge:
-        body.RaileatsDeliveryCharge ?? null,
+        body.RaileatsCustomerDeliveryCharge ?? null,
 
       RaileatsCustomerDeliveryChargeGSTRate:
-        body.RaileatsDeliveryChargeGSTRate ?? null,
+        body.RaileatsCustomerDeliveryChargeGSTRate ?? null,
 
       RaileatsCustomerDeliveryChargeGST:
-        body.RaileatsDeliveryChargeGST ?? null,
+        body.RaileatsCustomerDeliveryChargeGST ?? null,
 
       RaileatsCustomerDeliveryChargeTotalInclGST:
-        body.RaileatsDeliveryChargeTotalInclGST ?? null,
+        body.RaileatsCustomerDeliveryChargeTotalInclGST ?? null,
 
-      // ---------- Payment Options ----------
       RaileatsOrdersPaymentOptionforCustomer:
-        body.OrdersPaymentOptionForCustomer ?? null,
+        body.RaileatsOrdersPaymentOptionForCustomer ?? null,
 
       IRCTCOrdersPaymentOptionforCustomer:
         body.IRCTCOrdersPaymentOptionForCustomer ?? null,
 
-      // ---------- Delivery Type ----------
       RestroTypeofDeliveryRailEatsorVendor:
         body.RestroTypeOfDelivery ?? null,
-
-      // ---------- Flags ----------
-      RaileatsStatus:
-        body.RaileatsStatus !== undefined
-          ? Number(body.RaileatsStatus)
-          : null,
-
-      IsIrctcApproved:
-        body.IsIrctcApproved !== undefined
-          ? String(body.IsIrctcApproved)
-          : null,
-
-      RestroRating:
-        body.RestroRating !== undefined
-          ? Number(body.RestroRating)
-          : null,
     };
 
     /* ===============================
-       🧹 CLEAN NULL / UNDEFINED
+       CLEAN NULL / UNDEFINED
     =============================== */
     const cleaned: any = {};
     for (const [k, v] of Object.entries(payload)) {
       if (v !== undefined) cleaned[k] = v;
     }
 
-    if (Object.keys(cleaned).length === 0) {
-      return NextResponse.json({
-        ok: true,
-        message: "Nothing to update",
-      });
+    if (!Object.keys(cleaned).length) {
+      return NextResponse.json({ ok: true, message: "Nothing to update" });
     }
 
-    /* ===============================
-       🚀 UPDATE SUPABASE
-    =============================== */
     const { data, error } = await supabase
       .from("RestroMaster")
       .update(cleaned)
-      .eq("RestroCode", code)
+      .eq("RestroCode", RestroCode)
       .select()
       .single();
 
     if (error) {
-      console.error("Supabase error:", error);
+      console.error(error);
       return NextResponse.json(
         { ok: false, error: error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      row: data,
-    });
-  } catch (err: any) {
-    console.error("PATCH error:", err);
+    return NextResponse.json({ ok: true, row: data });
+  } catch (e: any) {
+    console.error(e);
     return NextResponse.json(
-      { ok: false, error: err.message },
+      { ok: false, error: e.message },
       { status: 500 }
     );
   }
