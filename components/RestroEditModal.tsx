@@ -6,7 +6,7 @@ import UI from "@/components/AdminUI";
 
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
-import AddressDocsClient from "@/components/tabs/AddressDocsClient";
+import AddressDocumentsTab from "./restro-edit/AddressDocumentsTab";
 import ContactsTab from "./restro-edit/ContactsTab";
 import BankTab from "./restro-edit/BankTab";
 import FutureClosedTab from "./restro-edit/FutureClosedTab";
@@ -14,6 +14,7 @@ import MenuTab from "./restro-edit/MenuTab";
 
 const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
 
+/* ================= CONSTANTS ================= */
 const TAB_NAMES = [
   "Basic Information",
   "Station Settings",
@@ -24,7 +25,7 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ---------------- helpers ---------------- */
+/* ================= HELPERS ================= */
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
     if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
@@ -39,7 +40,7 @@ function buildStationDisplay(obj: any) {
   return `${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}`;
 }
 
-/* ---------------- component ---------------- */
+/* ================= COMPONENT ================= */
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
@@ -51,7 +52,7 @@ export default function RestroEditModal({
   const [restro, setRestro] = useState<any>(restroProp);
   const [local, setLocal] = useState<any>({});
 
-  /* stations */
+  /* -------- Stations (for dropdown) -------- */
   const [stations, setStations] = useState<
     { label: string; value: string }[]
   >([]);
@@ -60,7 +61,7 @@ export default function RestroEditModal({
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<any>(null);
 
-  /* ---------------- INIT ---------------- */
+  /* ================= INIT ================= */
   useEffect(() => {
     if (restroProp) {
       setRestro(restroProp);
@@ -71,7 +72,16 @@ export default function RestroEditModal({
     }
   }, [restroProp]);
 
-  /* ---------------- FETCH STATIONS ---------------- */
+  /* ================= ESC CLOSE ================= */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose?.();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  /* ================= FETCH STATIONS ================= */
   useEffect(() => {
     async function fetchStations() {
       setLoadingStations(true);
@@ -100,25 +110,25 @@ export default function RestroEditModal({
     fetchStations();
   }, []);
 
-  /* ---------------- UPDATE FIELD ---------------- */
+  /* ================= UPDATE FIELD ================= */
   const updateField = useCallback((key: string, value: any) => {
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }, []);
 
   const restroCode = local?.RestroCode || restro?.RestroCode || "";
+  const isNewRestro = !restroCode;
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
-  /* ---------------- SAVE (🔥 MAIN FIX) ---------------- */
+  /* ================= SAVE ================= */
   async function handleSave() {
     try {
       setSaving(true);
       setNotification(null);
 
       const isEdit = Boolean(restroCode);
-
       const url = isEdit
         ? `/api/restros/${encodeURIComponent(restroCode)}`
-        : `/api/restros`;
+        : `/api/restrosmaster`;
 
       const method = isEdit ? "PATCH" : "POST";
 
@@ -149,7 +159,7 @@ export default function RestroEditModal({
     }
   }
 
-  /* ---------------- COMMON PROPS ---------------- */
+  /* ================= COMMON PROPS ================= */
   const common = {
     local,
     updateField,
@@ -161,6 +171,7 @@ export default function RestroEditModal({
     Toggle,
   };
 
+  /* ================= TAB RENDER ================= */
   function renderTab() {
     switch (activeTab) {
       case "Basic Information":
@@ -170,12 +181,7 @@ export default function RestroEditModal({
         return <StationSettingsTab {...common} />;
 
       case "Address & Documents":
-        return (
-          <AddressDocsClient
-            initialData={restro}
-            imagePrefix={process.env.NEXT_PUBLIC_IMAGE_PREFIX ?? ""}
-          />
-        );
+        return <AddressDocumentsTab {...common} />; // 🔥 OLD POWERFUL TAB
 
       case "Contacts":
         return <ContactsTab {...common} />;
@@ -194,7 +200,7 @@ export default function RestroEditModal({
     }
   }
 
-  /* ---------------- UI ---------------- */
+  /* ================= UI ================= */
   return (
     <div className="fixed inset-0 bg-black/40 z-[1100] flex items-center justify-center">
       <div className="bg-white w-[98%] h-[98%] rounded-lg flex flex-col">
