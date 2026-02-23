@@ -1,86 +1,110 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+
+/* ======================================================
+   SUPABASE ADMIN CLIENT
+====================================================== */
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+/* ======================================================
+   PATCH → UPDATE RESTRO BY RESTROCODE
+   URL: /api/restros/[code]
+====================================================== */
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
   try {
-    /* ================= RestroCode ================= */
+    /* ---------- Validate RestroCode ---------- */
     const RestroCode = Number(params.code);
-    if (!RestroCode) {
+
+    if (!RestroCode || isNaN(RestroCode)) {
       return NextResponse.json(
         { ok: false, error: "Invalid RestroCode" },
         { status: 400 }
       );
     }
 
-    /* ================= Read body ================= */
+    /* ---------- Read Request Body ---------- */
     const body = await req.json();
 
-    /* ================= Payload (EXACT DB MATCH) ================= */
-    const payload: any = {
-      // ---- Station Settings ----
-      WeeklyOff: body.WeeklyOff ?? null,
-      OpenTime: body.OpenTime ?? null, // ✅ EXACT
-      ClosedTime: body.ClosedTime ?? null,
-      MinimumOrderValue: body.MinimumOrderValue ?? null,
-      CutOffTime: body.CutOffTime ?? null,
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { ok: false, error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
 
-      RaileatsCustomerDeliveryCharge:
-        body.RaileatsCustomerDeliveryCharge ?? null,
+    /* ---------- Build Clean Payload ---------- */
+    const payload: Record<string, any> = {};
 
-      RaileatsCustomerDeliveryChargeGSTRate:
-        body.RaileatsCustomerDeliveryChargeGSTRate ?? null,
+    const allowedFields = [
+      // Station
+      "WeeklyOff",
+      "OpenTime",
+      "ClosedTime",
+      "MinimumOrderValue",
+      "CutOffTime",
+      "RaileatsCustomerDeliveryCharge",
+      "RaileatsCustomerDeliveryChargeGSTRate",
+      "RaileatsCustomerDeliveryChargeGST",
+      "RaileatsCustomerDeliveryChargeTotalInclGST",
+      "RaileatsOrdersPaymentOptionforCustomer",
+      "IRCTCOrdersPaymentOptionforCustomer",
+      "RestroTypeofDeliveryRailEatsorVendor",
 
-      RaileatsCustomerDeliveryChargeGST:
-        body.RaileatsCustomerDeliveryChargeGST ?? null,
+      // Basic
+      "StationCode",
+      "StationName",
+      "RestroName",
+      "OwnerName",
+      "OwnerEmail",
+      "OwnerPhone",
+      "RestroEmail",
+      "RestroPhone",
+      "BrandNameifAny",
+      "RaileatsStatus",
+      "IsIrctcApproved",
+      "RestroRating",
+      "IsPureVeg",
+      "RestroDisplayPhoto",
+      "State",
+      "City",
+      "District",
+      "PinCode",
+      "RestroAddress",
+      "FSSAINumber",
+      "GSTNumber",
+      "GSTType"
+    ];
 
-      RaileatsCustomerDeliveryChargeTotalInclGST:
-        body.RaileatsCustomerDeliveryChargeTotalInclGST ?? null,
+    for (const key of allowedFields) {
+      if (body[key] !== undefined) {
+        payload[key] = body[key];
+      }
+    }
 
-      RaileatsOrdersPaymentOptionforCustomer:
-        body.RaileatsOrdersPaymentOptionforCustomer ?? null,
+    // Optional auto timestamp
+    payload["UpdatedAt"] = new Date().toISOString();
 
-      IRCTCOrdersPaymentOptionforCustomer:
-        body.IRCTCOrdersPaymentOptionforCustomer ?? null,
+    console.log("Updating RestroCode:", RestroCode);
+    console.log("Payload keys:", Object.keys(payload));
 
-      RestroTypeofDeliveryRailEatsorVendor:
-        body.RestroTypeofDeliveryRailEatsorVendor ?? null,
-
-      // ---- Basic Info (safe to include) ----
-      StationCode: body.StationCode ?? null,
-      StationName: body.StationName ?? null,
-      RestroName: body.RestroName ?? null,
-      OwnerName: body.OwnerName ?? null,
-      OwnerEmail: body.OwnerEmail ?? null,
-      OwnerPhone: body.OwnerPhone ?? null,
-      RestroEmail: body.RestroEmail ?? null,
-      RestroPhone: body.RestroPhone ?? null,
-      BrandNameifAny: body.BrandNameifAny ?? null,
-
-      RaileatsStatus: body.RaileatsStatus ?? null,
-      IsIrctcApproved: body.IsIrctcApproved ?? null,
-      RestroRating: body.RestroRating ?? null,
-    };
-
-    /* ================= Remove undefined only ================= */
-    Object.keys(payload).forEach((k) => {
-      if (payload[k] === undefined) delete payload[k];
-    });
-
-    /* ================= Update Supabase ================= */
+    /* ---------- Update Supabase ---------- */
     const { data, error } = await supabase
       .from("RestroMaster")
       .update(payload)
       .eq("RestroCode", RestroCode)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("Supabase update error:", error);
@@ -90,9 +114,20 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ ok: true, row: data });
+    if (!data) {
+      return NextResponse.json(
+        { ok: false, error: "No rows updated (RestroCode mismatch?)" },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: "Restro updated successfully",
+      row: data,
+    });
   } catch (err: any) {
-    console.error("PATCH /api/restros/[code] failed:", err);
+    console.error("PATCH error:", err);
     return NextResponse.json(
       { ok: false, error: err?.message || "Server error" },
       { status: 500 }
