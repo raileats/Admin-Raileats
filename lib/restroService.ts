@@ -1,21 +1,15 @@
 // lib/restroService.ts
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
-const PUB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const PUB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-if (!PUB_URL || !PUB_KEY) {
-  throw new Error(
-    "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in environment"
-  );
-}
-
-export const supabase: SupabaseClient = createClient(PUB_URL, PUB_KEY);
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 /* ---------------- TYPES ---------------- */
 
 export type Restro = {
-  RestroCode?: number;
+  RestroCode: number;
   OwnerName?: string;
   RestroName?: string;
   OwnerPhone?: number;
@@ -27,42 +21,38 @@ export type Restro = {
   FSSAINumber?: number;
   GSTNumber?: string;
   GSTType?: string;
-  [k: string]: any;
+  [key: string]: any;
 };
 
 /* ---------------- GET ---------------- */
 
-export async function getRestroById(
-  restroCode: number
-): Promise<Restro | null> {
+export async function getRestroById(restroCode: number) {
   const { data, error } = await supabase
-    .from("RestroMaster") // ⚠️ EXACT case
+    .from("RestroMaster") // EXACT CASE
     .select("*")
-    .eq("RestroCode", restroCode) // ⚠️ EXACT case
-    .limit(1);
+    .eq("RestroCode", restroCode) // EXACT CASE
+    .single();
 
   if (error) {
     console.error("getRestroById error:", error);
     return null;
   }
 
-  if (!data || data.length === 0) return null;
-
-  return data[0] as Restro;
+  return data as Restro;
 }
 
-/* ---------------- UPDATE ---------------- */
+/* ---------------- UPDATE BASIC ---------------- */
 
 export async function updateRestroBasic(
   restroCode: number,
   payload: Partial<Restro>
 ) {
   if (!restroCode) {
-    return { data: null, error: "Invalid RestroCode" };
+    return { success: false, error: "Invalid RestroCode" };
   }
 
   const { data, error } = await supabase
-    .from("RestroMaster") // ⚠️ EXACT table name
+    .from("RestroMaster") // EXACT TABLE NAME
     .update({
       OwnerName: payload.OwnerName ?? null,
       RestroName: payload.RestroName ?? null,
@@ -75,18 +65,19 @@ export async function updateRestroBasic(
       FSSAINumber: payload.FSSAINumber ?? null,
       GSTNumber: payload.GSTNumber ?? null,
       GSTType: payload.GSTType ?? null,
+      UpdatedAt: new Date().toISOString(), // optional
     })
-    .eq("RestroCode", restroCode) // ⚠️ PRIMARY KEY MATCH
+    .eq("RestroCode", restroCode) // PRIMARY KEY MATCH
     .select();
 
   if (error) {
     console.error("updateRestroBasic error:", error);
-    return { data: null, error: error.message };
+    return { success: false, error: error.message };
   }
 
   if (!data || data.length === 0) {
-    return { data: null, error: "No rows updated" };
+    return { success: false, error: "No rows updated (check RestroCode)" };
   }
 
-  return { data: data[0], error: null };
+  return { success: true, data: data[0] };
 }
