@@ -1,4 +1,3 @@
-// components/tabs/BasicInfoClient.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -9,88 +8,99 @@ type Props = {
   imagePrefix?: string;
 };
 
-export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props) {
+export default function BasicInfoClient({
+  initialData,
+  imagePrefix = "",
+}: Props) {
   const router = useRouter();
 
-  const [local, setLocal] = useState<any>({
-    RestroCode: initialData?.RestroCode ?? "",
-    OwnerName: initialData?.OwnerName ?? "",
-    StationCode: initialData?.StationCode ?? "",
-    StationName: initialData?.StationName ?? "",
-    OwnerEmail: initialData?.OwnerEmail ?? "",
-    RestroName: initialData?.RestroName ?? "",
-    OwnerPhone: initialData?.OwnerPhone ?? "",
-    BrandNameifAny: initialData?.BrandNameifAny ?? "",
-    RestroEmail: initialData?.RestroEmail ?? "",
-    RestroPhone: initialData?.RestroPhone ?? "",
-    IRCTCStatus: initialData?.IRCTCStatus ?? 0,
-    RaileatsStatus: initialData?.RaileatsStatus ?? 0,
-    IsIrctcApproved: initialData?.IsIrctcApproved ?? "0",
-    RestroRating: initialData?.RestroRating ?? "",
-    IsPureVeg: initialData?.IsPureVeg ?? 0,
-    RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? "",
-    State: initialData?.State ?? "",
-  });
-
-  useEffect(() => {
-    setLocal((p: any) => ({
-      ...p,
-      RestroCode: initialData?.RestroCode ?? p.RestroCode,
-      OwnerName: initialData?.OwnerName ?? p.OwnerName,
-      StationCode: initialData?.StationCode ?? p.StationCode,
-      StationName: initialData?.StationName ?? p.StationName,
-      OwnerEmail: initialData?.OwnerEmail ?? p.OwnerEmail,
-      RestroName: initialData?.RestroName ?? p.RestroName,
-      OwnerPhone: initialData?.OwnerPhone ?? p.OwnerPhone,
-      BrandNameifAny: initialData?.BrandNameifAny ?? p.BrandNameifAny,
-      RestroEmail: initialData?.RestroEmail ?? p.RestroEmail,
-      RestroPhone: initialData?.RestroPhone ?? p.RestroPhone,
-      IRCTCStatus: initialData?.IRCTCStatus ?? p.IRCTCStatus,
-      RaileatsStatus: initialData?.RaileatsStatus ?? p.RaileatsStatus,
-      IsIrctcApproved: initialData?.IsIrctcApproved ?? p.IsIrctcApproved,
-      RestroRating: initialData?.RestroRating ?? p.RestroRating,
-      IsPureVeg: initialData?.IsPureVeg ?? p.IsPureVeg,
-      RestroDisplayPhoto: initialData?.RestroDisplayPhoto ?? p.RestroDisplayPhoto,
-      State: initialData?.State ?? p.State ?? "",
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData]);
-
+  const [local, setLocal] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  /* ================= LOAD INITIAL ================= */
+
+  useEffect(() => {
+    if (!initialData) return;
+    setLocal(initialData);
+  }, [initialData]);
+
+  /* ================= FIELD UPDATE ================= */
+
   function update(key: string, value: any) {
-    setLocal((s: any) => ({ ...s, [key]: value }));
+    setLocal((prev: any) => ({
+      ...prev,
+      [key]: value,
+    }));
     setMsg(null);
     setErr(null);
   }
 
-  async function save() {
-    setSaving(true);
-    setMsg(null);
-    setErr(null);
+  /* ================= CLEAN PAYLOAD ================= */
 
+  function buildPayload() {
+    const payload: any = {
+      RestroCode: Number(local.RestroCode),
+
+      RestroName: local.RestroName || null,
+      BrandNameifAny: local.BrandNameifAny || null,
+
+      OwnerName: local.OwnerName || null,
+      OwnerEmail: local.OwnerEmail || null,
+      OwnerPhone: local.OwnerPhone
+        ? Number(local.OwnerPhone)
+        : null,
+
+      RestroEmail: local.RestroEmail || null,
+      RestroPhone: local.RestroPhone
+        ? Number(local.RestroPhone)
+        : null,
+
+      StationCode: local.StationCode || null,
+      StationName: local.StationName || null,
+
+      IRCTCStatus: Number(local.IRCTCStatus || 0),
+      RaileatsStatus: Number(local.RaileatsStatus || 0),
+      IsIrctcApproved: String(local.IsIrctcApproved || "0"),
+
+      RestroRating:
+        local.RestroRating === ""
+          ? null
+          : Number(local.RestroRating),
+
+      IsPureVeg: Number(local.IsPureVeg || 0),
+
+      RestroDisplayPhoto: local.RestroDisplayPhoto || null,
+
+      State: local.State || null,
+    };
+
+    // remove undefined only
+    Object.keys(payload).forEach((k) => {
+      if (payload[k] === undefined) delete payload[k];
+    });
+
+    return payload;
+  }
+
+  /* ================= SAVE ================= */
+
+  async function save() {
     try {
-      const id = encodeURIComponent(String(local.RestroCode));
-      const payload: Record<string, any> = {
-        RestroName: local.RestroName,
-        OwnerName: local.OwnerName,
-        StationCode: local.StationCode,
-        StationName: local.StationName,
-        OwnerPhone: local.OwnerPhone,
-        OwnerEmail: local.OwnerEmail,
-        BrandNameifAny: local.BrandNameifAny,
-        RestroEmail: local.RestroEmail,
-        RestroPhone: local.RestroPhone,
-        IRCTCStatus: local.IRCTCStatus ? Number(local.IRCTCStatus) : 0,
-        RaileatsStatus: local.RaileatsStatus ? Number(local.RaileatsStatus) : 0,
-        IsIrctcApproved: String(local.IsIrctcApproved) ?? "0",
-        RestroRating: local.RestroRating === "" ? null : Number(local.RestroRating),
-        IsPureVeg: local.IsPureVeg ? 1 : 0,
-        RestroDisplayPhoto: local.RestroDisplayPhoto,
-        State: local.State ?? null,
-      };
+      setSaving(true);
+      setMsg(null);
+      setErr(null);
+
+      if (!local?.RestroCode) {
+        throw new Error("Invalid RestroCode");
+      }
+
+      const id = Number(local.RestroCode);
+      const payload = buildPayload();
+
+      console.log("Saving ID:", id);
+      console.log("Payload:", payload);
 
       const res = await fetch(`/api/restros/${id}`, {
         method: "PATCH",
@@ -98,225 +108,222 @@ export default function BasicInfoClient({ initialData, imagePrefix = "" }: Props
         body: JSON.stringify(payload),
       });
 
-      const json = await res.json().catch(() => null);
+      const json = await res.json();
+
+      console.log("API Response:", json);
 
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error ?? `Save failed (${res.status})`);
+        throw new Error(json?.error || "Save failed");
       }
 
-      setMsg("Saved successfully");
+      setMsg("Saved successfully ✅");
+
+      // force fresh data reload
       router.refresh();
     } catch (e: any) {
       console.error("Save error:", e);
-      setErr(e?.message ?? "Save failed");
+      setErr(e?.message || "Save failed");
     } finally {
       setSaving(false);
     }
   }
 
+  /* ================= IMAGE HELPER ================= */
+
   const imgSrc = (p: string) => {
     if (!p) return "";
-    if (p.startsWith("http://") || p.startsWith("https://")) return p;
-    return (imagePrefix ?? "") + p;
+    if (p.startsWith("http")) return p;
+    return imagePrefix + p;
   };
 
-  // ---- exact composition using CSV/DB columns: StationName, StationCode, State
-  const getStationDisplay = () => {
-    // if initialData already supplied a full-looking string under StationDisplay, prefer it
-    if (typeof initialData?.StationDisplay === "string" && initialData.StationDisplay.trim()) {
-      return initialData.StationDisplay.trim();
-    }
-
-    const sName = (initialData?.StationName ?? local.StationName ?? "").toString().trim();
-    const sCode = (initialData?.StationCode ?? local.StationCode ?? "").toString().trim();
-    const state = (initialData?.State ?? local.State ?? "").toString().trim();
-
-    const leftParts: string[] = [];
-    if (sName) leftParts.push(sName);
-    if (sCode) leftParts.push(`(${sCode})`);
-
-    const left = leftParts.join(" ");
-    if (left && state) return `${left} - ${state}`;
-    if (left) return left;
-    if (state) return state;
-    return "—";
-  };
-
-  const stationDisplay = getStationDisplay();
+  /* ================= UI ================= */
 
   return (
     <div style={{ padding: 18 }}>
-      <h3 style={{ textAlign: "center", marginBottom: 18, fontSize: 20 }}>Basic Information</h3>
+      <h3 style={{ textAlign: "center", marginBottom: 18 }}>
+        Basic Information
+      </h3>
 
-      <div className="compact-grid">
-        <div className="field">
-          <label>Station</label>
-          <div className="readonly">{stationDisplay}</div>
-        </div>
+      <div className="grid">
+        <Field label="Restro Code">
+          <div className="readonly">{local?.RestroCode ?? "-"}</div>
+        </Field>
 
-        <div className="field">
-          <label>Restro Code</label>
-          <div className="readonly">{local.RestroCode ?? "—"}</div>
-        </div>
+        <Field label="Restro Name">
+          <input
+            value={local?.RestroName ?? ""}
+            onChange={(e) =>
+              update("RestroName", e.target.value)
+            }
+          />
+        </Field>
 
-        <div className="field">
-          <label>Restro Name</label>
-          <input value={local.RestroName ?? ""} onChange={(e) => update("RestroName", e.target.value)} />
-        </div>
+        <Field label="Brand Name">
+          <input
+            value={local?.BrandNameifAny ?? ""}
+            onChange={(e) =>
+              update("BrandNameifAny", e.target.value)
+            }
+          />
+        </Field>
 
-        <div className="field">
-          <label>Brand Name</label>
-          <input value={local.BrandNameifAny ?? ""} onChange={(e) => update("BrandNameifAny", e.target.value)} />
-        </div>
+        <Field label="Owner Name">
+          <input
+            value={local?.OwnerName ?? ""}
+            onChange={(e) =>
+              update("OwnerName", e.target.value)
+            }
+          />
+        </Field>
 
-        <div className="field">
-          <label>Raileats Status</label>
-          <select value={String(local.RaileatsStatus ?? 0)} onChange={(e) => update("RaileatsStatus", Number(e.target.value))}>
+        <Field label="Owner Email">
+          <input
+            value={local?.OwnerEmail ?? ""}
+            onChange={(e) =>
+              update("OwnerEmail", e.target.value)
+            }
+          />
+        </Field>
+
+        <Field label="Owner Phone">
+          <input
+            value={local?.OwnerPhone ?? ""}
+            onChange={(e) =>
+              update("OwnerPhone", e.target.value)
+            }
+          />
+        </Field>
+
+        <Field label="Restro Email">
+          <input
+            value={local?.RestroEmail ?? ""}
+            onChange={(e) =>
+              update("RestroEmail", e.target.value)
+            }
+          />
+        </Field>
+
+        <Field label="Restro Phone">
+          <input
+            value={local?.RestroPhone ?? ""}
+            onChange={(e) =>
+              update("RestroPhone", e.target.value)
+            }
+          />
+        </Field>
+
+        <Field label="Raileats Status">
+          <select
+            value={local?.RaileatsStatus ?? 0}
+            onChange={(e) =>
+              update("RaileatsStatus", Number(e.target.value))
+            }
+          >
             <option value={1}>On</option>
             <option value={0}>Off</option>
           </select>
-        </div>
+        </Field>
 
-        <div className="field">
-          <label>IRCTC Status</label>
-          <select value={String(local.IRCTCStatus ?? 0)} onChange={(e) => update("IRCTCStatus", Number(e.target.value))}>
+        <Field label="IRCTC Status">
+          <select
+            value={local?.IRCTCStatus ?? 0}
+            onChange={(e) =>
+              update("IRCTCStatus", Number(e.target.value))
+            }
+          >
             <option value={1}>On</option>
             <option value={0}>Off</option>
           </select>
-        </div>
+        </Field>
 
-        <div className="field">
-          <label>Is IRCTC Approved</label>
-          <select value={String(local.IsIrctcApproved ?? "0")} onChange={(e) => update("IsIrctcApproved", e.target.value)}>
+        <Field label="IRCTC Approved">
+          <select
+            value={local?.IsIrctcApproved ?? "0"}
+            onChange={(e) =>
+              update("IsIrctcApproved", e.target.value)
+            }
+          >
             <option value="1">Yes</option>
             <option value="0">No</option>
           </select>
-        </div>
+        </Field>
 
-        <div className="field">
-          <label>Restro Rating</label>
-          <input type="number" step="0.1" value={local.RestroRating ?? ""} onChange={(e) => update("RestroRating", e.target.value)} />
-        </div>
+        <Field label="Restro Rating">
+          <input
+            type="number"
+            value={local?.RestroRating ?? ""}
+            onChange={(e) =>
+              update("RestroRating", e.target.value)
+            }
+          />
+        </Field>
 
-        <div className="field">
-          <label>Restro Display Photo (path)</label>
-          <input value={local.RestroDisplayPhoto ?? ""} onChange={(e) => update("RestroDisplayPhoto", e.target.value)} />
-        </div>
+        <Field label="Display Photo">
+          <input
+            value={local?.RestroDisplayPhoto ?? ""}
+            onChange={(e) =>
+              update("RestroDisplayPhoto", e.target.value)
+            }
+          />
+        </Field>
 
-        <div className="field">
-          <label>Display Preview</label>
-          {local.RestroDisplayPhoto ? <img src={imgSrc(local.RestroDisplayPhoto)} alt="display" className="preview" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} /> : <div className="readonly">No image</div>}
-        </div>
-
-        <div className="field">
-          <label>Owner Name</label>
-          <input value={local.OwnerName ?? ""} onChange={(e) => update("OwnerName", e.target.value)} />
-        </div>
-
-        <div className="field">
-          <label>Owner Email</label>
-          <input value={local.OwnerEmail ?? ""} onChange={(e) => update("OwnerEmail", e.target.value)} />
-        </div>
-
-        <div className="field">
-          <label>Owner Phone</label>
-          <input value={local.OwnerPhone ?? ""} onChange={(e) => update("OwnerPhone", e.target.value)} />
-        </div>
-
-        <div className="field">
-          <label>Restro Email</label>
-          <input value={local.RestroEmail ?? ""} onChange={(e) => update("RestroEmail", e.target.value)} />
-        </div>
-
-        <div className="field">
-          <label>Restro Phone</label>
-          <input value={local.RestroPhone ?? ""} onChange={(e) => update("RestroPhone", e.target.value)} />
-        </div>
-
-        <div className="field">
-          <label>Is Pure Veg</label>
-          <select value={String(local.IsPureVeg ?? 0)} onChange={(e) => update("IsPureVeg", Number(e.target.value))}>
-            <option value={1}>Yes</option>
-            <option value={0}>No</option>
-          </select>
-        </div>
-      </div> {/* ← ADDED CLOSE HERE (compact-grid) */}
-
-      <div className="actions">
-        <button className="btn-cancel" onClick={() => router.push("/admin/restros")} disabled={saving}>Cancel</button>
-        <button className="btn-save" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+        <Field label="Preview">
+          {local?.RestroDisplayPhoto ? (
+            <img
+              src={imgSrc(local.RestroDisplayPhoto)}
+              style={{ height: 80 }}
+            />
+          ) : (
+            <div className="readonly">No image</div>
+          )}
+        </Field>
       </div>
 
-      {msg && <div style={{ color: "green", marginTop: 10 }}>{msg}</div>}
-      {err && <div style={{ color: "red", marginTop: 10 }}>{err}</div>}
+      <div className="actions">
+        <button onClick={() => router.back()}>
+          Cancel
+        </button>
+        <button onClick={save} disabled={saving}>
+          {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
+
+      {msg && <div style={{ color: "green" }}>{msg}</div>}
+      {err && <div style={{ color: "red" }}>{err}</div>}
 
       <style jsx>{`
-        .compact-grid {
+        .grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 12px 18px;
-          max-width: 1100px;
-          margin: 0 auto;
-        }
-        .field label {
-          display: block;
-          font-size: 13px;
-          color: #444;
-          margin-bottom: 6px;
-          font-weight: 600;
-        }
-        .field input, .field select {
-          width: 100%;
-          padding: 8px;
-          border-radius: 6px;
-          border: 1px solid #e3e3e3;
-          font-size: 13px;
-          background: #fff;
-          box-sizing: border-box;
+          gap: 14px;
         }
         .readonly {
-          padding: 8px 10px;
-          border-radius: 6px;
-          background: #fafafa;
-          border: 1px solid #f0f0f0;
-          font-size: 13px;
+          padding: 8px;
+          background: #f5f5f5;
         }
-        .preview {
-          height: 80px;
-          object-fit: cover;
-          border-radius: 6px;
-          border: 1px solid #eee;
+        input,
+        select {
+          width: 100%;
+          padding: 8px;
         }
         .actions {
-          max-width: 1100px;
-          margin: 18px auto 0;
+          margin-top: 20px;
           display: flex;
           justify-content: flex-end;
           gap: 10px;
         }
-        .btn-cancel {
-          padding: 8px 12px;
-          border-radius: 6px;
-          border: 1px solid #ddd;
-          background: #fff;
-          cursor: pointer;
-        }
-        .btn-save {
-          padding: 8px 12px;
-          border-radius: 6px;
-          border: none;
-          background: #0ea5e9;
-          color: #fff;
-          cursor: pointer;
-        }
-        @media (max-width: 1100px) {
-          .compact-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 720px) {
-          .compact-grid { grid-template-columns: 1fr; }
-          .actions { padding: 0 12px; }
-        }
       `}</style>
+    </div>
+  );
+}
+
+function Field({ label, children }: any) {
+  return (
+    <div>
+      <label style={{ fontWeight: 600, fontSize: 13 }}>
+        {label}
+      </label>
+      {children}
     </div>
   );
 }
