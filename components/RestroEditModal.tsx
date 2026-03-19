@@ -129,10 +129,12 @@ export default function RestroEditModal({
       const payload = {
         WeeklyOff: local?.WeeklyOff ?? null,
 
-        "0penTime": local?.OpenTime ?? null,
+        // ✅ FIXED (0 → O)
+        OpenTime: local?.OpenTime ?? null,
         ClosedTime: local?.ClosedTime ?? null,
 
-        MinimumOrdermValue: local?.MinimumOrderValue ?? null,
+        // ✅ FIXED spelling
+        MinimumOrderValue: local?.MinimumOrderValue ?? null,
         CutOffTime: local?.CutOffTime ?? null,
 
         RaileatsCustomerDeliveryCharge:
