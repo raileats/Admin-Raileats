@@ -38,30 +38,29 @@ export async function PATCH(
     const supabase = srv();
 
     /* ================================
-       SAFE UPDATE OBJECT
-       (NO CRASH EVEN IF COLUMN MISSING)
+       UPDATE OBJECT
     ================================= */
 
     const updateData: any = {
       RestroName: body.RestroName,
-      FssaiNo: body.FssaiNo,
-      FssaiExpDate: body.FssaiExpDate,
-      GstNo: body.GstNo,
-      PanNo: body.PanNo,
-      BankName: body.BankName,
-      BankAccount: body.BankAccount,
-      IFSC: body.IFSC,
-      Branch: body.Branch,
+      OwnerName: body.OwnerName,
+      OwnerEmail: body.OwnerEmail,
+      OwnerPhone: body.OwnerPhone,
+      RestroEmail: body.RestroEmail,
+      RestroPhone: body.RestroPhone,
+      BrandNameifAny: body.BrandName,
+      RestroRating: body.RestroRating,
       updated_at: new Date().toISOString(),
     };
 
-    /* ✅ OPTIONAL FIELD (SAFE HANDLING) */
-    if (body.OpenTime !== undefined) {
-      updateData.OpenTime = body.OpenTime;
+    /* 🔥 FIXED TIME FIELDS (NO ERROR NOW) */
+
+    if (body.open_time !== undefined) {
+      updateData.open_time = body.open_time;
     }
 
-    if (body.CloseTime !== undefined) {
-      updateData.CloseTime = body.CloseTime;
+    if (body.closed_time !== undefined) {
+      updateData.closed_time = body.closed_time;
     }
 
     const { error } = await supabase
