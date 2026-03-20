@@ -4,8 +4,6 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-/* ================= SUPABASE CLIENT ================= */
-
 if (!process.env.SUPABASE_URL) {
   throw new Error("SUPABASE_URL missing in env");
 }
@@ -22,16 +20,11 @@ const supabase = createClient(
   }
 );
 
-/* ================= PATCH ================= */
-
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
   try {
-    console.log("===== PATCH CALLED =====");
-    console.log("Supabase URL:", process.env.SUPABASE_URL);
-
     const RestroCode = Number(params.code);
 
     if (!RestroCode || isNaN(RestroCode)) {
@@ -43,8 +36,6 @@ export async function PATCH(
 
     const body = await req.json();
 
-    console.log("Incoming body:", body);
-
     if (!body || typeof body !== "object") {
       return NextResponse.json(
         { ok: false, error: "Invalid body" },
@@ -52,17 +43,20 @@ export async function PATCH(
       );
     }
 
-    /* ========== CLEAN PAYLOAD ========== */
+    /* 🔥 FIX: FIELD MAPPING */
+    const payload: Record<string, any> = {
+      ...body,
 
-    const payload: Record<string, any> = { ...body };
+      // snake_case → DB CamelCase mapping
+      OpenTime: body.open_time,
+      ClosedTime: body.closed_time,
+    };
 
-    delete payload.RestroCode; // never update PK
+    delete payload.open_time;
+    delete payload.closed_time;
+    delete payload.RestroCode;
 
     payload.UpdatedAt = new Date().toISOString();
-
-    console.log("Final payload:", payload);
-
-    /* ========== EXECUTE UPDATE ========== */
 
     const { data, error, count } = await supabase
       .from("RestroMaster")
@@ -70,10 +64,7 @@ export async function PATCH(
       .eq("RestroCode", RestroCode)
       .select();
 
-    console.log("Rows affected:", count);
-
     if (error) {
-      console.error("Supabase error:", error);
       return NextResponse.json(
         { ok: false, error: error.message },
         { status: 500 }
@@ -84,7 +75,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           ok: false,
-          error: "No rows updated. Check RestroCode or Supabase project.",
+          error: "No rows updated",
         },
         { status: 400 }
       );
@@ -97,7 +88,6 @@ export async function PATCH(
       updatedRows: count,
     });
   } catch (err: any) {
-    console.error("PATCH FAILED:", err);
     return NextResponse.json(
       { ok: false, error: err?.message || "Server error" },
       { status: 500 }
