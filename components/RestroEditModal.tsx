@@ -115,7 +115,7 @@ export default function RestroEditModal({
   const restroCode = local?.RestroCode || restro?.RestroCode || "";
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
-  /* ================= SAVE (🔥 FIXED) ================= */
+  /* ================= SAVE ================= */
   async function handleSave() {
     try {
       setSaving(true);
@@ -125,15 +125,13 @@ export default function RestroEditModal({
         throw new Error("Missing RestroCode");
       }
 
-      /* 🔥 DB-MAPPED PAYLOAD (MATCHES RestroMaster TABLE) */
       const payload = {
         WeeklyOff: local?.WeeklyOff ?? null,
 
-        // ✅ FIXED (0 → O)
+        // ✅ FIXED
         OpenTime: local?.OpenTime ?? null,
-        ClosedTime: local?.ClosedTime ?? null,
+        closed_time: local?.ClosedTime ?? null,
 
-        // ✅ FIXED spelling
         MinimumOrderValue: local?.MinimumOrderValue ?? null,
         CutOffTime: local?.CutOffTime ?? null,
 
