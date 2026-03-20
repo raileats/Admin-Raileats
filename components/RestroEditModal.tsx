@@ -128,8 +128,8 @@ export default function RestroEditModal({
       const payload = {
         WeeklyOff: local?.WeeklyOff ?? null,
 
-        // ✅ FIXED
-        OpenTime: local?.OpenTime ?? null,
+        // 🔥 ONLY FIX HERE
+        open_time: local?.OpenTime ?? null,
         closed_time: local?.ClosedTime ?? null,
 
         MinimumOrderValue: local?.MinimumOrderValue ?? null,
