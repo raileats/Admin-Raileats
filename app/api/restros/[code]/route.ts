@@ -6,17 +6,9 @@ import { createClient } from "@supabase/supabase-js";
 
 /* ================= SUPABASE CLIENT ================= */
 
-if (!process.env.SUPABASE_URL) {
-  throw new Error("SUPABASE_URL missing in env");
-}
-
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("SUPABASE_SERVICE_ROLE_KEY missing in env");
-}
-
 const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
     auth: { persistSession: false }
   }
@@ -41,38 +33,69 @@ export async function PATCH(
     }
 
     const body = await req.json();
-
     console.log("Incoming body:", body);
 
-    if (!body || typeof body !== "object") {
-      return NextResponse.json(
-        { ok: false, error: "Invalid body" },
-        { status: 400 }
-      );
-    }
+    /* ================= SAFE PAYLOAD ================= */
 
-    /* ================= CLEAN PAYLOAD ================= */
+    const payload: any = {};
 
-    // ✅ FINAL FIX: NO MAPPING, DIRECT BODY USE
-    const payload: Record<string, any> = {
-      ...body
-    };
+    // ✅ ONLY VALID DB COLUMNS
+    if (body.OpenTime !== undefined)
+      payload.OpenTime = body.OpenTime;
 
-    delete payload.RestroCode; // never update PK
+    if (body.ClosedTime !== undefined)
+      payload.ClosedTime = body.ClosedTime;
 
+    if (body.MinimumOrderValue !== undefined)
+      payload.MinimumOrderValue = body.MinimumOrderValue;
+
+    if (body.CutOffTime !== undefined)
+      payload.CutOffTime = body.CutOffTime;
+
+    if (body.WeeklyOff !== undefined)
+      payload.WeeklyOff = body.WeeklyOff;
+
+    if (body.RaileatsCustomerDeliveryCharge !== undefined)
+      payload.RaileatsCustomerDeliveryCharge =
+        body.RaileatsCustomerDeliveryCharge;
+
+    if (body.RaileatsCustomerDeliveryChargeGSTRate !== undefined)
+      payload.RaileatsCustomerDeliveryChargeGSTRate =
+        body.RaileatsCustomerDeliveryChargeGSTRate;
+
+    if (body.RaileatsCustomerDeliveryChargeGST !== undefined)
+      payload.RaileatsCustomerDeliveryChargeGST =
+        body.RaileatsCustomerDeliveryChargeGST;
+
+    if (body.RaileatsCustomerDeliveryChargeTotalInclGST !== undefined)
+      payload.RaileatsCustomerDeliveryChargeTotalInclGST =
+        body.RaileatsCustomerDeliveryChargeTotalInclGST;
+
+    if (body.RaileatsOrdersPaymentOptionforCustomer !== undefined)
+      payload.RaileatsOrdersPaymentOptionforCustomer =
+        body.RaileatsOrdersPaymentOptionforCustomer;
+
+    if (body.IRCTCOrdersPaymentOptionforCustomer !== undefined)
+      payload.IRCTCOrdersPaymentOptionforCustomer =
+        body.IRCTCOrdersPaymentOptionforCustomer;
+
+    if (body.RestroTypeofDeliveryRailEatsorVendor !== undefined)
+      payload.RestroTypeofDeliveryRailEatsorVendor =
+        body.RestroTypeofDeliveryRailEatsorVendor;
+
+    // ✅ timestamp
     payload.UpdatedAt = new Date().toISOString();
 
     console.log("Final payload:", payload);
 
-    /* ================= EXECUTE UPDATE ================= */
+    /* ================= UPDATE ================= */
 
-    const { data, error, count } = await supabase
+    const { data, error } = await supabase
       .from("RestroMaster")
-      .update(payload, { count: "exact" })
+      .update(payload)
       .eq("RestroCode", RestroCode)
       .select();
 
-    console.log("Rows affected:", count);
     console.log("Updated row:", data);
 
     if (error) {
@@ -83,11 +106,11 @@ export async function PATCH(
       );
     }
 
-    if (!count || count === 0) {
+    if (!data || data.length === 0) {
       return NextResponse.json(
         {
           ok: false,
-          error: "No rows updated. Check RestroCode or payload fields.",
+          error: "No rows updated. Check RestroCode",
         },
         { status: 400 }
       );
@@ -96,8 +119,7 @@ export async function PATCH(
     return NextResponse.json({
       ok: true,
       message: "Restro updated successfully",
-      row: data?.[0] ?? null,
-      updatedRows: count,
+      row: data[0],
     });
   } catch (err: any) {
     console.error("PATCH FAILED:", err);
