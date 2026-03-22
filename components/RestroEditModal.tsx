@@ -56,17 +56,7 @@ export default function RestroEditModal({
           return;
         }
 
-        const text = await res.text();
-
-        let json: any = [];
-        try {
-          json = JSON.parse(text);
-        } catch {
-          console.error("❌ Stations API returned HTML:", text);
-          return;
-        }
-
-        console.log("✅ Stations API:", json);
+        const json = await res.json();
 
         const rows = json?.rows || json?.data || json || [];
 
@@ -131,8 +121,9 @@ export default function RestroEditModal({
 
       console.log("🚀 FINAL PAYLOAD:", payload);
 
+      /* ✅ FIXED API PATH */
       const res = await fetch(
-        `/api/admin/restros/${encodeURIComponent(String(restroCode))}`,
+        `/api/restros/${encodeURIComponent(String(restroCode))}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -140,18 +131,7 @@ export default function RestroEditModal({
         }
       );
 
-      console.log("STATUS:", res.status);
-
-      const text = await res.text();
-
-      let json: any = {};
-
-      try {
-        json = JSON.parse(text);
-      } catch {
-        console.error("❌ API returned HTML:", text);
-        throw new Error("Server returned HTML (API broken)");
-      }
+      const json = await res.json();
 
       console.log("✅ API RESPONSE:", json);
 
