@@ -9,10 +9,7 @@ import StationSettingsTab from "./restro-edit/StationSettingsTab";
 
 const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
 
-const TAB_NAMES = [
-  "Basic Information",
-  "Station Settings",
-];
+const TAB_NAMES = ["Basic Information", "Station Settings"];
 
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
@@ -55,12 +52,21 @@ export default function RestroEditModal({
         const res = await fetch("/api/stations");
 
         if (!res.ok) {
-          console.error("Stations API failed");
+          console.error("❌ Stations API failed:", res.status);
           return;
         }
 
-        const json = await res.json();
-        console.log("Stations API:", json);
+        const text = await res.text();
+
+        let json: any = [];
+        try {
+          json = JSON.parse(text);
+        } catch {
+          console.error("❌ Stations API returned HTML:", text);
+          return;
+        }
+
+        console.log("✅ Stations API:", json);
 
         const rows = json?.rows || json?.data || json || [];
 
@@ -125,7 +131,6 @@ export default function RestroEditModal({
 
       console.log("🚀 FINAL PAYLOAD:", payload);
 
-      /* ✅ FINAL CORRECT API */
       const res = await fetch(
         `/api/admin/restros/${encodeURIComponent(String(restroCode))}`,
         {
@@ -137,17 +142,18 @@ export default function RestroEditModal({
 
       console.log("STATUS:", res.status);
 
+      const text = await res.text();
+
       let json: any = {};
 
       try {
-        json = await res.json();
+        json = JSON.parse(text);
       } catch {
-        const text = await res.text();
-        console.error("❌ HTML RESPONSE:", text);
-        throw new Error("API not returning JSON");
+        console.error("❌ API returned HTML:", text);
+        throw new Error("Server returned HTML (API broken)");
       }
 
-      console.log("API RESPONSE:", json);
+      console.log("✅ API RESPONSE:", json);
 
       if (!res.ok || json?.ok === false) {
         throw new Error(json?.error || "Update failed");
