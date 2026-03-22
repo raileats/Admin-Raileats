@@ -61,41 +61,22 @@ export default function RestroEditModal({
     if (restroProp) {
       setRestro(restroProp);
       setLocal({ ...restroProp });
-    } else {
-      setRestro(null);
-      setLocal({});
     }
   }, [restroProp]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose?.();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  useEffect(() => {
     async function fetchStations() {
-      setLoadingStations(true);
       try {
         const res = await fetch("/api/stations");
-        if (!res.ok) return;
         const json = await res.json();
-        const rows = json?.rows || json?.data || json || [];
+        const rows = json?.rows || json || [];
         setStations(
           rows.map((r: any) => ({
             value: r.StationCode,
-            label: `${r.StationName} (${r.StationCode})${
-              r.State ? ` - ${r.State}` : ""
-            }`,
+            label: `${r.StationName} (${r.StationCode})`,
           }))
         );
-      } catch (e) {
-        console.error("Stations fetch failed", e);
-      } finally {
-        setLoadingStations(false);
-      }
+      } catch {}
     }
     fetchStations();
   }, []);
@@ -105,64 +86,43 @@ export default function RestroEditModal({
   }, []);
 
   const restroCode = local?.RestroCode || restro?.RestroCode || "";
-  const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
   async function handleSave() {
     try {
       setSaving(true);
       setNotification(null);
 
-      if (!restroCode) {
-        throw new Error("Missing RestroCode");
-      }
+      const payload: any = {};
 
-      const payload = {
-        RestroName: local?.RestroName ?? null,
-        OwnerName: local?.OwnerName ?? null,
-        OwnerEmail: local?.OwnerEmail ?? null,
-        OwnerPhone: local?.OwnerPhone ?? null,
-        RestroEmail: local?.RestroEmail ?? null,
-        RestroPhone: local?.RestroPhone ?? null,
-        BrandNameifAny: local?.BrandName ?? null,
-        RestroRating: local?.RestroRating ?? null,
-
-        IsIrctcApproved: local?.IsIrctcApproved ?? null,
-        RaileatsStatus: local?.RaileatsStatus ?? null,
-
-        WeeklyOff: local?.WeeklyOff ?? null,
-        open_time: local?.OpenTime ?? null,
-        closed_time: local?.ClosedTime ?? null,
-
-        MinimumOrderValue: local?.MinimumOrderValue ?? null,
-        CutOffTime: local?.CutOffTime ?? null,
-
-        RaileatsCustomerDeliveryCharge:
-          local?.RaileatsDeliveryCharge ?? null,
-
-        RaileatsCustomerDeliveryChargeGSTRate:
-          local?.RaileatsDeliveryChargeGSTRate ?? null,
-
-        RaileatsCustomerDeliveryChargeGST:
-          local?.RaileatsDeliveryChargeGST ?? null,
-
-        RaileatsCustomerDeliveryChargeTotalInclGST:
-          local?.RaileatsDeliveryChargeTotalInclGST ?? null,
-
-        RaileatsOrdersPaymentOptionforCustomer:
-          local?.OrdersPaymentOptionForCustomer ?? null,
-
-        IRCTCOrdersPaymentOptionforCustomer:
-          local?.IRCTCOrdersPaymentOptionForCustomer ?? null,
-
-        RestroTypeofDeliveryRailEatsorVendor:
-          local?.RestroTypeOfDelivery ?? null,
+      const setIf = (k: string, v: any) => {
+        if (v !== undefined && v !== "") payload[k] = v;
       };
 
-      console.log("FINAL PAYLOAD:", payload);
+      // ✅ BASIC INFO
+      setIf("RestroName", local.RestroName);
+      setIf("OwnerName", local.OwnerName);
+      setIf("OwnerEmail", local.OwnerEmail);
+      setIf("OwnerPhone", local.OwnerPhone);
+      setIf("RestroEmail", local.RestroEmail);
+      setIf("RestroPhone", local.RestroPhone);
+      setIf("BrandNameifAny", local.BrandName);
+      setIf("RestroRating", local.RestroRating);
 
-      /* 🔥 FINAL FIX HERE */
+      // ✅ STATUS
+      setIf("IsIrctcApproved", local.IsIrctcApproved);
+      setIf("RaileatsStatus", local.RaileatsStatus);
+
+      // ✅ SETTINGS
+      setIf("WeeklyOff", local.WeeklyOff);
+      setIf("open_time", local.OpenTime);
+      setIf("closed_time", local.ClosedTime);
+      setIf("MinimumOrderValue", local.MinimumOrderValue);
+      setIf("CutOffTime", local.CutOffTime);
+
+      console.log("FINAL CLEAN PAYLOAD:", payload);
+
       const res = await fetch(
-        `/api/admin/restros/${encodeURIComponent(String(restroCode))}`,
+        `/api/admin/restros/${restroCode}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -170,7 +130,7 @@ export default function RestroEditModal({
         }
       );
 
-      const json = await res.json().catch(() => ({}));
+      const json = await res.json();
 
       if (!res.ok || json?.ok === false) {
         throw new Error(json?.error || "Update failed");
@@ -178,14 +138,15 @@ export default function RestroEditModal({
 
       setNotification({
         type: "success",
-        text: "Updated successfully ✅",
+        text: "Saved successfully ✅",
       });
 
       router.refresh();
-    } catch (err: any) {
+    } catch (e: any) {
+      console.error(e);
       setNotification({
         type: "error",
-        text: err?.message || "Save failed",
+        text: e.message,
       });
     } finally {
       setSaving(false);
@@ -196,7 +157,6 @@ export default function RestroEditModal({
     local,
     updateField,
     restroCode,
-    stationDisplay,
     stations,
     loadingStations,
     Select,
@@ -209,59 +169,34 @@ export default function RestroEditModal({
         return <BasicInformationTab {...common} />;
       case "Station Settings":
         return <StationSettingsTab {...common} />;
-      case "Address & Documents":
-        return <AddressDocumentsTab {...common} />;
-      case "Contacts":
-        return <ContactsTab {...common} />;
-      case "Bank":
-        return <BankTab {...common} />;
-      case "Future Closed":
-        return <FutureClosedTab {...common} />;
-      case "Menu":
-        return <MenuTab {...common} />;
       default:
         return null;
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-[1100] flex items-center justify-center">
-      <div className="bg-white w-[98%] h-[98%] rounded-lg flex flex-col">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
+      <div className="bg-white w-[98%] h-[98%] flex flex-col">
+        
         <div className="flex gap-4 border-b px-6 py-3">
           {TAB_NAMES.map((t) => (
-            <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              className={`px-3 py-2 font-semibold ${
-                activeTab === t
-                  ? "border-b-2 border-blue-500 text-blue-600"
-                  : ""
-              }`}
-            >
+            <button key={t} onClick={() => setActiveTab(t)}>
               {t}
             </button>
           ))}
         </div>
 
         {notification && (
-          <div
-            className={`text-center py-2 font-semibold ${
-              notification.type === "error"
-                ? "text-red-600"
-                : "text-green-600"
-            }`}
-          >
-            {notification.text}
-          </div>
+          <div className="text-center py-2">{notification.text}</div>
         )}
 
         <div className="flex-1 overflow-auto p-6">
           <AdminForm>{renderTab()}</AdminForm>
         </div>
 
-        <div className="border-t p-4 flex justify-end gap-3">
+        <div className="p-4 flex justify-end gap-3">
           <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
-          <SubmitButton onClick={handleSave} disabled={saving}>
+          <SubmitButton onClick={handleSave}>
             {saving ? "Saving..." : "Save"}
           </SubmitButton>
         </div>
