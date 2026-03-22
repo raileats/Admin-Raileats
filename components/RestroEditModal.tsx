@@ -49,11 +49,7 @@ export default function RestroEditModal({
   const [restro, setRestro] = useState<any>(restroProp);
   const [local, setLocal] = useState<any>({});
 
-  const [stations, setStations] = useState<
-    { label: string; value: string }[]
-  >([]);
-  const [loadingStations, setLoadingStations] = useState(false);
-
+  const [stations, setStations] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<any>(null);
 
@@ -69,13 +65,7 @@ export default function RestroEditModal({
       try {
         const res = await fetch("/api/stations");
         const json = await res.json();
-        const rows = json?.rows || json || [];
-        setStations(
-          rows.map((r: any) => ({
-            value: r.StationCode,
-            label: `${r.StationName} (${r.StationCode})`,
-          }))
-        );
+        setStations(json || []);
       } catch {}
     }
     fetchStations();
@@ -87,7 +77,6 @@ export default function RestroEditModal({
 
   const restroCode = local?.RestroCode || restro?.RestroCode || "";
 
-  /* ✅ FIX ADDED HERE */
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
   async function handleSave() {
@@ -101,7 +90,7 @@ export default function RestroEditModal({
         if (v !== undefined && v !== "") payload[k] = v;
       };
 
-      // BASIC INFO
+      // BASIC
       setIf("RestroName", local.RestroName);
       setIf("OwnerName", local.OwnerName);
       setIf("OwnerEmail", local.OwnerEmail);
@@ -122,6 +111,8 @@ export default function RestroEditModal({
       setIf("MinimumOrderValue", local.MinimumOrderValue);
       setIf("CutOffTime", local.CutOffTime);
 
+      console.log("🚀 FINAL PAYLOAD:", payload);
+
       const res = await fetch(
         `/api/admin/restros/${restroCode}`,
         {
@@ -131,7 +122,19 @@ export default function RestroEditModal({
         }
       );
 
-      const json = await res.json();
+      console.log("STATUS:", res.status);
+
+      let json: any = {};
+
+      try {
+        json = await res.json();
+      } catch (e) {
+        const text = await res.text();
+        console.error("❌ HTML RESPONSE:", text);
+        throw new Error("Server returned HTML instead of JSON");
+      }
+
+      console.log("API RESPONSE:", json);
 
       if (!res.ok || json?.ok === false) {
         throw new Error(json?.error || "Update failed");
@@ -144,6 +147,7 @@ export default function RestroEditModal({
 
       router.refresh();
     } catch (e: any) {
+      console.error("SAVE ERROR:", e);
       setNotification({
         type: "error",
         text: e.message,
@@ -153,14 +157,12 @@ export default function RestroEditModal({
     }
   }
 
-  /* ✅ FIX ADDED HERE */
   const common = {
     local,
     updateField,
     restroCode,
-    stationDisplay, // 🔥 FIX
+    stationDisplay,
     stations,
-    loadingStations,
     Select,
     Toggle,
   };
@@ -171,16 +173,6 @@ export default function RestroEditModal({
         return <BasicInformationTab {...common} />;
       case "Station Settings":
         return <StationSettingsTab {...common} />;
-      case "Address & Documents":
-        return <AddressDocumentsTab {...common} />;
-      case "Contacts":
-        return <ContactsTab {...common} />;
-      case "Bank":
-        return <BankTab {...common} />;
-      case "Future Closed":
-        return <FutureClosedTab {...common} />;
-      case "Menu":
-        return <MenuTab {...common} />;
       default:
         return null;
     }
@@ -189,6 +181,7 @@ export default function RestroEditModal({
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
       <div className="bg-white w-[98%] h-[98%] flex flex-col">
+
         <div className="flex gap-4 border-b px-6 py-3">
           {TAB_NAMES.map((t) => (
             <button key={t} onClick={() => setActiveTab(t)}>
@@ -198,7 +191,9 @@ export default function RestroEditModal({
         </div>
 
         {notification && (
-          <div className="text-center py-2">{notification.text}</div>
+          <div className="text-center py-2 font-semibold">
+            {notification.text}
+          </div>
         )}
 
         <div className="flex-1 overflow-auto p-6">
@@ -207,10 +202,11 @@ export default function RestroEditModal({
 
         <div className="p-4 flex justify-end gap-3">
           <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
-          <SubmitButton onClick={handleSave}>
+          <SubmitButton onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : "Save"}
           </SubmitButton>
         </div>
+
       </div>
     </div>
   );
