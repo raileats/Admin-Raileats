@@ -52,7 +52,6 @@ export default function RestroEditModal({
   const [restro, setRestro] = useState<any>(restroProp);
   const [local, setLocal] = useState<any>({});
 
-  /* -------- Stations (dropdown) -------- */
   const [stations, setStations] = useState<
     { label: string; value: string }[]
   >([]);
@@ -125,13 +124,26 @@ export default function RestroEditModal({
         throw new Error("Missing RestroCode");
       }
 
+      /* 🔥 FULL FIXED PAYLOAD */
       const payload = {
-        WeeklyOff: local?.WeeklyOff ?? null,
+        // ✅ BASIC INFO FIX
+        RestroName: local?.RestroName ?? null,
+        OwnerName: local?.OwnerName ?? null,
+        OwnerEmail: local?.OwnerEmail ?? null,
+        OwnerPhone: local?.OwnerPhone ?? null,
+        RestroEmail: local?.RestroEmail ?? null,
+        RestroPhone: local?.RestroPhone ?? null,
+        BrandNameifAny: local?.BrandName ?? null,
+        RestroRating: local?.RestroRating ?? null,
 
-        // 🔥 ONLY FIX HERE
+        // ✅ STATUS
+        IsIrctcApproved: local?.IsIrctcApproved ?? null,
+        RaileatsStatus: local?.RaileatsStatus ?? null,
+
+        // ✅ STATION SETTINGS
+        WeeklyOff: local?.WeeklyOff ?? null,
         open_time: local?.OpenTime ?? null,
         closed_time: local?.ClosedTime ?? null,
-
         MinimumOrderValue: local?.MinimumOrderValue ?? null,
         CutOffTime: local?.CutOffTime ?? null,
 
@@ -156,6 +168,8 @@ export default function RestroEditModal({
         RestroTypeofDeliveryRailEatsorVendor:
           local?.RestroTypeOfDelivery ?? null,
       };
+
+      console.log("FINAL PAYLOAD:", payload);
 
       const res = await fetch(
         `/api/restros/${encodeURIComponent(String(restroCode))}`,
