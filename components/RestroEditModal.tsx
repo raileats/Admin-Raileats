@@ -60,7 +60,6 @@ export default function RestroEditModal({
         }
 
         const json = await res.json();
-
         console.log("Stations API:", json);
 
         const rows = json?.rows || json?.data || json || [];
@@ -87,7 +86,6 @@ export default function RestroEditModal({
   }, []);
 
   const restroCode = local?.RestroCode;
-
   const stationDisplay = buildStationDisplay(local);
 
   /* ================= SAVE ================= */
@@ -104,7 +102,7 @@ export default function RestroEditModal({
         if (v !== undefined && v !== "") payload[k] = v;
       };
 
-      // BASIC
+      // BASIC INFO
       setIf("RestroName", local.RestroName);
       setIf("OwnerName", local.OwnerName);
       setIf("OwnerEmail", local.OwnerEmail);
@@ -125,14 +123,17 @@ export default function RestroEditModal({
       setIf("MinimumOrderValue", local.MinimumOrderValue);
       setIf("CutOffTime", local.CutOffTime);
 
-      console.log("FINAL PAYLOAD:", payload);
+      console.log("🚀 FINAL PAYLOAD:", payload);
 
-      /* ✅ FIXED API */
-      const res = await fetch(`/api/restros/${restroCode}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      /* ✅ FINAL CORRECT API */
+      const res = await fetch(
+        `/api/admin/restros/${encodeURIComponent(String(restroCode))}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
       console.log("STATUS:", res.status);
 
@@ -142,7 +143,7 @@ export default function RestroEditModal({
         json = await res.json();
       } catch {
         const text = await res.text();
-        console.error("HTML RESPONSE:", text);
+        console.error("❌ HTML RESPONSE:", text);
         throw new Error("API not returning JSON");
       }
 
