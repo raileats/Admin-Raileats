@@ -14,7 +14,6 @@ import MenuTab from "./restro-edit/MenuTab";
 
 const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
 
-/* ================= CONSTANTS ================= */
 const TAB_NAMES = [
   "Basic Information",
   "Station Settings",
@@ -25,7 +24,6 @@ const TAB_NAMES = [
   "Menu",
 ];
 
-/* ================= HELPERS ================= */
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
     if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
@@ -40,7 +38,6 @@ function buildStationDisplay(obj: any) {
   return `${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}`;
 }
 
-/* ================= COMPONENT ================= */
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
@@ -60,7 +57,6 @@ export default function RestroEditModal({
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<any>(null);
 
-  /* ================= INIT ================= */
   useEffect(() => {
     if (restroProp) {
       setRestro(restroProp);
@@ -71,7 +67,6 @@ export default function RestroEditModal({
     }
   }, [restroProp]);
 
-  /* ================= ESC CLOSE ================= */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose?.();
@@ -80,7 +75,6 @@ export default function RestroEditModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  /* ================= FETCH STATIONS ================= */
   useEffect(() => {
     async function fetchStations() {
       setLoadingStations(true);
@@ -106,7 +100,6 @@ export default function RestroEditModal({
     fetchStations();
   }, []);
 
-  /* ================= UPDATE FIELD ================= */
   const updateField = useCallback((key: string, value: any) => {
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }, []);
@@ -114,7 +107,6 @@ export default function RestroEditModal({
   const restroCode = local?.RestroCode || restro?.RestroCode || "";
   const stationDisplay = buildStationDisplay({ ...restro, ...local });
 
-  /* ================= SAVE ================= */
   async function handleSave() {
     try {
       setSaving(true);
@@ -124,9 +116,7 @@ export default function RestroEditModal({
         throw new Error("Missing RestroCode");
       }
 
-      /* 🔥 FULL FIXED PAYLOAD */
       const payload = {
-        // ✅ BASIC INFO FIX
         RestroName: local?.RestroName ?? null,
         OwnerName: local?.OwnerName ?? null,
         OwnerEmail: local?.OwnerEmail ?? null,
@@ -136,14 +126,13 @@ export default function RestroEditModal({
         BrandNameifAny: local?.BrandName ?? null,
         RestroRating: local?.RestroRating ?? null,
 
-        // ✅ STATUS
         IsIrctcApproved: local?.IsIrctcApproved ?? null,
         RaileatsStatus: local?.RaileatsStatus ?? null,
 
-        // ✅ STATION SETTINGS
         WeeklyOff: local?.WeeklyOff ?? null,
         open_time: local?.OpenTime ?? null,
         closed_time: local?.ClosedTime ?? null,
+
         MinimumOrderValue: local?.MinimumOrderValue ?? null,
         CutOffTime: local?.CutOffTime ?? null,
 
@@ -171,8 +160,9 @@ export default function RestroEditModal({
 
       console.log("FINAL PAYLOAD:", payload);
 
+      /* 🔥 FINAL FIX HERE */
       const res = await fetch(
-        `/api/restros/${encodeURIComponent(String(restroCode))}`,
+        `/api/admin/restros/${encodeURIComponent(String(restroCode))}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -202,7 +192,6 @@ export default function RestroEditModal({
     }
   }
 
-  /* ================= COMMON PROPS ================= */
   const common = {
     local,
     updateField,
@@ -214,7 +203,6 @@ export default function RestroEditModal({
     Toggle,
   };
 
-  /* ================= TAB RENDER ================= */
   function renderTab() {
     switch (activeTab) {
       case "Basic Information":
@@ -236,7 +224,6 @@ export default function RestroEditModal({
     }
   }
 
-  /* ================= UI ================= */
   return (
     <div className="fixed inset-0 bg-black/40 z-[1100] flex items-center justify-center">
       <div className="bg-white w-[98%] h-[98%] rounded-lg flex flex-col">
