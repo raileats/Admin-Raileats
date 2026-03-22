@@ -6,22 +6,12 @@ import UI from "@/components/AdminUI";
 
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
-import AddressDocumentsTab from "./restro-edit/AddressDocumentsTab";
-import ContactsTab from "./restro-edit/ContactsTab";
-import BankTab from "./restro-edit/BankTab";
-import FutureClosedTab from "./restro-edit/FutureClosedTab";
-import MenuTab from "./restro-edit/MenuTab";
 
 const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
 
 const TAB_NAMES = [
   "Basic Information",
   "Station Settings",
-  "Address & Documents",
-  "Contacts",
-  "Bank",
-  "Future Closed",
-  "Menu",
 ];
 
 function safeGet(obj: any, ...keys: string[]) {
@@ -46,43 +36,67 @@ export default function RestroEditModal({
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [restro, setRestro] = useState<any>(restroProp);
   const [local, setLocal] = useState<any>({});
-
   const [stations, setStations] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<any>(null);
 
+  /* ================= LOAD DATA ================= */
   useEffect(() => {
     if (restroProp) {
-      setRestro(restroProp);
       setLocal({ ...restroProp });
     }
   }, [restroProp]);
 
+  /* ================= FETCH STATIONS ================= */
   useEffect(() => {
     async function fetchStations() {
       try {
         const res = await fetch("/api/stations");
+
+        if (!res.ok) {
+          console.error("Stations API failed");
+          return;
+        }
+
         const json = await res.json();
-        setStations(json || []);
-      } catch {}
+
+        console.log("Stations API:", json);
+
+        const rows = json?.rows || json?.data || json || [];
+
+        const mapped = rows.map((r: any) => ({
+          value: r.StationCode,
+          label: `${r.StationName} (${r.StationCode})${
+            r.State ? ` - ${r.State}` : ""
+          }`,
+        }));
+
+        setStations(mapped);
+      } catch (e) {
+        console.error("Stations fetch error", e);
+      }
     }
+
     fetchStations();
   }, []);
 
+  /* ================= UPDATE FIELD ================= */
   const updateField = useCallback((key: string, value: any) => {
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }, []);
 
-  const restroCode = local?.RestroCode || restro?.RestroCode || "";
+  const restroCode = local?.RestroCode;
 
-  const stationDisplay = buildStationDisplay({ ...restro, ...local });
+  const stationDisplay = buildStationDisplay(local);
 
+  /* ================= SAVE ================= */
   async function handleSave() {
     try {
       setSaving(true);
       setNotification(null);
+
+      if (!restroCode) throw new Error("Missing RestroCode");
 
       const payload: any = {};
 
@@ -111,16 +125,14 @@ export default function RestroEditModal({
       setIf("MinimumOrderValue", local.MinimumOrderValue);
       setIf("CutOffTime", local.CutOffTime);
 
-      console.log("🚀 FINAL PAYLOAD:", payload);
+      console.log("FINAL PAYLOAD:", payload);
 
-      const res = await fetch(
-        `/api/admin/restros/${restroCode}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      /* ✅ FIXED API */
+      const res = await fetch(`/api/restros/${restroCode}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       console.log("STATUS:", res.status);
 
@@ -128,10 +140,10 @@ export default function RestroEditModal({
 
       try {
         json = await res.json();
-      } catch (e) {
+      } catch {
         const text = await res.text();
-        console.error("❌ HTML RESPONSE:", text);
-        throw new Error("Server returned HTML instead of JSON");
+        console.error("HTML RESPONSE:", text);
+        throw new Error("API not returning JSON");
       }
 
       console.log("API RESPONSE:", json);
