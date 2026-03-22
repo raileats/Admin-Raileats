@@ -16,14 +16,16 @@ function srv() {
 }
 
 /* ================================
-   UPDATE RESTRO (MAIN API)
+   PATCH API
 ================================ */
 export async function PATCH(
   req: Request,
   { params }: { params: { code: string } }
 ) {
   try {
-    const restroCode = Number(params.code); // 🔥 FIX
+    console.log("===== PATCH START =====");
+
+    const restroCode = Number(params.code);
 
     if (!restroCode || isNaN(restroCode)) {
       return NextResponse.json(
@@ -38,35 +40,76 @@ export async function PATCH(
     const supabase = srv();
 
     /* ================================
-       UPDATE OBJECT
+       SAFE PAYLOAD (NO UNDEFINED)
     ================================= */
 
-    const updateData: any = {
-      RestroName: body.RestroName,
-      OwnerName: body.OwnerName,
-      OwnerEmail: body.OwnerEmail,
-      OwnerPhone: body.OwnerPhone,
-      RestroEmail: body.RestroEmail,
-      RestroPhone: body.RestroPhone,
-      BrandNameifAny: body.BrandName,
-      RestroRating: body.RestroRating,
+    const updateData: any = {};
 
-      WeeklyOff: body.WeeklyOff, // 🔥 added
-      MinimumOrderValue: body.MinimumOrderValue, // 🔥 added
-      CutOffTime: body.CutOffTime, // 🔥 added
-
-      updated_at: new Date().toISOString(),
+    const setIfDefined = (key: string, value: any) => {
+      if (value !== undefined) updateData[key] = value;
     };
 
-    /* 🔥 TIME FIELDS FIX */
+    // ✅ BASIC INFO
+    setIfDefined("RestroName", body.RestroName);
+    setIfDefined("OwnerName", body.OwnerName);
+    setIfDefined("OwnerEmail", body.OwnerEmail);
+    setIfDefined("OwnerPhone", body.OwnerPhone);
+    setIfDefined("RestroEmail", body.RestroEmail);
+    setIfDefined("RestroPhone", body.RestroPhone);
+    setIfDefined("BrandNameifAny", body.BrandNameifAny || body.BrandName);
+    setIfDefined("RestroRating", body.RestroRating);
 
-    if (body.open_time !== undefined) {
-      updateData.open_time = body.open_time;
-    }
+    // ✅ STATUS
+    setIfDefined("IsIrctcApproved", body.IsIrctcApproved);
+    setIfDefined("RaileatsStatus", body.RaileatsStatus);
 
-    if (body.closed_time !== undefined) {
-      updateData.closed_time = body.closed_time;
-    }
+    // ✅ STATION SETTINGS
+    setIfDefined("WeeklyOff", body.WeeklyOff);
+    setIfDefined("MinimumOrderValue", body.MinimumOrderValue);
+    setIfDefined("CutOffTime", body.CutOffTime);
+
+    // ✅ TIME FIX
+    setIfDefined("open_time", body.open_time);
+    setIfDefined("closed_time", body.closed_time);
+
+    // ✅ DELIVERY
+    setIfDefined(
+      "RaileatsCustomerDeliveryCharge",
+      body.RaileatsCustomerDeliveryCharge
+    );
+
+    setIfDefined(
+      "RaileatsCustomerDeliveryChargeGSTRate",
+      body.RaileatsCustomerDeliveryChargeGSTRate
+    );
+
+    setIfDefined(
+      "RaileatsCustomerDeliveryChargeGST",
+      body.RaileatsCustomerDeliveryChargeGST
+    );
+
+    setIfDefined(
+      "RaileatsCustomerDeliveryChargeTotalInclGST",
+      body.RaileatsCustomerDeliveryChargeTotalInclGST
+    );
+
+    setIfDefined(
+      "RaileatsOrdersPaymentOptionforCustomer",
+      body.RaileatsOrdersPaymentOptionforCustomer
+    );
+
+    setIfDefined(
+      "IRCTCOrdersPaymentOptionforCustomer",
+      body.IRCTCOrdersPaymentOptionforCustomer
+    );
+
+    setIfDefined(
+      "RestroTypeofDeliveryRailEatsorVendor",
+      body.RestroTypeofDeliveryRailEatsorVendor
+    );
+
+    // ✅ TIMESTAMP
+    updateData.updated_at = new Date().toISOString();
 
     console.log("Final Update Data:", updateData);
 
@@ -78,13 +121,16 @@ export async function PATCH(
       .from("RestroMaster")
       .update(updateData)
       .eq("RestroCode", restroCode)
-      .select(); // 🔥 VERY IMPORTANT
+      .select();
 
     console.log("Updated Row:", data);
 
     if (error) {
-      console.error("Supabase error:", error);
-      throw error;
+      console.error("❌ Supabase error:", error);
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
     }
 
     if (!data || data.length === 0) {
@@ -94,9 +140,12 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ ok: true, row: data[0] });
+    return NextResponse.json({
+      ok: true,
+      row: data[0],
+    });
   } catch (e: any) {
-    console.error("PATCH ERROR:", e);
+    console.error("❌ PATCH ERROR:", e);
     return NextResponse.json(
       { ok: false, error: e.message || "Internal Server Error" },
       { status: 500 }
