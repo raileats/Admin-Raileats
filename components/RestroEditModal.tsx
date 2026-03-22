@@ -87,6 +87,9 @@ export default function RestroEditModal({
 
   const restroCode = local?.RestroCode || restro?.RestroCode || "";
 
+  /* ✅ FIX ADDED HERE */
+  const stationDisplay = buildStationDisplay({ ...restro, ...local });
+
   async function handleSave() {
     try {
       setSaving(true);
@@ -98,7 +101,7 @@ export default function RestroEditModal({
         if (v !== undefined && v !== "") payload[k] = v;
       };
 
-      // ✅ BASIC INFO
+      // BASIC INFO
       setIf("RestroName", local.RestroName);
       setIf("OwnerName", local.OwnerName);
       setIf("OwnerEmail", local.OwnerEmail);
@@ -108,18 +111,16 @@ export default function RestroEditModal({
       setIf("BrandNameifAny", local.BrandName);
       setIf("RestroRating", local.RestroRating);
 
-      // ✅ STATUS
+      // STATUS
       setIf("IsIrctcApproved", local.IsIrctcApproved);
       setIf("RaileatsStatus", local.RaileatsStatus);
 
-      // ✅ SETTINGS
+      // SETTINGS
       setIf("WeeklyOff", local.WeeklyOff);
       setIf("open_time", local.OpenTime);
       setIf("closed_time", local.ClosedTime);
       setIf("MinimumOrderValue", local.MinimumOrderValue);
       setIf("CutOffTime", local.CutOffTime);
-
-      console.log("FINAL CLEAN PAYLOAD:", payload);
 
       const res = await fetch(
         `/api/admin/restros/${restroCode}`,
@@ -143,7 +144,6 @@ export default function RestroEditModal({
 
       router.refresh();
     } catch (e: any) {
-      console.error(e);
       setNotification({
         type: "error",
         text: e.message,
@@ -153,10 +153,12 @@ export default function RestroEditModal({
     }
   }
 
+  /* ✅ FIX ADDED HERE */
   const common = {
     local,
     updateField,
     restroCode,
+    stationDisplay, // 🔥 FIX
     stations,
     loadingStations,
     Select,
@@ -169,6 +171,16 @@ export default function RestroEditModal({
         return <BasicInformationTab {...common} />;
       case "Station Settings":
         return <StationSettingsTab {...common} />;
+      case "Address & Documents":
+        return <AddressDocumentsTab {...common} />;
+      case "Contacts":
+        return <ContactsTab {...common} />;
+      case "Bank":
+        return <BankTab {...common} />;
+      case "Future Closed":
+        return <FutureClosedTab {...common} />;
+      case "Menu":
+        return <MenuTab {...common} />;
       default:
         return null;
     }
@@ -177,7 +189,6 @@ export default function RestroEditModal({
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
       <div className="bg-white w-[98%] h-[98%] flex flex-col">
-        
         <div className="flex gap-4 border-b px-6 py-3">
           {TAB_NAMES.map((t) => (
             <button key={t} onClick={() => setActiveTab(t)}>
