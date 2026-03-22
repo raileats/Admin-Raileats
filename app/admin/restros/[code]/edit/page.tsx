@@ -58,6 +58,11 @@ export default function RestroEditRoutePage({
           setRestro({
             ...data,
             RestroCode: restroCode,
+
+            // 🔥 FIX: mapping DB → UI
+            BrandName: data.BrandNameifAny,
+            OpenTime: data.open_time,
+            ClosedTime: data.closed_time,
           });
         }
       } catch (e: any) {
