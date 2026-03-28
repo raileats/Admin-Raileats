@@ -38,45 +38,41 @@ export default function RestroEditModal({
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<any>(null);
 
-  /* ================= LOAD DATA ================= */
+  /* ================= LOAD ================= */
   useEffect(() => {
     if (restroProp) {
       setLocal({ ...restroProp });
     }
   }, [restroProp]);
 
-  /* ================= FETCH STATIONS ================= */
+  /* ================= STATIONS ================= */
   useEffect(() => {
     async function fetchStations() {
       try {
         const res = await fetch("/api/stations");
 
-        if (!res.ok) {
-          console.error("❌ Stations API failed:", res.status);
-          return;
-        }
+        if (!res.ok) return;
 
         const json = await res.json();
-
         const rows = json?.rows || json?.data || json || [];
 
-        const mapped = rows.map((r: any) => ({
-          value: r.StationCode,
-          label: `${r.StationName} (${r.StationCode})${
-            r.State ? ` - ${r.State}` : ""
-          }`,
-        }));
-
-        setStations(mapped);
+        setStations(
+          rows.map((r: any) => ({
+            value: r.StationCode,
+            label: `${r.StationName} (${r.StationCode})${
+              r.State ? ` - ${r.State}` : ""
+            }`,
+          }))
+        );
       } catch (e) {
-        console.error("Stations fetch error", e);
+        console.error("Stations error", e);
       }
     }
 
     fetchStations();
   }, []);
 
-  /* ================= UPDATE FIELD ================= */
+  /* ================= UPDATE ================= */
   const updateField = useCallback((key: string, value: any) => {
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }, []);
@@ -92,36 +88,29 @@ export default function RestroEditModal({
 
       if (!restroCode) throw new Error("Missing RestroCode");
 
-      const payload: any = {};
+      const payload = {
+        RestroName: local?.RestroName || null,
+        OwnerName: local?.OwnerName || null,
+        OwnerEmail: local?.OwnerEmail || null,
+        OwnerPhone: local?.OwnerPhone || null,
+        RestroEmail: local?.RestroEmail || null,
+        RestroPhone: local?.RestroPhone || null,
+        BrandNameifAny: local?.BrandName || null,
+        RestroRating: local?.RestroRating || null,
 
-      const setIf = (k: string, v: any) => {
-        if (v !== undefined && v !== "") payload[k] = v;
+        IsIrctcApproved: local?.IsIrctcApproved || null,
+        RaileatsStatus: local?.RaileatsStatus ? 1 : 0,
+
+        WeeklyOff: local?.WeeklyOff || null,
+        open_time: local?.OpenTime || null,
+        closed_time: local?.ClosedTime || null,
+
+        MinimumOrderValue: local?.MinimumOrderValue || null,
+        CutOffTime: local?.CutOffTime || null,
       };
-
-      // BASIC INFO
-      setIf("RestroName", local.RestroName);
-      setIf("OwnerName", local.OwnerName);
-      setIf("OwnerEmail", local.OwnerEmail);
-      setIf("OwnerPhone", local.OwnerPhone);
-      setIf("RestroEmail", local.RestroEmail);
-      setIf("RestroPhone", local.RestroPhone);
-      setIf("BrandNameifAny", local.BrandName);
-      setIf("RestroRating", local.RestroRating);
-
-      // STATUS
-      setIf("IsIrctcApproved", local.IsIrctcApproved);
-      setIf("RaileatsStatus", local.RaileatsStatus);
-
-      // SETTINGS
-      setIf("WeeklyOff", local.WeeklyOff);
-      setIf("open_time", local.OpenTime);
-      setIf("closed_time", local.ClosedTime);
-      setIf("MinimumOrderValue", local.MinimumOrderValue);
-      setIf("CutOffTime", local.CutOffTime);
 
       console.log("🚀 FINAL PAYLOAD:", payload);
 
-      /* ✅ FIXED API PATH */
       const res = await fetch(
         `/api/restros/${encodeURIComponent(String(restroCode))}`,
         {
