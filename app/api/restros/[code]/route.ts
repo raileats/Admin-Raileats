@@ -39,12 +39,13 @@ export async function PATCH(
 
     const payload: any = {};
 
-    // ✅ ONLY VALID DB COLUMNS
-    if (body.OpenTime !== undefined)
-      payload.OpenTime = body.OpenTime;
+    // ✅ 🔥 FIXED MAPPING (IMPORTANT)
 
-    if (body.ClosedTime !== undefined)
-      payload.ClosedTime = body.ClosedTime;
+    if (body.open_time !== undefined)
+      payload.open_time = body.open_time;
+
+    if (body.closed_time !== undefined)
+      payload.closed_time = body.closed_time;
 
     if (body.MinimumOrderValue !== undefined)
       payload.MinimumOrderValue = body.MinimumOrderValue;
@@ -82,6 +83,37 @@ export async function PATCH(
     if (body.RestroTypeofDeliveryRailEatsorVendor !== undefined)
       payload.RestroTypeofDeliveryRailEatsorVendor =
         body.RestroTypeofDeliveryRailEatsorVendor;
+
+    // 🔥 NEW (basic info bhi save hoga)
+    if (body.RestroName !== undefined)
+      payload.RestroName = body.RestroName;
+
+    if (body.OwnerName !== undefined)
+      payload.OwnerName = body.OwnerName;
+
+    if (body.OwnerEmail !== undefined)
+      payload.OwnerEmail = body.OwnerEmail;
+
+    if (body.OwnerPhone !== undefined)
+      payload.OwnerPhone = body.OwnerPhone;
+
+    if (body.RestroEmail !== undefined)
+      payload.RestroEmail = body.RestroEmail;
+
+    if (body.RestroPhone !== undefined)
+      payload.RestroPhone = body.RestroPhone;
+
+    if (body.BrandNameifAny !== undefined)
+      payload.BrandNameifAny = body.BrandNameifAny;
+
+    if (body.RestroRating !== undefined)
+      payload.RestroRating = body.RestroRating;
+
+    if (body.IsIrctcApproved !== undefined)
+      payload.IsIrctcApproved = body.IsIrctcApproved;
+
+    if (body.RaileatsStatus !== undefined)
+      payload.RaileatsStatus = body.RaileatsStatus;
 
     // ✅ timestamp
     payload.UpdatedAt = new Date().toISOString();
