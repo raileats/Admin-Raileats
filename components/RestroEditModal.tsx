@@ -6,10 +6,24 @@ import UI from "@/components/AdminUI";
 
 import BasicInformationTab from "./restro-edit/BasicInformationTab";
 import StationSettingsTab from "./restro-edit/StationSettingsTab";
+import AddressDocumentsTab from "./restro-edit/AddressDocumentsTab";
+import ContactsTab from "./restro-edit/ContactsTab";
+import BankTab from "./restro-edit/BankTab";
+import FutureClosedTab from "./restro-edit/FutureClosedTab";
+import MenuTab from "./restro-edit/MenuTab";
 
 const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
 
-const TAB_NAMES = ["Basic Information", "Station Settings"];
+/* ✅ ALL TABS BACK */
+const TAB_NAMES = [
+  "Basic Information",
+  "Station Settings",
+  "Address & Documents",
+  "Contacts",
+  "Bank",
+  "Future Closed",
+  "Menu",
+];
 
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
@@ -109,20 +123,13 @@ export default function RestroEditModal({
         CutOffTime: local?.CutOffTime || null,
       };
 
-      console.log("🚀 FINAL PAYLOAD:", payload);
-
-      const res = await fetch(
-        `/api/restros/${encodeURIComponent(String(restroCode))}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(`/api/restros/${restroCode}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       const json = await res.json();
-
-      console.log("✅ API RESPONSE:", json);
 
       if (!res.ok || json?.ok === false) {
         throw new Error(json?.error || "Update failed");
@@ -135,7 +142,6 @@ export default function RestroEditModal({
 
       router.refresh();
     } catch (e: any) {
-      console.error("SAVE ERROR:", e);
       setNotification({
         type: "error",
         text: e.message,
@@ -155,12 +161,23 @@ export default function RestroEditModal({
     Toggle,
   };
 
+  /* ✅ ALL TAB RENDER BACK */
   function renderTab() {
     switch (activeTab) {
       case "Basic Information":
         return <BasicInformationTab {...common} />;
       case "Station Settings":
         return <StationSettingsTab {...common} />;
+      case "Address & Documents":
+        return <AddressDocumentsTab {...common} />;
+      case "Contacts":
+        return <ContactsTab {...common} />;
+      case "Bank":
+        return <BankTab {...common} />;
+      case "Future Closed":
+        return <FutureClosedTab {...common} />;
+      case "Menu":
+        return <MenuTab {...common} />;
       default:
         return null;
     }
@@ -172,7 +189,11 @@ export default function RestroEditModal({
 
         <div className="flex gap-4 border-b px-6 py-3">
           {TAB_NAMES.map((t) => (
-            <button key={t} onClick={() => setActiveTab(t)}>
+            <button
+              key={t}
+              onClick={() => setActiveTab(t)}
+              className={activeTab === t ? "text-blue-600 font-bold" : ""}
+            >
               {t}
             </button>
           ))}
