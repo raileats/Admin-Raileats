@@ -39,13 +39,26 @@ export async function PATCH(
 
     const payload: any = {};
 
-    // ✅ 🔥 FIXED MAPPING (IMPORTANT)
+    /* 🔥 ================= STATION FIX ================= */
+
+    if (body.StationCode !== undefined)
+      payload.StationCode = body.StationCode;
+
+    if (body.StationName !== undefined)
+      payload.StationName = body.StationName;
+
+    if (body.State !== undefined)
+      payload.State = body.State;
+
+    /* 🔥 ================= TIME FIX ================= */
 
     if (body.open_time !== undefined)
       payload.open_time = body.open_time;
 
     if (body.closed_time !== undefined)
       payload.closed_time = body.closed_time;
+
+    /* 🔥 ================= ORDER SETTINGS ================= */
 
     if (body.MinimumOrderValue !== undefined)
       payload.MinimumOrderValue = body.MinimumOrderValue;
@@ -84,7 +97,8 @@ export async function PATCH(
       payload.RestroTypeofDeliveryRailEatsorVendor =
         body.RestroTypeofDeliveryRailEatsorVendor;
 
-    // 🔥 NEW (basic info bhi save hoga)
+    /* 🔥 ================= BASIC INFO FIX ================= */
+
     if (body.RestroName !== undefined)
       payload.RestroName = body.RestroName;
 
@@ -115,10 +129,10 @@ export async function PATCH(
     if (body.RaileatsStatus !== undefined)
       payload.RaileatsStatus = body.RaileatsStatus;
 
-    // ✅ timestamp
+    /* ✅ TIMESTAMP */
     payload.UpdatedAt = new Date().toISOString();
 
-    console.log("Final payload:", payload);
+    console.log("🔥 Final payload:", payload);
 
     /* ================= UPDATE ================= */
 
@@ -128,10 +142,10 @@ export async function PATCH(
       .eq("RestroCode", RestroCode)
       .select();
 
-    console.log("Updated row:", data);
+    console.log("✅ Updated row:", data);
 
     if (error) {
-      console.error("Supabase error:", error);
+      console.error("❌ Supabase error:", error);
       return NextResponse.json(
         { ok: false, error: error.message },
         { status: 500 }
@@ -154,7 +168,7 @@ export async function PATCH(
       row: data[0],
     });
   } catch (err: any) {
-    console.error("PATCH FAILED:", err);
+    console.error("❌ PATCH FAILED:", err);
     return NextResponse.json(
       { ok: false, error: err?.message || "Server error" },
       { status: 500 }
