@@ -14,7 +14,6 @@ import MenuTab from "./restro-edit/MenuTab";
 
 const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
 
-/* ✅ ALL TABS BACK */
 const TAB_NAMES = [
   "Basic Information",
   "Station Settings",
@@ -52,41 +51,39 @@ export default function RestroEditModal({
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<any>(null);
 
-  /* ================= LOAD ================= */
+  /* ================= LOAD DATA ================= */
   useEffect(() => {
     if (restroProp) {
       setLocal({ ...restroProp });
     }
   }, [restroProp]);
 
-  /* ================= STATIONS ================= */
+  /* ================= FETCH STATIONS ================= */
   useEffect(() => {
     async function fetchStations() {
       try {
         const res = await fetch("/api/stations");
-
-        if (!res.ok) return;
-
         const json = await res.json();
+
         const rows = json?.rows || json?.data || json || [];
 
-        setStations(
-          rows.map((r: any) => ({
-            value: r.StationCode,
-            label: `${r.StationName} (${r.StationCode})${
-              r.State ? ` - ${r.State}` : ""
-            }`,
-          }))
-        );
+        const mapped = rows.map((r: any) => ({
+          value: r.StationCode,
+          label: `${r.StationName} (${r.StationCode})${
+            r.State ? ` - ${r.State}` : ""
+          }`,
+        }));
+
+        setStations(mapped);
       } catch (e) {
-        console.error("Stations error", e);
+        console.error("Stations fetch error", e);
       }
     }
 
     fetchStations();
   }, []);
 
-  /* ================= UPDATE ================= */
+  /* ================= UPDATE FIELD ================= */
   const updateField = useCallback((key: string, value: any) => {
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }, []);
@@ -102,34 +99,54 @@ export default function RestroEditModal({
 
       if (!restroCode) throw new Error("Missing RestroCode");
 
-      const payload = {
-        RestroName: local?.RestroName || null,
-        OwnerName: local?.OwnerName || null,
-        OwnerEmail: local?.OwnerEmail || null,
-        OwnerPhone: local?.OwnerPhone || null,
-        RestroEmail: local?.RestroEmail || null,
-        RestroPhone: local?.RestroPhone || null,
-        BrandNameifAny: local?.BrandName || null,
-        RestroRating: local?.RestroRating || null,
+      const payload: any = {};
 
-        IsIrctcApproved: local?.IsIrctcApproved || null,
-        RaileatsStatus: local?.RaileatsStatus ? 1 : 0,
-
-        WeeklyOff: local?.WeeklyOff || null,
-        open_time: local?.OpenTime || null,
-        closed_time: local?.ClosedTime || null,
-
-        MinimumOrderValue: local?.MinimumOrderValue || null,
-        CutOffTime: local?.CutOffTime || null,
+      const setIf = (k: string, v: any) => {
+        if (v !== undefined && v !== "") payload[k] = v;
       };
 
-      const res = await fetch(`/api/restros/${restroCode}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      /* ================= 🔥 FULL FIX ================= */
+
+      // BASIC INFO
+      setIf("RestroName", local.RestroName);
+      setIf("OwnerName", local.OwnerName);
+      setIf("OwnerEmail", local.OwnerEmail);
+      setIf("OwnerPhone", local.OwnerPhone);
+      setIf("RestroEmail", local.RestroEmail);
+      setIf("RestroPhone", local.RestroPhone);
+      setIf("BrandNameifAny", local.BrandNameifAny); // 🔥 FIX
+      setIf("RestroRating", local.RestroRating);
+
+      // 🔥 STATION FIX (MAIN ISSUE)
+      setIf("StationCode", local.StationCode);
+      setIf("StationName", local.StationName);
+      setIf("State", local.State);
+
+      // STATUS
+      setIf("IsIrctcApproved", local.IsIrctcApproved);
+      setIf("RaileatsStatus", local.RaileatsStatus);
+
+      // SETTINGS
+      setIf("WeeklyOff", local.WeeklyOff);
+      setIf("open_time", local.OpenTime);
+      setIf("closed_time", local.ClosedTime);
+      setIf("MinimumOrderValue", local.MinimumOrderValue);
+      setIf("CutOffTime", local.CutOffTime);
+
+      console.log("🚀 FINAL PAYLOAD:", payload);
+
+      const res = await fetch(
+        `/api/restros/${encodeURIComponent(String(restroCode))}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
       const json = await res.json();
+
+      console.log("✅ API RESPONSE:", json);
 
       if (!res.ok || json?.ok === false) {
         throw new Error(json?.error || "Update failed");
@@ -142,6 +159,7 @@ export default function RestroEditModal({
 
       router.refresh();
     } catch (e: any) {
+      console.error("SAVE ERROR:", e);
       setNotification({
         type: "error",
         text: e.message,
@@ -161,7 +179,6 @@ export default function RestroEditModal({
     Toggle,
   };
 
-  /* ✅ ALL TAB RENDER BACK */
   function renderTab() {
     switch (activeTab) {
       case "Basic Information":
@@ -189,11 +206,7 @@ export default function RestroEditModal({
 
         <div className="flex gap-4 border-b px-6 py-3">
           {TAB_NAMES.map((t) => (
-            <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              className={activeTab === t ? "text-blue-600 font-bold" : ""}
-            >
+            <button key={t} onClick={() => setActiveTab(t)}>
               {t}
             </button>
           ))}
