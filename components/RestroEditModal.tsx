@@ -58,6 +58,37 @@ export default function RestroEditModal({
     }
   }, [restroProp]);
 
+  /* ================= 🔥 AUTO RESTRO CODE FIX ================= */
+  useEffect(() => {
+    async function getLastCode() {
+      // 👉 only for NEW create
+      if (restroProp) return;
+
+      try {
+        const res = await fetch("/api/restros");
+        if (!res.ok) return;
+
+        const json = await res.json();
+        const rows = json?.rows || json?.data || json || [];
+
+        if (!rows.length) return;
+
+        const maxCode = Math.max(
+          ...rows.map((r: any) => Number(r.RestroCode) || 0)
+        );
+
+        setLocal((prev: any) => ({
+          ...prev,
+          RestroCode: maxCode + 1,
+        }));
+      } catch (e) {
+        console.error("Auto code fetch failed", e);
+      }
+    }
+
+    getLastCode();
+  }, [restroProp]);
+
   /* ================= FETCH STATIONS ================= */
   useEffect(() => {
     async function fetchStations() {
@@ -97,7 +128,8 @@ export default function RestroEditModal({
       setSaving(true);
       setNotification(null);
 
-      if (!restroCode) throw new Error("Missing RestroCode");
+      // ❌ REMOVED ERROR (important)
+      // if (!restroCode) throw new Error("Missing RestroCode");
 
       const payload: any = {};
 
@@ -114,10 +146,10 @@ export default function RestroEditModal({
       setIf("OwnerPhone", local.OwnerPhone);
       setIf("RestroEmail", local.RestroEmail);
       setIf("RestroPhone", local.RestroPhone);
-      setIf("BrandNameifAny", local.BrandNameifAny); // 🔥 FIX
+      setIf("BrandNameifAny", local.BrandNameifAny);
       setIf("RestroRating", local.RestroRating);
 
-      // 🔥 STATION FIX (MAIN ISSUE)
+      // 🔥 STATION FIX
       setIf("StationCode", local.StationCode);
       setIf("StationName", local.StationName);
       setIf("State", local.State);
@@ -133,10 +165,15 @@ export default function RestroEditModal({
       setIf("MinimumOrderValue", local.MinimumOrderValue);
       setIf("CutOffTime", local.CutOffTime);
 
+      // 🔥 CREATE CASE → include code
+      if (!restroProp) {
+        setIf("RestroCode", local.RestroCode);
+      }
+
       console.log("🚀 FINAL PAYLOAD:", payload);
 
       const res = await fetch(
-        `/api/restros/${encodeURIComponent(String(restroCode))}`,
+        `/api/restros/${encodeURIComponent(String(restroCode || ""))}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
