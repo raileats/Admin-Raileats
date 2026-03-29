@@ -39,6 +39,9 @@ export async function PATCH(
 
     const payload: any = {};
 
+    const num = (v: any) =>
+      v === "" || v === null || v === undefined ? null : Number(v);
+
     /* 🔥 ================= STATION FIX ================= */
 
     if (body.StationCode !== undefined)
@@ -61,29 +64,33 @@ export async function PATCH(
     /* 🔥 ================= ORDER SETTINGS ================= */
 
     if (body.MinimumOrderValue !== undefined)
-      payload.MinimumOrderValue = body.MinimumOrderValue;
+      payload.MinimumOrderValue = num(body.MinimumOrderValue);
 
     if (body.CutOffTime !== undefined)
-      payload.CutOffTime = body.CutOffTime;
+      payload.CutOffTime = num(body.CutOffTime);
 
     if (body.WeeklyOff !== undefined)
       payload.WeeklyOff = body.WeeklyOff;
 
     if (body.RaileatsCustomerDeliveryCharge !== undefined)
       payload.RaileatsCustomerDeliveryCharge =
-        body.RaileatsCustomerDeliveryCharge;
+        num(body.RaileatsCustomerDeliveryCharge);
+
+    /* 🔥🔥🔥 MAIN FIX (GST VALUES NOW SAVE PROPERLY) */
 
     if (body.RaileatsCustomerDeliveryChargeGSTRate !== undefined)
       payload.RaileatsCustomerDeliveryChargeGSTRate =
-        body.RaileatsCustomerDeliveryChargeGSTRate;
+        num(body.RaileatsCustomerDeliveryChargeGSTRate);
 
     if (body.RaileatsCustomerDeliveryChargeGST !== undefined)
       payload.RaileatsCustomerDeliveryChargeGST =
-        body.RaileatsCustomerDeliveryChargeGST;
+        num(body.RaileatsCustomerDeliveryChargeGST);
 
     if (body.RaileatsCustomerDeliveryChargeTotalInclGST !== undefined)
       payload.RaileatsCustomerDeliveryChargeTotalInclGST =
-        body.RaileatsCustomerDeliveryChargeTotalInclGST;
+        num(body.RaileatsCustomerDeliveryChargeTotalInclGST);
+
+    /* 🔥 ============================================== */
 
     if (body.RaileatsOrdersPaymentOptionforCustomer !== undefined)
       payload.RaileatsOrdersPaymentOptionforCustomer =
@@ -121,7 +128,7 @@ export async function PATCH(
       payload.BrandNameifAny = body.BrandNameifAny;
 
     if (body.RestroRating !== undefined)
-      payload.RestroRating = body.RestroRating;
+      payload.RestroRating = num(body.RestroRating);
 
     if (body.IsIrctcApproved !== undefined)
       payload.IsIrctcApproved = body.IsIrctcApproved;
