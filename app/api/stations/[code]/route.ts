@@ -224,9 +224,9 @@ export async function GET(_request: Request, { params }: { params: { code?: stri
           RestroRating: row.RestroRating ?? null,
           isPureVeg,
           RestroDisplayPhoto: photoUrl,
-          OpenTime: row["0penTime"] ?? null,
-          ClosedTime: row.ClosedTime ?? null,
-          MinimumOrdermValue: row.MinimumOrdermValue ?? null,
+         OpenTime: row.open_time ?? null,
+ClosedTime: row.closed_time ?? null,
+MinimumOrdermValue: row.MinimumOrderValue ?? null,
           _isActiveRaw: isActive,
           _fssaiActiveRaw: fssaiActive,
         };
