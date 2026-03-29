@@ -92,6 +92,7 @@ export default function GstTab({ restroCode }: Props) {
 
   return (
     <div className="mt-6">
+
       {/* Header */}
       <div className="flex justify-between items-center mb-2">
         <h4 className="font-semibold">GST</h4>
@@ -115,10 +116,7 @@ export default function GstTab({ restroCode }: Props) {
 
       {/* Active */}
       {activeRows.map((r) => (
-        <div
-          key={r.id}
-          className="grid grid-cols-5 gap-3 text-sm items-center p-2 border border-green-300 bg-green-50 rounded mb-1"
-        >
+        <div key={r.id} className="grid grid-cols-5 gap-3 text-sm items-center p-2 border border-green-300 bg-green-50 rounded mb-1">
           <div className="font-semibold">{r.GstNumber}</div>
           <div>{r.GstType}</div>
           <div className="text-green-700 font-semibold">Active</div>
@@ -128,9 +126,7 @@ export default function GstTab({ restroCode }: Props) {
               <a href={r.fileurl} target="_blank" className="text-blue-600 underline">
                 View
               </a>
-            ) : (
-              "—"
-            )}
+            ) : "—"}
           </div>
         </div>
       ))}
@@ -143,10 +139,7 @@ export default function GstTab({ restroCode }: Props) {
           </div>
 
           {inactiveRows.map((r) => (
-            <div
-              key={r.id}
-              className="grid grid-cols-5 gap-3 text-sm items-center p-2 border border-red-300 bg-red-50 rounded mb-1"
-            >
+            <div key={r.id} className="grid grid-cols-5 gap-3 text-sm items-center p-2 border border-red-300 bg-red-50 rounded mb-1">
               <div className="font-semibold">{r.GstNumber}</div>
               <div>{r.GstType}</div>
               <div className="text-red-600 font-semibold">Inactive</div>
@@ -156,9 +149,7 @@ export default function GstTab({ restroCode }: Props) {
                   <a href={r.fileurl} target="_blank" className="text-red-600 underline">
                     View
                   </a>
-                ) : (
-                  "—"
-                )}
+                ) : "—"}
               </div>
             </div>
           ))}
@@ -168,65 +159,49 @@ export default function GstTab({ restroCode }: Props) {
       {/* ADD FORM */}
       {showAdd && (
         <div className="mt-3 p-3 bg-gray-50 border rounded">
+
           <h5 className="font-semibold mb-2 text-sm">Add GST</h5>
 
-          {/* GST INPUT */}
           <input
             value={gstNumber}
             placeholder="15 Digit GST Number"
-            maxLength={15} // 🔥 HARD STOP
+            maxLength={15}
             onChange={(e) => {
               const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
               setGstNumber(v.slice(0, 15));
             }}
-            className={`w-full p-2 rounded mb-1 text-sm border
-              ${
-                gstLength === 0
-                  ? "border-gray-300"
-                  : isValidLength
-                  ? "border-green-500 bg-green-50"
-                  : "border-red-500 bg-red-50"
-              }`}
+            className={`w-full p-2 rounded mb-1 text-sm border ${
+              gstLength === 0
+                ? "border-gray-300"
+                : isValidLength
+                ? "border-green-500 bg-green-50"
+                : "border-red-500 bg-red-50"
+            }`}
           />
-
-          <div className="text-xs mb-2">
-            {gstLength < 15 && (
-              <span className="text-red-600">
-                {15 - gstLength} characters remaining
-              </span>
-            )}
-            {isValidLength && (
-              <span className="text-green-600">GST length valid</span>
-            )}
-          </div>
 
           <select
             value={gstType}
-            onChange={(e) =>
-              setGstType(e.target.value as "Regular" | "Composition")
-            }
+            onChange={(e) => setGstType(e.target.value as any)}
             className="w-full p-2 border rounded mb-2 text-sm"
           >
             <option value="Regular">Regular</option>
             <option value="Composition">Composition</option>
           </select>
 
-          <input
-            type="file"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-            className="mb-2 text-sm"
-          />
+          <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 mt-2">
             <button
               type="button"
               onClick={saveNew}
               disabled={!isValidGST}
-              className={`px-3 py-1 rounded text-sm text-white
-                ${isValidGST ? "bg-cyan-500" : "bg-gray-400 cursor-not-allowed"}`}
+              className={`px-3 py-1 rounded text-sm text-white ${
+                isValidGST ? "bg-cyan-500" : "bg-gray-400"
+              }`}
             >
               Save
             </button>
+
             <button
               type="button"
               onClick={() => setShowAdd(false)}
@@ -235,8 +210,10 @@ export default function GstTab({ restroCode }: Props) {
               Cancel
             </button>
           </div>
+
         </div>
       )}
+
     </div>
   );
 }
