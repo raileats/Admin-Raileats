@@ -58,10 +58,9 @@ export default function RestroEditModal({
     }
   }, [restroProp]);
 
-  /* ================= 🔥 AUTO RESTRO CODE FIX ================= */
+  /* ================= AUTO RESTRO CODE ================= */
   useEffect(() => {
     async function getLastCode() {
-      // 👉 only for NEW create
       if (restroProp) return;
 
       try {
@@ -114,7 +113,6 @@ export default function RestroEditModal({
     fetchStations();
   }, []);
 
-  /* ================= UPDATE FIELD ================= */
   const updateField = useCallback((key: string, value: any) => {
     setLocal((prev: any) => ({ ...prev, [key]: value }));
   }, []);
@@ -128,16 +126,13 @@ export default function RestroEditModal({
       setSaving(true);
       setNotification(null);
 
-      // ❌ REMOVED ERROR (important)
-      // if (!restroCode) throw new Error("Missing RestroCode");
-
       const payload: any = {};
 
       const setIf = (k: string, v: any) => {
         if (v !== undefined && v !== "") payload[k] = v;
       };
 
-      /* ================= 🔥 FULL FIX ================= */
+      /* ================= FULL DATA ================= */
 
       // BASIC INFO
       setIf("RestroName", local.RestroName);
@@ -149,7 +144,7 @@ export default function RestroEditModal({
       setIf("BrandNameifAny", local.BrandNameifAny);
       setIf("RestroRating", local.RestroRating);
 
-      // 🔥 STATION FIX
+      // STATION
       setIf("StationCode", local.StationCode);
       setIf("StationName", local.StationName);
       setIf("State", local.State);
@@ -165,7 +160,23 @@ export default function RestroEditModal({
       setIf("MinimumOrderValue", local.MinimumOrderValue);
       setIf("CutOffTime", local.CutOffTime);
 
-      // 🔥 CREATE CASE → include code
+      /* 🔥 DELIVERY CHARGE FIX (MAIN ISSUE) */
+      setIf(
+        "RaileatsCustomerDeliveryChargeGSTRate",
+        local?.RaileatsDeliveryChargeGSTRate
+      );
+
+      setIf(
+        "RaileatsCustomerDeliveryChargeGST",
+        local?.RaileatsDeliveryChargeGST
+      );
+
+      setIf(
+        "RaileatsCustomerDeliveryChargeTotalInclGST",
+        local?.RaileatsDeliveryChargeTotalInclGST
+      );
+
+      // CREATE CASE
       if (!restroProp) {
         setIf("RestroCode", local.RestroCode);
       }
@@ -181,7 +192,14 @@ export default function RestroEditModal({
         }
       );
 
-      const json = await res.json();
+      let json: any = {};
+      try {
+        json = await res.json();
+      } catch {
+        const text = await res.text();
+        console.error("❌ HTML RESPONSE:", text);
+        throw new Error("Server returned HTML (API issue)");
+      }
 
       console.log("✅ API RESPONSE:", json);
 
