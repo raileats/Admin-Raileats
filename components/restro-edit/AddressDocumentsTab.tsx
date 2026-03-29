@@ -6,7 +6,7 @@ import UI from "@/components/AdminUI";
 import FssaiTab from "./FssaiTab";
 import GstTab from "./GstTab";
 import PanTab from "./PanTab";
-import AdminSection from "@/components/AdminSection"; // ✅ COMMON SECTION
+import AdminSection from "@/components/AdminSection";
 
 const { AdminForm, SubmitButton } = UI;
 
@@ -32,7 +32,7 @@ export default function AddressDocumentsTab({
   /* ================= SYNC ================= */
   useEffect(() => {
     setAddr(local?.RestroAddress ?? "");
-    setCity(local?.["City/Village"] ?? local?.City ?? "");
+    setCity(local?.City ?? local?.["City/Village"] ?? ""); // ✅ FIX
     setState(local?.State ?? "");
     setDistrict(local?.District ?? "");
     setPin(local?.PinCode ?? "");
@@ -41,15 +41,51 @@ export default function AddressDocumentsTab({
   }, [local]);
 
   /* ================= SAVE ADDRESS ================= */
-  function saveAddress() {
-    updateField("RestroAddress", addr);
-    updateField("City/Village", city);
-    updateField("State", state);
-    updateField("District", district);
-    updateField("PinCode", pin);
-    updateField("RestroLatitude", lat);
-    updateField("RestroLongitude", lng);
-    alert("Address saved");
+  async function saveAddress() {
+    try {
+      if (!restroCode) {
+        alert("RestroCode missing");
+        return;
+      }
+
+      const payload = {
+        RestroAddress: addr,
+        City: city, // ✅ FIX (IMPORTANT)
+        State: state,
+        District: district,
+        PinCode: pin,
+        RestroLatitude: lat,
+        RestroLongitude: lng,
+      };
+
+      console.log("📦 Address Payload:", payload);
+
+      const res = await fetch(`/api/restros/${restroCode}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || "Address save failed");
+      }
+
+      // ✅ UI sync bhi
+      updateField("RestroAddress", addr);
+      updateField("City", city);
+      updateField("State", state);
+      updateField("District", district);
+      updateField("PinCode", pin);
+      updateField("RestroLatitude", lat);
+      updateField("RestroLongitude", lng);
+
+      alert("✅ Address saved successfully");
+    } catch (e: any) {
+      console.error("❌ Address Save Error:", e);
+      alert(e.message);
+    }
   }
 
   return (
@@ -59,7 +95,6 @@ export default function AddressDocumentsTab({
         title="Address"
         action={<SubmitButton onClick={saveAddress}>Save Address</SubmitButton>}
       >
-        {/* Full address */}
         <textarea
           value={addr}
           onChange={(e) => setAddr(e.target.value)}
@@ -68,7 +103,6 @@ export default function AddressDocumentsTab({
           rows={2}
         />
 
-        {/* Headings */}
         <div className="grid grid-cols-6 gap-2 text-xs font-semibold text-gray-600 mb-1">
           <div>City / Village</div>
           <div>State</div>
@@ -78,43 +112,17 @@ export default function AddressDocumentsTab({
           <div>Longitude</div>
         </div>
 
-        {/* Inputs */}
         <div className="grid grid-cols-6 gap-2 text-sm">
-          <input
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            className="p-2 border rounded"
-          />
-          <input
-            value={state}
-            onChange={(e) => setState(e.target.value)}
-            className="p-2 border rounded"
-          />
-          <input
-            value={district}
-            onChange={(e) => setDistrict(e.target.value)}
-            className="p-2 border rounded"
-          />
-          <input
-            value={pin}
-            onChange={(e) => setPin(e.target.value)}
-            className="p-2 border rounded"
-          />
-          <input
-            value={lat}
-            onChange={(e) => setLat(e.target.value)}
-            className="p-2 border rounded"
-          />
-          <input
-            value={lng}
-            onChange={(e) => setLng(e.target.value)}
-            className="p-2 border rounded"
-          />
+          <input value={city} onChange={(e) => setCity(e.target.value)} className="p-2 border rounded" />
+          <input value={state} onChange={(e) => setState(e.target.value)} className="p-2 border rounded" />
+          <input value={district} onChange={(e) => setDistrict(e.target.value)} className="p-2 border rounded" />
+          <input value={pin} onChange={(e) => setPin(e.target.value)} className="p-2 border rounded" />
+          <input value={lat} onChange={(e) => setLat(e.target.value)} className="p-2 border rounded" />
+          <input value={lng} onChange={(e) => setLng(e.target.value)} className="p-2 border rounded" />
         </div>
       </AdminSection>
 
       {/* ================= DOCUMENTS ================= */}
-
       <AdminSection title="FSSAI">
         <FssaiTab restroCode={restroCode} />
       </AdminSection>
