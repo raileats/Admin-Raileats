@@ -16,7 +16,7 @@ function srv() {
 }
 
 /* ================================
-   PATCH API
+   UPDATE API (PATCH)
 ================================ */
 export async function PATCH(
   req: Request,
@@ -40,39 +40,57 @@ export async function PATCH(
     const supabase = srv();
 
     /* ================================
-       SAFE PAYLOAD (NO UNDEFINED)
+       SAFE PAYLOAD BUILDER
     ================================= */
-
     const updateData: any = {};
 
     const setIfDefined = (key: string, value: any) => {
       if (value !== undefined) updateData[key] = value;
     };
 
-    // ✅ BASIC INFO
+    /* ================================
+       BASIC INFO
+    ================================= */
     setIfDefined("RestroName", body.RestroName);
     setIfDefined("OwnerName", body.OwnerName);
     setIfDefined("OwnerEmail", body.OwnerEmail);
     setIfDefined("OwnerPhone", body.OwnerPhone);
     setIfDefined("RestroEmail", body.RestroEmail);
     setIfDefined("RestroPhone", body.RestroPhone);
-    setIfDefined("BrandNameifAny", body.BrandNameifAny || body.BrandName);
-    setIfDefined("RestroRating", body.RestroRating);
 
-    // ✅ STATUS
+    /* ================================
+       ADDRESS (🔥 FIX ADDED)
+    ================================= */
+    setIfDefined("RestroAddress", body.RestroAddress);
+    setIfDefined("City", body.City);
+    setIfDefined("State", body.State);
+    setIfDefined("District", body.District);
+    setIfDefined("PinCode", body.PinCode);
+    setIfDefined("RestroLatitude", body.RestroLatitude);
+    setIfDefined("RestroLongitude", body.RestroLongitude);
+
+    /* ================================
+       STATUS
+    ================================= */
     setIfDefined("IsIrctcApproved", body.IsIrctcApproved);
     setIfDefined("RaileatsStatus", body.RaileatsStatus);
 
-    // ✅ STATION SETTINGS
+    /* ================================
+       SETTINGS
+    ================================= */
     setIfDefined("WeeklyOff", body.WeeklyOff);
     setIfDefined("MinimumOrderValue", body.MinimumOrderValue);
     setIfDefined("CutOffTime", body.CutOffTime);
 
-    // ✅ TIME FIX
+    /* ================================
+       TIME
+    ================================= */
     setIfDefined("open_time", body.open_time);
     setIfDefined("closed_time", body.closed_time);
 
-    // ✅ DELIVERY
+    /* ================================
+       DELIVERY
+    ================================= */
     setIfDefined(
       "RaileatsCustomerDeliveryCharge",
       body.RaileatsCustomerDeliveryCharge
@@ -93,22 +111,9 @@ export async function PATCH(
       body.RaileatsCustomerDeliveryChargeTotalInclGST
     );
 
-    setIfDefined(
-      "RaileatsOrdersPaymentOptionforCustomer",
-      body.RaileatsOrdersPaymentOptionforCustomer
-    );
-
-    setIfDefined(
-      "IRCTCOrdersPaymentOptionforCustomer",
-      body.IRCTCOrdersPaymentOptionforCustomer
-    );
-
-    setIfDefined(
-      "RestroTypeofDeliveryRailEatsorVendor",
-      body.RestroTypeofDeliveryRailEatsorVendor
-    );
-
-    // ✅ TIMESTAMP
+    /* ================================
+       TIMESTAMP
+    ================================= */
     updateData.updated_at = new Date().toISOString();
 
     console.log("Final Update Data:", updateData);
@@ -116,14 +121,11 @@ export async function PATCH(
     /* ================================
        UPDATE QUERY
     ================================= */
-
     const { data, error } = await supabase
       .from("RestroMaster")
       .update(updateData)
       .eq("RestroCode", restroCode)
       .select();
-
-    console.log("Updated Row:", data);
 
     if (error) {
       console.error("❌ Supabase error:", error);
