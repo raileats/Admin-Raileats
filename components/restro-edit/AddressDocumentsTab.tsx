@@ -28,11 +28,12 @@ export default function AddressDocumentsTab({
   const [pin, setPin] = useState("");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
+  const [loading, setLoading] = useState(false);
 
   /* ================= SYNC ================= */
   useEffect(() => {
     setAddr(local?.RestroAddress ?? "");
-    setCity(local?.City ?? local?.["City/Village"] ?? ""); // ✅ FIX
+    setCity(local?.City ?? local?.["City/Village"] ?? "");
     setState(local?.State ?? "");
     setDistrict(local?.District ?? "");
     setPin(local?.PinCode ?? "");
@@ -48,9 +49,11 @@ export default function AddressDocumentsTab({
         return;
       }
 
+      setLoading(true);
+
       const payload = {
         RestroAddress: addr,
-        City: city, // ✅ FIX (IMPORTANT)
+        City: city,
         State: state,
         District: district,
         PinCode: pin,
@@ -60,31 +63,28 @@ export default function AddressDocumentsTab({
 
       console.log("📦 Address Payload:", payload);
 
-      const res = await fetch(`/api/restros/${restroCode}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/admin/restros/${restroCode}`, {
+        method: "PUT", // ✅ FIXED
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const json = await res.json();
+      console.log("📥 API Response:", json);
 
-      if (!res.ok || json?.ok === false) {
+      if (!res.ok) {
         throw new Error(json?.error || "Address save failed");
       }
 
-      // ✅ UI sync bhi
-      updateField("RestroAddress", addr);
-      updateField("City", city);
-      updateField("State", state);
-      updateField("District", district);
-      updateField("PinCode", pin);
-      updateField("RestroLatitude", lat);
-      updateField("RestroLongitude", lng);
+      // UI sync
+      Object.entries(payload).forEach(([k, v]) => updateField(k, v));
 
       alert("✅ Address saved successfully");
     } catch (e: any) {
       console.error("❌ Address Save Error:", e);
       alert(e.message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -93,7 +93,11 @@ export default function AddressDocumentsTab({
       {/* ================= ADDRESS ================= */}
       <AdminSection
         title="Address"
-        action={<SubmitButton onClick={saveAddress}>Save Address</SubmitButton>}
+        action={
+          <SubmitButton onClick={saveAddress} disabled={loading}>
+            {loading ? "Saving..." : "Save Address"}
+          </SubmitButton>
+        }
       >
         <textarea
           value={addr}
