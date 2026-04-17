@@ -16,6 +16,20 @@ function srv() {
 }
 
 /* ================================
+   GET (TEST PURPOSE ONLY)
+================================ */
+export async function GET(
+  req: Request,
+  { params }: { params: { code: string } }
+) {
+  return NextResponse.json({
+    ok: true,
+    message: "API working",
+    code: params.code,
+  });
+}
+
+/* ================================
    UPDATE API (PATCH)
 ================================ */
 export async function PATCH(
@@ -59,7 +73,7 @@ export async function PATCH(
     setIfDefined("RestroPhone", body.RestroPhone);
 
     /* ================================
-       ADDRESS (🔥 FIX ADDED)
+       ADDRESS
     ================================= */
     setIfDefined("RestroAddress", body.RestroAddress);
     setIfDefined("City", body.City);
