@@ -63,13 +63,25 @@ export default function AddressDocumentsTab({
 
       console.log("📦 Address Payload:", payload);
 
-      const res = await fetch(`/api/admin/restros/${restroCode}`, {
-        method: "PATCH", // ✅ FIXED (PUT → PATCH)
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await fetch(
+        `/api/admin/restros/${restroCode}/status`, // ✅ FINAL FIX
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
-      const json = await res.json();
+      const text = await res.text(); // 🔥 safe parse
+      let json;
+
+      try {
+        json = JSON.parse(text);
+      } catch {
+        console.error("Non JSON response:", text);
+        throw new Error("API error (non JSON)");
+      }
+
       console.log("📥 API Response:", json);
 
       if (!res.ok) {
@@ -90,7 +102,6 @@ export default function AddressDocumentsTab({
 
   return (
     <AdminForm>
-      {/* ================= ADDRESS ================= */}
       <AdminSection
         title="Address"
         action={
@@ -126,7 +137,6 @@ export default function AddressDocumentsTab({
         </div>
       </AdminSection>
 
-      {/* ================= DOCUMENTS ================= */}
       <AdminSection title="FSSAI">
         <FssaiTab restroCode={restroCode} />
       </AdminSection>
