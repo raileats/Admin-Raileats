@@ -16,7 +16,7 @@ export default function FutureClosedFormModal({
   onClose,
   onSaved,
 }: Props) {
-  const admin = useAdminUser(); // ✅ logged-in admin from context
+  const admin = useAdminUser();
 
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
@@ -35,30 +35,33 @@ export default function FutureClosedFormModal({
         throw new Error("Please select start & end date/time");
       }
 
-      if (!admin?.id || !admin?.name) {
-        throw new Error("Admin session missing");
-      }
+      // ✅ SAFE FALLBACK (IMPORTANT FIX)
+      const adminId = admin?.id || "system";
+      const adminName = admin?.name || "System";
 
       const payload = {
         start_at: new Date(start).toISOString(),
         end_at: new Date(end).toISOString(),
         comment: comment?.trim() || null,
 
-        // ✅ EXACT DB COLUMN NAMES (THIS WAS THE BUG)
-        created_by_id: String(admin.id),
-        created_by_name: admin.name,
+        created_by_id: String(adminId),
+        created_by_name: adminName,
       };
+
+      console.log("📦 Holiday Payload:", payload);
 
       const res = await fetch(
         `/api/restros/${encodeURIComponent(String(restroCode))}/holidays`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include", // ⭐ SESSION FIX
           body: JSON.stringify(payload),
         }
       );
 
       const json = await res.json();
+      console.log("📥 Response:", json);
 
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || "Save failed");
@@ -67,7 +70,7 @@ export default function FutureClosedFormModal({
       onSaved();
       onClose();
     } catch (e: any) {
-      console.error("Holiday save error:", e);
+      console.error("❌ Holiday save error:", e);
       setErr(e?.message || "Failed to save");
     } finally {
       setSaving(false);
