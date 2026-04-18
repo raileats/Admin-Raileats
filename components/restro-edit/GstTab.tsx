@@ -39,17 +39,7 @@ export default function GstTab({ restroCode }: Props) {
     try {
       // ✅ FIXED API PATH
       const res = await fetch(`/api/admin/restros/${restroCode}/gst`);
-
-      const text = await res.text();
-      let json;
-
-      try {
-        json = JSON.parse(text);
-      } catch {
-        console.error("❌ Non JSON response:", text);
-        return;
-      }
-
+      const json = await res.json();
       if (json.ok) setRows(json.rows || []);
     } catch (e) {
       console.error("GST load error:", e);
@@ -81,19 +71,10 @@ export default function GstTab({ restroCode }: Props) {
         body: form,
       });
 
-      const text = await res.text();
+      const json = await res.json();
 
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        console.error("❌ Non JSON response:", text);
-        alert("Server error (non JSON response)");
-        return;
-      }
-
-      if (!res.ok || !json.ok) {
-        alert(json?.error || "Save failed");
+      if (!json.ok) {
+        alert(json.error || "Save failed");
         return;
       }
 
