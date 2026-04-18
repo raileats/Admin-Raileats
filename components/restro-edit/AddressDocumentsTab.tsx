@@ -64,7 +64,7 @@ export default function AddressDocumentsTab({
       console.log("📦 Address Payload:", payload);
 
       const res = await fetch(`/api/admin/restros/${restroCode}`, {
-        method: "PUT", // ✅ FIXED
+        method: "PATCH", // ✅ FIXED (PUT → PATCH)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
