@@ -51,20 +51,21 @@ export default function AddressDocumentsTab({
 
       setLoading(true);
 
+      // ✅ FIXED PAYLOAD (important)
       const payload = {
-        RestroAddress: addr,
-        City: city,
-        State: state,
-        District: district,
-        PinCode: pin,
-        RestroLatitude: lat,
-        RestroLongitude: lng,
+        RestroAddress: addr || null,
+        City: city || null,
+        State: state || null,
+        District: district || null,
+        PinCode: pin ? Number(pin) : null,
+        RestroLatitude: lat ? Number(lat) : null,
+        RestroLongitude: lng ? Number(lng) : null,
       };
 
       console.log("📦 Address Payload:", payload);
 
       const res = await fetch(
-        `/api/admin/restros/${restroCode}/status`, // ✅ FINAL FIX
+        `/api/admin/restros/${restroCode}/status`, // ✅ correct API
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -72,9 +73,9 @@ export default function AddressDocumentsTab({
         }
       );
 
-      const text = await res.text(); // 🔥 safe parse
-      let json;
+      const text = await res.text();
 
+      let json;
       try {
         json = JSON.parse(text);
       } catch {
