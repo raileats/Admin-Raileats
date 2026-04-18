@@ -37,8 +37,19 @@ export default function GstTab({ restroCode }: Props) {
     if (!restroCode) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/restros/${restroCode}/gst`);
-      const json = await res.json();
+      // ✅ FIXED API PATH
+      const res = await fetch(`/api/admin/restros/${restroCode}/gst`);
+
+      const text = await res.text();
+      let json;
+
+      try {
+        json = JSON.parse(text);
+      } catch {
+        console.error("❌ Non JSON response:", text);
+        return;
+      }
+
       if (json.ok) setRows(json.rows || []);
     } catch (e) {
       console.error("GST load error:", e);
@@ -58,27 +69,44 @@ export default function GstTab({ restroCode }: Props) {
       return;
     }
 
-    const form = new FormData();
-    form.append("gst_number", gstNumber);
-    form.append("gst_type", gstType);
-    if (file) form.append("file", file);
+    try {
+      const form = new FormData();
+      form.append("gst_number", gstNumber);
+      form.append("gst_type", gstType);
+      if (file) form.append("file", file);
 
-    const res = await fetch(`/api/restros/${restroCode}/gst`, {
-      method: "POST",
-      body: form,
-    });
+      // ✅ FIXED API PATH
+      const res = await fetch(`/api/admin/restros/${restroCode}/gst`, {
+        method: "POST",
+        body: form,
+      });
 
-    const json = await res.json();
-    if (!json.ok) {
-      alert(json.error || "Save failed");
-      return;
+      const text = await res.text();
+
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        console.error("❌ Non JSON response:", text);
+        alert("Server error (non JSON response)");
+        return;
+      }
+
+      if (!res.ok || !json.ok) {
+        alert(json?.error || "Save failed");
+        return;
+      }
+
+      setShowAdd(false);
+      setGstNumber("");
+      setGstType("Regular");
+      setFile(null);
+
+      loadData();
+    } catch (e) {
+      console.error("GST save error:", e);
+      alert("Something went wrong");
     }
-
-    setShowAdd(false);
-    setGstNumber("");
-    setGstType("Regular");
-    setFile(null);
-    loadData();
   }
 
   /* ================= DATE ================= */
@@ -188,7 +216,10 @@ export default function GstTab({ restroCode }: Props) {
             <option value="Composition">Composition</option>
           </select>
 
-          <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          <input
+            type="file"
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+          />
 
           <div className="flex gap-2 mt-2">
             <button
