@@ -37,8 +37,8 @@ export default function GstTab({ restroCode }: Props) {
     if (!restroCode) return;
     setLoading(true);
     try {
-      // ✅ FIXED API PATH
-      const res = await fetch(`/api/admin/restros/${restroCode}/gst`);
+      // ✅ OLD WORKING API
+      const res = await fetch(`/api/restros/${restroCode}/gst`);
       const json = await res.json();
       if (json.ok) setRows(json.rows || []);
     } catch (e) {
@@ -65,8 +65,8 @@ export default function GstTab({ restroCode }: Props) {
       form.append("gst_type", gstType);
       if (file) form.append("file", file);
 
-      // ✅ FIXED API PATH
-      const res = await fetch(`/api/admin/restros/${restroCode}/gst`, {
+      // ✅ OLD WORKING API
+      const res = await fetch(`/api/restros/${restroCode}/gst`, {
         method: "POST",
         body: form,
       });
@@ -139,31 +139,6 @@ export default function GstTab({ restroCode }: Props) {
           </div>
         </div>
       ))}
-
-      {/* Inactive */}
-      {inactiveRows.length > 0 && (
-        <div className="mt-2">
-          <div className="text-xs font-semibold text-red-600 mb-1">
-            Old / Inactive GST
-          </div>
-
-          {inactiveRows.map((r) => (
-            <div key={r.id} className="grid grid-cols-5 gap-3 text-sm items-center p-2 border border-red-300 bg-red-50 rounded mb-1">
-              <div className="font-semibold">{r.GstNumber}</div>
-              <div>{r.GstType}</div>
-              <div className="text-red-600 font-semibold">Inactive</div>
-              <div>{formatDate(r.createdDate)}</div>
-              <div>
-                {r.fileurl ? (
-                  <a href={r.fileurl} target="_blank" className="text-red-600 underline">
-                    View
-                  </a>
-                ) : "—"}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* ADD FORM */}
       {showAdd && (
