@@ -1,8 +1,9 @@
 // app/components/Sidebar.tsx
 'use client';
+
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation'; // optional for active highlight
+import { usePathname } from 'next/navigation';
 
 type Item = { href: string; label: string; icon: string };
 
@@ -15,18 +16,17 @@ const menu: Item[] = [
   { href: '/admin/stations', label: 'Stations', icon: 'fa-solid fa-location-dot' },
   { href: '/admin/users', label: 'Users', icon: 'fa-solid fa-users' },
 
-  // ✅ NEW MENUS
-  { href: '/admin/bulk', label: 'Bulk Orders', icon: 'fa-solid fa-box' },
+  // ✅ NEW MENU ADDED
+  { href: '/admin/bulk', label: 'Bulk Orders', icon: 'fa-solid fa-layer-group' },
   { href: '/admin/customers', label: 'Customers', icon: 'fa-solid fa-user-group' },
-  { href: '/admin/feedback', label: 'Feedback', icon: 'fa-solid fa-message' },
+  { href: '/admin/feedback', label: 'Feedback', icon: 'fa-solid fa-comments' },
 ];
 
 export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const [keyboardExpanded, setKeyboardExpanded] = useState(false);
+
   const pathname =
-    typeof window !== 'undefined'
-      ? window.location.pathname
-      : '';
+    typeof window !== 'undefined' ? window.location.pathname : '';
 
   const handleFocusIn = () => setKeyboardExpanded(true);
 
@@ -36,7 +36,6 @@ export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) 
     }
   };
 
-  // when parent forces collapsed, keep collapsedEffective true, else follow hover/focus
   const collapsedEffective = !!collapsed && !keyboardExpanded;
 
   return (
@@ -51,9 +50,7 @@ export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) 
       <div className="sidebar-inner">
         <div className="logo-wrap">
           <img src="/logo.png" alt="RailEats" />
-          <span className="sidebar-brand">
-            RailEats Admin
-          </span>
+          <span className="sidebar-brand">RailEats Admin</span>
         </div>
 
         <ul className="nav flex-column">
@@ -65,9 +62,7 @@ export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) 
                 <Link
                   href={m.href}
                   className={`nav-link ${
-                    collapsedEffective
-                      ? 'collapsed-link'
-                      : ''
+                    collapsedEffective ? 'collapsed-link' : ''
                   } ${isActive ? 'active' : ''}`}
                   title={m.label}
                 >
@@ -75,14 +70,9 @@ export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) 
                     <i className={m.icon} />
                   </div>
 
-                  <span className="sidebar-label">
-                    {m.label}
-                  </span>
+                  <span className="sidebar-label">{m.label}</span>
 
-                  <span
-                    className="sidebar-tooltip"
-                    aria-hidden
-                  >
+                  <span className="sidebar-tooltip" aria-hidden>
                     {m.label}
                   </span>
                 </Link>
@@ -95,23 +85,16 @@ export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) 
           <Link
             href="/admin/logout"
             className={`btn btn-sm btn-outline-secondary w-100 ${
-              collapsedEffective
-                ? 'text-center'
-                : ''
+              collapsedEffective ? 'text-center' : ''
             }`}
           >
             <div className="bubble-icon" aria-hidden>
               <i className="fa fa-sign-out-alt" />
             </div>
 
-            <span className="sidebar-label">
-              Logout
-            </span>
+            <span className="sidebar-label">Logout</span>
 
-            <span
-              className="sidebar-tooltip"
-              aria-hidden
-            >
+            <span className="sidebar-tooltip" aria-hidden>
               Logout
             </span>
           </Link>
