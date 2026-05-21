@@ -20,12 +20,18 @@ export default function RestroMasterPage() {
   const [loading, setLoading] = useState(false);
   const [openAddRestro, setOpenAddRestro] = useState(false);
 
+  // ✅ SEARCH STATES
+  const [searchBy, setSearchBy] = useState("RestroName");
+  const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
   useEffect(() => {
     fetchRestros();
   }, []);
 
   async function fetchRestros() {
     setLoading(true);
+
     const { data } = await supabase
       .from("RestroMaster")
       .select("*")
@@ -37,6 +43,7 @@ export default function RestroMasterPage() {
         ...r,
       }))
     );
+
     setLoading(false);
   }
 
@@ -72,6 +79,33 @@ export default function RestroMasterPage() {
     router.push(`/admin/restros/${code}/edit`);
   }
 
+  // ✅ FILTER LOGIC
+  const filteredResults = results.filter((item) => {
+    let matchesSearch = true;
+    let matchesStatus = true;
+
+    // SEARCH FILTER
+    if (searchText.trim() !== "") {
+      const value =
+        item?.[searchBy]?.toString().toLowerCase() || "";
+
+      matchesSearch = value.includes(
+        searchText.toLowerCase()
+      );
+    }
+
+    // STATUS FILTER
+    if (statusFilter === "active") {
+      matchesStatus = Number(item.RaileatsStatus) === 1;
+    }
+
+    if (statusFilter === "deactive") {
+      matchesStatus = Number(item.RaileatsStatus) === 0;
+    }
+
+    return matchesSearch && matchesStatus;
+  });
+
   const columns: Column<Restro>[] = [
     { key: "RestroCode", title: "Restro Code", width: "110px" },
     { key: "RestroName", title: "Restro Name" },
@@ -86,6 +120,7 @@ export default function RestroMasterPage() {
       title: "Raileats",
       render: (row) => {
         const on = Number(row.RaileatsStatus ?? 0) === 1;
+
         return (
           <div
             onClick={() => toggleRaileats(row)}
@@ -118,9 +153,85 @@ export default function RestroMasterPage() {
 
   return (
     <main className="mx-6 my-4 max-w-full">
-      <h2 className="text-xl font-semibold mb-6">Restro Master</h2>
+      <h2 className="text-xl font-semibold mb-6">
+        Restro Master
+      </h2>
 
-      <div className="flex justify-end gap-3 mb-3">
+      {/* ✅ SEARCH + BUTTON SECTION */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+
+        {/* LEFT SIDE */}
+        <div className="flex flex-wrap items-center gap-3">
+
+          {/* SEARCH BY */}
+          <select
+            value={searchBy}
+            onChange={(e) => setSearchBy(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="OwnerPhone">
+              Owner Mobile
+            </option>
+
+            <option value="RestroCode">
+              Restro Code
+            </option>
+
+            <option value="FSSAI">
+              By FSSAI
+            </option>
+
+            <option value="RestroName">
+              By Restro Name
+            </option>
+
+            <option value="OwnerName">
+              By Owner Name
+            </option>
+
+            <option value="StationCode">
+              By STN Code
+            </option>
+
+            <option value="StationName">
+              By Station Name
+            </option>
+          </select>
+
+          {/* SEARCH INPUT */}
+          <input
+            type="text"
+            placeholder="Search here..."
+            value={searchText}
+            onChange={(e) =>
+              setSearchText(e.target.value)
+            }
+            className="border rounded-lg px-3 py-2 w-[240px] text-sm"
+          />
+
+          {/* STATUS FILTER */}
+          <select
+            value={statusFilter}
+            onChange={(e) =>
+              setStatusFilter(e.target.value)
+            }
+            className="border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">
+              All Status
+            </option>
+
+            <option value="active">
+              Active
+            </option>
+
+            <option value="deactive">
+              Deactivate
+            </option>
+          </select>
+        </div>
+
+        {/* RIGHT SIDE BUTTON */}
         <button
           onClick={() => setOpenAddRestro(true)}
           className="px-4 py-2 bg-green-600 text-white rounded-lg"
@@ -133,12 +244,14 @@ export default function RestroMasterPage() {
         title=""
         subtitle=""
         columns={columns}
-        data={results}
+        data={filteredResults}
         loading={loading}
         pageSize={10}
         actions={(row) => (
           <button
-            onClick={() => openEdit(row.RestroCode)}
+            onClick={() =>
+              openEdit(row.RestroCode)
+            }
             className="px-3 py-1 rounded-md bg-amber-400 text-black"
           >
             Edit
@@ -150,7 +263,9 @@ export default function RestroMasterPage() {
         <RestroEditModal
           restro={null}
           initialTab="Basic Information"
-          onClose={() => setOpenAddRestro(false)}
+          onClose={() =>
+            setOpenAddRestro(false)
+          }
         />
       )}
     </main>
