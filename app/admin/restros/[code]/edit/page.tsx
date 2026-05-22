@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import RestroEditModal from "@/components/RestroEditModal";
 
+// ✅ NEW IMPORT
+import RestroUserPasswordTab from "@/components/restro-edit/RestroUserPasswordTab";
+
 type Restro = {
   RestroCode: string | number;
   [key: string]: any;
@@ -39,7 +42,8 @@ export default function RestroEditRoutePage({
       setErr(null);
 
       try {
-        if (!supabase) throw new Error("Supabase not configured");
+        if (!supabase)
+          throw new Error("Supabase not configured");
 
         const restroCode =
           /^\d+$/.test(restroCodeParam)
@@ -67,13 +71,19 @@ export default function RestroEditRoutePage({
         }
       } catch (e: any) {
         console.error("Load restro failed:", e);
-        if (mounted) setErr(e?.message || "Failed to load restaurant");
+
+        if (mounted)
+          setErr(
+            e?.message ||
+              "Failed to load restaurant"
+          );
       } finally {
         if (mounted) setLoading(false);
       }
     }
 
     loadRestro();
+
     return () => {
       mounted = false;
     };
@@ -82,7 +92,12 @@ export default function RestroEditRoutePage({
   /* ================= STATES ================= */
   if (loading) {
     return (
-      <div style={{ padding: 40, textAlign: "center" }}>
+      <div
+        style={{
+          padding: 40,
+          textAlign: "center",
+        }}
+      >
         Loading restaurant…
       </div>
     );
@@ -91,10 +106,20 @@ export default function RestroEditRoutePage({
   if (err) {
     return (
       <div style={{ padding: 40 }}>
-        <div style={{ color: "crimson", marginBottom: 12 }}>
+        <div
+          style={{
+            color: "crimson",
+            marginBottom: 12,
+          }}
+        >
           Error: {err}
         </div>
-        <button onClick={() => router.back()}>Go Back</button>
+
+        <button
+          onClick={() => router.back()}
+        >
+          Go Back
+        </button>
       </div>
     );
   }
@@ -102,7 +127,8 @@ export default function RestroEditRoutePage({
   if (!restro) {
     return (
       <div style={{ padding: 40 }}>
-        No restaurant found for code: {restroCodeParam}
+        No restaurant found for code:{" "}
+        {restroCodeParam}
       </div>
     );
   }
@@ -110,7 +136,25 @@ export default function RestroEditRoutePage({
   /* ================= RENDER MODAL ================= */
   return (
     <RestroEditModal
-      restro={restro}
+      restro={{
+        ...restro,
+
+        // ✅ NEW TAB
+        ExtraTabs: [
+          {
+            key: "Restro User & Password",
+            label:
+              "Restro User & Password",
+
+            component: (
+              <RestroUserPasswordTab
+                form={restro}
+                setForm={setRestro}
+              />
+            ),
+          },
+        ],
+      }}
       initialTab="Basic Information"
       onClose={() => router.back()}
       onSave={async (payload: any) => {
@@ -121,21 +165,44 @@ export default function RestroEditRoutePage({
             )}`,
             {
               method: "PATCH",
-              headers: { "Content-Type": "application/json" },
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
               body: JSON.stringify(payload),
             }
           );
 
           if (!res.ok) {
-            const text = await res.text();
-            throw new Error(text || "Save failed");
+            const text =
+              await res.text();
+
+            throw new Error(
+              text || "Save failed"
+            );
           }
 
           const json = await res.json();
-          return { ok: true, row: json?.row ?? payload };
+
+          return {
+            ok: true,
+            row:
+              json?.row ?? payload,
+          };
         } catch (e: any) {
-          console.error("Save error:", e);
-          return { ok: false, error: e?.message || "Save failed" };
+          console.error(
+            "Save error:",
+            e
+          );
+
+          return {
+            ok: false,
+            error:
+              e?.message ||
+              "Save failed",
+          };
         }
       }}
     />
