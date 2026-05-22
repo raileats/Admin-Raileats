@@ -89,6 +89,7 @@ export default function RestroMasterPage() {
             ownerPhone.toLowerCase().trim()
           );
 
+      // ✅ RESTRO CODE SEARCH
       const matchRestroCode =
         restroCode.trim() === "" ||
         String(item?.RestroCode || "")
@@ -129,12 +130,10 @@ export default function RestroMasterPage() {
             stationCode.toLowerCase().trim()
           );
 
-      // ✅ FIXED STATION NAME SEARCH
       const matchStationName =
         stationName.trim() === "" ||
         String(item?.StationName || "")
           .toLowerCase()
-          .trim()
           .includes(
             stationName.toLowerCase().trim()
           );
@@ -306,6 +305,7 @@ export default function RestroMasterPage() {
 
         <div className="flex flex-wrap gap-2 items-center">
 
+          {/* OWNER MOBILE */}
           <input
             type="text"
             placeholder="Owner Mobile"
@@ -315,9 +315,10 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[140px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[125px]"
           />
 
+          {/* RESTRO CODE */}
           <input
             type="text"
             placeholder="Restro Code"
@@ -327,9 +328,10 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[120px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[110px]"
           />
 
+          {/* FSSAI */}
           <input
             type="text"
             placeholder="FSSAI"
@@ -337,9 +339,10 @@ export default function RestroMasterPage() {
             onChange={(e) =>
               setFssai(e.target.value)
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[120px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[100px]"
           />
 
+          {/* RESTRO NAME */}
           <input
             type="text"
             placeholder="Restro Name"
@@ -349,9 +352,10 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[150px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[130px]"
           />
 
+          {/* OWNER NAME */}
           <input
             type="text"
             placeholder="Owner Name"
@@ -361,9 +365,10 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[150px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[130px]"
           />
 
+          {/* STN CODE */}
           <input
             type="text"
             placeholder="STN Code"
@@ -373,9 +378,10 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[110px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[95px]"
           />
 
+          {/* STATION NAME */}
           <input
             type="text"
             placeholder="Station Name"
@@ -385,9 +391,10 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[150px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[130px]"
           />
 
+          {/* STATUS */}
           <select
             value={statusFilter}
             onChange={(e) =>
