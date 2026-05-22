@@ -17,13 +17,38 @@ export default function RestroMasterPage() {
   const router = useRouter();
 
   const [results, setResults] = useState<Restro[]>([]);
+  const [filteredResults, setFilteredResults] = useState<
+    Restro[]
+  >([]);
+
   const [loading, setLoading] = useState(false);
-  const [openAddRestro, setOpenAddRestro] = useState(false);
+
+  const [openAddRestro, setOpenAddRestro] =
+    useState(false);
 
   // ✅ SEARCH STATES
-  const [searchBy, setSearchBy] = useState("RestroName");
-  const [searchText, setSearchText] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [ownerPhone, setOwnerPhone] =
+    useState("");
+
+  const [restroCode, setRestroCode] =
+    useState("");
+
+  const [fssai, setFssai] = useState("");
+
+  const [restroName, setRestroName] =
+    useState("");
+
+  const [ownerName, setOwnerName] =
+    useState("");
+
+  const [stationCode, setStationCode] =
+    useState("");
+
+  const [stationName, setStationName] =
+    useState("");
+
+  const [statusFilter, setStatusFilter] =
+    useState("");
 
   useEffect(() => {
     fetchRestros();
@@ -35,21 +60,120 @@ export default function RestroMasterPage() {
     const { data } = await supabase
       .from("RestroMaster")
       .select("*")
-      .order("RestroCode", { ascending: false });
+      .order("RestroCode", {
+        ascending: false,
+      });
 
-    setResults(
-      (data ?? []).map((r: any) => ({
+    const finalData = (data ?? []).map(
+      (r: any) => ({
         id: r.RestroCode,
         ...r,
-      }))
+      })
     );
+
+    setResults(finalData);
+    setFilteredResults(finalData);
 
     setLoading(false);
   }
 
+  // ✅ SEARCH FUNCTION
+  function handleSearch() {
+    const filtered = results.filter((item) => {
+      const matchOwnerPhone =
+        ownerPhone === "" ||
+        item?.OwnerPhone
+          ?.toString()
+          .toLowerCase()
+          .includes(
+            ownerPhone.toLowerCase()
+          );
+
+      const matchRestroCode =
+        restroCode === "" ||
+        item?.RestroCode
+          ?.toString()
+          .toLowerCase()
+          .includes(
+            restroCode.toLowerCase()
+          );
+
+      const matchFssai =
+        fssai === "" ||
+        item?.FSSAI
+          ?.toString()
+          .toLowerCase()
+          .includes(fssai.toLowerCase());
+
+      const matchRestroName =
+        restroName === "" ||
+        item?.RestroName
+          ?.toString()
+          .toLowerCase()
+          .includes(
+            restroName.toLowerCase()
+          );
+
+      const matchOwnerName =
+        ownerName === "" ||
+        item?.OwnerName
+          ?.toString()
+          .toLowerCase()
+          .includes(
+            ownerName.toLowerCase()
+          );
+
+      const matchStationCode =
+        stationCode === "" ||
+        item?.StationCode
+          ?.toString()
+          .toLowerCase()
+          .includes(
+            stationCode.toLowerCase()
+          );
+
+      const matchStationName =
+        stationName === "" ||
+        item?.StationName
+          ?.toString()
+          .toLowerCase()
+          .includes(
+            stationName.toLowerCase()
+          );
+
+      let matchStatus = true;
+
+      if (statusFilter === "active") {
+        matchStatus =
+          Number(item.RaileatsStatus) === 1;
+      }
+
+      if (statusFilter === "deactive") {
+        matchStatus =
+          Number(item.RaileatsStatus) === 0;
+      }
+
+      return (
+        matchOwnerPhone &&
+        matchRestroCode &&
+        matchFssai &&
+        matchRestroName &&
+        matchOwnerName &&
+        matchStationCode &&
+        matchStationName &&
+        matchStatus
+      );
+    });
+
+    setFilteredResults(filtered);
+  }
+
   /* 🔥 SAME API AS BasicInformationTab */
   async function toggleRaileats(row: Restro) {
-    const current = Number(row.RaileatsStatus ?? 0);
+    const current = Number(
+      row.RaileatsStatus ?? 0
+    );
+
     const next = current === 1 ? 0 : 1;
 
     try {
@@ -59,76 +183,96 @@ export default function RestroMasterPage() {
         )}/status`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ raileatsStatus: next }),
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            raileatsStatus: next,
+          }),
         }
       );
 
       if (!res.ok) {
-        alert("Failed to update Raileats status");
+        alert(
+          "Failed to update Raileats status"
+        );
+
         return;
       }
 
-      fetchRestros(); // 🔄 refresh list
+      fetchRestros();
     } catch (e) {
-      alert("Network error while updating status");
-    }
-  }
-
-  function openEdit(code: string | number) {
-    router.push(`/admin/restros/${code}/edit`);
-  }
-
-  // ✅ FILTER LOGIC
-  const filteredResults = results.filter((item) => {
-    let matchesSearch = true;
-    let matchesStatus = true;
-
-    // SEARCH FILTER
-    if (searchText.trim() !== "") {
-      const value =
-        item?.[searchBy]?.toString().toLowerCase() || "";
-
-      matchesSearch = value.includes(
-        searchText.toLowerCase()
+      alert(
+        "Network error while updating status"
       );
     }
+  }
 
-    // STATUS FILTER
-    if (statusFilter === "active") {
-      matchesStatus = Number(item.RaileatsStatus) === 1;
-    }
-
-    if (statusFilter === "deactive") {
-      matchesStatus = Number(item.RaileatsStatus) === 0;
-    }
-
-    return matchesSearch && matchesStatus;
-  });
+  function openEdit(
+    code: string | number
+  ) {
+    router.push(
+      `/admin/restros/${code}/edit`
+    );
+  }
 
   const columns: Column<Restro>[] = [
-    { key: "RestroCode", title: "Restro Code", width: "110px" },
-    { key: "RestroName", title: "Restro Name" },
-    { key: "StationCode", title: "Station Code", width: "100px" },
-    { key: "StationName", title: "Station Name" },
-    { key: "OwnerName", title: "Owner Name" },
-    { key: "OwnerPhone", title: "Owner Phone", width: "140px" },
+    {
+      key: "RestroCode",
+      title: "Restro Code",
+      width: "110px",
+    },
 
-    /* ✅ SAME LOOK + LOGIC AS EDIT PAGE */
+    {
+      key: "RestroName",
+      title: "Restro Name",
+    },
+
+    {
+      key: "StationCode",
+      title: "Station Code",
+      width: "100px",
+    },
+
+    {
+      key: "StationName",
+      title: "Station Name",
+    },
+
+    {
+      key: "OwnerName",
+      title: "Owner Name",
+    },
+
+    {
+      key: "OwnerPhone",
+      title: "Owner Phone",
+      width: "140px",
+    },
+
     {
       key: "RaileatsStatus",
       title: "Raileats",
+
       render: (row) => {
-        const on = Number(row.RaileatsStatus ?? 0) === 1;
+        const on =
+          Number(
+            row.RaileatsStatus ?? 0
+          ) === 1;
 
         return (
           <div
-            onClick={() => toggleRaileats(row)}
+            onClick={() =>
+              toggleRaileats(row)
+            }
             style={{
               width: 44,
               height: 22,
               borderRadius: 999,
-              backgroundColor: on ? "#0ea5e9" : "#9ca3af",
+              backgroundColor: on
+                ? "#0ea5e9"
+                : "#9ca3af",
               cursor: "pointer",
               position: "relative",
             }}
@@ -142,7 +286,8 @@ export default function RestroMasterPage() {
                 position: "absolute",
                 top: 2,
                 left: on ? 24 : 2,
-                transition: "left 0.2s ease",
+                transition:
+                  "left 0.2s ease",
               }}
             />
           </div>
@@ -153,69 +298,106 @@ export default function RestroMasterPage() {
 
   return (
     <main className="mx-6 my-4 max-w-full">
+
       <h2 className="text-xl font-semibold mb-6">
         Restro Master
       </h2>
 
-      {/* ✅ SEARCH + BUTTON SECTION */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+      {/* ✅ SEARCH SECTION */}
+      <div className="bg-white p-4 rounded-lg border mb-5">
 
-        {/* LEFT SIDE */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="grid grid-cols-4 gap-3">
 
-          {/* SEARCH BY */}
-          <select
-            value={searchBy}
-            onChange={(e) => setSearchBy(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm"
-          >
-            <option value="OwnerPhone">
-              Owner Mobile
-            </option>
-
-            <option value="RestroCode">
-              Restro Code
-            </option>
-
-            <option value="FSSAI">
-              By FSSAI
-            </option>
-
-            <option value="RestroName">
-              By Restro Name
-            </option>
-
-            <option value="OwnerName">
-              By Owner Name
-            </option>
-
-            <option value="StationCode">
-              By STN Code
-            </option>
-
-            <option value="StationName">
-              By Station Name
-            </option>
-          </select>
-
-          {/* SEARCH INPUT */}
           <input
             type="text"
-            placeholder="Search here..."
-            value={searchText}
+            placeholder="Owner Mobile"
+            value={ownerPhone}
             onChange={(e) =>
-              setSearchText(e.target.value)
+              setOwnerPhone(
+                e.target.value
+              )
             }
-            className="border rounded-lg px-3 py-2 w-[240px] text-sm"
+            className="border rounded-lg px-3 py-2"
           />
 
-          {/* STATUS FILTER */}
+          <input
+            type="text"
+            placeholder="Restro Code"
+            value={restroCode}
+            onChange={(e) =>
+              setRestroCode(
+                e.target.value
+              )
+            }
+            className="border rounded-lg px-3 py-2"
+          />
+
+          <input
+            type="text"
+            placeholder="FSSAI"
+            value={fssai}
+            onChange={(e) =>
+              setFssai(e.target.value)
+            }
+            className="border rounded-lg px-3 py-2"
+          />
+
+          <input
+            type="text"
+            placeholder="Restro Name"
+            value={restroName}
+            onChange={(e) =>
+              setRestroName(
+                e.target.value
+              )
+            }
+            className="border rounded-lg px-3 py-2"
+          />
+
+          <input
+            type="text"
+            placeholder="Owner Name"
+            value={ownerName}
+            onChange={(e) =>
+              setOwnerName(
+                e.target.value
+              )
+            }
+            className="border rounded-lg px-3 py-2"
+          />
+
+          <input
+            type="text"
+            placeholder="STN Code"
+            value={stationCode}
+            onChange={(e) =>
+              setStationCode(
+                e.target.value
+              )
+            }
+            className="border rounded-lg px-3 py-2"
+          />
+
+          <input
+            type="text"
+            placeholder="Station Name"
+            value={stationName}
+            onChange={(e) =>
+              setStationName(
+                e.target.value
+              )
+            }
+            className="border rounded-lg px-3 py-2"
+          />
+
           <select
             value={statusFilter}
             onChange={(e) =>
-              setStatusFilter(e.target.value)
+              setStatusFilter(
+                e.target.value
+              )
             }
-            className="border rounded-lg px-3 py-2 text-sm"
+            className="border rounded-lg px-3 py-2"
           >
             <option value="">
               All Status
@@ -231,13 +413,25 @@ export default function RestroMasterPage() {
           </select>
         </div>
 
-        {/* RIGHT SIDE BUTTON */}
-        <button
-          onClick={() => setOpenAddRestro(true)}
-          className="px-4 py-2 bg-green-600 text-white rounded-lg"
-        >
-          + Add New Restro
-        </button>
+        {/* BUTTONS */}
+        <div className="flex justify-between mt-4">
+
+          <button
+            onClick={handleSearch}
+            className="px-5 py-2 bg-blue-600 text-white rounded-lg"
+          >
+            Search
+          </button>
+
+          <button
+            onClick={() =>
+              setOpenAddRestro(true)
+            }
+            className="px-4 py-2 bg-green-600 text-white rounded-lg"
+          >
+            + Add New Restro
+          </button>
+        </div>
       </div>
 
       <AdminTable
@@ -250,7 +444,9 @@ export default function RestroMasterPage() {
         actions={(row) => (
           <button
             onClick={() =>
-              openEdit(row.RestroCode)
+              openEdit(
+                row.RestroCode
+              )
             }
             className="px-3 py-1 rounded-md bg-amber-400 text-black"
           >
