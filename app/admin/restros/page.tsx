@@ -89,7 +89,6 @@ export default function RestroMasterPage() {
             ownerPhone.toLowerCase().trim()
           );
 
-      // ✅ RESTRO CODE SEARCH
       const matchRestroCode =
         restroCode.trim() === "" ||
         String(item?.RestroCode || "")
@@ -151,13 +150,13 @@ export default function RestroMasterPage() {
       }
 
       return (
-        matchOwnerPhone &&
         matchRestroCode &&
-        matchFssai &&
         matchRestroName &&
-        matchOwnerName &&
         matchStationCode &&
         matchStationName &&
+        matchOwnerPhone &&
+        matchOwnerName &&
+        matchFssai &&
         matchStatus
       );
     });
@@ -305,19 +304,6 @@ export default function RestroMasterPage() {
 
         <div className="flex flex-wrap gap-2 items-center">
 
-          {/* OWNER MOBILE */}
-          <input
-            type="text"
-            placeholder="Owner Mobile"
-            value={ownerPhone}
-            onChange={(e) =>
-              setOwnerPhone(
-                e.target.value
-              )
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[125px]"
-          />
-
           {/* RESTRO CODE */}
           <input
             type="text"
@@ -328,18 +314,7 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[110px]"
-          />
-
-          {/* FSSAI */}
-          <input
-            type="text"
-            placeholder="FSSAI"
-            value={fssai}
-            onChange={(e) =>
-              setFssai(e.target.value)
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[100px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[105px]"
           />
 
           {/* RESTRO NAME */}
@@ -352,23 +327,10 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[130px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[125px]"
           />
 
-          {/* OWNER NAME */}
-          <input
-            type="text"
-            placeholder="Owner Name"
-            value={ownerName}
-            onChange={(e) =>
-              setOwnerName(
-                e.target.value
-              )
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[130px]"
-          />
-
-          {/* STN CODE */}
+          {/* STATION CODE */}
           <input
             type="text"
             placeholder="STN Code"
@@ -378,7 +340,7 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[95px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[90px]"
           />
 
           {/* STATION NAME */}
@@ -391,7 +353,44 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[130px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[125px]"
+          />
+
+          {/* OWNER MOBILE */}
+          <input
+            type="text"
+            placeholder="Owner Mobile"
+            value={ownerPhone}
+            onChange={(e) =>
+              setOwnerPhone(
+                e.target.value
+              )
+            }
+            className="border rounded-md px-2 py-1.5 text-sm w-[120px]"
+          />
+
+          {/* OWNER NAME */}
+          <input
+            type="text"
+            placeholder="Owner Name"
+            value={ownerName}
+            onChange={(e) =>
+              setOwnerName(
+                e.target.value
+              )
+            }
+            className="border rounded-md px-2 py-1.5 text-sm w-[120px]"
+          />
+
+          {/* FSSAI */}
+          <input
+            type="text"
+            placeholder="FSSAI"
+            value={fssai}
+            onChange={(e) =>
+              setFssai(e.target.value)
+            }
+            className="border rounded-md px-2 py-1.5 text-sm w-[90px]"
           />
 
           {/* STATUS */}
@@ -402,7 +401,7 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-md px-2 py-1.5 text-sm w-[120px]"
+            className="border rounded-md px-2 py-1.5 text-sm w-[110px]"
           >
             <option value="">
               All Status
