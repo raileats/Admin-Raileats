@@ -10,7 +10,9 @@ const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
-    auth: { persistSession: false }
+    auth: {
+      persistSession: false,
+    },
   }
 );
 
@@ -23,138 +25,312 @@ export async function PATCH(
   try {
     console.log("===== PATCH CALLED =====");
 
-    const RestroCode = Number(params.code);
+    const RestroCode = Number(
+      params.code
+    );
 
-    if (!RestroCode || isNaN(RestroCode)) {
+    if (
+      !RestroCode ||
+      isNaN(RestroCode)
+    ) {
       return NextResponse.json(
-        { ok: false, error: "Invalid RestroCode" },
+        {
+          ok: false,
+          error:
+            "Invalid RestroCode",
+        },
         { status: 400 }
       );
     }
 
     const body = await req.json();
-    console.log("Incoming body:", body);
+
+    console.log(
+      "Incoming body:",
+      body
+    );
 
     /* ================= SAFE PAYLOAD ================= */
 
     const payload: any = {};
 
     const num = (v: any) =>
-      v === "" || v === null || v === undefined ? null : Number(v);
+      v === "" ||
+      v === null ||
+      v === undefined
+        ? null
+        : Number(v);
 
     /* 🔥 ================= STATION FIX ================= */
 
-    if (body.StationCode !== undefined)
-      payload.StationCode = body.StationCode;
+    if (
+      body.StationCode !==
+      undefined
+    )
+      payload.StationCode =
+        body.StationCode;
 
-    if (body.StationName !== undefined)
-      payload.StationName = body.StationName;
+    if (
+      body.StationName !==
+      undefined
+    )
+      payload.StationName =
+        body.StationName;
 
     if (body.State !== undefined)
       payload.State = body.State;
 
     /* 🔥 ================= TIME FIX ================= */
 
-    if (body.open_time !== undefined)
-      payload.open_time = body.open_time;
+    if (
+      body.open_time !==
+      undefined
+    )
+      payload.open_time =
+        body.open_time;
 
-    if (body.closed_time !== undefined)
-      payload.closed_time = body.closed_time;
+    if (
+      body.closed_time !==
+      undefined
+    )
+      payload.closed_time =
+        body.closed_time;
 
     /* 🔥 ================= ORDER SETTINGS ================= */
 
-    if (body.MinimumOrderValue !== undefined)
-      payload.MinimumOrderValue = num(body.MinimumOrderValue);
+    if (
+      body.MinimumOrderValue !==
+      undefined
+    )
+      payload.MinimumOrderValue =
+        num(
+          body.MinimumOrderValue
+        );
 
-    if (body.CutOffTime !== undefined)
-      payload.CutOffTime = num(body.CutOffTime);
+    if (
+      body.CutOffTime !==
+      undefined
+    )
+      payload.CutOffTime = num(
+        body.CutOffTime
+      );
 
-    if (body.WeeklyOff !== undefined)
-      payload.WeeklyOff = body.WeeklyOff;
+    if (
+      body.WeeklyOff !==
+      undefined
+    )
+      payload.WeeklyOff =
+        body.WeeklyOff;
 
-    if (body.RaileatsCustomerDeliveryCharge !== undefined)
+    if (
+      body.RaileatsCustomerDeliveryCharge !==
+      undefined
+    )
       payload.RaileatsCustomerDeliveryCharge =
-        num(body.RaileatsCustomerDeliveryCharge);
+        num(
+          body.RaileatsCustomerDeliveryCharge
+        );
 
     /* 🔥🔥🔥 MAIN FIX (GST VALUES NOW SAVE PROPERLY) */
 
-    if (body.RaileatsCustomerDeliveryChargeGSTRate !== undefined)
+    if (
+      body.RaileatsCustomerDeliveryChargeGSTRate !==
+      undefined
+    )
       payload.RaileatsCustomerDeliveryChargeGSTRate =
-        num(body.RaileatsCustomerDeliveryChargeGSTRate);
+        num(
+          body.RaileatsCustomerDeliveryChargeGSTRate
+        );
 
-    if (body.RaileatsCustomerDeliveryChargeGST !== undefined)
+    if (
+      body.RaileatsCustomerDeliveryChargeGST !==
+      undefined
+    )
       payload.RaileatsCustomerDeliveryChargeGST =
-        num(body.RaileatsCustomerDeliveryChargeGST);
+        num(
+          body.RaileatsCustomerDeliveryChargeGST
+        );
 
-    if (body.RaileatsCustomerDeliveryChargeTotalInclGST !== undefined)
+    if (
+      body.RaileatsCustomerDeliveryChargeTotalInclGST !==
+      undefined
+    )
       payload.RaileatsCustomerDeliveryChargeTotalInclGST =
-        num(body.RaileatsCustomerDeliveryChargeTotalInclGST);
+        num(
+          body.RaileatsCustomerDeliveryChargeTotalInclGST
+        );
 
     /* 🔥 ============================================== */
 
-    if (body.RaileatsOrdersPaymentOptionforCustomer !== undefined)
+    if (
+      body.RaileatsOrdersPaymentOptionforCustomer !==
+      undefined
+    )
       payload.RaileatsOrdersPaymentOptionforCustomer =
         body.RaileatsOrdersPaymentOptionforCustomer;
 
-    if (body.IRCTCOrdersPaymentOptionforCustomer !== undefined)
+    if (
+      body.IRCTCOrdersPaymentOptionforCustomer !==
+      undefined
+    )
       payload.IRCTCOrdersPaymentOptionforCustomer =
         body.IRCTCOrdersPaymentOptionforCustomer;
 
-    if (body.RestroTypeofDeliveryRailEatsorVendor !== undefined)
+    if (
+      body.RestroTypeofDeliveryRailEatsorVendor !==
+      undefined
+    )
       payload.RestroTypeofDeliveryRailEatsorVendor =
         body.RestroTypeofDeliveryRailEatsorVendor;
 
     /* 🔥 ================= BASIC INFO FIX ================= */
 
-    if (body.RestroName !== undefined)
-      payload.RestroName = body.RestroName;
+    if (
+      body.RestroName !==
+      undefined
+    )
+      payload.RestroName =
+        body.RestroName;
 
-    if (body.OwnerName !== undefined)
-      payload.OwnerName = body.OwnerName;
+    if (
+      body.OwnerName !==
+      undefined
+    )
+      payload.OwnerName =
+        body.OwnerName;
 
-    if (body.OwnerEmail !== undefined)
-      payload.OwnerEmail = body.OwnerEmail;
+    if (
+      body.OwnerEmail !==
+      undefined
+    )
+      payload.OwnerEmail =
+        body.OwnerEmail;
 
-    if (body.OwnerPhone !== undefined)
-      payload.OwnerPhone = body.OwnerPhone;
+    if (
+      body.OwnerPhone !==
+      undefined
+    )
+      payload.OwnerPhone =
+        body.OwnerPhone;
 
-    if (body.RestroEmail !== undefined)
-      payload.RestroEmail = body.RestroEmail;
+    if (
+      body.RestroEmail !==
+      undefined
+    )
+      payload.RestroEmail =
+        body.RestroEmail;
 
-    if (body.RestroPhone !== undefined)
-      payload.RestroPhone = body.RestroPhone;
+    if (
+      body.RestroPhone !==
+      undefined
+    )
+      payload.RestroPhone =
+        body.RestroPhone;
 
-    if (body.BrandNameifAny !== undefined)
-      payload.BrandNameifAny = body.BrandNameifAny;
+    if (
+      body.BrandNameifAny !==
+      undefined
+    )
+      payload.BrandNameifAny =
+        body.BrandNameifAny;
 
-    if (body.RestroRating !== undefined)
-      payload.RestroRating = num(body.RestroRating);
+    if (
+      body.RestroRating !==
+      undefined
+    )
+      payload.RestroRating = num(
+        body.RestroRating
+      );
 
-    if (body.IsIrctcApproved !== undefined)
-      payload.IsIrctcApproved = body.IsIrctcApproved;
+    if (
+      body.IsIrctcApproved !==
+      undefined
+    )
+      payload.IsIrctcApproved =
+        body.IsIrctcApproved;
 
-    if (body.RaileatsStatus !== undefined)
-      payload.RaileatsStatus = body.RaileatsStatus;
+    if (
+      body.RaileatsStatus !==
+      undefined
+    )
+      payload.RaileatsStatus =
+        body.RaileatsStatus;
+
+    /* ✅ RESTRO LOGIN */
+
+    if (
+      body.RestroLoginMobile !==
+      undefined
+    )
+      payload.RestroLoginMobile =
+        body.RestroLoginMobile;
+
+    if (
+      body.RestroPassword !==
+      undefined
+    )
+      payload.RestroPassword =
+        body.RestroPassword;
+
+    /* ✅ HOLIDAY */
+
+    if (
+      body.HolidayStatus !==
+      undefined
+    )
+      payload.HolidayStatus = num(
+        body.HolidayStatus
+      );
+
+    /* ✅ MINIMUM ORDER */
+
+    if (
+      body.MinimumOrderAmount !==
+      undefined
+    )
+      payload.MinimumOrderAmount =
+        num(
+          body.MinimumOrderAmount
+        );
 
     /* ✅ TIMESTAMP */
-    payload.UpdatedAt = new Date().toISOString();
 
-    console.log("🔥 Final payload:", payload);
+    payload.UpdatedAt =
+      new Date().toISOString();
+
+    console.log(
+      "🔥 Final payload:",
+      payload
+    );
 
     /* ================= UPDATE ================= */
 
-    const { data, error } = await supabase
-      .from("RestroMaster")
-      .update(payload)
-      .eq("RestroCode", RestroCode)
-      .select();
+    const { data, error } =
+      await supabase
+        .from("RestroMaster")
+        .update(payload)
+        .eq(
+          "RestroCode",
+          RestroCode
+        )
+        .select();
 
-    console.log("✅ Updated row:", data);
+    console.log(
+      "✅ Updated row:",
+      data
+    );
 
     if (error) {
-      console.error("❌ Supabase error:", error);
+      console.error(
+        "❌ Supabase error:",
+        error
+      );
+
       return NextResponse.json(
-        { ok: false, error: error.message },
+        {
+          ok: false,
+          error: error.message,
+        },
         { status: 500 }
       );
     }
@@ -163,7 +339,8 @@ export async function PATCH(
       return NextResponse.json(
         {
           ok: false,
-          error: "No rows updated. Check RestroCode",
+          error:
+            "No rows updated. Check RestroCode",
         },
         { status: 400 }
       );
@@ -171,13 +348,23 @@ export async function PATCH(
 
     return NextResponse.json({
       ok: true,
-      message: "Restro updated successfully",
+      message:
+        "Restro updated successfully",
       row: data[0],
     });
   } catch (err: any) {
-    console.error("❌ PATCH FAILED:", err);
+    console.error(
+      "❌ PATCH FAILED:",
+      err
+    );
+
     return NextResponse.json(
-      { ok: false, error: err?.message || "Server error" },
+      {
+        ok: false,
+        error:
+          err?.message ||
+          "Server error",
+      },
       { status: 500 }
     );
   }
