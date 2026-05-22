@@ -80,65 +80,63 @@ export default function RestroMasterPage() {
   // ✅ SEARCH FUNCTION
   function handleSearch() {
     const filtered = results.filter((item) => {
+
       const matchOwnerPhone =
-        ownerPhone === "" ||
-        item?.OwnerPhone
-          ?.toString()
+        ownerPhone.trim() === "" ||
+        String(item?.OwnerPhone || "")
           .toLowerCase()
           .includes(
-            ownerPhone.toLowerCase()
+            ownerPhone.toLowerCase().trim()
           );
 
       const matchRestroCode =
-        restroCode === "" ||
-        item?.RestroCode
-          ?.toString()
+        restroCode.trim() === "" ||
+        String(item?.RestroCode || "")
           .toLowerCase()
           .includes(
-            restroCode.toLowerCase()
+            restroCode.toLowerCase().trim()
           );
 
       const matchFssai =
-        fssai === "" ||
-        item?.FSSAI
-          ?.toString()
-          .toLowerCase()
-          .includes(fssai.toLowerCase());
-
-      const matchRestroName =
-        restroName === "" ||
-        item?.RestroName
-          ?.toString()
+        fssai.trim() === "" ||
+        String(item?.FSSAI || "")
           .toLowerCase()
           .includes(
-            restroName.toLowerCase()
+            fssai.toLowerCase().trim()
+          );
+
+      const matchRestroName =
+        restroName.trim() === "" ||
+        String(item?.RestroName || "")
+          .toLowerCase()
+          .includes(
+            restroName.toLowerCase().trim()
           );
 
       const matchOwnerName =
-        ownerName === "" ||
-        item?.OwnerName
-          ?.toString()
+        ownerName.trim() === "" ||
+        String(item?.OwnerName || "")
           .toLowerCase()
           .includes(
-            ownerName.toLowerCase()
+            ownerName.toLowerCase().trim()
           );
 
       const matchStationCode =
-        stationCode === "" ||
-        item?.StationCode
-          ?.toString()
+        stationCode.trim() === "" ||
+        String(item?.StationCode || "")
           .toLowerCase()
           .includes(
-            stationCode.toLowerCase()
+            stationCode.toLowerCase().trim()
           );
 
+      // ✅ FIXED STATION NAME SEARCH
       const matchStationName =
-        stationName === "" ||
-        item?.StationName
-          ?.toString()
+        stationName.trim() === "" ||
+        String(item?.StationName || "")
           .toLowerCase()
+          .trim()
           .includes(
-            stationName.toLowerCase()
+            stationName.toLowerCase().trim()
           );
 
       let matchStatus = true;
@@ -299,14 +297,14 @@ export default function RestroMasterPage() {
   return (
     <main className="mx-6 my-4 max-w-full">
 
-      <h2 className="text-xl font-semibold mb-6">
+      <h2 className="text-xl font-semibold mb-5">
         Restro Master
       </h2>
 
       {/* ✅ SEARCH SECTION */}
-      <div className="bg-white p-4 rounded-lg border mb-5">
+      <div className="bg-white p-3 rounded-lg border mb-4">
 
-        <div className="grid grid-cols-4 gap-3">
+        <div className="flex flex-wrap gap-2 items-center">
 
           <input
             type="text"
@@ -317,7 +315,7 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-lg px-3 py-2"
+            className="border rounded-md px-2 py-1.5 text-sm w-[140px]"
           />
 
           <input
@@ -329,7 +327,7 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-lg px-3 py-2"
+            className="border rounded-md px-2 py-1.5 text-sm w-[120px]"
           />
 
           <input
@@ -339,7 +337,7 @@ export default function RestroMasterPage() {
             onChange={(e) =>
               setFssai(e.target.value)
             }
-            className="border rounded-lg px-3 py-2"
+            className="border rounded-md px-2 py-1.5 text-sm w-[120px]"
           />
 
           <input
@@ -351,7 +349,7 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-lg px-3 py-2"
+            className="border rounded-md px-2 py-1.5 text-sm w-[150px]"
           />
 
           <input
@@ -363,7 +361,7 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-lg px-3 py-2"
+            className="border rounded-md px-2 py-1.5 text-sm w-[150px]"
           />
 
           <input
@@ -375,7 +373,7 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-lg px-3 py-2"
+            className="border rounded-md px-2 py-1.5 text-sm w-[110px]"
           />
 
           <input
@@ -387,7 +385,7 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-lg px-3 py-2"
+            className="border rounded-md px-2 py-1.5 text-sm w-[150px]"
           />
 
           <select
@@ -397,7 +395,7 @@ export default function RestroMasterPage() {
                 e.target.value
               )
             }
-            className="border rounded-lg px-3 py-2"
+            className="border rounded-md px-2 py-1.5 text-sm w-[120px]"
           >
             <option value="">
               All Status
@@ -411,23 +409,21 @@ export default function RestroMasterPage() {
               Deactivate
             </option>
           </select>
-        </div>
 
-        {/* BUTTONS */}
-        <div className="flex justify-between mt-4">
-
+          {/* SEARCH BUTTON */}
           <button
             onClick={handleSearch}
-            className="px-5 py-2 bg-blue-600 text-white rounded-lg"
+            className="px-4 py-1.5 bg-blue-600 text-white rounded-md text-sm"
           >
             Search
           </button>
 
+          {/* ADD BUTTON */}
           <button
             onClick={() =>
               setOpenAddRestro(true)
             }
-            className="px-4 py-2 bg-green-600 text-white rounded-lg"
+            className="px-4 py-1.5 bg-green-600 text-white rounded-md text-sm"
           >
             + Add New Restro
           </button>
