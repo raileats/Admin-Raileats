@@ -12,7 +12,16 @@ import BankTab from "./restro-edit/BankTab";
 import FutureClosedTab from "./restro-edit/FutureClosedTab";
 import MenuTab from "./restro-edit/MenuTab";
 
-const { AdminForm, SubmitButton, SecondaryButton, Select, Toggle } = UI;
+// ✅ NEW TAB IMPORT
+import RestroUserPasswordTab from "./restro-edit/RestroUserPasswordTab";
+
+const {
+  AdminForm,
+  SubmitButton,
+  SecondaryButton,
+  Select,
+  Toggle,
+} = UI;
 
 const TAB_NAMES = [
   "Basic Information",
@@ -22,20 +31,43 @@ const TAB_NAMES = [
   "Bank",
   "Future Closed",
   "Menu",
+
+  // ✅ NEW TAB
+  "Restro User & Password",
 ];
 
 function safeGet(obj: any, ...keys: string[]) {
   for (const k of keys) {
-    if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
+    if (
+      obj &&
+      obj[k] !== undefined &&
+      obj[k] !== null
+    )
+      return obj[k];
   }
+
   return "";
 }
 
 function buildStationDisplay(obj: any) {
-  const name = safeGet(obj, "StationName");
-  const code = safeGet(obj, "StationCode");
-  const state = safeGet(obj, "State");
-  return `${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}`;
+  const name = safeGet(
+    obj,
+    "StationName"
+  );
+
+  const code = safeGet(
+    obj,
+    "StationCode"
+  );
+
+  const state = safeGet(
+    obj,
+    "State"
+  );
+
+  return `${name}${
+    code ? ` (${code})` : ""
+  }${state ? ` - ${state}` : ""}`;
 }
 
 export default function RestroEditModal({
@@ -45,11 +77,20 @@ export default function RestroEditModal({
 }: any) {
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState(initialTab);
-  const [local, setLocal] = useState<any>({});
-  const [stations, setStations] = useState<any[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [notification, setNotification] = useState<any>(null);
+  const [activeTab, setActiveTab] =
+    useState(initialTab);
+
+  const [local, setLocal] =
+    useState<any>({});
+
+  const [stations, setStations] =
+    useState<any[]>([]);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [notification, setNotification] =
+    useState<any>(null);
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
@@ -64,16 +105,27 @@ export default function RestroEditModal({
       if (restroProp) return;
 
       try {
-        const res = await fetch("/api/restros");
+        const res = await fetch(
+          "/api/restros"
+        );
+
         if (!res.ok) return;
 
         const json = await res.json();
-        const rows = json?.rows || json?.data || json || [];
+
+        const rows =
+          json?.rows ||
+          json?.data ||
+          json ||
+          [];
 
         if (!rows.length) return;
 
         const maxCode = Math.max(
-          ...rows.map((r: any) => Number(r.RestroCode) || 0)
+          ...rows.map(
+            (r: any) =>
+              Number(r.RestroCode) || 0
+          )
         );
 
         setLocal((prev: any) => ({
@@ -81,7 +133,10 @@ export default function RestroEditModal({
           RestroCode: maxCode + 1,
         }));
       } catch (e) {
-        console.error("Auto code fetch failed", e);
+        console.error(
+          "Auto code fetch failed",
+          e
+        );
       }
     }
 
@@ -92,73 +147,170 @@ export default function RestroEditModal({
   useEffect(() => {
     async function fetchStations() {
       try {
-        const res = await fetch("/api/stations");
+        const res = await fetch(
+          "/api/stations"
+        );
+
         const json = await res.json();
 
-        const rows = json?.rows || json?.data || json || [];
+        const rows =
+          json?.rows ||
+          json?.data ||
+          json ||
+          [];
 
-        const mapped = rows.map((r: any) => ({
-          value: r.StationCode,
-          label: `${r.StationName} (${r.StationCode})${
-            r.State ? ` - ${r.State}` : ""
-          }`,
-        }));
+        const mapped = rows.map(
+          (r: any) => ({
+            value: r.StationCode,
+
+            label: `${r.StationName} (${r.StationCode})${
+              r.State
+                ? ` - ${r.State}`
+                : ""
+            }`,
+          })
+        );
 
         setStations(mapped);
       } catch (e) {
-        console.error("Stations fetch error", e);
+        console.error(
+          "Stations fetch error",
+          e
+        );
       }
     }
 
     fetchStations();
   }, []);
 
-  const updateField = useCallback((key: string, value: any) => {
-    setLocal((prev: any) => ({ ...prev, [key]: value }));
-  }, []);
+  const updateField = useCallback(
+    (key: string, value: any) => {
+      setLocal((prev: any) => ({
+        ...prev,
+        [key]: value,
+      }));
+    },
+    []
+  );
 
-  const restroCode = local?.RestroCode;
-  const stationDisplay = buildStationDisplay(local);
+  const restroCode =
+    local?.RestroCode;
+
+  const stationDisplay =
+    buildStationDisplay(local);
 
   /* ================= SAVE ================= */
   async function handleSave() {
     try {
       setSaving(true);
+
       setNotification(null);
 
       const payload: any = {};
 
-      const setIf = (k: string, v: any) => {
-        if (v !== undefined && v !== "") payload[k] = v;
+      const setIf = (
+        k: string,
+        v: any
+      ) => {
+        if (
+          v !== undefined &&
+          v !== ""
+        )
+          payload[k] = v;
       };
 
       /* ================= FULL DATA ================= */
 
       // BASIC INFO
-      setIf("RestroName", local.RestroName);
-      setIf("OwnerName", local.OwnerName);
-      setIf("OwnerEmail", local.OwnerEmail);
-      setIf("OwnerPhone", local.OwnerPhone);
-      setIf("RestroEmail", local.RestroEmail);
-      setIf("RestroPhone", local.RestroPhone);
-      setIf("BrandNameifAny", local.BrandNameifAny);
-      setIf("RestroRating", local.RestroRating);
+      setIf(
+        "RestroName",
+        local.RestroName
+      );
+
+      setIf(
+        "OwnerName",
+        local.OwnerName
+      );
+
+      setIf(
+        "OwnerEmail",
+        local.OwnerEmail
+      );
+
+      setIf(
+        "OwnerPhone",
+        local.OwnerPhone
+      );
+
+      setIf(
+        "RestroEmail",
+        local.RestroEmail
+      );
+
+      setIf(
+        "RestroPhone",
+        local.RestroPhone
+      );
+
+      setIf(
+        "BrandNameifAny",
+        local.BrandNameifAny
+      );
+
+      setIf(
+        "RestroRating",
+        local.RestroRating
+      );
 
       // STATION
-      setIf("StationCode", local.StationCode);
-      setIf("StationName", local.StationName);
+      setIf(
+        "StationCode",
+        local.StationCode
+      );
+
+      setIf(
+        "StationName",
+        local.StationName
+      );
+
       setIf("State", local.State);
 
       // STATUS
-      setIf("IsIrctcApproved", local.IsIrctcApproved);
-      setIf("RaileatsStatus", local.RaileatsStatus);
+      setIf(
+        "IsIrctcApproved",
+        local.IsIrctcApproved
+      );
+
+      setIf(
+        "RaileatsStatus",
+        local.RaileatsStatus
+      );
 
       // SETTINGS
-      setIf("WeeklyOff", local.WeeklyOff);
-      setIf("open_time", local.OpenTime);
-      setIf("closed_time", local.ClosedTime);
-      setIf("MinimumOrderValue", local.MinimumOrderValue);
-      setIf("CutOffTime", local.CutOffTime);
+      setIf(
+        "WeeklyOff",
+        local.WeeklyOff
+      );
+
+      setIf(
+        "open_time",
+        local.OpenTime
+      );
+
+      setIf(
+        "closed_time",
+        local.ClosedTime
+      );
+
+      setIf(
+        "MinimumOrderValue",
+        local.MinimumOrderValue
+      );
+
+      setIf(
+        "CutOffTime",
+        local.CutOffTime
+      );
 
       /* 🔥 DELIVERY CHARGE FIX (MAIN ISSUE) */
       setIf(
@@ -176,35 +328,89 @@ export default function RestroEditModal({
         local?.RaileatsDeliveryChargeTotalInclGST
       );
 
+      // ✅ NEW LOGIN FIELDS
+      setIf(
+        "RestroLoginMobile",
+        local?.RestroLoginMobile
+      );
+
+      setIf(
+        "RestroPassword",
+        local?.RestroPassword
+      );
+
+      setIf(
+        "HolidayStatus",
+        local?.HolidayStatus
+      );
+
+      setIf(
+        "MinimumOrderAmount",
+        local?.MinimumOrderAmount
+      );
+
       // CREATE CASE
       if (!restroProp) {
-        setIf("RestroCode", local.RestroCode);
+        setIf(
+          "RestroCode",
+          local.RestroCode
+        );
       }
 
-      console.log("🚀 FINAL PAYLOAD:", payload);
+      console.log(
+        "🚀 FINAL PAYLOAD:",
+        payload
+      );
 
       const res = await fetch(
-        `/api/restros/${encodeURIComponent(String(restroCode || ""))}`,
+        `/api/restros/${encodeURIComponent(
+          String(restroCode || "")
+        )}`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify(
+            payload
+          ),
         }
       );
 
       let json: any = {};
+
       try {
         json = await res.json();
       } catch {
-        const text = await res.text();
-        console.error("❌ HTML RESPONSE:", text);
-        throw new Error("Server returned HTML (API issue)");
+        const text =
+          await res.text();
+
+        console.error(
+          "❌ HTML RESPONSE:",
+          text
+        );
+
+        throw new Error(
+          "Server returned HTML (API issue)"
+        );
       }
 
-      console.log("✅ API RESPONSE:", json);
+      console.log(
+        "✅ API RESPONSE:",
+        json
+      );
 
-      if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || "Update failed");
+      if (
+        !res.ok ||
+        json?.ok === false
+      ) {
+        throw new Error(
+          json?.error ||
+            "Update failed"
+        );
       }
 
       setNotification({
@@ -214,7 +420,11 @@ export default function RestroEditModal({
 
       router.refresh();
     } catch (e: any) {
-      console.error("SAVE ERROR:", e);
+      console.error(
+        "SAVE ERROR:",
+        e
+      );
+
       setNotification({
         type: "error",
         text: e.message,
@@ -237,19 +447,59 @@ export default function RestroEditModal({
   function renderTab() {
     switch (activeTab) {
       case "Basic Information":
-        return <BasicInformationTab {...common} />;
+        return (
+          <BasicInformationTab
+            {...common}
+          />
+        );
+
       case "Station Settings":
-        return <StationSettingsTab {...common} />;
+        return (
+          <StationSettingsTab
+            {...common}
+          />
+        );
+
       case "Address & Documents":
-        return <AddressDocumentsTab {...common} />;
+        return (
+          <AddressDocumentsTab
+            {...common}
+          />
+        );
+
       case "Contacts":
-        return <ContactsTab {...common} />;
+        return (
+          <ContactsTab
+            {...common}
+          />
+        );
+
       case "Bank":
-        return <BankTab {...common} />;
+        return (
+          <BankTab {...common} />
+        );
+
       case "Future Closed":
-        return <FutureClosedTab {...common} />;
+        return (
+          <FutureClosedTab
+            {...common}
+          />
+        );
+
       case "Menu":
-        return <MenuTab {...common} />;
+        return (
+          <MenuTab {...common} />
+        );
+
+      // ✅ NEW TAB
+      case "Restro User & Password":
+        return (
+          <RestroUserPasswordTab
+            form={local}
+            setForm={setLocal}
+          />
+        );
+
       default:
         return null;
     }
@@ -257,11 +507,18 @@ export default function RestroEditModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
+
       <div className="bg-white w-[98%] h-[98%] flex flex-col">
 
         <div className="flex gap-4 border-b px-6 py-3">
+
           {TAB_NAMES.map((t) => (
-            <button key={t} onClick={() => setActiveTab(t)}>
+            <button
+              key={t}
+              onClick={() =>
+                setActiveTab(t)
+              }
+            >
               {t}
             </button>
           ))}
@@ -269,21 +526,36 @@ export default function RestroEditModal({
 
         {notification && (
           <div className="text-center py-2 font-semibold">
-            {notification.text}
+            {
+              notification.text
+            }
           </div>
         )}
 
         <div className="flex-1 overflow-auto p-6">
-          <AdminForm>{renderTab()}</AdminForm>
+          <AdminForm>
+            {renderTab()}
+          </AdminForm>
         </div>
 
         <div className="p-4 flex justify-end gap-3">
-          <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
-          <SubmitButton onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
-          </SubmitButton>
-        </div>
 
+          <SecondaryButton
+            onClick={onClose}
+          >
+            Cancel
+          </SecondaryButton>
+
+          <SubmitButton
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving
+              ? "Saving..."
+              : "Save"}
+          </SubmitButton>
+
+        </div>
       </div>
     </div>
   );
