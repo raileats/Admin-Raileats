@@ -19,17 +19,33 @@ export default function RestroUserPasswordTab({
         </label>
 
         <input
-          type="text"
-          value={form.RestroLoginMobile || ""}
-          onChange={(e) =>
-            setForm({
-              ...form,
-              RestroLoginMobile:
-                e.target.value,
-            })
+          type="tel"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={10}
+          value={
+            form?.RestroLoginMobile || ""
           }
+          onChange={(e) => {
+
+            // ✅ ONLY NUMBERS
+            let value =
+              e.target.value.replace(
+                /\D/g,
+                ""
+              );
+
+            // ✅ MAX 10 DIGITS
+            value = value.slice(0, 10);
+
+            setForm((prev: any) => ({
+              ...prev,
+              RestroLoginMobile:
+                value,
+            }));
+          }}
           className="w-full border rounded-lg px-3 py-2"
-          placeholder="Enter login mobile"
+          placeholder="Enter 10 digit mobile"
         />
       </div>
 
@@ -41,13 +57,15 @@ export default function RestroUserPasswordTab({
 
         <input
           type="text"
-          value={form.RestroPassword || ""}
+          value={
+            form?.RestroPassword || ""
+          }
           onChange={(e) =>
-            setForm({
-              ...form,
+            setForm((prev: any) => ({
+              ...prev,
               RestroPassword:
                 e.target.value,
-            })
+            }))
           }
           className="w-full border rounded-lg px-3 py-2"
           placeholder="Enter password"
@@ -62,14 +80,16 @@ export default function RestroUserPasswordTab({
 
         <select
           value={
-            form.HolidayStatus ?? 0
+            form?.HolidayStatus ?? 0
           }
           onChange={(e) =>
-            setForm({
-              ...form,
+            setForm((prev: any) => ({
+              ...prev,
               HolidayStatus:
-                Number(e.target.value),
-            })
+                Number(
+                  e.target.value
+                ),
+            }))
           }
           className="w-full border rounded-lg px-3 py-2"
         >
@@ -92,20 +112,21 @@ export default function RestroUserPasswordTab({
         <input
           type="number"
           value={
-            form.MinimumOrderAmount ||
+            form?.MinimumOrderAmount ||
             ""
           }
           onChange={(e) =>
-            setForm({
-              ...form,
+            setForm((prev: any) => ({
+              ...prev,
               MinimumOrderAmount:
                 e.target.value,
-            })
+            }))
           }
           className="w-full border rounded-lg px-3 py-2"
           placeholder="Enter minimum order"
         />
       </div>
+
     </div>
   );
 }
