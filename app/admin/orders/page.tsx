@@ -50,21 +50,21 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 const NEXT_MAP: Record<TabKey, { next: TabKey | null; actionLabel: string; dbValue: string }> = {
-  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "In Verification" },
-  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "In Kitchen" },
-  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "Out for Delivery" },
-  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "Delivered" },
-  delivered: { next: null, actionLabel: "", dbValue: "Delivered" },
-  cancelled: { next: null, actionLabel: "", dbValue: "Cancelled" },
-  notdelivered: { next: null, actionLabel: "", dbValue: "Not Delivered" },
-  baddelivery: { next: null, actionLabel: "", dbValue: "Bad Delivery" },
+  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "UNDER_VERIFICATION" },
+  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "IN_KITCHEN" },
+  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "OUT_FOR_DELIVERY" },
+  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "DELIVERED" },
+  delivered: { next: null, actionLabel: "", dbValue: "DELIVERED" },
+  cancelled: { next: null, actionLabel: "", dbValue: "CANCELLED" },
+  notdelivered: { next: null, actionLabel: "", dbValue: "NOT_DELIVERED" },
+  baddelivery: { next: null, actionLabel: "", dbValue: "BAD_DELIVERY" },
 };
 
 const FINAL_MARK_OPTIONS = [
-  { key: "delivered", label: "Delivered", dbValue: "Delivered" },
-  { key: "cancelled", label: "Cancelled", dbValue: "Cancelled" },
-  { key: "notdelivered", label: "Not Delivered", dbValue: "Not Delivered" },
-  { key: "baddelivery", label: "Bad Delivery", dbValue: "Bad Delivery" },
+  { key: "delivered", label: "Delivered", dbValue: "DELIVERED" },
+  { key: "cancelled", label: "Cancelled", dbValue: "CANCELLED" },
+  { key: "notdelivered", label: "Not Delivered", dbValue: "NOT_DELIVERED" },
+  { key: "baddelivery", label: "Bad Delivery", dbValue: "BAD_DELIVERY" },
 ] as const;
 
 type SearchType =
@@ -103,20 +103,20 @@ export default function AdminOrdersPage() {
         return;
       }
 
-      // Backend API se explicit key mapping sync karenge
+      // 🔹 CRITICAL FIX: Frontend par aate hi data ko map karenge taaki tab filter se match ho jaye
       const mapped: Order[] = (json.orders || []).map((row: any) => {
-        const rawStatus = String(row.Status ?? "Booked");
+        // Kisi bhi key se raw status uthao (OrderId ya orderId, Status ya status)
+        const rawStatus = String(row.Status || row.status || "BOOKED").toUpperCase().trim();
         let tabStatus: TabKey = "booked";
-        const lowerRaw = rawStatus.toLowerCase().trim();
         
-        if (lowerRaw === "booked") tabStatus = "booked";
-        else if (lowerRaw === "verification" || lowerRaw === "in verification") tabStatus = "verification";
-        else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") tabStatus = "inkitchen";
-        else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") tabStatus = "outfordelivery";
-        else if (lowerRaw === "delivered") tabStatus = "delivered";
-        else if (lowerRaw === "cancelled") tabStatus = "cancelled";
-        else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") tabStatus = "notdelivered";
-        else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") tabStatus = "baddelivery";
+        if (rawStatus === "BOOKED") tabStatus = "booked";
+        else if (rawStatus === "UNDER_VERIFICATION" || rawStatus === "IN VERIFICATION" || rawStatus === "VERIFICATION") tabStatus = "verification";
+        else if (rawStatus === "IN_KITCHEN" || rawStatus === "IN KITCHEN" || rawStatus === "INKITCHEN") tabStatus = "inkitchen";
+        else if (rawStatus === "OUT_FOR_DELIVERY" || rawStatus === "OUT FOR DELIVERY" || rawStatus === "OUTFORDELIVERY") tabStatus = "outfordelivery";
+        else if (rawStatus === "DELIVERED") tabStatus = "delivered";
+        else if (rawStatus === "CANCELLED") tabStatus = "cancelled";
+        else if (rawStatus === "NOT_DELIVERED" || rawStatus === "NOT DELIVERED" || rawStatus === "NOTDELIVERED") tabStatus = "notdelivered";
+        else if (rawStatus === "BAD_DELIVERY" || rawStatus === "BAD DELIVERY" || rawStatus === "BADDELIVERY") tabStatus = "baddelivery";
 
         const rawHistory = Array.isArray(row.history) ? row.history : [];
         const formattedHistory: OrderHistoryItem[] = rawHistory.map((h: any) => ({
@@ -127,20 +127,20 @@ export default function AdminOrdersPage() {
         }));
 
         return {
-          id: String(row.OrderId ?? ""),
+          id: String(row.OrderId || row.orderId || row.id || ""),
           status: tabStatus,
           dbStatus: rawStatus, 
-          outletId: String(row.RestroCode ?? ""),
-          outletName: String(row.RestroName ?? ""),
-          stationCode: String(row.StationCode ?? ""),
-          stationName: String(row.StationName ?? ""),
-          deliveryDate: String(row.DeliveryDate ?? ""),
-          deliveryTime: String(row.DeliveryTime ?? ""),
-          trainNo: row.TrainNumber ?? "",
-          coach: row.Coach ?? "",
-          seat: row.Seat ?? "",
-          customerName: String(row.CustomerName ?? ""),
-          customerMobile: String(row.CustomerMobile ?? ""),
+          outletId: String(row.RestroCode || row.restroCode || ""),
+          outletName: String(row.RestroName || row.restroName || ""),
+          stationCode: String(row.StationCode || row.stationCode || ""),
+          stationName: String(row.StationName || row.stationName || ""),
+          deliveryDate: String(row.DeliveryDate || row.deliveryDate || ""),
+          deliveryTime: String(row.DeliveryTime || row.deliveryTime || ""),
+          trainNo: row.TrainNumber || row.trainNo || "",
+          coach: row.Coach || row.coach || "",
+          seat: row.Seat || row.seat || "",
+          customerName: String(row.CustomerName || row.customerName || ""),
+          customerMobile: String(row.CustomerMobile || row.customerMobile || ""),
           total: row.TotalAmount != null ? String(row.TotalAmount) : undefined,
           history: formattedHistory,
         };
