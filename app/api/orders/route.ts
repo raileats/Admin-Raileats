@@ -161,7 +161,7 @@ export async function POST(req: Request) {
       PlatformCharge: pricing.platform_charge ?? 0,
       TotalAmount: pricing.total,
       PaymentMode: pricing.payment_mode ?? "COD",
-      Status: "Booked", // Standardized to DB Exact Match
+      Status: "Booked", 
       JourneyPayload: body.meta ?? null,
       CreatedAt: nowIso,
       UpdatedAt: nowIso,
@@ -226,7 +226,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const statusFilter = searchParams.get("status"); 
 
-    // Dynamic relational mapping across '"Orders"' and '"OrderStatusHistory"' tables
+    // Relational mapping queries with wrapped case-sensitive identifiers
     let query = supa
       .from('"Orders"')
       .select(`
@@ -255,7 +255,6 @@ export async function GET(req: Request) {
       `);
 
     if (statusFilter) {
-      // Map frontend values to exact DB capitalization if coming lowercase
       const statusMap: Record<string, string> = {
         booked: "Booked",
         verification: "In Verification",
@@ -272,7 +271,6 @@ export async function GET(req: Request) {
       query = query.eq("Status", normalizedFilter);
     }
 
-    // Order items listing by timeline descending order
     query = query.order("CreatedAt", { ascending: false });
 
     const { data, error } = await query;
@@ -281,14 +279,12 @@ export async function GET(req: Request) {
       console.error("Orders GET failure log:", error);
       return NextResponse.json({ 
         error: "orders_fetch_failed", 
-        details: error.message,
-        hint: error.hint,
-        code: error.code
+        details: error.message 
       }, { status: 500 });
     }
 
-    // Formatting fields array structure to keep frontend pages clean
-    const orders = (data || []).map((row: any) => ({
+    // Explicit format restructuring so frontend receives perfect layout
+    const formattedOrders = (data || []).map((row: any) => ({
       OrderId: row.OrderId,
       Status: row.Status || "Booked",
       RestroCode: row.RestroCode,
@@ -306,7 +302,7 @@ export async function GET(req: Request) {
       history: Array.isArray(row.history) ? row.history : [],
     }));
 
-    return NextResponse.json({ ok: true, orders });
+    return NextResponse.json({ ok: true, orders: formattedOrders });
   } catch (err: any) {
     console.error("orders.GET execution runtime error", err);
     return NextResponse.json({ error: "server_error", details: err?.message }, { status: 500 });
