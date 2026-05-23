@@ -22,7 +22,7 @@ export async function PATCH(
     const body = (await req.json().catch(() => ({}))) as Body;
     const incomingStatus = String(body.newStatus || "").toLowerCase().replace(/[^a-z]/g, "");
 
-    // Exact database strings matching backend triggers requirements
+    // Exact database strings matching backend requirements
     const statusMap: Record<string, string> = {
       booked: "Booked",
       verification: "In Verification",
@@ -46,7 +46,24 @@ export async function PATCH(
 
     const nowIso = new Date().toISOString();
 
-    // FIXED KEYPOINT: Using '"Orders"' literal to force uppercase match in live DB without changing schema
+    // 1) Pehle current order ka status fetch karte hain taaki OldStatus mil sake
+    // FIXED: Wrapped 'Orders' in literal double quotes
+    const { data: currentOrder, error: fetchErr } = await serviceClient
+      .from('"Orders"')
+      .select("Status")
+      .eq("OrderId", orderId)
+      .maybeSingle();
+
+    if (fetchErr) {
+      return NextResponse.json({ 
+        error: "order_fetch_failed", 
+        details: fetchErr.message 
+      }, { status: 500 });
+    }
+
+    const oldStatus = currentOrder ? currentOrder.Status : null;
+
+    // 2) Main table '"Orders"' ko update karte hain
     const { data: updatedData, error: updErr } = await serviceClient
       .from('"Orders"') 
       .update({
@@ -73,17 +90,20 @@ export async function PATCH(
       }, { status: 404 });
     }
 
-    // Optional Audit log for '"OrderStatusHistory"' table with case-sensitive wrap
+    // 3) Audit history log insert karte hain '"OrderStatusHistory"' table par uppercase columns ke sath
+    // FIXED: Wrapped 'OrderStatusHistory' in literal double quotes to respect case sensitivity
     try {
       await serviceClient.from('"OrderStatusHistory"').insert({
         OrderId: orderId,
+        OldStatus: oldStatus,
         NewStatus: dbStatus,
         Note: body.remarks || `Status updated to ${dbStatus}`,
         ChangedBy: body.changedBy || "admin",
         ChangedAt: nowIso,
       });
-    } catch (hE) {
-      console.log("History logging bypassed or handled by DB Triggers natively:", hE);
+    } catch (historyError) {
+      // Agar database triggers automatic handle kar rahe honge toh koi conflict nahi hoga, catch safe handle karega
+      console.log("History logging details: ", historyError);
     }
 
     return NextResponse.json({ ok: true });
