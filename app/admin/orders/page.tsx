@@ -295,27 +295,27 @@ export default function AdminOrdersPage() {
         </div>
       </header>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, marginBottom: 12 }}>
-        {TABS.map((tab) => {
-          const active = tab.key === activeTab;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: active ? "2px solid #273e9a" : "1px solid #e6e8eb",
-                background: active ? "#fff" : "#f8fafc",
-                fontWeight: active ? 700 : 600,
-                cursor: "pointer",
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            onClick={() => submitMark(o)}
+                            style={{ padding: "8px 10px", borderRadius: 6, background: "#0f172a", color: "#fff", cursor: "pointer", flex: 1, border: "none" }}
+                          >
+                            Submit
+                          </button>
+                          <button
+                            onClick={() =>
+                              setMarking((prev) => {
+                                const cp = { ...prev };
+                                // FIX: 'order' ki jagah 'o' use kiya hai kyunki map mein 'o' define hai
+                                delete cp[o.id]; 
+                                return cp;
+                              })
+                            }
+                            style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #e6e8eb", background: "#fff", cursor: "pointer" }}
+                          >
+                            Clear
+                          </button>
+                        </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
