@@ -1,10 +1,3 @@
-Bhai, bilkul sahi decision hai! Agar database ke chalte hue production system mein tables ko rename karenge, toh ho sakta hai aapki customer-side ki live app ya filters toot jayein.
-
-Bina kisi SQL change ke, sirf **`app/admin/orders/page.tsx`** mein hi hum pure columns aur custom tables ko handles kar lete hain. Hum dynamic queries mein pure table and columns ko exact standard parameters ke saath bypass kar dete hain.
-
-Aap niche diye gaye pure code ko copy karke bina kisi jhanjhat ke **`app/admin/orders/page.tsx`** mein replace kar lijiye:
-
-```tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -19,7 +12,13 @@ type TabKey =
   | "notdelivered"
   | "baddelivery";
 
-type OrderHistoryItem = { at: string; by: string; note?: string; status: TabKey };
+type OrderHistoryItem = { 
+  at: string; 
+  by: string; 
+  note?: string; 
+  status: string; 
+};
+
 type Order = {
   id: string;
   status: TabKey;
@@ -91,7 +90,8 @@ export default function AdminOrdersPage() {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      params.set("status", activeTab === "booked" ? "booked" : activeTab.toLowerCase());
+      // Sending proper casing query map
+      params.set("status", activeTab === "booked" ? "Booked" : (NEXT_MAP[activeTab]?.dbValue || activeTab));
       
       const res = await fetch(`/api/orders?${params.toString()}`, {
         cache: "no-store",
@@ -118,23 +118,32 @@ export default function AdminOrdersPage() {
         else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") tabStatus = "notdelivered";
         else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") tabStatus = "baddelivery";
 
+        // Parse order status history records safely matching OrderStatusHistory schema columns
+        const rawHistory = Array.isArray(row.history) ? row.history : [];
+        const formattedHistory: OrderHistoryItem[] = rawHistory.map((h: any) => ({
+          at: String(h.ChangedAt || h.changedAt || h.at || new Date().toISOString()),
+          by: String(h.ChangedBy || h.changedBy || h.by || "system"),
+          note: h.Note || h.note || h.Remarks || h.remarks,
+          status: String(h.NewStatus || h.newStatus || h.status || "")
+        }));
+
         return {
-          id: String(row.id ?? row.OrderId ?? ""),
+          id: String(row.OrderId ?? row.orderId ?? row.id ?? ""),
           status: tabStatus,
           dbStatus: rawStatus, 
-          outletId: String(row.restroCode ?? row.RestroCode ?? ""),
-          outletName: String(row.restroName ?? row.RestroName ?? ""),
-          stationCode: String(row.stationCode ?? row.StationCode ?? ""),
-          stationName: String(row.stationName ?? row.StationName ?? ""),
-          deliveryDate: String(row.deliveryDate ?? row.DeliveryDate ?? ""),
-          deliveryTime: String(row.deliveryTime ?? row.DeliveryTime ?? ""),
-          trainNo: row.trainNumber ?? row.TrainNumber ?? "",
-          coach: row.coach ?? row.Coach ?? "",
-          seat: row.seat ?? row.Seat ?? "",
-          customerName: String(row.customerName ?? row.CustomerName ?? ""),
-          customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
-          total: row.totalAmount != null ? String(row.totalAmount) : (row.TotalAmount != null ? String(row.TotalAmount) : undefined),
-          history: Array.isArray(row.history) ? row.history : [],
+          outletId: String(row.RestroCode ?? row.restroCode ?? ""),
+          outletName: String(row.RestroName ?? row.restroName ?? ""),
+          stationCode: String(row.StationCode ?? row.stationCode ?? ""),
+          stationName: String(row.StationName ?? row.stationName ?? ""),
+          deliveryDate: String(row.DeliveryDate ?? row.deliveryDate ?? ""),
+          deliveryTime: String(row.DeliveryTime ?? row.deliveryTime ?? ""),
+          trainNo: row.TrainNumber ?? row.trainNumber ?? "",
+          coach: row.Coach ?? row.coach ?? "",
+          seat: row.Seat ?? row.seat ?? "",
+          customerName: String(row.CustomerName ?? row.customerName ?? ""),
+          customerMobile: String(row.CustomerMobile ?? row.customerMobile ?? ""),
+          total: row.TotalAmount != null ? String(row.TotalAmount) : (row.totalAmount != null ? String(row.totalAmount) : undefined),
+          history: formattedHistory,
         };
       });
 
@@ -409,9 +418,9 @@ export default function AdminOrdersPage() {
                       <ul style={{ marginTop: 8, paddingLeft: 14 }}>
                         {o.history.map((h, i) => (
                           <li key={i} style={{ marginBottom: 6 }}>
-                            <div style={{ fontSize: 12, color: "#6b7280" }}>{new Date(h.at).toLocaleString()}</div>
+                            <div style={{ fontSize: 12, color: "#6b7280" }}>{h.at ? new Date(h.at).toLocaleString() : "N/A"}</div>
                             <div style={{ fontWeight: 600 }}>{h.by}</div>
-                            <div style={{ fontSize: 13 }}>{h.note ?? TABS.find((t) => t.key === h.status)?.label}</div>
+                            <div style={{ fontSize: 13 }}>{h.note || h.status}</div>
                           </li>
                         ))}
                       </ul>
@@ -511,5 +520,3 @@ export default function AdminOrdersPage() {
     </section>
   );
 }
-
-```
