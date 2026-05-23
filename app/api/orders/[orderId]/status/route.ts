@@ -1,4 +1,3 @@
-// app/api/orders/[orderId]/status/route.ts
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabaseServer";
 
@@ -30,29 +29,29 @@ export async function PATCH(
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const statusMap: Record<string, string> = {
-  booked: "Booked",
-  verification: "In Verification",
-  inkitchen: "In Kitchen",
-  outfordelivery: "Out for Delivery",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-  notdelivered: "Not Delivered",
-  baddelivery: "Bad Delivery",
-};
+      booked: "Booked",
+      verification: "In Verification",
+      inkitchen: "In Kitchen",
+      outfordelivery: "Out for Delivery",
+      delivered: "Delivered",
+      cancelled: "Cancelled",
+      notdelivered: "Not Delivered",
+      baddelivery: "Bad Delivery",
+    };
 
-const requestStatus = body.newStatus;
+    const requestStatus = body.newStatus;
 
-if (!requestStatus || !statusMap[requestStatus]) {
-  return NextResponse.json(
-    { error: "invalid_status" },
-    { status: 400 }
-  );
-}
+    if (!requestStatus || !statusMap[requestStatus]) {
+      return NextResponse.json(
+        { error: "invalid_status" },
+        { status: 400 }
+      );
+    }
 
-const dbStatus = statusMap[requestStatus];
+    const dbStatus = statusMap[requestStatus];
 
-    // 1) current order fetch karo
-    const { data: order, error: fetchErr } = await supa
+    // 1) current order fetch karo (serviceClient use kiya)
+    const { data: order, error: fetchErr } = await serviceClient
       .from("Orders")
       .select("OrderId, Status")
       .eq("OrderId", orderId)
@@ -69,22 +68,22 @@ const dbStatus = statusMap[requestStatus];
     const oldStatus = order.Status as TabKey | null;
     const nowIso = new Date().toISOString();
 
-    // 2) Orders table me Status update
-    const { error: updErr } = await supa
-  .from("Orders")
-  .update({
-    Status: dbStatus,
-    UpdatedAt: nowIso,
-  })
-  .eq("OrderId", orderId);
+    // 2) Orders table me Status update (serviceClient use kiya)
+    const { error: updErr } = await serviceClient
+      .from("Orders")
+      .update({
+        Status: dbStatus,
+        UpdatedAt: nowIso,
+      })
+      .eq("OrderId", orderId);
 
     if (updErr) {
       console.error("status PATCH: updateErr", updErr);
       return NextResponse.json({ error: "order_update_failed" }, { status: 500 });
     }
 
-    // 3) OrderStatusHistory me row add karo
-    const { error: histErr } = await supa.from("OrderStatusHistory").insert({
+    // 3) OrderStatusHistory me row add karo (serviceClient use kiya)
+    const { error: histErr } = await serviceClient.from("OrderStatusHistory").insert({
       OrderId: orderId,
       OldStatus: oldStatus,
       NewStatus: dbStatus,
@@ -95,7 +94,6 @@ const dbStatus = statusMap[requestStatus];
 
     if (histErr) {
       console.error("status PATCH: historyErr", histErr);
-      // yahan error aaye to bhi 200 de sakte hai (status update ho chuka hai)
     }
 
     return NextResponse.json({ ok: true });
