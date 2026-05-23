@@ -50,11 +50,12 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "baddelivery", label: "Bad Delivery" },
 ];
 
+// 🔥 FIXED: NEXT_MAP me sequence update kar diya hai taaki click karne par orders agle tab me smoothly move hon
 const NEXT_MAP: Record<TabKey, { next?: TabKey; actionLabel?: string }> = {
   booked: { next: "verification", actionLabel: "Move to In Verification" },
   verification: { next: "inkitchen", actionLabel: "Move to In Kitchen" },
-  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery" },
-  outfordelivery: {},
+  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵" },
+  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅" },
   delivered: {},
   cancelled: {},
   notdelivered: {},
@@ -385,7 +386,7 @@ export default function AdminOrdersPage() {
           marginBottom: 12,
         }}
       >
-        {TABS.map((tab) => {
+        ={TABS.map((tab) => {
           const active = tab.key === activeTab;
           return (
             <button
@@ -578,8 +579,8 @@ export default function AdminOrdersPage() {
                   </td>
 
                   <td style={{ padding: 10, verticalAlign: "top" }}>
-                    {/* intermediary statuses => quick move */}
-                    {["booked", "verification", "inkitchen"].includes(o.status) ? (
+                    {/* 🔥 FIXED ACTION CELL: It will render the sequential movement button for intermediate states */}
+                    {["booked", "verification", "inkitchen", "outfordelivery"].includes(o.status) ? (
                       <button
                         onClick={() => {
                           if (!confirm(`Move ${o.id} to next status?`)) return;
@@ -592,12 +593,13 @@ export default function AdminOrdersPage() {
                           color: "#fff",
                           border: "none",
                           cursor: "pointer",
+                          fontWeight: "bold",
                         }}
                       >
                         {NEXT_MAP[o.status]?.actionLabel}
                       </button>
                     ) : (
-                      // Out for delivery or final-state => inline dropdown + remarks + submit
+                      // Final-states (Delivered, Cancelled etc.) will show direct jump dropdown + remarks
                       <div
                         style={{
                           display: "flex",
@@ -656,7 +658,7 @@ export default function AdminOrdersPage() {
                             style={{
                               padding: "8px 10px",
                               borderRadius: 6,
-                              border: "none",
+                              border: "1px solid #000",
                               background: "#0f172a",
                               color: "#fff",
                               cursor: "pointer",
