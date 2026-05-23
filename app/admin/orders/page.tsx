@@ -2,12 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/**
- * Orders admin page with tabs, inline dropdown marking, and flexible search filters.
- * Real API /api/orders se load ho raha hai.
- */
-
-/* ---------- Types ---------- */
 type TabKey =
   | "booked"
   | "verification"
@@ -22,12 +16,12 @@ type OrderHistoryItem = { at: string; by: string; note?: string; status: TabKey 
 type Order = {
   id: string;
   status: TabKey;
-  outletId: string;          // = RestroCode (string)
-  outletName: string;        // = RestroName
+  outletId: string;
+  outletName: string;
   stationCode: string;
   stationName: string;
-  deliveryDate: string;      // yyyy-mm-dd
-  deliveryTime: string;      // hh:mm or hh:mm:ss
+  deliveryDate: string;
+  deliveryTime: string;
   trainNo?: string;
   coach?: string;
   seat?: string;
@@ -37,7 +31,6 @@ type Order = {
   history: OrderHistoryItem[];
 };
 
-/* ---------- Tabs & helpers ---------- */
 const TABS: { key: TabKey; label: string }[] = [
   { key: "booked", label: "Booked" },
   { key: "verification", label: "In Verification" },
@@ -75,20 +68,17 @@ type SearchType =
   | "deliveryDate"
   | "trainNo";
 
-/* ---------- Component ---------- */
 export default function AdminOrdersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("booked");
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>({} as Record<TabKey, Order[]>);
   const [loading, setLoading] = useState(false);
   const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
 
-  // Search controls
   const [searchType, setSearchType] = useState<SearchType>("orderId");
   const [searchText, setSearchText] = useState("");
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
 
-  /* ---------- Load orders from backend ---------- */
   useEffect(() => {
     const load = async () => {
       try {
@@ -138,7 +128,6 @@ export default function AdminOrdersPage() {
 
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
 
-  /* ---------- Sequential status move ---------- */
   function moveOrderToNext(orderId: string) {
     const current = allOrders[activeTab] ?? [];
     const idx = current.findIndex((o) => o.id === orderId);
@@ -195,7 +184,6 @@ export default function AdminOrdersPage() {
     })();
   }
 
-  /* ---------- Submit direct jump marking ---------- */
   function submitMark(order: Order) {
     const selection = marking[order.id];
     if (!selection || !selection.status) {
@@ -258,7 +246,6 @@ export default function AdminOrdersPage() {
     })();
   }
 
-  /* ---------- Filtering logic ---------- */
   function applyFilters(list: Order[]) {
     let filtered = list.slice();
 
@@ -306,7 +293,6 @@ export default function AdminOrdersPage() {
         </div>
       </header>
 
-      {/* Tabs */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, marginBottom: 12 }}>
         {TABS.map((tab) => {
           const active = tab.key === activeTab;
@@ -329,7 +315,6 @@ export default function AdminOrdersPage() {
         })}
       </div>
 
-      {/* Search / Filters */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontWeight: 600 }}>Search by</span>
@@ -378,7 +363,6 @@ export default function AdminOrdersPage() {
         </button>
       </div>
 
-      {/* Orders table */}
       <div style={{ background: "#fff", borderRadius: 8, padding: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.03)" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1200 }}>
