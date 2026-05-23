@@ -3,55 +3,15 @@ import { serviceClient } from "@/lib/supabaseServer";
 
 type Payload = {
   restro_code: string | number;
-  customer: {
-    full_name: string;
-    phone: string;
-  };
-  delivery: {
-    train_no: string;
-    coach: string;
-    seat: string;
-    delivery_date?: string;
-    delivery_time?: string;
-    note?: string | null;
-  };
-  pricing: {
-    subtotal: number;
-    gst?: number;
-    platform_charge?: number;
-    total: number;
-    payment_mode?: "COD" | "ONLINE";
-  };
-  items: {
-    item_id: number;
-    name: string;
-    qty: number;
-    base_price: number;
-    line_total: number;
-  }[];
+  customer: { full_name: string; phone: string };
+  delivery: { train_no: string; coach: string; seat: string; delivery_date?: string; delivery_time?: string; note?: string | null };
+  pricing: { subtotal: number; gst?: number; platform_charge?: number; total: number; payment_mode?: "COD" | "ONLINE" };
+  items: { item_id: number; name: string; qty: number; base_price: number; line_total: number }[];
   meta?: any;
 };
 
-type RestroMasterRow = {
-  RestroCode: number;
-  RestroName: string | null;
-  StationCode: string | null;
-  StationName: string | null;
-};
-
-type MenuRow = {
-  id: number;
-  restro_code: number;
-  item_code: number | null;
-  item_name: string;
-  item_description?: string | null;
-  item_category?: string | null;
-  item_cuisine?: string | null;
-  menu_type?: string | null;
-  base_price?: number | null;
-  gst_percent?: number | null;
-  selling_price?: number | null;
-};
+type RestroMasterRow = { RestroCode: number; RestroName: string | null; StationCode: string | null; StationName: string | null };
+type MenuRow = { id: number; restro_code: number; item_code: number | null; item_name: string; item_description?: string | null; item_category?: string | null; item_cuisine?: string | null; menu_type?: string | null; base_price?: number | null; gst_percent?: number | null; selling_price?: number | null };
 
 function generateOrderId() {
   const now = new Date();
@@ -61,255 +21,128 @@ function generateOrderId() {
   const ms = String(now.getTime()).slice(-5);
   return `BOO-${y}${m}${d}-${ms}`;
 }
-
 function todayYMD() {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
-
 function timeHM() {
   const now = new Date();
-  const h = String(now.getHours()).padStart(2, "0");
-  const m = String(now.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
 
-/* ========= POST: create new order from raileats.in ========= */
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
-
-    if (!body?.restro_code) {
-      return NextResponse.json({ error: "missing_restroc_code" }, { status: 400 });
-    }
-    if (!body?.customer?.full_name || !body?.customer?.phone) {
-      return NextResponse.json({ error: "missing_customer" }, { status: 400 });
-    }
-    if (!body?.delivery?.train_no || !body?.delivery?.coach || !body?.delivery?.seat) {
-      return NextResponse.json({ error: "missing_delivery" }, { status: 400 });
-    }
-    if (!Array.isArray(body?.items) || body.items.length === 0) {
-      return NextResponse.json({ error: "empty_items" }, { status: 400 });
+    if (!body?.restro_code || !body?.customer?.full_name || !body?.customer?.phone || !body?.delivery?.train_no || !body?.delivery?.coach || !body?.delivery?.seat || !Array.isArray(body?.items) || body.items.length === 0) {
+      return NextResponse.json({ error: "missing_required_fields" }, { status: 400 });
     }
 
     const supa = serviceClient;
-    const restroCodeNum = Number(body.restro_code);
-
-    const { data: restroData, error: restroErr } = await supa
-      .from('"RestroMaster"')
-      .select("RestroCode, RestroName, StationCode, StationName")
-      .eq("RestroCode", restroCodeNum)
-      .maybeSingle();
-
-    const restro = (restroData || null) as RestroMasterRow | null;
-
-    if (restroErr) {
-      console.error("RestroMaster error", restroErr);
-      return NextResponse.json({ error: "restro_lookup_failed", details: restroErr.message }, { status: 500 });
-    }
-    if (!restro) {
-      return NextResponse.json({ error: "restro_not_found" }, { status: 400 });
-    }
+    const { data: restro, error: restroErr } = await supa.from('"RestroMaster"').select("RestroCode, RestroName, StationCode, StationName").eq("RestroCode", Number(body.restro_code)).maybeSingle();
+    if (restroErr || !restro) return NextResponse.json({ error: "restro_not_found" }, { status: 400 });
 
     const itemIds = body.items.map((i) => i.item_id);
-    const { data: menuRowsData, error: menuErr } = await supa
-      .from('"RestroMenuItems"')
-      .select(
-        "id, restro_code, item_code, item_name, item_description, item_category, item_cuisine, menu_type, base_price, gst_percent, selling_price"
-      )
-      .in("id", itemIds);
-
-    if (menuErr) {
-      console.error("Menu lookup error", menuErr);
-      return NextResponse.json({ error: "menu_lookup_failed", details: menuErr.message }, { status: 500 });
-    }
-
-    const menuRows = (menuRowsData || []) as MenuRow[];
-    const menuById = new Map<number, MenuRow>();
-    menuRows.forEach((row) => menuById.set(row.id, row));
+    const { data: menuRows } = await supa.from('"RestroMenuItems"').select("id, item_code, item_name, item_description, item_category, item_cuisine, menu_type, base_price, gst_percent, selling_price").in("id", itemIds);
+    const menuById = new Map<number, any>();
+    (menuRows || []).forEach((r) => menuById.set(r.id, r));
 
     const orderId = generateOrderId();
     const nowIso = new Date().toISOString();
-
     const { customer, delivery, pricing } = body;
-    const deliveryDate = delivery.delivery_date || todayYMD();
-    const deliveryTime = delivery.delivery_time || timeHM();
 
     const { error: orderInsertErr } = await supa.from('"Orders"').insert({
-      OrderId: orderId,
-      RestroCode: restro.RestroCode,
-      RestroName: restro.RestroName,
-      StationCode: restro.StationCode,
-      StationName: restro.StationName,
-      DeliveryDate: deliveryDate,
-      DeliveryTime: deliveryTime,
-      TrainNumber: delivery.train_no,
-      Coach: delivery.coach,
-      Seat: delivery.seat,
-      CustomerName: customer.full_name,
-      CustomerMobile: customer.phone,
-      SubTotal: pricing.subtotal,
-      GSTAmount: pricing.gst ?? 0,
-      PlatformCharge: pricing.platform_charge ?? 0,
-      TotalAmount: pricing.total,
-      PaymentMode: pricing.payment_mode ?? "COD",
-      Status: "Booked", 
-      JourneyPayload: body.meta ?? null,
-      CreatedAt: nowIso,
-      UpdatedAt: nowIso,
+      OrderId: orderId, RestroCode: restro.RestroCode, RestroName: restro.RestroName, StationCode: restro.StationCode, StationName: restro.StationName,
+      DeliveryDate: delivery.delivery_date || todayYMD(), DeliveryTime: delivery.delivery_time || timeHM(), TrainNumber: delivery.train_no, Coach: delivery.coach, Seat: delivery.seat,
+      CustomerName: customer.full_name, CustomerMobile: customer.phone, SubTotal: pricing.subtotal, GSTAmount: pricing.gst ?? 0, PlatformCharge: pricing.platform_charge ?? 0,
+      TotalAmount: pricing.total, PaymentMode: pricing.payment_mode ?? "COD", Status: "Booked", JourneyPayload: body.meta ?? null, CreatedAt: nowIso, UpdatedAt: nowIso
     });
-
-    if (orderInsertErr) {
-      console.error("Orders insert error", orderInsertErr);
-      return NextResponse.json({ error: "order_insert_failed", details: orderInsertErr.message }, { status: 500 });
-    }
+    if (orderInsertErr) return NextResponse.json({ error: "order_insert_failed", details: orderInsertErr.message }, { status: 500 });
 
     const orderItemsPayload = body.items.map((it) => {
       const row = menuById.get(it.item_id);
       return {
-        OrderId: orderId,
-        RestroCode: restro.RestroCode,
-        ItemCode: row?.item_code ?? it.item_id,
-        ItemName: row?.item_name ?? it.name,
-        ItemDescription: row?.item_description ?? null,
-        ItemCategory: row?.item_category ?? null,
-        Cuisine: row?.item_cuisine ?? null,
-        MenuType: row?.menu_type ?? null,
-        BasePrice: row?.base_price ?? it.base_price,
-        GSTPercent: row?.gst_percent ?? null,
-        SellingPrice: row?.selling_price ?? it.base_price,
-        Quantity: it.qty,
-        LineTotal: it.line_total,
+        OrderId: orderId, RestroCode: restro.RestroCode, ItemCode: row?.item_code ?? it.item_id, ItemName: row?.item_name ?? it.name,
+        ItemDescription: row?.item_description ?? null, ItemCategory: row?.item_category ?? null, Cuisine: row?.item_cuisine ?? null, MenuType: row?.menu_type ?? null,
+        BasePrice: row?.base_price ?? it.base_price, GSTPercent: row?.gst_percent ?? null, SellingPrice: row?.selling_price ?? it.base_price, Quantity: it.qty, LineTotal: it.line_total
       };
     });
-
-    const { error: itemsInsertErr } = await supa.from('"OrderItems"').insert(orderItemsPayload);
-    if (itemsInsertErr) {
-      console.error("OrderItems insert error", itemsInsertErr);
-    }
+    await supa.from('"OrderItems"').insert(orderItemsPayload);
 
     try {
-      await supa.from('"OrderStatusHistory"').insert({
-        OrderId: orderId,
-        OldStatus: null,
-        NewStatus: "Booked",
-        Note: "Order created from website",
-        ChangedBy: "system",
-        ChangedAt: nowIso,
-      });
-    } catch (hErr) {
-      console.error("OrderStatusHistory bypass log:", hErr);
-    }
+      await supa.from('"OrderStatusHistory"').insert({ OrderId: orderId, OldStatus: null, NewStatus: "Booked", Note: "Order created from website", ChangedBy: "system", ChangedAt: nowIso });
+    } catch (_) {}
 
     return NextResponse.json({ ok: true, order_id: orderId });
   } catch (err: any) {
-    console.error("orders.POST error", err);
     return NextResponse.json({ error: "server_error", details: err?.message }, { status: 500 });
   }
 }
 
-/* ========= GET: fetch orders for Admin UI with Audit Tracking ========= */
+/* ========= GET: Fetch Orders supporting Multi-Format status matching ========= */
 export async function GET(req: Request) {
   try {
     const supa = serviceClient;
     const { searchParams } = new URL(req.url);
     const statusFilter = searchParams.get("status"); 
 
-    let query = supa
-      .from('"Orders"')
-      .select(`
-        OrderId,
-        RestroCode,
-        RestroName,
-        StationCode,
-        StationName,
-        DeliveryDate,
-        DeliveryTime,
-        TrainNumber,
-        Coach,
-        Seat,
-        CustomerName,
-        CustomerMobile,
-        TotalAmount,
-        Status,
-        history: "OrderStatusHistory" (
-          OrderId,
-          OldStatus,
-          NewStatus,
-          Note,
-          ChangedBy,
-          ChangedAt
-        )
-      `);
+    let query = supa.from('"Orders"').select(`
+      OrderId, RestroCode, RestroName, StationCode, StationName, DeliveryDate, DeliveryTime,
+      TrainNumber, Coach, Seat, CustomerName, CustomerMobile, TotalAmount, Status, CreatedAt,
+      history: "OrderStatusHistory" ( OrderId, OldStatus, NewStatus, Note, ChangedBy, ChangedAt )
+    `);
 
     if (statusFilter) {
-      // 🔹 FIX: DB ke purane (UNDER_VERIFICATION, CANCELLED) aur naye dono formats ek sath map honge
+      // 🔹 CSV DATA MATCHING FIX: Database ke saare ajeeb-o-gareeb matching variations ko array me lapeta
       const statusGroups: Record<string, string[]> = {
         booked: ["Booked", "booked", "BOOKED"],
-        verification: ["In Verification", "UNDER_VERIFICATION", "verification", "Under Verification"],
-        inkitchen: ["In Kitchen", "IN_KITCHEN", "inkitchen"],
-        outfordelivery: ["Out for Delivery", "OUT_FOR_DELIVERY", "outfordelivery"],
-        delivered: ["Delivered", "DELIVERED", "delivered"],
-        cancelled: ["Cancelled", "CANCELLED", "cancelled"],
-        notdelivered: ["Not Delivered", "NOT_DELIVERED", "notdelivered"],
-        baddelivery: ["Bad Delivery", "BAD_DELIVERY", "baddelivery"],
+        verification: ["In Verification", "In verification", "verification", "UNDER_VERIFICATION", "under_verification", "Under Verification"],
+        inkitchen: ["In Kitchen", "In kitchen", "inkitchen", "IN_KITCHEN", "in_kitchen"],
+        outfordelivery: ["Out for Delivery", "Out for delivery", "outfordelivery", "OUT_FOR_DELIVERY", "out_for_delivery"],
+        delivered: ["Delivered", "delivered", "DELIVERED"],
+        cancelled: ["Cancelled", "cancelled", "CANCELLED"],
+        notdelivered: ["Not Delivered", "notdelivered", "NOT_DELIVERED", "not_delivered"],
+        baddelivery: ["Bad Delivery", "baddelivery", "BAD_DELIVERY", "bad_delivery"]
       };
 
       const filterKey = statusFilter.toLowerCase().trim();
       const allowedStatuses = statusGroups[filterKey] || [statusFilter];
-      
-      // Supabase ka .in filter humein array se matching allow karta hai
       query = query.in("Status", allowedStatuses);
     }
 
+    // New orders upar lane ke liye descending order
     query = query.order("CreatedAt", { ascending: false });
-
     const { data, error } = await query;
 
     if (error) {
-      console.error("Orders GET failure log:", error);
+      console.error("Orders query failed", error);
       return NextResponse.json({ error: "orders_fetch_failed", details: error.message }, { status: 500 });
     }
 
-    // 🔹 FIX: UI ko hamesha standard format hi return hoga taaki frontend filter na toote
-    const formattedOrders = (data || []).map((row: any) => {
-      const dbStatus = String(row.Status ?? "Booked").toUpperCase().trim();
-      let normalizedStatus = "Booked"; // Default Fallback
+    // 🔹 NORMALIZATION MAP: Frontend ko ek clean standard standard formats bhejna
+    const normalizedOrders = (data || []).map((row: any) => {
+      const currentRaw = String(row.Status ?? "Booked").toLowerCase().replace(/[^a-z]/g, "");
+      let finalStatus = "Booked"; // Safe Fallback
 
-      if (dbStatus === "BOOKED") normalizedStatus = "Booked";
-      else if (dbStatus === "UNDER_VERIFICATION" || dbStatus === "IN VERIFICATION") normalizedStatus = "In Verification";
-      else if (dbStatus === "IN_KITCHEN" || dbStatus === "IN KITCHEN") normalizedStatus = "In Kitchen";
-      else if (dbStatus === "OUT_FOR_DELIVERY" || dbStatus === "OUT FOR DELIVERY") normalizedStatus = "Out for Delivery";
-      else if (dbStatus === "DELIVERED") normalizedStatus = "Delivered";
-      else if (dbStatus === "CANCELLED") normalizedStatus = "Cancelled";
-      else if (dbStatus === "NOT_DELIVERED" || dbStatus === "NOT DELIVERED") normalizedStatus = "Not Delivered";
-      else if (dbStatus === "BAD_DELIVERY" || dbStatus === "BAD DELIVERY") normalizedStatus = "Bad Delivery";
+      if (currentRaw === "booked") finalStatus = "Booked";
+      else if (currentRaw.includes("verification") || currentRaw.includes("under")) finalStatus = "In Verification";
+      else if (currentRaw.includes("kitchen")) finalStatus = "In Kitchen";
+      else if (currentRaw.includes("delivery") && currentRaw.includes("out")) finalStatus = "Out for Delivery";
+      else if (currentRaw === "delivered") finalStatus = "Delivered";
+      else if (currentRaw === "cancelled") finalStatus = "Cancelled";
+      else if (currentRaw.includes("not")) finalStatus = "Not Delivered";
+      else if (currentRaw.includes("bad")) finalStatus = "Bad Delivery";
 
       return {
-        OrderId: row.OrderId,
-        Status: normalizedStatus, // Pure frontend standard matching
-        RestroCode: row.RestroCode,
-        RestroName: row.RestroName,
-        StationCode: row.StationCode,
-        StationName: row.StationName,
-        DeliveryDate: row.DeliveryDate, 
-        DeliveryTime: row.DeliveryTime, 
-        TrainNumber: row.TrainNumber,
-        Coach: row.Coach,
-        Seat: row.Seat,
-        CustomerName: row.CustomerName,
-        CustomerMobile: row.CustomerMobile,
-        TotalAmount: Number(row.TotalAmount ?? 0),
-        history: Array.isArray(row.history) ? row.history : [],
+        OrderId: row.OrderId, Status: finalStatus, RestroCode: row.RestroCode, RestroName: row.RestroName,
+        StationCode: row.StationCode, StationName: row.StationName, DeliveryDate: row.DeliveryDate,
+        DeliveryTime: row.DeliveryTime, TrainNumber: row.TrainNumber, Coach: row.Coach, Seat: row.Seat,
+        CustomerName: row.CustomerName, CustomerMobile: row.CustomerMobile, TotalAmount: Number(row.TotalAmount ?? 0),
+        history: Array.isArray(row.history) ? row.history : []
       };
     });
 
-    return NextResponse.json({ ok: true, orders: formattedOrders });
+    return NextResponse.json({ ok: true, orders: normalizedOrders });
   } catch (err: any) {
-    console.error("orders.GET execution runtime error", err);
     return NextResponse.json({ error: "server_error", details: err?.message }, { status: 500 });
   }
 }
