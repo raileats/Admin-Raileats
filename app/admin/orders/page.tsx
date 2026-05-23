@@ -43,24 +43,34 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "baddelivery", label: "Bad Delivery" },
 ];
 
-// FIXED: dbValue ko lowercase types me badal diya jo backend accept karta hai
-const NEXT_MAP: Record<TabKey, { next: TabKey | null; actionLabel: string; dbValue: TabKey }> = {
-  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "verification" },
-  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "inkitchen" },
-  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "outfordelivery" },
-  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "delivered" },
-  delivered: { next: null, actionLabel: "", dbValue: "delivered" },
-  cancelled: { next: null, actionLabel: "", dbValue: "cancelled" },
-  notdelivered: { next: null, actionLabel: "", dbValue: "notdelivered" },
-  baddelivery: { next: null, actionLabel: "", dbValue: "baddelivery" },
+// FIXED: Backend status structure mapping (Dono lowercase aur standard database strings ko handles karega)
+const BACKEND_STATUS_MAP: Record<TabKey, string> = {
+  booked: "Booked",
+  verification: "In Verification",
+  inkitchen: "In Kitchen",
+  outfordelivery: "Out for Delivery",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  notdelivered: "Not Delivered",
+  baddelivery: "Bad Delivery",
 };
 
-// FIXED: dbValue ko lowercase kar diya taaki backend error na de
+const NEXT_MAP: Record<TabKey, { next: TabKey | null; actionLabel: string; dbValue: string }> = {
+  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "In Verification" },
+  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "In Kitchen" },
+  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "Out for Delivery" },
+  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "Delivered" },
+  delivered: { next: null, actionLabel: "", dbValue: "Delivered" },
+  cancelled: { next: null, actionLabel: "", dbValue: "Cancelled" },
+  notdelivered: { next: null, actionLabel: "", dbValue: "Not Delivered" },
+  baddelivery: { next: null, actionLabel: "", dbValue: "Bad Delivery" },
+};
+
 const FINAL_MARK_OPTIONS = [
-  { key: "delivered", label: "Delivered", dbValue: "delivered" },
-  { key: "cancelled", label: "Cancelled", dbValue: "cancelled" },
-  { key: "notdelivered", label: "Not Delivered", dbValue: "notdelivered" },
-  { key: "baddelivery", label: "Bad Delivery", dbValue: "baddelivery" },
+  { key: "delivered", label: "Delivered", dbValue: "Delivered" },
+  { key: "cancelled", label: "Cancelled", dbValue: "Cancelled" },
+  { key: "notdelivered", label: "Not Delivered", dbValue: "Not Delivered" },
+  { key: "baddelivery", label: "Bad Delivery", dbValue: "Bad Delivery" },
 ] as const;
 
 type SearchType =
@@ -82,69 +92,72 @@ export default function AdminOrdersPage() {
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const params = new URLSearchParams();
-        
-        params.set("status", activeTab);
-        
-        const res = await fetch(`/api/orders?${params.toString()}`, {
-          cache: "no-store",
-        });
-        const json = await res.json().catch(() => ({} as any));
+  // Reusable load function taaki status change ke baad latest state fetch ho sake
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      
+      // FIXED: Agar backend lowercase reject kar rha hai, toh exact database string bhejenge
+      const backendQueryStatus = BACKEND_STATUS_MAP[activeTab] || activeTab;
+      params.set("status", backendQueryStatus);
+      
+      const res = await fetch(`/api/orders?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const json = await res.json().catch(() => ({} as any));
 
-        if (!res.ok || !json?.ok) {
-          console.error("orders fetch failed", json);
-          setAllOrders((prev) => ({ ...prev, [activeTab]: [] }));
-          return;
-        }
-
-        const mapped: Order[] = (json.orders || []).map((row: any) => {
-          const rawStatus = String(row.status ?? row.Status ?? "Booked");
-          let tabStatus: TabKey = "booked";
-          const lowerRaw = rawStatus.toLowerCase().trim();
-          
-          if (lowerRaw === "booked") tabStatus = "booked";
-          else if (lowerRaw === "verification" || lowerRaw === "in verification") tabStatus = "verification";
-          else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") tabStatus = "inkitchen";
-          else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") tabStatus = "outfordelivery";
-          else if (lowerRaw === "delivered") tabStatus = "delivered";
-          else if (lowerRaw === "cancelled") tabStatus = "cancelled";
-          else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") tabStatus = "notdelivered";
-          else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") tabStatus = "baddelivery";
-
-          return {
-            id: String(row.id ?? row.OrderId ?? ""),
-            status: tabStatus,
-            dbStatus: rawStatus, 
-            outletId: String(row.restroCode ?? row.RestroCode ?? ""),
-            outletName: String(row.restroName ?? row.RestroName ?? ""),
-            stationCode: String(row.stationCode ?? row.StationCode ?? ""),
-            stationName: String(row.stationName ?? row.StationName ?? ""),
-            deliveryDate: String(row.deliveryDate ?? row.DeliveryDate ?? ""),
-            deliveryTime: String(row.deliveryTime ?? row.DeliveryTime ?? ""),
-            trainNo: row.trainNumber ?? row.TrainNumber ?? "",
-            coach: row.coach ?? row.Coach ?? "",
-            seat: row.seat ?? row.Seat ?? "",
-            customerName: String(row.customerName ?? row.CustomerName ?? ""),
-            customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
-            total: row.totalAmount != null ? String(row.totalAmount) : (row.TotalAmount != null ? String(row.TotalAmount) : undefined),
-            history: Array.isArray(row.history) ? row.history : [],
-          };
-        });
-
-        setAllOrders((prev) => ({ ...prev, [activeTab]: mapped }));
-      } catch (e) {
-        console.error("orders fetch error", e);
+      if (!res.ok || !json?.ok) {
+        console.error("orders fetch failed", json);
         setAllOrders((prev) => ({ ...prev, [activeTab]: [] }));
-      } finally {
-        setLoading(false);
+        return;
       }
-    };
 
-    load();
+      const mapped: Order[] = (json.orders || []).map((row: any) => {
+        const rawStatus = String(row.status ?? row.Status ?? "Booked");
+        let tabStatus: TabKey = "booked";
+        const lowerRaw = rawStatus.toLowerCase().trim();
+        
+        if (lowerRaw === "booked") tabStatus = "booked";
+        else if (lowerRaw === "verification" || lowerRaw === "in verification") tabStatus = "verification";
+        else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") tabStatus = "inkitchen";
+        else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") tabStatus = "outfordelivery";
+        else if (lowerRaw === "delivered") tabStatus = "delivered";
+        else if (lowerRaw === "cancelled") tabStatus = "cancelled";
+        else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") tabStatus = "notdelivered";
+        else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") tabStatus = "baddelivery";
+
+        return {
+          id: String(row.id ?? row.OrderId ?? ""),
+          status: tabStatus,
+          dbStatus: rawStatus, 
+          outletId: String(row.restroCode ?? row.RestroCode ?? ""),
+          outletName: String(row.restroName ?? row.RestroName ?? ""),
+          stationCode: String(row.stationCode ?? row.StationCode ?? ""),
+          stationName: String(row.stationName ?? row.StationName ?? ""),
+          deliveryDate: String(row.deliveryDate ?? row.DeliveryDate ?? ""),
+          deliveryTime: String(row.deliveryTime ?? row.DeliveryTime ?? ""),
+          trainNo: row.trainNumber ?? row.TrainNumber ?? "",
+          coach: row.coach ?? row.Coach ?? "",
+          seat: row.seat ?? row.Seat ?? "",
+          customerName: String(row.customerName ?? row.CustomerName ?? ""),
+          customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
+          total: row.totalAmount != null ? String(row.totalAmount) : (row.TotalAmount != null ? String(row.TotalAmount) : undefined),
+          history: Array.isArray(row.history) ? row.history : [],
+        };
+      });
+
+      setAllOrders((prev) => ({ ...prev, [activeTab]: mapped }));
+    } catch (e) {
+      console.error("orders fetch error", e);
+      setAllOrders((prev) => ({ ...prev, [activeTab]: [] }));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOrders();
   }, [activeTab]);
 
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
@@ -176,31 +189,14 @@ export default function AdminOrdersPage() {
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || !json?.ok) {
-          alert("Failed to change status");
+          alert(`Failed to change status: ${json?.error || 'Unknown Server Error'}`);
           return;
         }
 
-        const updated: Order = {
-          ...order,
-          status: nextStatus,
-          dbStatus: targetDbValue,
-          history: [
-            ...order.history,
-            {
-              at: new Date().toISOString(),
-              by: "admin",
-              note: mapping.actionLabel,
-              status: nextStatus,
-            },
-          ],
-        };
+        // Fresh data fetch karega taaki front-end backend dono automatic sync ho jayein safely
+        await loadOrders();
+        alert("Status updated successfully!");
 
-        setAllOrders((prev) => {
-          const copy = { ...prev };
-          copy[activeTab] = (copy[activeTab] ?? []).filter((o) => o.id !== orderId);
-          copy[nextStatus] = [updated, ...(copy[nextStatus] ?? [])];
-          return copy;
-        });
       } catch (e) {
         alert("Failed to change status (network error)");
       }
@@ -231,33 +227,9 @@ export default function AdminOrdersPage() {
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || !json?.ok) {
-          alert("Failed to change status");
+          alert(`Failed to change status: ${json?.error || 'Unknown Server Error'}`);
           return;
         }
-
-        const updated: Order = {
-          ...order,
-          status: targetKey,
-          dbStatus: targetDbValue,
-          history: [
-            ...order.history,
-            {
-              at: new Date().toISOString(),
-              by: "admin",
-              note: remarks,
-              status: targetKey,
-            },
-          ],
-        };
-
-        setAllOrders((prev) => {
-          const copy: Record<TabKey, Order[]> = { ...prev } as any;
-          (Object.keys(copy) as TabKey[]).forEach((k) => {
-            copy[k] = (copy[k] ?? []).filter((o) => o.id !== order.id);
-          });
-          copy[targetKey] = [updated, ...(copy[targetKey] ?? [])];
-          return copy;
-        });
 
         setMarking((prev) => {
           const cp = { ...prev };
@@ -266,6 +238,7 @@ export default function AdminOrdersPage() {
         });
 
         setActiveTab(targetKey);
+        await loadOrders();
       } catch (e) {
         alert("Failed to change status (network error)");
       }
