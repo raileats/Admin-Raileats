@@ -174,7 +174,6 @@ export default function AdminOrdersPage() {
         const json = await res.json().catch(() => ({}));
         
         if (!res.ok || !json?.ok) {
-          // DETAILED ON-SCREEN DIAGNOSTIC LOGGING
           const errorMsg = `🚨 STATUS UPDATE FAILED!\n\n` +
                            `• Error Type: ${json?.error || "Unknown"}\n` +
                            `• Message/Details: ${json?.details || json?.message || "No details provided"}\n` +
@@ -220,7 +219,6 @@ export default function AdminOrdersPage() {
         const json = await res.json().catch(() => ({}));
         
         if (!res.ok || !json?.ok) {
-          // DETAILED ON-SCREEN DIAGNOSTIC LOGGING
           const errorMsg = `🚨 DROPDOWN UPDATE FAILED!\n\n` +
                            `• Error Type: ${json?.error || "Unknown"}\n` +
                            `• Message/Details: ${json?.details || json?.message || "No details provided"}\n` +
@@ -475,7 +473,8 @@ export default function AdminOrdersPage() {
                             onClick={() =>
                               setMarking((prev) => {
                                 const cp = { ...prev };
-                                delete cp[order.id];
+                                // FIXED: Replaced 'order.id' with loop scoped variable 'o.id'
+                                delete cp[o.id];
                                 return cp;
                               })
                             }
