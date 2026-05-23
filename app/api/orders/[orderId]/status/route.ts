@@ -46,8 +46,7 @@ export async function PATCH(
 
     const nowIso = new Date().toISOString();
 
-    // FIXED KEYPOINT: Wrapped table in literal double quotes inside single quotes -> '"Orders"'
-    // This tells PostgreSQL to respect the uppercase "Orders" name.
+    // FIXED KEYPOINT: Using '"Orders"' literal to force uppercase match in live DB without changing schema
     const { data: updatedData, error: updErr } = await serviceClient
       .from('"Orders"') 
       .update({
@@ -74,8 +73,18 @@ export async function PATCH(
       }, { status: 404 });
     }
 
-    // Aapke database triggers automatic update logs and status logging function run kar rahe hain, 
-    // isliye manually OrderStatusHistory manage karne ki zaroorat nahi hai.
+    // Optional Audit log for '"OrderStatusHistory"' table with case-sensitive wrap
+    try {
+      await serviceClient.from('"OrderStatusHistory"').insert({
+        OrderId: orderId,
+        NewStatus: dbStatus,
+        Note: body.remarks || `Status updated to ${dbStatus}`,
+        ChangedBy: body.changedBy || "admin",
+        ChangedAt: nowIso,
+      });
+    } catch (hE) {
+      console.log("History logging bypassed or handled by DB Triggers natively:", hE);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
