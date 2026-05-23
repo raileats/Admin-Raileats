@@ -22,12 +22,11 @@ export async function PATCH(
   context: { params: Promise<{ orderId: string }> | { orderId: string } }
 ) {
   try {
-    // FIXED: Handled Next.js dynamic routing parameter promise safely
     const resolvedParams = "then" in context.params ? await context.params : context.params;
     const orderId = resolvedParams?.orderId;
     
     if (!orderId) {
-      return NextResponse.json({ error: "missing_order_id" }, { status: 400 });
+      return NextResponse.json({ error: "missing_order_id", details: "Params did not resolve orderId" }, { status: 400 });
     }
 
     const body = (await req.json().catch(() => ({}))) as Body;
@@ -49,12 +48,12 @@ export async function PATCH(
 
     if (!dbStatus) {
       return NextResponse.json(
-        { error: "invalid_status", received: body.newStatus },
+        { error: "invalid_status", details: `Received status '${body.newStatus}' mapped to nothing.` },
         { status: 400 }
       );
     }
 
-    // 1) Fetch current order state safely
+    // 1) Fetch current order state
     const { data: order, error: fetchErr } = await serviceClient
       .from("Orders")
       .select("OrderId, Status")
@@ -62,17 +61,16 @@ export async function PATCH(
       .maybeSingle();
 
     if (fetchErr) {
-      console.error("status PATCH: fetchErr", fetchErr);
-      return NextResponse.json({ error: "order_lookup_failed" }, { status: 500 });
+      return NextResponse.json({ error: "order_lookup_failed", details: fetchErr.message, hint: fetchErr.hint }, { status: 500 });
     }
     if (!order) {
-      return NextResponse.json({ error: "order_not_found" }, { status: 404 });
+      return NextResponse.json({ error: "order_not_found", details: `No row matches OrderId: ${orderId}` }, { status: 404 });
     }
 
     const oldStatus = order.Status; 
     const nowIso = new Date().toISOString();
 
-    // 2) Execute core status change update inside Orders Table
+    // 2) Core Status Update with DB Error Expose
     const { error: updErr } = await serviceClient
       .from("Orders")
       .update({
@@ -82,13 +80,18 @@ export async function PATCH(
       .eq("OrderId", orderId);
 
     if (updErr) {
-      console.error("status PATCH: updateErr", updErr);
-      return NextResponse.json({ error: "order_update_failed", message: updErr.message }, { status: 500 });
+      // YAHAN SE ERROR KA ASLI DETAILS FRONTEND KO JAYEGA
+      return NextResponse.json({ 
+        error: "order_update_failed", 
+        details: updErr.message, 
+        hint: updErr.hint,
+        code: updErr.code 
+      }, { status: 500 });
     }
 
-    // 3) Push audit trace logs silently to OrderStatusHistory Table
+    // 3) Audit history row
     try {
-      await serviceClient.from("OrderStatusHistory").insert({
+      const { error: histErr } = await serviceClient.from("OrderStatusHistory").insert({
         OrderId: orderId,
         OldStatus: oldStatus ? String(oldStatus) : null,
         NewStatus: dbStatus,
@@ -96,13 +99,13 @@ export async function PATCH(
         ChangedBy: body.changedBy || "admin",
         ChangedAt: nowIso,
       });
-    } catch (histErr) {
-      console.error("status PATCH: history logger fallback triggered", histErr);
+      if (histErr) console.error("History DB Error: ", histErr.message);
+    } catch (hE) {
+      console.error("History Insert Crash: ", hE);
     }
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    console.error("status PATCH: runtime shell exception caught", e);
-    return NextResponse.json({ error: "server_error", message: e?.message }, { status: 500 });
+    return NextResponse.json({ error: "server_error", details: e?.message || "Unknown dynamic error" }, { status: 500 });
   }
 }
