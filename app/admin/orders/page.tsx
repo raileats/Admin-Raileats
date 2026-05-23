@@ -43,8 +43,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "baddelivery", label: "Bad Delivery" },
 ];
 
-// FIXED: Agar "verification" fail ho raha hai, toh backend absolute standard format strings expect kar raha hai.
-// Agar aapke backend me database column update custom uppercase strings leta hai to ye formats match ho jayenge.
 const NEXT_MAP: Record<TabKey, { next: TabKey | null; actionLabel: string; dbValue: string }> = {
   booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "In Verification" },
   verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "In Kitchen" },
@@ -86,8 +84,6 @@ export default function AdminOrdersPage() {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      
-      // Active tab ko validation ke liye query param me send karte waqt lowercase kar rahe hain
       params.set("status", activeTab === "booked" ? "booked" : activeTab.toLowerCase());
       
       const res = await fetch(`/api/orders?${params.toString()}`, {
@@ -174,17 +170,26 @@ export default function AdminOrdersPage() {
             changedBy: "admin",
           }),
         });
+        
         const json = await res.json().catch(() => ({}));
+        
         if (!res.ok || !json?.ok) {
-          alert(`Failed to change status: ${json?.error || json?.message || 'order_update_failed'}`);
+          // DETAILED ON-SCREEN DIAGNOSTIC LOGGING
+          const errorMsg = `🚨 STATUS UPDATE FAILED!\n\n` +
+                           `• Error Type: ${json?.error || "Unknown"}\n` +
+                           `• Message/Details: ${json?.details || json?.message || "No details provided"}\n` +
+                           `• DB Hint: ${json?.hint || "None"}\n` +
+                           `• Postgres Code: ${json?.code || "N/A"}`;
+          alert(errorMsg);
+          console.error("Full Debug Response from Route:", json);
           return;
         }
 
         alert("Status moved successfully!");
         await loadOrders();
 
-      } catch (e) {
-        alert("Failed to change status (network error)");
+      } catch (e: any) {
+        alert(`Network Processing Error: ${e?.message || e}`);
       }
     })();
   }
@@ -211,9 +216,18 @@ export default function AdminOrdersPage() {
             changedBy: "admin",
           }),
         });
+        
         const json = await res.json().catch(() => ({}));
+        
         if (!res.ok || !json?.ok) {
-          alert(`Failed to change status: ${json?.error || json?.message || 'order_update_failed'}`);
+          // DETAILED ON-SCREEN DIAGNOSTIC LOGGING
+          const errorMsg = `🚨 DROPDOWN UPDATE FAILED!\n\n` +
+                           `• Error Type: ${json?.error || "Unknown"}\n` +
+                           `• Message/Details: ${json?.details || json?.message || "No details provided"}\n` +
+                           `• DB Hint: ${json?.hint || "None"}\n` +
+                           `• Postgres Code: ${json?.code || "N/A"}`;
+          alert(errorMsg);
+          console.error("Full Debug Dropdown Response:", json);
           return;
         }
 
@@ -225,8 +239,8 @@ export default function AdminOrdersPage() {
 
         alert("Status updated successfully!");
         await loadOrders();
-      } catch (e) {
-        alert("Failed to change status (network error)");
+      } catch (e: any) {
+        alert(`Network Processing Error: ${e?.message || e}`);
       }
     })();
   }
@@ -461,7 +475,7 @@ export default function AdminOrdersPage() {
                             onClick={() =>
                               setMarking((prev) => {
                                 const cp = { ...prev };
-                                delete cp[o.id];
+                                delete cp[order.id];
                                 return cp;
                               })
                             }
