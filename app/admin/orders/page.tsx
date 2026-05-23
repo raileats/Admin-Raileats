@@ -90,8 +90,7 @@ export default function AdminOrdersPage() {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      // Sending proper casing query map
-      params.set("status", activeTab === "booked" ? "Booked" : (NEXT_MAP[activeTab]?.dbValue || activeTab));
+      params.set("status", activeTab);
       
       const res = await fetch(`/api/orders?${params.toString()}`, {
         cache: "no-store",
@@ -104,8 +103,9 @@ export default function AdminOrdersPage() {
         return;
       }
 
+      // Backend API se explicit key mapping sync karenge
       const mapped: Order[] = (json.orders || []).map((row: any) => {
-        const rawStatus = String(row.status ?? row.Status ?? "Booked");
+        const rawStatus = String(row.Status ?? "Booked");
         let tabStatus: TabKey = "booked";
         const lowerRaw = rawStatus.toLowerCase().trim();
         
@@ -118,7 +118,6 @@ export default function AdminOrdersPage() {
         else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") tabStatus = "notdelivered";
         else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") tabStatus = "baddelivery";
 
-        // Parse order status history records safely matching OrderStatusHistory schema columns
         const rawHistory = Array.isArray(row.history) ? row.history : [];
         const formattedHistory: OrderHistoryItem[] = rawHistory.map((h: any) => ({
           at: String(h.ChangedAt || h.changedAt || h.at || new Date().toISOString()),
@@ -128,21 +127,21 @@ export default function AdminOrdersPage() {
         }));
 
         return {
-          id: String(row.OrderId ?? row.orderId ?? row.id ?? ""),
+          id: String(row.OrderId ?? ""),
           status: tabStatus,
           dbStatus: rawStatus, 
-          outletId: String(row.RestroCode ?? row.restroCode ?? ""),
-          outletName: String(row.RestroName ?? row.restroName ?? ""),
-          stationCode: String(row.StationCode ?? row.stationCode ?? ""),
-          stationName: String(row.StationName ?? row.stationName ?? ""),
-          deliveryDate: String(row.DeliveryDate ?? row.deliveryDate ?? ""),
-          deliveryTime: String(row.DeliveryTime ?? row.deliveryTime ?? ""),
-          trainNo: row.TrainNumber ?? row.trainNumber ?? "",
-          coach: row.Coach ?? row.coach ?? "",
-          seat: row.Seat ?? row.seat ?? "",
-          customerName: String(row.CustomerName ?? row.customerName ?? ""),
-          customerMobile: String(row.CustomerMobile ?? row.customerMobile ?? ""),
-          total: row.TotalAmount != null ? String(row.TotalAmount) : (row.totalAmount != null ? String(row.totalAmount) : undefined),
+          outletId: String(row.RestroCode ?? ""),
+          outletName: String(row.RestroName ?? ""),
+          stationCode: String(row.StationCode ?? ""),
+          stationName: String(row.StationName ?? ""),
+          deliveryDate: String(row.DeliveryDate ?? ""),
+          deliveryTime: String(row.DeliveryTime ?? ""),
+          trainNo: row.TrainNumber ?? "",
+          coach: row.Coach ?? "",
+          seat: row.Seat ?? "",
+          customerName: String(row.CustomerName ?? ""),
+          customerMobile: String(row.CustomerMobile ?? ""),
+          total: row.TotalAmount != null ? String(row.TotalAmount) : undefined,
           history: formattedHistory,
         };
       });
@@ -190,12 +189,7 @@ export default function AdminOrdersPage() {
         const json = await res.json().catch(() => ({}));
         
         if (!res.ok || !json?.ok) {
-          const errorMsg = `🚨 STATUS UPDATE FAILED!\n\n` +
-                           `• Error Type: ${json?.error || "Unknown"}\n` +
-                           `• Message/Details: ${json?.details || json?.message || "No details provided"}\n` +
-                           `• DB Hint: ${json?.hint || "None"}\n` +
-                           `• Postgres Code: ${json?.code || "N/A"}`;
-          alert(errorMsg);
+          alert(`🚨 STATUS UPDATE FAILED!\n\n${json?.details || json?.message || "Error"}`);
           return;
         }
 
@@ -203,7 +197,7 @@ export default function AdminOrdersPage() {
         await loadOrders();
 
       } catch (e: any) {
-        alert(`Network Processing Error: ${e?.message || e}`);
+        alert(`Network Error: ${e?.message || e}`);
       }
     })();
   }
@@ -234,12 +228,7 @@ export default function AdminOrdersPage() {
         const json = await res.json().catch(() => ({}));
         
         if (!res.ok || !json?.ok) {
-          const errorMsg = `🚨 DROPDOWN UPDATE FAILED!\n\n` +
-                           `• Error Type: ${json?.error || "Unknown"}\n` +
-                           `• Message/Details: ${json?.details || json?.message || "No details provided"}\n` +
-                           `• DB Hint: ${json?.hint || "None"}\n` +
-                           `• Postgres Code: ${json?.code || "N/A"}`;
-          alert(errorMsg);
+          alert(`🚨 DROPDOWN UPDATE FAILED!\n\n${json?.details || json?.message || "Error"}`);
           return;
         }
 
@@ -252,7 +241,7 @@ export default function AdminOrdersPage() {
         alert("Status updated successfully!");
         await loadOrders();
       } catch (e: any) {
-        alert(`Network Processing Error: ${e?.message || e}`);
+        alert(`Network Error: ${e?.message || e}`);
       }
     })();
   }
