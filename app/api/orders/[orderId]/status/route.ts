@@ -29,24 +29,27 @@ export async function PATCH(
     }
 
     const body = (await req.json().catch(() => ({}))) as Body;
-    const newStatus = body.newStatus;
-    if (
-      !newStatus ||
-      ![
-        "booked",
-        "verification",
-        "inkitchen",
-        "outfordelivery",
-        "delivered",
-        "cancelled",
-        "notdelivered",
-        "baddelivery",
-      ].includes(newStatus)
-    ) {
-      return NextResponse.json({ error: "invalid_status" }, { status: 400 });
-    }
+    const statusMap: Record<string, string> = {
+  booked: "Booked",
+  verification: "In Verification",
+  inkitchen: "In Kitchen",
+  outfordelivery: "Out for Delivery",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  notdelivered: "Not Delivered",
+  baddelivery: "Bad Delivery",
+};
 
-    const supa = serviceClient;
+const requestStatus = body.newStatus;
+
+if (!requestStatus || !statusMap[requestStatus]) {
+  return NextResponse.json(
+    { error: "invalid_status" },
+    { status: 400 }
+  );
+}
+
+const dbStatus = statusMap[requestStatus];
 
     // 1) current order fetch karo
     const { data: order, error: fetchErr } = await supa
