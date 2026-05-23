@@ -22,6 +22,7 @@ export async function PATCH(
     const body = (await req.json().catch(() => ({}))) as Body;
     const incomingStatus = String(body.newStatus || "").toLowerCase().replace(/[^a-z]/g, "");
 
+    // Exact database strings matching backend triggers requirements
     const statusMap: Record<string, string> = {
       booked: "Booked",
       verification: "In Verification",
@@ -43,31 +44,18 @@ export async function PATCH(
       );
     }
 
-    // 1) Fetch current order state - Fixed Table and Column Casing explicitly
-    const { data: order, error: fetchErr } = await serviceClient
-      .from("Orders")
-      .select("OrderId, Status")
-      .eq("OrderId", orderId)
-      .maybeSingle();
-
-    if (fetchErr) {
-      return NextResponse.json({ error: "order_lookup_failed", details: fetchErr.message, hint: fetchErr.hint }, { status: 500 });
-    }
-    if (!order) {
-      return NextResponse.json({ error: "order_not_found", details: `No row matches OrderId: ${orderId} in Orders table.` }, { status: 404 });
-    }
-
-    const oldStatus = order.Status; 
     const nowIso = new Date().toISOString();
 
-    // 2) Core Status Update - Matching exact schema columns from CSV
-    const { error: updErr } = await serviceClient
-      .from("Orders")
+    // FIXED KEYPOINT: Wrapped table in literal double quotes inside single quotes -> '"Orders"'
+    // This tells PostgreSQL to respect the uppercase "Orders" name.
+    const { data: updatedData, error: updErr } = await serviceClient
+      .from('"Orders"') 
       .update({
         Status: dbStatus,
         UpdatedAt: nowIso,
       })
-      .eq("OrderId", orderId);
+      .eq("OrderId", orderId)
+      .select("OrderId, Status");
 
     if (updErr) {
       return NextResponse.json({ 
@@ -78,19 +66,16 @@ export async function PATCH(
       }, { status: 500 });
     }
 
-    // 3) Audit history row - Safe wrapper for OrderStatusHistory table
-    try {
-      await serviceClient.from("OrderStatusHistory").insert({
-        OrderId: orderId,
-        OldStatus: oldStatus ? String(oldStatus) : null,
-        NewStatus: dbStatus,
-        Note: body.remarks || `Status updated to ${dbStatus}`,
-        ChangedBy: body.changedBy || "admin",
-        ChangedAt: nowIso,
-      });
-    } catch (hE) {
-      console.error("History Insert Silently Skipped: ", hE);
+    // Checking if any row actually matched and got updated
+    if (!updatedData || updatedData.length === 0) {
+      return NextResponse.json({ 
+        error: "order_not_found", 
+        details: `No row matched with OrderId: ${orderId} inside the database.` 
+      }, { status: 404 });
     }
+
+    // Aapke database triggers automatic update logs and status logging function run kar rahe hain, 
+    // isliye manually OrderStatusHistory manage karne ki zaroorat nahi hai.
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
