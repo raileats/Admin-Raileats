@@ -1,104 +1,97 @@
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabaseServer";
 
-type TabKey =
-  | "booked"
-  | "verification"
-  | "inkitchen"
-  | "outfordelivery"
-  | "delivered"
-  | "cancelled"
-  | "notdelivered"
-  | "baddelivery";
-
-type Body = {
-  newStatus: TabKey;
-  remarks?: string;
-  changedBy?: string;
-};
-
 export async function PATCH(
   req: Request,
-  { params }: { params: { orderId: string } },
+  { params }: { params: { orderId: string } }
 ) {
   try {
     const orderId = params.orderId;
-    if (!orderId) {
-      return NextResponse.json({ error: "missing_order_id" }, { status: 400 });
-    }
 
-    const body = (await req.json().catch(() => ({}))) as Body;
-    const statusMap: Record<string, string> = {
-      booked: "Booked",
-      verification: "In Verification",
-      inkitchen: "In Kitchen",
-      outfordelivery: "Out for Delivery",
-      delivered: "Delivered",
-      cancelled: "Cancelled",
-      notdelivered: "Not Delivered",
-      baddelivery: "Bad Delivery",
-    };
+    const body = await req.json();
 
-    const requestStatus = body.newStatus;
+    const newStatus = String(body.newStatus || "").trim();
+    const remarks = body.remarks || "";
+    const changedBy = body.changedBy || "admin";
 
-    if (!requestStatus || !statusMap[requestStatus]) {
+    if (!orderId || !newStatus) {
       return NextResponse.json(
-        { error: "invalid_status" },
+        { ok: false, error: "missing_data" },
         { status: 400 }
       );
     }
 
-    const dbStatus = statusMap[requestStatus];
+    const allowedStatuses = [
+      "Booked",
+      "In Verification",
+      "In Kitchen",
+      "Out for Delivery",
+      "Delivered",
+      "Cancelled",
+      "Not Delivered",
+      "Bad Delivery",
+    ];
 
-    // 1) current order fetch karo (serviceClient use kiya)
-    const { data: order, error: fetchErr } = await serviceClient
+    if (!allowedStatuses.includes(newStatus)) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_status" },
+        { status: 400 }
+      );
+    }
+
+    const supa = serviceClient;
+
+    // current order
+    const { data: oldOrder, error: fetchError } = await supa
       .from("Orders")
-      .select("OrderId, Status")
+      .select("*")
       .eq("OrderId", orderId)
-      .maybeSingle();
+      .single();
 
-    if (fetchErr) {
-      console.error("status PATCH: fetchErr", fetchErr);
-      return NextResponse.json({ error: "order_lookup_failed" }, { status: 500 });
+    if (fetchError || !oldOrder) {
+      return NextResponse.json(
+        { ok: false, error: "order_not_found" },
+        { status: 404 }
+      );
     }
-    if (!order) {
-      return NextResponse.json({ error: "order_not_found" }, { status: 404 });
-    }
 
-    const oldStatus = order.Status as TabKey | null;
-    const nowIso = new Date().toISOString();
-
-    // 2) Orders table me Status update (serviceClient use kiya)
-    const { error: updErr } = await serviceClient
+    // update order
+    const { error: updateError } = await supa
       .from("Orders")
       .update({
-        Status: dbStatus,
-        UpdatedAt: nowIso,
+        Status: newStatus,
+        UpdatedAt: new Date().toISOString(),
       })
       .eq("OrderId", orderId);
 
-    if (updErr) {
-      console.error("status PATCH: updateErr", updErr);
-      return NextResponse.json({ error: "order_update_failed" }, { status: 500 });
+    if (updateError) {
+      console.error(updateError);
+
+      return NextResponse.json(
+        { ok: false, error: "update_failed" },
+        { status: 500 }
+      );
     }
 
-    // 3) OrderStatusHistory me row add karo (serviceClient use kiya)
-    const { error: histErr } = await serviceClient.from("OrderStatusHistory").insert({
+    // history insert
+    await supa.from("OrderStatusHistory").insert({
       OrderId: orderId,
-      OldStatus: oldStatus,
-      NewStatus: dbStatus,
-      Note: body.remarks || null,
-      ChangedBy: body.changedBy || "admin",
-      ChangedAt: nowIso,
+      OldStatus: oldOrder.Status,
+      NewStatus: newStatus,
+      Note: remarks,
+      ChangedBy: changedBy,
+      ChangedAt: new Date().toISOString(),
     });
 
-    if (histErr) {
-      console.error("status PATCH: historyErr", histErr);
-    }
+    return NextResponse.json({
+      ok: true,
+    });
+  } catch (error) {
+    console.error(error);
 
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error("status PATCH: server_error", e);
-    return NextResponse.json({ error: "server_error" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "server_error" },
+      { status: 500 }
+    );
   }
 }
