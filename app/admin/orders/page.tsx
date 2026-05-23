@@ -16,7 +16,7 @@ type OrderHistoryItem = { at: string; by: string; note?: string; status: TabKey 
 type Order = {
   id: string;
   status: TabKey;
-  dbStatus: string; // Database ki original string safe rakhne ke liye
+  dbStatus: string;
   outletId: string;
   outletName: string;
   stationCode: string;
@@ -43,12 +43,12 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "baddelivery", label: "Bad Delivery" },
 ];
 
-// Next action map setup
+// MAPS EVERYTHING TO THE EXACT SUPABASE ENUM CASING (Matches 'Booked', 'In Verification' etc.)
 const NEXT_MAP: Record<TabKey, { next: TabKey | null; actionLabel: string; dbValue: string }> = {
-  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "verification" },
-  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "inkitchen" },
-  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "outfordelivery" },
-  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "Delivered" }, // Matches your DB check constraint
+  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "In Verification" },
+  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "In Kitchen" },
+  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "Out for Delivery" },
+  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "Delivered" },
   delivered: { next: null, actionLabel: "", dbValue: "Delivered" },
   cancelled: { next: null, actionLabel: "", dbValue: "Cancelled" },
   notdelivered: { next: null, actionLabel: "", dbValue: "Not Delivered" },
@@ -87,7 +87,7 @@ export default function AdminOrdersPage() {
         setLoading(true);
         const params = new URLSearchParams();
         
-        // Agar activeTab 'booked' hai, toh hum API ko batane ke liye normal text bhej sakte hain ya API handles case-insensitivity
+        // API handles query parameter
         params.set("status", activeTab);
         
         const res = await fetch(`/api/orders?${params.toString()}`, {
@@ -102,10 +102,9 @@ export default function AdminOrdersPage() {
         }
 
         const mapped: Order[] = (json.orders || []).map((row: any) => {
-          const rawStatus = String(row.status ?? row.Status ?? "booked");
-          // DB string ko lowercase karke filter match karte hain
+          const rawStatus = String(row.status ?? row.Status ?? "Booked");
           let tabStatus: TabKey = "booked";
-          const lowerRaw = rawStatus.toLowerCase();
+          const lowerRaw = rawStatus.toLowerCase().trim();
           
           if (lowerRaw === "booked") tabStatus = "booked";
           else if (lowerRaw === "verification" || lowerRaw === "in verification") tabStatus = "verification";
@@ -170,7 +169,7 @@ export default function AdminOrdersPage() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            newStatus: targetDbValue, // Database ko exact exact string bhejenge jo use chaiye
+            newStatus: targetDbValue, // Sends exact Enum string like "In Verification"
             remarks: mapping.actionLabel,
             changedBy: "admin",
           }),
@@ -225,7 +224,7 @@ export default function AdminOrdersPage() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            newStatus: targetDbValue, // Pushes exact casing required by DB constraint
+            newStatus: targetDbValue, // Pushes capitalized Enum string
             remarks,
             changedBy: "admin",
           }),
