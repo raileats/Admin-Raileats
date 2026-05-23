@@ -265,6 +265,20 @@ export async function GET(req: Request) {
     const supa = serviceClient;
     const { searchParams } = new URL(req.url);
     const statusFilter = searchParams.get("status"); // e.g. "booked", "inkitchen", ...
+    const statusMap: Record<string, string> = {
+  booked: "Booked",
+  verification: "In Verification",
+  inkitchen: "In Kitchen",
+  outfordelivery: "Out for Delivery",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  notdelivered: "Not Delivered",
+  baddelivery: "Bad Delivery",
+};
+
+const dbStatus = statusFilter
+  ? statusMap[statusFilter] || statusFilter
+  : null;
 
     let query = supa
       .from("Orders")
@@ -289,7 +303,7 @@ export async function GET(req: Request) {
       .order("CreatedAt", { ascending: false });
 
     if (statusFilter) {
-      query = query.eq("Status", statusFilter);
+      query = query.eq("Status", dbStatus);
     }
 
     const { data, error } = await query;
