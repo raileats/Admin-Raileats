@@ -103,7 +103,9 @@ export default function AdminOrdersPage() {
         return;
       }
 
+      // 🔹 DEEP READ MAPPING: Database headings aur UI state ko sync karne ki layer
       const mapped: Order[] = (json.orders || []).map((row: any) => {
+        // Supabase schema 'Status' property ko uppercase karke check karenge
         const rawStatus = String(row.Status || row.status || "BOOKED").toUpperCase().trim();
         let tabStatus: TabKey = "booked";
         
@@ -116,14 +118,16 @@ export default function AdminOrdersPage() {
         else if (rawStatus === "NOT_DELIVERED" || rawStatus === "NOT DELIVERED" || rawStatus === "NOTDELIVERED") tabStatus = "notdelivered";
         else if (rawStatus === "BAD_DELIVERY" || rawStatus === "BAD DELIVERY" || rawStatus === "BADDELIVERY") tabStatus = "baddelivery";
 
+        // History keys matching with OrderStatusHistory_rows schema
         const rawHistory = Array.isArray(row.history) ? row.history : [];
         const formattedHistory: OrderHistoryItem[] = rawHistory.map((h: any) => ({
           at: String(h.ChangedAt || h.changedAt || h.at || new Date().toISOString()),
           by: String(h.ChangedBy || h.changedBy || h.by || "system"),
-          note: h.Note || h.note || h.Remarks || h.remarks,
+          note: h.Note || h.note || h.Remarks || h.remarks || "",
           status: String(h.NewStatus || h.newStatus || h.status || "")
         }));
 
+        // Main orders columns mapping with proper database heading fallbacks
         return {
           id: String(row.OrderId || row.orderId || row.id || ""),
           status: tabStatus,
@@ -134,9 +138,9 @@ export default function AdminOrdersPage() {
           stationName: String(row.StationName || row.stationName || ""),
           deliveryDate: String(row.DeliveryDate || row.deliveryDate || ""),
           deliveryTime: String(row.DeliveryTime || row.deliveryTime || ""),
-          trainNo: row.TrainNumber || row.trainNo || "",
-          coach: row.Coach || row.coach || "",
-          seat: row.Seat || row.seat || "",
+          trainNo: String(row.TrainNumber || row.trainNo || row.TrainNo || ""),
+          coach: String(row.Coach || row.coach || ""),
+          seat: String(row.Seat || row.seat || ""),
           customerName: String(row.CustomerName || row.customerName || ""),
           customerMobile: String(row.CustomerMobile || row.customerMobile || ""),
           total: row.TotalAmount != null ? String(row.TotalAmount) : undefined,
@@ -474,7 +478,7 @@ export default function AdminOrdersPage() {
                             onClick={() =>
                               setMarking((prev) => {
                                 const cp = { ...prev };
-                                delete cp[o.id];
+                                delete cp[order.id];
                                 return cp;
                               })
                             }
