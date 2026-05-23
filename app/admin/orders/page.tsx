@@ -43,34 +43,24 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "baddelivery", label: "Bad Delivery" },
 ];
 
-// FIXED: Backend status structure mapping (Dono lowercase aur standard database strings ko handles karega)
-const BACKEND_STATUS_MAP: Record<TabKey, string> = {
-  booked: "Booked",
-  verification: "In Verification",
-  inkitchen: "In Kitchen",
-  outfordelivery: "Out for Delivery",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-  notdelivered: "Not Delivered",
-  baddelivery: "Bad Delivery",
-};
-
+// FIXED: dbValue ko strict lowercase kar diya hai kyunki backend/validation lowercase keys expect kar raha hai
 const NEXT_MAP: Record<TabKey, { next: TabKey | null; actionLabel: string; dbValue: string }> = {
-  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "In Verification" },
-  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "In Kitchen" },
-  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "Out for Delivery" },
-  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "Delivered" },
-  delivered: { next: null, actionLabel: "", dbValue: "Delivered" },
-  cancelled: { next: null, actionLabel: "", dbValue: "Cancelled" },
-  notdelivered: { next: null, actionLabel: "", dbValue: "Not Delivered" },
-  baddelivery: { next: null, actionLabel: "", dbValue: "Bad Delivery" },
+  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "verification" },
+  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "inkitchen" },
+  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "outfordelivery" },
+  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "delivered" },
+  delivered: { next: null, actionLabel: "", dbValue: "delivered" },
+  cancelled: { next: null, actionLabel: "", dbValue: "cancelled" },
+  notdelivered: { next: null, actionLabel: "", dbValue: "notdelivered" },
+  baddelivery: { next: null, actionLabel: "", dbValue: "baddelivery" },
 };
 
+// FIXED: Dropdown options ki dbValue ko bhi safe strict lowercase kar diya hai
 const FINAL_MARK_OPTIONS = [
-  { key: "delivered", label: "Delivered", dbValue: "Delivered" },
-  { key: "cancelled", label: "Cancelled", dbValue: "Cancelled" },
-  { key: "notdelivered", label: "Not Delivered", dbValue: "Not Delivered" },
-  { key: "baddelivery", label: "Bad Delivery", dbValue: "Bad Delivery" },
+  { key: "delivered", label: "Delivered", dbValue: "delivered" },
+  { key: "cancelled", label: "Cancelled", dbValue: "cancelled" },
+  { key: "notdelivered", label: "Not Delivered", dbValue: "notdelivered" },
+  { key: "baddelivery", label: "Bad Delivery", dbValue: "baddelivery" },
 ] as const;
 
 type SearchType =
@@ -92,15 +82,14 @@ export default function AdminOrdersPage() {
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
 
-  // Reusable load function taaki status change ke baad latest state fetch ho sake
+  // Reusable load function jisse tab change par aur status update ke baad exact database content sync ho sake
   const loadOrders = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
       
-      // FIXED: Agar backend lowercase reject kar rha hai, toh exact database string bhejenge
-      const backendQueryStatus = BACKEND_STATUS_MAP[activeTab] || activeTab;
-      params.set("status", backendQueryStatus);
+      // FIXED: Strict lowercase tab string pass ki hai taaki query param 'invalid_status' na fanke
+      params.set("status", activeTab);
       
       const res = await fetch(`/api/orders?${params.toString()}`, {
         cache: "no-store",
@@ -189,13 +178,13 @@ export default function AdminOrdersPage() {
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || !json?.ok) {
-          alert(`Failed to change status: ${json?.error || 'Unknown Server Error'}`);
+          alert(`Failed to change status: ${json?.error || json?.message || 'invalid_status'}`);
           return;
         }
 
-        // Fresh data fetch karega taaki front-end backend dono automatic sync ho jayein safely
+        // FIXED: State ko locally manual pop karne ke badle safe side directly re-fetch chalaya h taaki UI broken na dikhe
+        alert("Status moved successfully!");
         await loadOrders();
-        alert("Status updated successfully!");
 
       } catch (e) {
         alert("Failed to change status (network error)");
@@ -227,7 +216,7 @@ export default function AdminOrdersPage() {
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || !json?.ok) {
-          alert(`Failed to change status: ${json?.error || 'Unknown Server Error'}`);
+          alert(`Failed to change status: ${json?.error || json?.message || 'invalid_status'}`);
           return;
         }
 
@@ -237,6 +226,7 @@ export default function AdminOrdersPage() {
           return cp;
         });
 
+        alert("Status updated successfully!");
         setActiveTab(targetKey);
         await loadOrders();
       } catch (e) {
