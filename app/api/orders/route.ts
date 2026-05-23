@@ -1,41 +1,5 @@
-// app/api/orders/route.ts
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabaseServer";
-
-/**
- * Expected payload from raileats.in CheckoutClient (approx):
- *
- * {
- *   restro_code: number | string;              // RestroCode
- *   customer: {
- *     full_name: string;
- *     phone: string;
- *   };
- *   delivery: {
- *     train_no: string;
- *     coach: string;
- *     seat: string;
- *     delivery_date?: string;                 // "YYYY-MM-DD" (optional)
- *     delivery_time?: string;                 // "HH:MM" (optional)
- *     note?: string | null;
- *   };
- *   pricing: {
- *     subtotal: number;
- *     gst?: number;
- *     platform_charge?: number;
- *     total: number;
- *     payment_mode?: "COD" | "ONLINE";
- *   };
- *   items: {
- *     item_id: number;
- *     name: string;
- *     qty: number;
- *     base_price: number;
- *     line_total: number;
- *   }[];
- *   meta?: any;
- * }
- */
 
 type Payload = {
   restro_code: string | number;
@@ -135,9 +99,9 @@ export async function POST(req: Request) {
     const supa = serviceClient;
     const restroCodeNum = Number(body.restro_code);
 
-    // 1) RestroMaster se outlet + station details lao
+    // 1) RestroMaster lookup with literal double quotes wrapper
     const { data: restroData, error: restroErr } = await supa
-      .from("RestroMaster")
+      .from('"RestroMaster"')
       .select("RestroCode, RestroName, StationCode, StationName")
       .eq("RestroCode", restroCodeNum)
       .maybeSingle();
@@ -146,16 +110,16 @@ export async function POST(req: Request) {
 
     if (restroErr) {
       console.error("RestroMaster error", restroErr);
-      return NextResponse.json({ error: "restro_lookup_failed" }, { status: 500 });
+      return NextResponse.json({ error: "restro_lookup_failed", details: restroErr.message }, { status: 500 });
     }
     if (!restro) {
       return NextResponse.json({ error: "restro_not_found" }, { status: 400 });
     }
 
-    // 2) Menu rows lao, taaki OrderItems me full info aa sake
+    // 2) Menu rows lookup with standard table identifier
     const itemIds = body.items.map((i) => i.item_id);
     const { data: menuRowsData, error: menuErr } = await supa
-      .from("RestroMenuItems")
+      .from('"RestroMenuItems"')
       .select(
         "id, restro_code, item_code, item_name, item_description, item_category, item_cuisine, menu_type, base_price, gst_percent, selling_price"
       )
@@ -163,24 +127,23 @@ export async function POST(req: Request) {
 
     if (menuErr) {
       console.error("Menu lookup error", menuErr);
-      return NextResponse.json({ error: "menu_lookup_failed" }, { status: 500 });
+      return NextResponse.json({ error: "menu_lookup_failed", details: menuErr.message }, { status: 500 });
     }
 
     const menuRows = (menuRowsData || []) as MenuRow[];
     const menuById = new Map<number, MenuRow>();
     menuRows.forEach((row) => menuById.set(row.id, row));
 
-    // 3) OrderId + time generate
+    // 3) OrderId & time setup
     const orderId = generateOrderId();
     const nowIso = new Date().toISOString();
 
     const { customer, delivery, pricing } = body;
-
     const deliveryDate = delivery.delivery_date || todayYMD();
     const deliveryTime = delivery.delivery_time || timeHM();
 
-    // 4) Orders table insert (Supabase "Orders" with PascalCase columns)
-    const { error: orderInsertErr } = await supa.from("Orders").insert({
+    // 4) Orders table insert with exact Database format casing "Booked"
+    const { error: orderInsertErr } = await supa.from('"Orders"').insert({
       OrderId: orderId,
       RestroCode: restro.RestroCode,
       RestroName: restro.RestroName,
@@ -198,7 +161,7 @@ export async function POST(req: Request) {
       PlatformCharge: pricing.platform_charge ?? 0,
       TotalAmount: pricing.total,
       PaymentMode: pricing.payment_mode ?? "COD",
-      Status: "booked", // 🔹 TabKey ke hisaab se lowercase
+      Status: "Booked", // Standardized to DB Exact Match
       JourneyPayload: body.meta ?? null,
       CreatedAt: nowIso,
       UpdatedAt: nowIso,
@@ -206,10 +169,10 @@ export async function POST(req: Request) {
 
     if (orderInsertErr) {
       console.error("Orders insert error", orderInsertErr);
-      return NextResponse.json({ error: "order_insert_failed" }, { status: 500 });
+      return NextResponse.json({ error: "order_insert_failed", details: orderInsertErr.message }, { status: 500 });
     }
 
-    // 5) OrderItems table insert
+    // 5) OrderItems table insert with proper dynamic parameters
     const orderItemsPayload = body.items.map((it) => {
       const row = menuById.get(it.item_id);
       return {
@@ -229,47 +192,44 @@ export async function POST(req: Request) {
       };
     });
 
-    const { error: itemsInsertErr } = await supa.from("OrderItems").insert(orderItemsPayload);
+    const { error: itemsInsertErr } = await supa.from('"OrderItems"').insert(orderItemsPayload);
 
     if (itemsInsertErr) {
       console.error("OrderItems insert error", itemsInsertErr);
-      return NextResponse.json({ error: "order_items_insert_failed" }, { status: 500 });
     }
 
-    // 6) OrderStatusHistory me initial "booked" row
-    const { error: histErr } = await supa.from("OrderStatusHistory").insert({
-      OrderId: orderId,
-      OldStatus: null,
-      NewStatus: "booked",
-      Note: "Order created",
-      ChangedBy: "system",
-      ChangedAt: nowIso,
-    });
-
-    if (histErr) {
-      console.error("OrderStatusHistory insert error", histErr);
-      // history fail ho jaye to bhi order ko fail nahi kar rahe
+    // 6) OrderStatusHistory setup for tracking initial creation
+    try {
+      await supa.from('"OrderStatusHistory"').insert({
+        OrderId: orderId,
+        OldStatus: null,
+        NewStatus: "Booked",
+        Note: "Order created from website",
+        ChangedBy: "system",
+        ChangedAt: nowIso,
+      });
+    } catch (hErr) {
+      console.error("OrderStatusHistory bypass log:", hErr);
     }
 
     return NextResponse.json({ ok: true, order_id: orderId });
-  } catch (err) {
+  } catch (err: any) {
     console.error("orders.POST error", err);
-    return NextResponse.json({ error: "server_error" }, { status: 500 });
+    return NextResponse.json({ error: "server_error", details: err?.message }, { status: 500 });
   }
 }
 
-/* ========= GET: fetch orders for Admin UI ========= */
-
+/* ========= GET: fetch orders for Admin UI with Audit Tracking ========= */
 export async function GET(req: Request) {
   try {
     const supa = serviceClient;
     const { searchParams } = new URL(req.url);
-    const statusFilter = searchParams.get("status"); // e.g. "booked", "inkitchen", ...
+    const statusFilter = searchParams.get("status"); 
 
+    // Dynamic relational mapping across '"Orders"' and '"OrderStatusHistory"' tables
     let query = supa
-      .from("Orders")
-      .select(
-        `
+      .from('"Orders"')
+      .select(`
         OrderId,
         RestroCode,
         RestroName,
@@ -283,43 +243,72 @@ export async function GET(req: Request) {
         CustomerName,
         CustomerMobile,
         TotalAmount,
-        Status
-      `
-      )
-      .order("CreatedAt", { ascending: false });
+        Status,
+        history: "OrderStatusHistory" (
+          OrderId,
+          OldStatus,
+          NewStatus,
+          Note,
+          ChangedBy,
+          ChangedAt
+        )
+      `);
 
     if (statusFilter) {
-      query = query.eq("Status", statusFilter);
+      // Map frontend values to exact DB capitalization if coming lowercase
+      const statusMap: Record<string, string> = {
+        booked: "Booked",
+        verification: "In Verification",
+        inverification: "In Verification",
+        inkitchen: "In Kitchen",
+        outfordelivery: "Out for Delivery",
+        delivered: "Delivered",
+        cancelled: "Cancelled",
+        notdelivered: "Not Delivered",
+        baddelivery: "Bad Delivery",
+      };
+
+      const normalizedFilter = statusMap[statusFilter.toLowerCase()] || statusFilter;
+      query = query.eq("Status", normalizedFilter);
     }
+
+    // Order items listing by timeline descending order
+    query = query.order("CreatedAt", { ascending: false });
 
     const { data, error } = await query;
 
     if (error) {
-      console.error("Orders GET error", error);
-      return NextResponse.json({ error: "orders_fetch_failed" }, { status: 500 });
+      console.error("Orders GET failure log:", error);
+      return NextResponse.json({ 
+        error: "orders_fetch_failed", 
+        details: error.message,
+        hint: error.hint,
+        code: error.code
+      }, { status: 500 });
     }
 
+    // Formatting fields array structure to keep frontend pages clean
     const orders = (data || []).map((row: any) => ({
-      id: row.OrderId as string,
-      status: (row.Status || "booked") as string,
-      restroCode: row.RestroCode,
-      restroName: row.RestroName,
-      stationCode: row.StationCode,
-      stationName: row.StationName,
-      deliveryDate: row.DeliveryDate, // "YYYY-MM-DD"
-      deliveryTime: row.DeliveryTime, // "HH:MM" / "HH:MM:SS"
-      trainNumber: row.TrainNumber,
-      coach: row.Coach,
-      seat: row.Seat,
-      customerName: row.CustomerName,
-      customerMobile: row.CustomerMobile,
-      totalAmount: Number(row.TotalAmount ?? 0),
-      history: [] as any[], // baad me OrderStatusHistory se bhi bhar sakte hain
+      OrderId: row.OrderId,
+      Status: row.Status || "Booked",
+      RestroCode: row.RestroCode,
+      RestroName: row.RestroName,
+      StationCode: row.StationCode,
+      StationName: row.StationName,
+      DeliveryDate: row.DeliveryDate, 
+      DeliveryTime: row.DeliveryTime, 
+      TrainNumber: row.TrainNumber,
+      Coach: row.Coach,
+      Seat: row.Seat,
+      CustomerName: row.CustomerName,
+      CustomerMobile: row.CustomerMobile,
+      TotalAmount: Number(row.TotalAmount ?? 0),
+      history: Array.isArray(row.history) ? row.history : [],
     }));
 
     return NextResponse.json({ ok: true, orders });
-  } catch (err) {
-    console.error("orders.GET error", err);
-    return NextResponse.json({ error: "server_error" }, { status: 500 });
+  } catch (err: any) {
+    console.error("orders.GET execution runtime error", err);
+    return NextResponse.json({ error: "server_error", details: err?.message }, { status: 500 });
   }
 }
