@@ -16,6 +16,7 @@ type OrderHistoryItem = { at: string; by: string; note?: string; status: TabKey 
 type Order = {
   id: string;
   status: TabKey;
+  dbStatus: string; // Database ki original string safe rakhne ke liye
   outletId: string;
   outletName: string;
   stationCode: string;
@@ -42,22 +43,23 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "baddelivery", label: "Bad Delivery" },
 ];
 
-const NEXT_MAP: Record<TabKey, { next?: TabKey; actionLabel?: string }> = {
-  booked: { next: "verification", actionLabel: "Move to In Verification" },
-  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen" },
-  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵" },
-  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅" },
-  delivered: {},
-  cancelled: {},
-  notdelivered: {},
-  baddelivery: {},
+// Next action map setup
+const NEXT_MAP: Record<TabKey, { next: TabKey | null; actionLabel: string; dbValue: string }> = {
+  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "verification" },
+  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "inkitchen" },
+  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "outfordelivery" },
+  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "Delivered" }, // Matches your DB check constraint
+  delivered: { next: null, actionLabel: "", dbValue: "Delivered" },
+  cancelled: { next: null, actionLabel: "", dbValue: "Cancelled" },
+  notdelivered: { next: null, actionLabel: "", dbValue: "Not Delivered" },
+  baddelivery: { next: null, actionLabel: "", dbValue: "Bad Delivery" },
 };
 
 const FINAL_MARK_OPTIONS = [
-  { key: "delivered", label: "Delivered" },
-  { key: "cancelled", label: "Cancelled" },
-  { key: "notdelivered", label: "Not Delivered" },
-  { key: "baddelivery", label: "Bad Delivery" },
+  { key: "delivered", label: "Delivered", dbValue: "Delivered" },
+  { key: "cancelled", label: "Cancelled", dbValue: "Cancelled" },
+  { key: "notdelivered", label: "Not Delivered", dbValue: "Not Delivered" },
+  { key: "baddelivery", label: "Bad Delivery", dbValue: "Bad Delivery" },
 ] as const;
 
 type SearchType =
@@ -84,7 +86,10 @@ export default function AdminOrdersPage() {
       try {
         setLoading(true);
         const params = new URLSearchParams();
+        
+        // Agar activeTab 'booked' hai, toh hum API ko batane ke liye normal text bhej sakte hain ya API handles case-insensitivity
         params.set("status", activeTab);
+        
         const res = await fetch(`/api/orders?${params.toString()}`, {
           cache: "no-store",
         });
@@ -96,23 +101,40 @@ export default function AdminOrdersPage() {
           return;
         }
 
-        const mapped: Order[] = (json.orders || []).map((row: any) => ({
-          id: String(row.id ?? row.OrderId ?? ""),
-          status: (row.status ?? "booked") as TabKey,
-          outletId: String(row.restroCode ?? row.RestroCode ?? ""),
-          outletName: String(row.restroName ?? row.RestroName ?? ""),
-          stationCode: String(row.stationCode ?? row.StationCode ?? ""),
-          stationName: String(row.stationName ?? row.StationName ?? ""),
-          deliveryDate: String(row.deliveryDate ?? row.DeliveryDate ?? ""),
-          deliveryTime: String(row.deliveryTime ?? row.DeliveryTime ?? ""),
-          trainNo: row.trainNumber ?? row.TrainNumber ?? "",
-          coach: row.coach ?? row.Coach ?? "",
-          seat: row.seat ?? row.Seat ?? "",
-          customerName: String(row.customerName ?? row.CustomerName ?? ""),
-          customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
-          total: row.totalAmount != null ? String(row.totalAmount) : (row.TotalAmount != null ? String(row.TotalAmount) : undefined),
-          history: Array.isArray(row.history) ? row.history : [],
-        }));
+        const mapped: Order[] = (json.orders || []).map((row: any) => {
+          const rawStatus = String(row.status ?? row.Status ?? "booked");
+          // DB string ko lowercase karke filter match karte hain
+          let tabStatus: TabKey = "booked";
+          const lowerRaw = rawStatus.toLowerCase();
+          
+          if (lowerRaw === "booked") tabStatus = "booked";
+          else if (lowerRaw === "verification" || lowerRaw === "in verification") tabStatus = "verification";
+          else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") tabStatus = "inkitchen";
+          else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") tabStatus = "outfordelivery";
+          else if (lowerRaw === "delivered") tabStatus = "delivered";
+          else if (lowerRaw === "cancelled") tabStatus = "cancelled";
+          else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") tabStatus = "notdelivered";
+          else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") tabStatus = "baddelivery";
+
+          return {
+            id: String(row.id ?? row.OrderId ?? ""),
+            status: tabStatus,
+            dbStatus: rawStatus, 
+            outletId: String(row.restroCode ?? row.RestroCode ?? ""),
+            outletName: String(row.restroName ?? row.RestroName ?? ""),
+            stationCode: String(row.stationCode ?? row.StationCode ?? ""),
+            stationName: String(row.stationName ?? row.StationName ?? ""),
+            deliveryDate: String(row.deliveryDate ?? row.DeliveryDate ?? ""),
+            deliveryTime: String(row.deliveryTime ?? row.DeliveryTime ?? ""),
+            trainNo: row.trainNumber ?? row.TrainNumber ?? "",
+            coach: row.coach ?? row.Coach ?? "",
+            seat: row.seat ?? row.Seat ?? "",
+            customerName: String(row.customerName ?? row.CustomerName ?? ""),
+            customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
+            total: row.totalAmount != null ? String(row.totalAmount) : (row.TotalAmount != null ? String(row.TotalAmount) : undefined),
+            history: Array.isArray(row.history) ? row.history : [],
+          };
+        });
 
         setAllOrders((prev) => ({ ...prev, [activeTab]: mapped }));
       } catch (e) {
@@ -134,12 +156,13 @@ export default function AdminOrdersPage() {
     if (idx === -1) return;
     const order = current[idx];
     const mapping = NEXT_MAP[order.status];
-    if (!mapping?.next) {
+    if (!mapping || !mapping.next) {
       alert("Cannot move further");
       return;
     }
 
     const nextStatus = mapping.next;
+    const targetDbValue = mapping.dbValue; 
 
     (async () => {
       try {
@@ -147,7 +170,7 @@ export default function AdminOrdersPage() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            newStatus: nextStatus,
+            newStatus: targetDbValue, // Database ko exact exact string bhejenge jo use chaiye
             remarks: mapping.actionLabel,
             changedBy: "admin",
           }),
@@ -160,14 +183,15 @@ export default function AdminOrdersPage() {
 
         const updated: Order = {
           ...order,
-          status: nextStatus!,
+          status: nextStatus,
+          dbStatus: targetDbValue,
           history: [
             ...order.history,
             {
               at: new Date().toISOString(),
               by: "admin",
               note: mapping.actionLabel,
-              status: nextStatus!,
+              status: nextStatus,
             },
           ],
         };
@@ -175,7 +199,7 @@ export default function AdminOrdersPage() {
         setAllOrders((prev) => {
           const copy = { ...prev };
           copy[activeTab] = (copy[activeTab] ?? []).filter((o) => o.id !== orderId);
-          copy[nextStatus!] = [updated, ...(copy[nextStatus!] ?? [])];
+          copy[nextStatus] = [updated, ...(copy[nextStatus] ?? [])];
           return copy;
         });
       } catch (e) {
@@ -190,8 +214,10 @@ export default function AdminOrdersPage() {
       alert("Select status first");
       return;
     }
-    const target = selection.status as TabKey;
-    const remarks = selection.remarks || `Marked ${target}`;
+    const targetKey = selection.status as TabKey;
+    const matchedOption = FINAL_MARK_OPTIONS.find(o => o.key === targetKey);
+    const targetDbValue = matchedOption ? matchedOption.dbValue : targetKey;
+    const remarks = selection.remarks || `Marked ${targetKey}`;
 
     (async () => {
       try {
@@ -199,7 +225,7 @@ export default function AdminOrdersPage() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            newStatus: target,
+            newStatus: targetDbValue, // Pushes exact casing required by DB constraint
             remarks,
             changedBy: "admin",
           }),
@@ -212,14 +238,15 @@ export default function AdminOrdersPage() {
 
         const updated: Order = {
           ...order,
-          status: target,
+          status: targetKey,
+          dbStatus: targetDbValue,
           history: [
             ...order.history,
             {
               at: new Date().toISOString(),
               by: "admin",
               note: remarks,
-              status: target,
+              status: targetKey,
             },
           ],
         };
@@ -229,7 +256,7 @@ export default function AdminOrdersPage() {
           (Object.keys(copy) as TabKey[]).forEach((k) => {
             copy[k] = (copy[k] ?? []).filter((o) => o.id !== order.id);
           });
-          copy[target] = [updated, ...(copy[target] ?? [])];
+          copy[targetKey] = [updated, ...(copy[targetKey] ?? [])];
           return copy;
         });
 
@@ -239,7 +266,7 @@ export default function AdminOrdersPage() {
           return cp;
         });
 
-        setActiveTab(target);
+        setActiveTab(targetKey);
       } catch (e) {
         alert("Failed to change status (network error)");
       }
