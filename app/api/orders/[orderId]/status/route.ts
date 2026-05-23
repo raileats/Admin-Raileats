@@ -20,22 +20,34 @@ export async function PATCH(
     }
 
     const body = (await req.json().catch(() => ({}))) as Body;
-    const incomingStatus = String(body.newStatus || "").toLowerCase().replace(/[^a-z]/g, "");
+    
+    // 🔹 Pure string cleaning bina spaces aur underscores hataye taaki exact match pakad sake
+    const incomingStatus = String(body.newStatus || "").toLowerCase().trim();
 
-    // Exact database strings matching backend requirements
+    // 🔹 FIX: Map frontend active values directly to your EXACT Database schema strings (Uppercase + Underscores)
     const statusMap: Record<string, string> = {
-      booked: "Booked",
-      verification: "In Verification",
-      inverification: "In Verification",
-      inkitchen: "In Kitchen",
-      outfordelivery: "Out for Delivery",
-      delivered: "Delivered",
-      cancelled: "Cancelled",
-      notdelivered: "Not Delivered",
-      baddelivery: "Bad Delivery",
+      booked: "BOOKED",
+      verification: "UNDER_VERIFICATION",
+      inverification: "UNDER_VERIFICATION",
+      "in verification": "UNDER_VERIFICATION",
+      under_verification: "UNDER_VERIFICATION",
+      inkitchen: "IN_KITCHEN",
+      "in kitchen": "IN_KITCHEN",
+      in_kitchen: "IN_KITCHEN",
+      outfordelivery: "OUT_FOR_DELIVERY",
+      "out for delivery": "OUT_FOR_DELIVERY",
+      out_for_delivery: "OUT_FOR_DELIVERY",
+      delivered: "DELIVERED",
+      cancelled: "CANCELLED",
+      notdelivered: "NOT_DELIVERED",
+      "not delivered": "NOT_DELIVERED",
+      not_delivered: "NOT_DELIVERED",
+      baddelivery: "BAD_DELIVERY",
+      "bad delivery": "BAD_DELIVERY",
+      bad_delivery: "BAD_DELIVERY",
     };
 
-    const dbStatus = statusMap[incomingStatus];
+    const dbStatus = statusMap[incomingStatus] || body.newStatus; // Fallback to raw if already uppercase
 
     if (!dbStatus) {
       return NextResponse.json(
@@ -47,7 +59,6 @@ export async function PATCH(
     const nowIso = new Date().toISOString();
 
     // 1) Pehle current order ka status fetch karte hain taaki OldStatus mil sake
-    // FIXED: Wrapped 'Orders' in literal double quotes
     const { data: currentOrder, error: fetchErr } = await serviceClient
       .from('"Orders"')
       .select("Status")
@@ -63,11 +74,11 @@ export async function PATCH(
 
     const oldStatus = currentOrder ? currentOrder.Status : null;
 
-    // 2) Main table '"Orders"' ko update karte hain
+    // 2) Main table '"Orders"' ko update karte hain uppercase format database status ke sath
     const { data: updatedData, error: updErr } = await serviceClient
       .from('"Orders"') 
       .update({
-        Status: dbStatus,
+        Status: dbStatus, // Database formats like 'UNDER_VERIFICATION', 'DELIVERED'
         UpdatedAt: nowIso,
       })
       .eq("OrderId", orderId)
@@ -82,7 +93,6 @@ export async function PATCH(
       }, { status: 500 });
     }
 
-    // Checking if any row actually matched and got updated
     if (!updatedData || updatedData.length === 0) {
       return NextResponse.json({ 
         error: "order_not_found", 
@@ -90,8 +100,7 @@ export async function PATCH(
       }, { status: 404 });
     }
 
-    // 3) Audit history log insert karte hain '"OrderStatusHistory"' table par uppercase columns ke sath
-    // FIXED: Wrapped 'OrderStatusHistory' in literal double quotes to respect case sensitivity
+    // 3) Audit history log insert karte hain '"OrderStatusHistory"' table par
     try {
       await serviceClient.from('"OrderStatusHistory"').insert({
         OrderId: orderId,
@@ -102,11 +111,10 @@ export async function PATCH(
         ChangedAt: nowIso,
       });
     } catch (historyError) {
-      // Agar database triggers automatic handle kar rahe honge toh koi conflict nahi hoga, catch safe handle karega
-      console.log("History logging details: ", historyError);
+      console.log("History logging bypass log: ", historyError);
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, currentStatus: dbStatus });
   } catch (e: any) {
     return NextResponse.json({ error: "server_error", details: e?.message || "Unknown dynamic error" }, { status: 500 });
   }
