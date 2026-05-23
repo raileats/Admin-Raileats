@@ -82,7 +82,6 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
 
-    // basic validations
     if (!body?.restro_code) {
       return NextResponse.json({ error: "missing_restroc_code" }, { status: 400 });
     }
@@ -99,7 +98,6 @@ export async function POST(req: Request) {
     const supa = serviceClient;
     const restroCodeNum = Number(body.restro_code);
 
-    // 1) RestroMaster lookup with literal double quotes wrapper
     const { data: restroData, error: restroErr } = await supa
       .from('"RestroMaster"')
       .select("RestroCode, RestroName, StationCode, StationName")
@@ -116,7 +114,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "restro_not_found" }, { status: 400 });
     }
 
-    // 2) Menu rows lookup with standard table identifier
     const itemIds = body.items.map((i) => i.item_id);
     const { data: menuRowsData, error: menuErr } = await supa
       .from('"RestroMenuItems"')
@@ -134,7 +131,6 @@ export async function POST(req: Request) {
     const menuById = new Map<number, MenuRow>();
     menuRows.forEach((row) => menuById.set(row.id, row));
 
-    // 3) OrderId & time setup
     const orderId = generateOrderId();
     const nowIso = new Date().toISOString();
 
@@ -142,7 +138,6 @@ export async function POST(req: Request) {
     const deliveryDate = delivery.delivery_date || todayYMD();
     const deliveryTime = delivery.delivery_time || timeHM();
 
-    // 4) Orders table insert with exact Database format casing "Booked"
     const { error: orderInsertErr } = await supa.from('"Orders"').insert({
       OrderId: orderId,
       RestroCode: restro.RestroCode,
@@ -172,7 +167,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "order_insert_failed", details: orderInsertErr.message }, { status: 500 });
     }
 
-    // 5) OrderItems table insert with proper dynamic parameters
     const orderItemsPayload = body.items.map((it) => {
       const row = menuById.get(it.item_id);
       return {
@@ -193,12 +187,10 @@ export async function POST(req: Request) {
     });
 
     const { error: itemsInsertErr } = await supa.from('"OrderItems"').insert(orderItemsPayload);
-
     if (itemsInsertErr) {
       console.error("OrderItems insert error", itemsInsertErr);
     }
 
-    // 6) OrderStatusHistory setup for tracking initial creation
     try {
       await supa.from('"OrderStatusHistory"').insert({
         OrderId: orderId,
@@ -226,7 +218,6 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const statusFilter = searchParams.get("status"); 
 
-    // Relational mapping queries with wrapped case-sensitive identifiers
     let query = supa
       .from('"Orders"')
       .select(`
@@ -255,20 +246,23 @@ export async function GET(req: Request) {
       `);
 
     if (statusFilter) {
-      const statusMap: Record<string, string> = {
-        booked: "Booked",
-        verification: "In Verification",
-        inverification: "In Verification",
-        inkitchen: "In Kitchen",
-        outfordelivery: "Out for Delivery",
-        delivered: "Delivered",
-        cancelled: "Cancelled",
-        notdelivered: "Not Delivered",
-        baddelivery: "Bad Delivery",
+      // 🔹 FIX: DB ke purane (UNDER_VERIFICATION, CANCELLED) aur naye dono formats ek sath map honge
+      const statusGroups: Record<string, string[]> = {
+        booked: ["Booked", "booked", "BOOKED"],
+        verification: ["In Verification", "UNDER_VERIFICATION", "verification", "Under Verification"],
+        inkitchen: ["In Kitchen", "IN_KITCHEN", "inkitchen"],
+        outfordelivery: ["Out for Delivery", "OUT_FOR_DELIVERY", "outfordelivery"],
+        delivered: ["Delivered", "DELIVERED", "delivered"],
+        cancelled: ["Cancelled", "CANCELLED", "cancelled"],
+        notdelivered: ["Not Delivered", "NOT_DELIVERED", "notdelivered"],
+        baddelivery: ["Bad Delivery", "BAD_DELIVERY", "baddelivery"],
       };
 
-      const normalizedFilter = statusMap[statusFilter.toLowerCase()] || statusFilter;
-      query = query.eq("Status", normalizedFilter);
+      const filterKey = statusFilter.toLowerCase().trim();
+      const allowedStatuses = statusGroups[filterKey] || [statusFilter];
+      
+      // Supabase ka .in filter humein array se matching allow karta hai
+      query = query.in("Status", allowedStatuses);
     }
 
     query = query.order("CreatedAt", { ascending: false });
@@ -277,30 +271,41 @@ export async function GET(req: Request) {
 
     if (error) {
       console.error("Orders GET failure log:", error);
-      return NextResponse.json({ 
-        error: "orders_fetch_failed", 
-        details: error.message 
-      }, { status: 500 });
+      return NextResponse.json({ error: "orders_fetch_failed", details: error.message }, { status: 500 });
     }
 
-    // Explicit format restructuring so frontend receives perfect layout
-    const formattedOrders = (data || []).map((row: any) => ({
-      OrderId: row.OrderId,
-      Status: row.Status || "Booked",
-      RestroCode: row.RestroCode,
-      RestroName: row.RestroName,
-      StationCode: row.StationCode,
-      StationName: row.StationName,
-      DeliveryDate: row.DeliveryDate, 
-      DeliveryTime: row.DeliveryTime, 
-      TrainNumber: row.TrainNumber,
-      Coach: row.Coach,
-      Seat: row.Seat,
-      CustomerName: row.CustomerName,
-      CustomerMobile: row.CustomerMobile,
-      TotalAmount: Number(row.TotalAmount ?? 0),
-      history: Array.isArray(row.history) ? row.history : [],
-    }));
+    // 🔹 FIX: UI ko hamesha standard format hi return hoga taaki frontend filter na toote
+    const formattedOrders = (data || []).map((row: any) => {
+      const dbStatus = String(row.Status ?? "Booked").toUpperCase().trim();
+      let normalizedStatus = "Booked"; // Default Fallback
+
+      if (dbStatus === "BOOKED") normalizedStatus = "Booked";
+      else if (dbStatus === "UNDER_VERIFICATION" || dbStatus === "IN VERIFICATION") normalizedStatus = "In Verification";
+      else if (dbStatus === "IN_KITCHEN" || dbStatus === "IN KITCHEN") normalizedStatus = "In Kitchen";
+      else if (dbStatus === "OUT_FOR_DELIVERY" || dbStatus === "OUT FOR DELIVERY") normalizedStatus = "Out for Delivery";
+      else if (dbStatus === "DELIVERED") normalizedStatus = "Delivered";
+      else if (dbStatus === "CANCELLED") normalizedStatus = "Cancelled";
+      else if (dbStatus === "NOT_DELIVERED" || dbStatus === "NOT DELIVERED") normalizedStatus = "Not Delivered";
+      else if (dbStatus === "BAD_DELIVERY" || dbStatus === "BAD DELIVERY") normalizedStatus = "Bad Delivery";
+
+      return {
+        OrderId: row.OrderId,
+        Status: normalizedStatus, // Pure frontend standard matching
+        RestroCode: row.RestroCode,
+        RestroName: row.RestroName,
+        StationCode: row.StationCode,
+        StationName: row.StationName,
+        DeliveryDate: row.DeliveryDate, 
+        DeliveryTime: row.DeliveryTime, 
+        TrainNumber: row.TrainNumber,
+        Coach: row.Coach,
+        Seat: row.Seat,
+        CustomerName: row.CustomerName,
+        CustomerMobile: row.CustomerMobile,
+        TotalAmount: Number(row.TotalAmount ?? 0),
+        history: Array.isArray(row.history) ? row.history : [],
+      };
+    });
 
     return NextResponse.json({ ok: true, orders: formattedOrders });
   } catch (err: any) {
