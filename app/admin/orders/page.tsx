@@ -43,23 +43,24 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "baddelivery", label: "Bad Delivery" },
 ];
 
-// MAPS EVERYTHING TO THE EXACT SUPABASE ENUM CASING (Matches 'Booked', 'In Verification' etc.)
-const NEXT_MAP: Record<TabKey, { next: TabKey | null; actionLabel: string; dbValue: string }> = {
-  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "In Verification" },
-  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "In Kitchen" },
-  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "Out for Delivery" },
-  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "Delivered" },
-  delivered: { next: null, actionLabel: "", dbValue: "Delivered" },
-  cancelled: { next: null, actionLabel: "", dbValue: "Cancelled" },
-  notdelivered: { next: null, actionLabel: "", dbValue: "Not Delivered" },
-  baddelivery: { next: null, actionLabel: "", dbValue: "Bad Delivery" },
+// FIXED: dbValue ko lowercase types me badal diya jo backend accept karta hai
+const NEXT_MAP: Record<TabKey, { next: TabKey | null; actionLabel: string; dbValue: TabKey }> = {
+  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "verification" },
+  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "inkitchen" },
+  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "outfordelivery" },
+  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "delivered" },
+  delivered: { next: null, actionLabel: "", dbValue: "delivered" },
+  cancelled: { next: null, actionLabel: "", dbValue: "cancelled" },
+  notdelivered: { next: null, actionLabel: "", dbValue: "notdelivered" },
+  baddelivery: { next: null, actionLabel: "", dbValue: "baddelivery" },
 };
 
+// FIXED: dbValue ko lowercase kar diya taaki backend error na de
 const FINAL_MARK_OPTIONS = [
-  { key: "delivered", label: "Delivered", dbValue: "Delivered" },
-  { key: "cancelled", label: "Cancelled", dbValue: "Cancelled" },
-  { key: "notdelivered", label: "Not Delivered", dbValue: "Not Delivered" },
-  { key: "baddelivery", label: "Bad Delivery", dbValue: "Bad Delivery" },
+  { key: "delivered", label: "Delivered", dbValue: "delivered" },
+  { key: "cancelled", label: "Cancelled", dbValue: "cancelled" },
+  { key: "notdelivered", label: "Not Delivered", dbValue: "notdelivered" },
+  { key: "baddelivery", label: "Bad Delivery", dbValue: "baddelivery" },
 ] as const;
 
 type SearchType =
@@ -87,7 +88,6 @@ export default function AdminOrdersPage() {
         setLoading(true);
         const params = new URLSearchParams();
         
-        // API handles query parameter
         params.set("status", activeTab);
         
         const res = await fetch(`/api/orders?${params.toString()}`, {
@@ -169,7 +169,7 @@ export default function AdminOrdersPage() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            newStatus: targetDbValue, // Sends exact Enum string like "In Verification"
+            newStatus: targetDbValue, 
             remarks: mapping.actionLabel,
             changedBy: "admin",
           }),
@@ -224,7 +224,7 @@ export default function AdminOrdersPage() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            newStatus: targetDbValue, // Pushes capitalized Enum string
+            newStatus: targetDbValue, 
             remarks,
             changedBy: "admin",
           }),
