@@ -71,12 +71,12 @@ const dbStatus = statusMap[requestStatus];
 
     // 2) Orders table me Status update
     const { error: updErr } = await supa
-      .from("Orders")
-      .update({
-        Status: newStatus,
-        UpdatedAt: nowIso,
-      })
-      .eq("OrderId", orderId);
+  .from("Orders")
+  .update({
+    Status: dbStatus,
+    UpdatedAt: nowIso,
+  })
+  .eq("OrderId", orderId);
 
     if (updErr) {
       console.error("status PATCH: updateErr", updErr);
@@ -87,7 +87,7 @@ const dbStatus = statusMap[requestStatus];
     const { error: histErr } = await supa.from("OrderStatusHistory").insert({
       OrderId: orderId,
       OldStatus: oldStatus,
-      NewStatus: newStatus,
+      NewStatus: dbStatus,
       Note: body.remarks || null,
       ChangedBy: body.changedBy || "admin",
       ChangedAt: nowIso,
