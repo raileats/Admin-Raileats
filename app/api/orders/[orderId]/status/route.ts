@@ -12,18 +12,18 @@ type TabKey =
   | "baddelivery";
 
 type Body = {
-  newStatus: string; // Dynamic support string to prevent crashing
+  newStatus: string;
   remarks?: string;
   changedBy?: string;
 };
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { orderId: string } },
+  context: { params: Promise<{ orderId: string }> | { orderId: string } }
 ) {
   try {
-    // Next.js structural safety for dynamic route parameters
-    const resolvedParams = await params;
+    // FIXED: Handled Next.js dynamic routing parameter promise safely
+    const resolvedParams = "then" in context.params ? await context.params : context.params;
     const orderId = resolvedParams?.orderId;
     
     if (!orderId) {
@@ -31,8 +31,6 @@ export async function PATCH(
     }
 
     const body = (await req.json().catch(() => ({}))) as Body;
-    
-    // Standardizing incoming status formats to handle lowercase/uppercase gracefully
     const incomingStatus = String(body.newStatus || "").toLowerCase().replace(/[^a-z]/g, "");
 
     const statusMap: Record<string, string> = {
@@ -56,7 +54,7 @@ export async function PATCH(
       );
     }
 
-    // 1) Current order check from Supabase
+    // 1) Fetch current order state safely
     const { data: order, error: fetchErr } = await serviceClient
       .from("Orders")
       .select("OrderId, Status")
@@ -74,7 +72,7 @@ export async function PATCH(
     const oldStatus = order.Status; 
     const nowIso = new Date().toISOString();
 
-    // 2) Update order status in core Orders Table
+    // 2) Execute core status change update inside Orders Table
     const { error: updErr } = await serviceClient
       .from("Orders")
       .update({
@@ -85,28 +83,26 @@ export async function PATCH(
 
     if (updErr) {
       console.error("status PATCH: updateErr", updErr);
-      return NextResponse.json({ error: "order_update_failed", details: updErr.message }, { status: 500 });
+      return NextResponse.json({ error: "order_update_failed", message: updErr.message }, { status: 500 });
     }
 
-    // 3) Create history item inside OrderStatusHistory Table 
-    // Handled with explicit type mapping matching standard string expectations
-    const { error: histErr } = await serviceClient.from("OrderStatusHistory").insert({
-      OrderId: orderId,
-      OldStatus: oldStatus ? String(oldStatus) : null,
-      NewStatus: dbStatus,
-      Note: body.remarks || `Status updated to ${dbStatus}`,
-      ChangedBy: body.changedBy || "admin",
-      ChangedAt: nowIso,
-    });
-
-    if (histErr) {
-      console.error("status PATCH: historyErr logs generated", histErr);
-      // Main operation process successful, log generated safely
+    // 3) Push audit trace logs silently to OrderStatusHistory Table
+    try {
+      await serviceClient.from("OrderStatusHistory").insert({
+        OrderId: orderId,
+        OldStatus: oldStatus ? String(oldStatus) : null,
+        NewStatus: dbStatus,
+        Note: body.remarks || `Status updated to ${dbStatus}`,
+        ChangedBy: body.changedBy || "admin",
+        ChangedAt: nowIso,
+      });
+    } catch (histErr) {
+      console.error("status PATCH: history logger fallback triggered", histErr);
     }
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    console.error("status PATCH: server_error exploded", e);
-    return NextResponse.json({ error: "server_error", details: e?.message }, { status: 500 });
+    console.error("status PATCH: runtime shell exception caught", e);
+    return NextResponse.json({ error: "server_error", message: e?.message }, { status: 500 });
   }
 }
