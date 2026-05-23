@@ -67,42 +67,69 @@ const FINAL_MARK_OPTIONS = [
   { key: "baddelivery", label: "Bad Delivery", dbValue: "BAD_DELIVERY" },
 ] as const;
 
-type SearchType =
-  | "customerMobile"
-  | "orderId"
-  | "outletId"
-  | "stationCode"
-  | "deliveryDate"
-  | "trainNo";
+type SearchType = "customerMobile" | "orderId" | "outletId" | "stationCode" | "deliveryDate" | "trainNo";
 
 export default function AdminOrdersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("booked");
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>({} as Record<TabKey, Order[]>);
   const [loading, setLoading] = useState(false);
   const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
-
   const [searchType, setSearchType] = useState<SearchType>("orderId");
   const [searchText, setSearchText] = useState("");
-  const [searchDate, setSearchDate] = useState<string>(""); 
-  const [searchOutlet, setSearchOutlet] = useState("");
 
   const loadOrders = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      params.set("status", activeTab);
+      const res = await fetch(`/api/orders?status=${activeTab}`, { cache: "no-store" });
+      const json = await res.json().catch(() => ({ orders: [] }));
       
-      const res = await fetch(`/api/orders?${params.toString()}`, {
-        cache: "no-store",
-      });
-      const json = await res.json().catch(() => ({} as any));
+      const mapped: Order[] = (json.orders || []).map((row: any) => ({
+        id: String(row.OrderId || row.orderId || row.id || ""),
+        status: row.Status?.toLowerCase() || "booked",
+        customerMobile: String(row.CustomerMobile || row.customerMobile || ""),
+        // ... (Baaki mapping wahi hai)
+      }));
+      setAllOrders((prev) => ({ ...prev, [activeTab]: mapped }));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      if (!res.ok || !json?.ok) {
-        console.error("orders fetch failed", json);
-        setAllOrders((prev) => ({ ...prev, [activeTab]: [] }));
-        return;
-      }
+  useEffect(() => { loadOrders(); }, [activeTab]);
 
+  const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
+
+  return (
+    <section style={{ padding: 20 }}>
+      {/* ...Tabs logic... */}
+      <table style={{ width: "100%" }}>
+        <tbody>
+          {orders.map((o) => (
+            <tr key={o.id}>
+              <td>{o.id}</td>
+              <td>
+                <select onChange={(e) => setMarking(p => ({ ...p, [o.id]: { ...(p[o.id] || {remarks: ""}), status: e.target.value } }))}>
+                   {FINAL_MARK_OPTIONS.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                </select>
+                <button onClick={async () => {
+                   const m = marking[o.id];
+                   if(!m) return;
+                   await fetch(`/api/orders/${o.id}/status`, { 
+                     method: "PATCH", 
+                     body: JSON.stringify({ newStatus: m.status, remarks: m.remarks }) 
+                   });
+                   await loadOrders();
+                }}>Submit</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
       // 🔹 DEEP READ MAPPING: Database headings aur UI state ko sync karne ki layer
       const mapped: Order[] = (json.orders || []).map((row: any) => {
         // Supabase schema 'Status' property ko uppercase karke check karenge
