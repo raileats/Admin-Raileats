@@ -72,61 +72,7 @@ export default function RestroUserPasswordTab({
         />
       </div>
 
-      {/* HOLIDAY STATUS */}
-      <div>
-        <label className="block text-sm font-medium mb-1">
-          Holiday Status
-        </label>
-
-        <select
-          value={
-            form?.HolidayStatus ?? 0
-          }
-          onChange={(e) =>
-            setForm((prev: any) => ({
-              ...prev,
-              HolidayStatus:
-                Number(
-                  e.target.value
-                ),
-            }))
-          }
-          className="w-full border rounded-lg px-3 py-2"
-        >
-          <option value={0}>
-            OFF
-          </option>
-
-          <option value={1}>
-            ON
-          </option>
-        </select>
-      </div>
-
-      {/* MINIMUM ORDER */}
-      <div>
-        <label className="block text-sm font-medium mb-1">
-          Minimum Order Amount
-        </label>
-
-        <input
-          type="number"
-          value={
-            form?.MinimumOrderAmount ||
-            ""
-          }
-          onChange={(e) =>
-            setForm((prev: any) => ({
-              ...prev,
-              MinimumOrderAmount:
-                e.target.value,
-            }))
-          }
-          className="w-full border rounded-lg px-3 py-2"
-          placeholder="Enter minimum order"
-        />
-      </div>
-
+     
     </div>
   );
 }
