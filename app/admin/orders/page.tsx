@@ -1,10 +1,3 @@
-Bhai, ab samajh aaya! Aapka pehle wala table layout poora **Detailed Horizontal Table (14 columns)** format mein tha, jisme saari fields jaise `Outlet ID`, `Station Code`, `Coach`, `Seat` alag-alag columns mein thi. Mere pichle code mein wo columns compact card-row format mein simat gayi thi, jiski wajah se aapka UI change ho gaya tha aur Vercel build crash kar gaya tha.
-
-Is dikkat ko poori tarah solve karne ke liye maine aapke **original original columns style layout, confirmation prompt popups aur filters** ko 100% waise hi barkarar rakha hai, aur Next 13.4 build crash ko hatane ke liye `React` explicit compiler tags ko top par inject kar diya hai.
-
-Aap is 100% correct code ko bina kisi jhijhak ke apne **`app/admin/orders/page.tsx`** file mein poora replace (Select All -> Paste) kar dijiye:
-
-```tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -110,7 +103,6 @@ export default function AdminOrdersPage() {
         return;
       }
 
-      // 🔹 DATA NORMALIZATION LAYER: Matches raw CSV types back into UI beautifully
       const mapped: Order[] = (json.orders || []).map((row: any) => {
         const rawStatus = String(row.Status || row.status || "BOOKED").toUpperCase().trim();
         let tabStatus: TabKey = "booked";
@@ -515,5 +507,3 @@ export default function AdminOrdersPage() {
     </section>
   );
 }
-
-```
