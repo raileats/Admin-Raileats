@@ -96,17 +96,31 @@ audioRef.current.preload = "auto";
 
 document.body.addEventListener(
   "click",
-  () => {
+  async () => {
 
-    audioRef.current?.play().then(() => {
-
-      audioRef.current?.pause();
+    try {
 
       if (audioRef.current) {
+
+        audioRef.current.muted = true;
+
+        await audioRef.current.play();
+
+        audioRef.current.pause();
+
         audioRef.current.currentTime = 0;
+
+        audioRef.current.muted = false;
+
+        console.log("Audio unlocked");
+
       }
 
-    });
+    } catch (e) {
+
+      console.log("Unlock failed");
+
+    }
 
   },
   { once: true }
