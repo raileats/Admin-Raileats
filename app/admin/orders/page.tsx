@@ -86,7 +86,7 @@ export default function AdminOrdersPage() {
   const [searchText, setSearchText] = useState("");
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
-  const [newOrderCount, setNewOrderCount] = useState(0);
+  const [newOrderCount, setNewOrderCount] = useState<number>(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   /* ================= INIT SOUND ================= */
@@ -155,6 +155,15 @@ useEffect(() => {
       async (payload) => {
 
         console.log("NEW ORDER:", payload);
+        setNewOrderCount((prev) => {
+
+  const next = prev + 1;
+
+  console.log("Bell Count:", next);
+
+  return next;
+
+});
         setNewOrderCount((prev) => prev + 1);
 
         /* PLAY SOUND */
@@ -515,8 +524,7 @@ useEffect(() => {
 
       <Bell size={24} />
 
-      {newOrderCount > 0 && (
-
+      {Number(newOrderCount) > 0 && (
         <span
           style={{
             position: "absolute",
