@@ -192,9 +192,7 @@ try {
 
 } catch (e) {}
 
-/* AUTO RELOAD */
-
-window.location.reload();
+/* AUTO REFRESH HANDLED SEPARATELY */
 
     }
 
@@ -208,7 +206,7 @@ return () => {
 
 };
 
-}, []);
+}, []);;
 
 /* ================= AUTO REFRESH ================= */
 
@@ -218,7 +216,7 @@ useEffect(() => {
 
     window.location.reload();
 
-  }, 15000);
+  }, 30000);
 
   return () => clearInterval(interval);
 
