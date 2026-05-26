@@ -177,39 +177,38 @@ useEffect(() => {
 
         /* NOTIFICATION */
 
-        try {
+try {
 
-          if (Notification.permission === "granted") {
+  if (Notification.permission === "granted") {
 
-            new Notification("🚆 New RailEats Order", {
+    new Notification("🚆 New RailEats Order", {
 
-              body:
-                `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
+      body:
+        `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
 
-            });
+    });
 
-          }
+  }
 
-        } catch (e) {}
+} catch (e) {}
 
-        /* AUTO RELOAD */
+/* AUTO RELOAD */
 
-        window.location.reload();
+window.location.reload();
 
-      }
-    )
+    }
 
-    .subscribe();
+  )
 
-  return () => {
+  .subscribe();
 
-    supabase.removeChannel(channel);
+return () => {
 
-  };
+  supabase.removeChannel(channel);
+
+};
 
 }, []);
-  useEffect(() => {
-    }, []);
 
 /* ================= AUTO REFRESH ================= */
 
@@ -224,10 +223,20 @@ useEffect(() => {
   return () => clearInterval(interval);
 
 }, []);
-    const load = async () => {
-      try {
-        setLoading(true);
-        const params = new URLSearchParams();
+
+/* ================= LOAD ORDERS ================= */
+
+useEffect(() => {
+
+  let mounted = true;
+
+  const load = async () => {
+
+    try {
+
+      setLoading(true);
+
+      const params = new URLSearchParams();
         
         // API handles query parameter
         params.set("status", activeTab);
