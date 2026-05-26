@@ -715,16 +715,54 @@ const tabCounts = useMemo(() => {
 
 }}
               style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: active ? "2px solid #273e9a" : "1px solid #e6e8eb",
-                background: active ? "#fff" : "#f8fafc",
-                fontWeight: active ? 700 : 600,
-                cursor: "pointer",
-              }}
-            >
-              {tab.label}
-            </button>
+  padding: "8px 12px",
+  borderRadius: 8,
+  border: active ? "2px solid #273e9a" : "1px solid #e6e8eb",
+  background: active ? "#fff" : "#f8fafc",
+  fontWeight: active ? 700 : 600,
+  cursor: "pointer",
+}}
+>
+
+<div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  }}
+>
+
+  <span>{tab.label}</span>
+
+  <span
+    style={{
+      background: active
+        ? "#1d4ed8"
+        : "#e5e7eb",
+
+      color: active
+        ? "#fff"
+        : "#111827",
+
+      borderRadius: 999,
+      minWidth: 20,
+      height: 20,
+      padding: "0 6px",
+
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+
+      fontSize: 11,
+      fontWeight: 700,
+    }}
+  >
+    {tabCounts[tab.key] || 0}
+  </span>
+
+</div>
+
+</button>
           );
         })}
       </div>
