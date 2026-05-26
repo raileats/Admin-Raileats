@@ -143,7 +143,19 @@ type SearchType =
   | "trainNo";
 
 export default function AdminOrdersPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>("booked");
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+
+  if (typeof window !== "undefined") {
+
+    return (
+      localStorage.getItem("raileats_admin_tab") as TabKey
+    ) || "booked";
+
+  }
+
+  return "booked";
+
+});
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>({} as Record<TabKey, Order[]>);
   const [loading, setLoading] = useState(false);
   const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
@@ -549,7 +561,20 @@ useEffect(() => {
 
     return filtered;
   }
+const tabCounts = useMemo(() => {
 
+  const counts: Record<string, number> = {};
+
+  TABS.forEach((tab) => {
+
+    counts[tab.key] =
+      allOrders[tab.key]?.length || 0;
+
+  });
+
+  return counts;
+
+}, [allOrders]);
   const visibleOrders = useMemo(() => applyFilters(orders), [orders, searchText, searchDate, searchType, searchOutlet]);
 
   return (
@@ -679,7 +704,16 @@ useEffect(() => {
           return (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => {
+
+  setActiveTab(tab.key);
+
+  localStorage.setItem(
+    "raileats_admin_tab",
+    tab.key
+  );
+
+}}
               style={{
                 padding: "8px 12px",
                 borderRadius: 8,
