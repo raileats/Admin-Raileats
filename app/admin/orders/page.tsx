@@ -450,16 +450,117 @@ useEffect(() => {
 
   return (
     <section style={{ padding: 12 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 28 }}>Orders</h1>
-          <p style={{ margin: 0, color: "#6b7280" }}>Manage orders &amp; mark statuses</p>
-        </div>
-        <div style={{ color: "#6b7280" }}>
-          Showing: <strong>{TABS.find((t) => t.key === activeTab)?.label}</strong>
-          {loading ? " • Loading…" : ""}
-        </div>
-      </header>
+      <header
+  style={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  }}
+>
+
+  {/* LEFT */}
+
+  <div>
+    <h1
+      style={{
+        margin: 0,
+        fontSize: 28,
+      }}
+    >
+      Orders
+    </h1>
+
+    <p
+      style={{
+        margin: 0,
+        color: "#6b7280",
+      }}
+    >
+      Manage orders &amp; mark statuses
+    </p>
+  </div>
+
+  {/* RIGHT */}
+
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+    }}
+  >
+
+    {/* BELL */}
+
+    <Link
+      href="/admin/orders"
+      onClick={() => setNewOrderCount(0)}
+      style={{
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        color: "#111827",
+        textDecoration: "none",
+      }}
+    >
+
+      <Bell size={24} />
+
+      {newOrderCount > 0 && (
+
+        <span
+          style={{
+            position: "absolute",
+            top: -8,
+            right: -10,
+            background: "#dc2626",
+            color: "#fff",
+            borderRadius: 999,
+            minWidth: 20,
+            height: 20,
+            fontSize: 12,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 6px",
+          }}
+        >
+          {newOrderCount}
+        </span>
+
+      )}
+
+    </Link>
+
+    {/* STATUS */}
+
+    <div style={{ color: "#6b7280" }}>
+
+      Showing:
+
+      {" "}
+
+      <strong>
+        {
+          TABS.find(
+            (t) =>
+              t.key === activeTab
+          )?.label
+        }
+      </strong>
+
+      {loading
+        ? " • Loading…"
+        : ""}
+
+    </div>
+
+  </div>
+
+</header>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, marginBottom: 12 }}>
         {TABS.map((tab) => {
