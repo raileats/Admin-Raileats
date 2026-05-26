@@ -267,15 +267,23 @@ export async function GET(req: Request) {
     const statusFilter = searchParams.get("status"); // e.g. "booked", "inkitchen", ...
     const statusMap: Record<string, string> = {
   booked: "Booked",
+
   verification: "In Verification",
+
+  neworder: "New Order",
+
   inkitchen: "In Kitchen",
+
   outfordelivery: "Out for Delivery",
+
   delivered: "Delivered",
+
   cancelled: "Cancelled",
+
   notdelivered: "Not Delivered",
+
   baddelivery: "Bad Delivery",
 };
-
 const dbStatus = statusFilter
   ? statusMap[statusFilter] || statusFilter
   : null;
