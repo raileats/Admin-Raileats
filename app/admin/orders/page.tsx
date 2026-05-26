@@ -8,6 +8,7 @@ import Link from "next/link";
 type TabKey =
   | "booked"
   | "verification"
+  | "neworder"
   | "inkitchen"
   | "outfordelivery"
   | "delivered"
@@ -36,26 +37,91 @@ type Order = {
 };
 
 const TABS: { key: TabKey; label: string }[] = [
+
   { key: "booked", label: "Booked" },
+
   { key: "verification", label: "In Verification" },
+
+  { key: "neworder", label: "New Order" },
+
   { key: "inkitchen", label: "In Kitchen" },
+
   { key: "outfordelivery", label: "Out for Delivery" },
+
   { key: "delivered", label: "Delivered" },
+
   { key: "cancelled", label: "Cancelled" },
+
   { key: "notdelivered", label: "Not Delivered" },
+
   { key: "baddelivery", label: "Bad Delivery" },
+
 ];
 
 // MAPS EVERYTHING TO THE EXACT SUPABASE ENUM CASING (Matches 'Booked', 'In Verification' etc.)
-const NEXT_MAP: Record<TabKey, { next: TabKey | null; actionLabel: string; dbValue: string }> = {
-  booked: { next: "verification", actionLabel: "Move to In Verification", dbValue: "In Verification" },
-  verification: { next: "inkitchen", actionLabel: "Move to In Kitchen", dbValue: "In Kitchen" },
-  inkitchen: { next: "outfordelivery", actionLabel: "Move to Out for Delivery 🛵", dbValue: "Out for Delivery" },
-  outfordelivery: { next: "delivered", actionLabel: "Mark as Delivered ✅", dbValue: "Delivered" },
-  delivered: { next: null, actionLabel: "", dbValue: "Delivered" },
-  cancelled: { next: null, actionLabel: "", dbValue: "Cancelled" },
-  notdelivered: { next: null, actionLabel: "", dbValue: "Not Delivered" },
-  baddelivery: { next: null, actionLabel: "", dbValue: "Bad Delivery" },
+const NEXT_MAP: Record<
+  TabKey,
+  {
+    next: TabKey | null;
+    actionLabel: string;
+    dbValue: string;
+  }
+> = {
+
+  booked: {
+    next: "verification",
+    actionLabel: "Move to In Verification",
+    dbValue: "In Verification",
+  },
+
+  verification: {
+    next: "neworder",
+    actionLabel: "Send to Restaurant",
+    dbValue: "New Order",
+  },
+
+  neworder: {
+    next: "inkitchen",
+    actionLabel: "Move to In Kitchen",
+    dbValue: "In Kitchen",
+  },
+
+  inkitchen: {
+    next: "outfordelivery",
+    actionLabel: "Move to Out for Delivery 🛵",
+    dbValue: "Out for Delivery",
+  },
+
+  outfordelivery: {
+    next: "delivered",
+    actionLabel: "Mark as Delivered ✅",
+    dbValue: "Delivered",
+  },
+
+  delivered: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Delivered",
+  },
+
+  cancelled: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Cancelled",
+  },
+
+  notdelivered: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Not Delivered",
+  },
+
+  baddelivery: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Bad Delivery",
+  },
+
 };
 
 const FINAL_MARK_OPTIONS = [
@@ -283,6 +349,11 @@ useEffect(() => {
           
           if (lowerRaw === "booked") tabStatus = "booked";
           else if (lowerRaw === "verification" || lowerRaw === "in verification") tabStatus = "verification";
+            else if (
+  lowerRaw === "neworder" ||
+  lowerRaw === "new order"
+)
+  tabStatus = "neworder";
           else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") tabStatus = "inkitchen";
           else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") tabStatus = "outfordelivery";
           else if (lowerRaw === "delivered") tabStatus = "delivered";
@@ -726,7 +797,13 @@ useEffect(() => {
                   </td>
 
                   <td style={{ padding: 10, verticalAlign: "top" }}>
-                    {["booked", "verification", "inkitchen", "outfordelivery"].includes(o.status) ? (
+                    [
+  "booked",
+  "verification",
+  "neworder",
+  "inkitchen",
+  "outfordelivery",
+]
                       <button
                         onClick={() => {
                           if (!confirm(`Move ${o.id} to next status?`)) return;
