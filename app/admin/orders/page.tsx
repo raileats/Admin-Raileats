@@ -797,83 +797,125 @@ useEffect(() => {
                   </td>
 
                   <td style={{ padding: 10, verticalAlign: "top" }}>
-                    [
-  "booked",
-  "verification",
-  "neworder",
-  "inkitchen",
-  "outfordelivery",
-]
-                      <button
-                        onClick={() => {
-                          if (!confirm(`Move ${o.id} to next status?`)) return;
-                          moveOrderToNext(o.id);
-                        }}
-                        style={{
-                          padding: "8px 10px",
-                          borderRadius: 6,
-                          background: "#273e9a",
-                          color: "#fff",
-                          border: "none",
-                          cursor: "pointer",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {NEXT_MAP[o.status]?.actionLabel}
-                      </button>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 200 }}>
-                        <select
-                          value={marking[o.id]?.status || ""}
-                          onChange={(e) =>
-                            setMarking((prev) => ({
-                              ...prev,
-                              [o.id]: { ...(prev[o.id] || { remarks: "" }), status: e.target.value },
-                            }))
-                          }
-                          style={{ padding: 8, borderRadius: 6, border: "1px solid #e6e8eb" }}
-                        >
-                          <option value="">Select status</option>
-                          {FINAL_MARK_OPTIONS.map((opt) => (
-                            <option key={opt.key} value={opt.key}>{opt.label}</option>
-                          ))}
-                        </select>
 
-                        <input
-                          placeholder="Remarks (optional)"
-                          value={marking[o.id]?.remarks || ""}
-                          onChange={(e) =>
-                            setMarking((prev) => ({
-                              ...prev,
-                              [o.id]: { ...(prev[o.id] || { status: "" }), remarks: e.target.value },
-                            }))
-                          }
-                          style={{ padding: 8, borderRadius: 6, border: "1px solid #e6e8eb" }}
-                        />
+  {[
+    "booked",
+    "verification",
+    "neworder",
+    "inkitchen",
+    "outfordelivery",
+  ].includes(o.status) ? (
 
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button
-                            onClick={() => submitMark(o)}
-                            style={{ padding: "8px 10px", borderRadius: 6, background: "#0f172a", color: "#fff", cursor: "pointer", flex: 1, border: "none" }}
-                          >
-                            Submit
-                          </button>
-                          <button
-                            onClick={() =>
-                              setMarking((prev) => {
-                                const cp = { ...prev };
-                                delete cp[o.id];
-                                return cp;
-                              })
-                            }
-                            style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #e6e8eb", background: "#fff", cursor: "pointer" }}
-                          >
-                            Clear
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </td>
+    <button
+      onClick={() => {
+        if (!confirm(`Move ${o.id} to next status?`)) return;
+        moveOrderToNext(o.id);
+      }}
+      style={{
+        padding: "8px 10px",
+        borderRadius: 6,
+        background: "#273e9a",
+        color: "#fff",
+        border: "none",
+        cursor: "pointer",
+        fontWeight: "bold",
+      }}
+    >
+      {NEXT_MAP[o.status]?.actionLabel}
+    </button>
+
+  ) : (
+
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 200 }}>
+
+      <select
+        value={marking[o.id]?.status || ""}
+        onChange={(e) =>
+          setMarking((prev) => ({
+            ...prev,
+            [o.id]: {
+              ...(prev[o.id] || { remarks: "" }),
+              status: e.target.value,
+            },
+          }))
+        }
+        style={{
+          padding: 8,
+          borderRadius: 6,
+          border: "1px solid #e6e8eb",
+        }}
+      >
+        <option value="">Select status</option>
+
+        {FINAL_MARK_OPTIONS.map((opt) => (
+          <option key={opt.key} value={opt.key}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+
+      <input
+        placeholder="Remarks (optional)"
+        value={marking[o.id]?.remarks || ""}
+        onChange={(e) =>
+          setMarking((prev) => ({
+            ...prev,
+            [o.id]: {
+              ...(prev[o.id] || { status: "" }),
+              remarks: e.target.value,
+            },
+          }))
+        }
+        style={{
+          padding: 8,
+          borderRadius: 6,
+          border: "1px solid #e6e8eb",
+        }}
+      />
+
+      <div style={{ display: "flex", gap: 8 }}>
+
+        <button
+          onClick={() => submitMark(o)}
+          style={{
+            padding: "8px 10px",
+            borderRadius: 6,
+            background: "#0f172a",
+            color: "#fff",
+            cursor: "pointer",
+            flex: 1,
+            border: "none",
+          }}
+        >
+          Submit
+        </button>
+
+        <button
+          onClick={() =>
+            setMarking((prev) => {
+              const cp = { ...prev };
+              delete cp[o.id];
+              return cp;
+            })
+          }
+          style={{
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: "1px solid #e6e8eb",
+            background: "#fff",
+            cursor: "pointer",
+          }}
+        >
+          Clear
+        </button>
+
+      </div>
+
+    </div>
+
+  )}
+
+</td>
                 </tr>
               ))}
 
