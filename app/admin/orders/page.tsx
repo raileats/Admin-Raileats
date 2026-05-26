@@ -149,7 +149,7 @@ useEffect(() => {
       {
         event: "INSERT",
         schema: "public",
-        table: "orders",
+        table: "Orders",
       },
 
       async (payload) => {
