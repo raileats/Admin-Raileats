@@ -57,6 +57,43 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "baddelivery", label: "Bad Delivery" },
 
 ];
+const CANCEL_REASONS = [
+
+  "Customer Plan Change",
+
+  "Customer Call Not Connect",
+
+  "Restro Closed",
+
+  "Train Late",
+
+  "Train Divert",
+
+  "Item Issue",
+
+  "Restro Refused without Reason",
+
+  "Other",
+
+];
+
+const NOT_DELIVERED_REASONS = [
+
+  "Restro Missed",
+
+  "Late Processing",
+
+  "Technical Issue",
+
+];
+
+const DELIVERED_REASONS = [
+
+  "Delivered",
+
+  "Bad Delivery",
+
+];
 
 // MAPS EVERYTHING TO THE EXACT SUPABASE ENUM CASING (Matches 'Booked', 'In Verification' etc.)
 const NEXT_MAP: Record<
@@ -158,6 +195,20 @@ export default function AdminOrdersPage() {
 });
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>({} as Record<TabKey, Order[]>);
   const [loading, setLoading] = useState(false);
+  const [statusModalOpen, setStatusModalOpen] =
+  useState(false);
+
+const [selectedOrder, setSelectedOrder] =
+  useState<any>(null);
+
+const [actionType, setActionType] =
+  useState("");
+
+const [subStatus, setSubStatus] =
+  useState("");
+
+const [remarks, setRemarks] =
+  useState("");
   const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
 
   const [searchType, setSearchType] = useState<SearchType>("orderId");
