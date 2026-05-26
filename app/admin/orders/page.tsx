@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { Bell } from "lucide-react";
+import Link from "next/link";
 
 type TabKey =
   | "booked"
@@ -84,6 +86,7 @@ export default function AdminOrdersPage() {
   const [searchText, setSearchText] = useState("");
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
+  const [newOrderCount, setNewOrderCount] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   /* ================= INIT SOUND ================= */
@@ -152,6 +155,7 @@ useEffect(() => {
       async (payload) => {
 
         console.log("NEW ORDER:", payload);
+        setNewOrderCount((prev) => prev + 1);
 
         /* PLAY SOUND */
 
@@ -205,6 +209,21 @@ useEffect(() => {
 
 }, []);
   useEffect(() => {
+    }, []);
+
+/* ================= AUTO REFRESH ================= */
+
+useEffect(() => {
+
+  const interval = setInterval(() => {
+
+    window.location.reload();
+
+  }, 15000);
+
+  return () => clearInterval(interval);
+
+}, []);
     const load = async () => {
       try {
         setLoading(true);
