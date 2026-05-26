@@ -97,10 +97,17 @@ audioRef.current.preload = "auto";
 document.body.addEventListener(
   "click",
   () => {
+
     audioRef.current?.play().then(() => {
+
       audioRef.current?.pause();
-      audioRef.current.currentTime = 0;
+
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+      }
+
     });
+
   },
   { once: true }
 );
