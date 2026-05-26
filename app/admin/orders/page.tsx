@@ -563,14 +563,39 @@ useEffect(() => {
   }
 const tabCounts = useMemo(() => {
 
-  const counts: Record<string, number> = {};
+  const counts: Record<string, number> = {
 
-  TABS.forEach((tab) => {
+    booked: 0,
 
-    counts[tab.key] =
-      allOrders[tab.key]?.length || 0;
+    verification: 0,
 
-  });
+    neworder: 0,
+
+    inkitchen: 0,
+
+    outfordelivery: 0,
+
+    delivered: 0,
+
+    cancelled: 0,
+
+    notdelivered: 0,
+
+    baddelivery: 0,
+
+  };
+
+  Object.values(allOrders)
+    .flat()
+    .forEach((o) => {
+
+      if (counts[o.status] !== undefined) {
+
+        counts[o.status]++;
+
+      }
+
+    });
 
   return counts;
 
