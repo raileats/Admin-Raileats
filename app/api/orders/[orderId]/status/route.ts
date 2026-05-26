@@ -22,15 +22,16 @@ export async function PATCH(
     }
 
     const allowedStatuses = [
-      "Booked",
-      "In Verification",
-      "In Kitchen",
-      "Out for Delivery",
-      "Delivered",
-      "Cancelled",
-      "Not Delivered",
-      "Bad Delivery",
-    ];
+  "Booked",
+  "In Verification",
+  "New Order",
+  "In Kitchen",
+  "Out for Delivery",
+  "Delivered",
+  "Cancelled",
+  "Not Delivered",
+  "Bad Delivery",
+];
 
     if (!allowedStatuses.includes(newStatus)) {
       return NextResponse.json(
