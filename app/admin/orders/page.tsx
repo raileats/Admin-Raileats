@@ -86,7 +86,19 @@ export default function AdminOrdersPage() {
   const [searchText, setSearchText] = useState("");
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
-  const [newOrderCount, setNewOrderCount] = useState<number>(0);
+  const [newOrderCount, setNewOrderCount] = useState<number>(() => {
+
+  if (typeof window !== "undefined") {
+
+    return Number(
+      localStorage.getItem("raileats_new_orders") || 0
+    );
+
+  }
+
+  return 0;
+
+});
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   /* ================= INIT SOUND ================= */
@@ -157,11 +169,16 @@ useEffect(() => {
         console.log("NEW ORDER:", payload);
         setNewOrderCount((prev) => {
 
-  const next = prev + 1;
+  const updated = prev + 1;
 
-  console.log("Bell Count:", next);
+  console.log("Bell Updated:", updated);
 
-  return next;
+  localStorage.setItem(
+    "raileats_new_orders",
+    String(updated)
+  );
+
+  return updated;
 
 });
         setNewOrderCount((prev) => prev + 1);
@@ -512,7 +529,15 @@ useEffect(() => {
 
     <Link
       href="/admin/orders"
-      onClick={() => setNewOrderCount(0)}
+      onClick={() => {
+
+  setNewOrderCount(0);
+
+  localStorage.removeItem(
+    "raileats_new_orders"
+  );
+
+}}
       style={{
         position: "relative",
         display: "flex",
