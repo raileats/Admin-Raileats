@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 type TabKey =
   | "booked"
@@ -61,7 +62,10 @@ const FINAL_MARK_OPTIONS = [
   { key: "notdelivered", label: "Not Delivered", dbValue: "Not Delivered" },
   { key: "baddelivery", label: "Bad Delivery", dbValue: "Bad Delivery" },
 ] as const;
-
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 type SearchType =
   | "customerMobile"
   | "orderId"
@@ -80,7 +84,93 @@ export default function AdminOrdersPage() {
   const [searchText, setSearchText] = useState("");
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  /* ================= INIT SOUND ================= */
+
+useEffect(() => {
+
+  audioRef.current = new Audio("/sounds/new-order.mp3");
+
+  audioRef.current.volume = 1;
+
+  if (Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
+
+}, []);
+
+/* ================= REALTIME ORDERS ================= */
+
+useEffect(() => {
+
+  const channel = supabase
+
+    .channel("admin-orders-live")
+
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "orders",
+      },
+
+      async (payload) => {
+
+        console.log("NEW ORDER:", payload);
+
+        /* PLAY SOUND */
+
+        try {
+
+          if (audioRef.current) {
+
+            audioRef.current.currentTime = 0;
+
+            await audioRef.current.play();
+
+          }
+
+        } catch (e) {
+
+          console.log("sound blocked");
+
+        }
+
+        /* NOTIFICATION */
+
+        try {
+
+          if (Notification.permission === "granted") {
+
+            new Notification("🚆 New RailEats Order", {
+
+              body:
+                `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
+
+            });
+
+          }
+
+        } catch (e) {}
+
+        /* AUTO RELOAD */
+
+        window.location.reload();
+
+      }
+    )
+
+    .subscribe();
+
+  return () => {
+
+    supabase.removeChannel(channel);
+
+  };
+
+}, []);
   useEffect(() => {
     const load = async () => {
       try {
