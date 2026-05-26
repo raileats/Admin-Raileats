@@ -92,6 +92,18 @@ useEffect(() => {
 
   audioRef.current = new Audio("/sounds/new-order.mp3");
 
+audioRef.current.preload = "auto";
+
+document.body.addEventListener(
+  "click",
+  () => {
+    audioRef.current?.play().then(() => {
+      audioRef.current?.pause();
+      audioRef.current.currentTime = 0;
+    });
+  },
+  { once: true }
+);
   audioRef.current.volume = 1;
 
   if (Notification.permission !== "granted") {
