@@ -954,92 +954,102 @@ const tabCounts = useMemo(() => {
     "outfordelivery",
   ].includes(o.status) ? (
 
+    <div
+  style={{
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  }}
+>
+
+  <button
+    onClick={() => {
+      if (!confirm(`Move ${o.id} to next status?`)) return;
+      moveOrderToNext(o.id);
+    }}
+    style={{
+      padding: "8px 10px",
+      borderRadius: 6,
+      background: "#273e9a",
+      color: "#fff",
+      border: "none",
+      cursor: "pointer",
+      fontWeight: "bold",
+    }}
+  >
+    {NEXT_MAP[o.status]?.actionLabel}
+  </button>
+
+  {(
+    o.status === "booked" ||
+    o.status === "verification" ||
+    o.status === "neworder"
+  ) && (
+
     <button
       onClick={() => {
-        if (!confirm(`Move ${o.id} to next status?`)) return;
-        moveOrderToNext(o.id);
+
+        setSelectedOrder(o);
+
+        setActionType("cancel");
+
+        setSubStatus("");
+
+        setRemarks("");
+
+        setStatusModalOpen(true);
+
       }}
       style={{
         padding: "8px 10px",
         borderRadius: 6,
-        background: "#273e9a",
+        background: "#dc2626",
         color: "#fff",
         border: "none",
         cursor: "pointer",
         fontWeight: "bold",
       }}
     >
-      {NEXT_MAP[o.status]?.actionLabel}
+      Cancel
     </button>
-    {(
-  o.status === "booked" ||
-  o.status === "verification" ||
-  o.status === "neworder"
-) && (
 
-  <button
-    onClick={() => {
+  )}
 
-      setSelectedOrder(o);
+  {(
+    o.status === "inkitchen" ||
+    o.status === "outfordelivery"
+  ) && (
 
-      setActionType("cancel");
+    <button
+      onClick={() => {
 
-      setSubStatus("");
+        setSelectedOrder(o);
 
-      setRemarks("");
+        setActionType("mark");
 
-      setStatusModalOpen(true);
+        setSubStatus("");
 
-    }}
-    style={{
-      padding: "8px 10px",
-      borderRadius: 6,
-      background: "#dc2626",
-      color: "#fff",
-      border: "none",
-      cursor: "pointer",
-      fontWeight: "bold",
-      marginLeft: 8,
-    }}
-  >
-    Cancel
-  </button>
+        setRemarks("");
 
-)}
-                    {(
-  o.status === "inkitchen" ||
-  o.status === "outfordelivery"
-) && (
+        setStatusModalOpen(true);
 
-  <button
-    onClick={() => {
+      }}
+      style={{
+        padding: "8px 10px",
+        borderRadius: 6,
+        background: "#111827",
+        color: "#fff",
+        border: "none",
+        cursor: "pointer",
+        fontWeight: "bold",
+      }}
+    >
+      Mark Status
+    </button>
 
-      setSelectedOrder(o);
+  )}
 
-      setActionType("mark");
-
-      setSubStatus("");
-
-      setRemarks("");
-
-      setStatusModalOpen(true);
-
-    }}
-    style={{
-      padding: "8px 10px",
-      borderRadius: 6,
-      background: "#111827",
-      color: "#fff",
-      border: "none",
-      cursor: "pointer",
-      fontWeight: "bold",
-      marginLeft: 8,
-    }}
-  >
-    Mark Status
-  </button>
-
-)}
+</div>
 
   ) : (
 
