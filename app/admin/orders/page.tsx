@@ -419,7 +419,32 @@ useEffect(() => {
   tabStatus = "neworder";
           else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") tabStatus = "inkitchen";
           else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") tabStatus = "outfordelivery";
-          else if (lowerRaw === "delivered") tabStatus = "delivered";
+          else if (lowerRaw === "delivered") {
+
+  const sub =
+    String(
+      row.subStatus ??
+      row.SubStatus ??
+      ""
+    )
+      .toLowerCase()
+      .trim();
+
+  if (
+    sub === "bad delivery"
+  ) {
+
+    tabStatus = "baddelivery";
+
+  }
+
+  else {
+
+    tabStatus = "delivered";
+
+  }
+
+}
           else if (lowerRaw === "cancelled") tabStatus = "cancelled";
           else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") tabStatus = "notdelivered";
           else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") tabStatus = "baddelivery";
