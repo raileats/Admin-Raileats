@@ -861,30 +861,31 @@ style={{
 
 
 {tab.label}
+{tab.label}
+
 <span
-  style={{background: active? "#1d4ed8": "#e5e7eb",
+  style={{
+    background: active ? "#1d4ed8" : "#e5e7eb",
+    color: active ? "#fff" : "#111827",
+    borderRadius: 999,
+    minWidth: 20,
+    height: 20,
+    padding: "0 6px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 11,
+    fontWeight: 700,
+    marginLeft: 8,
+  }}
+>
+  {tabCounts[tab.key] || 0}
+</span>
 
-  color: active
-    ? "#fff"
-    : "#111827",
+</button>
 
-  borderRadius: 999,
-  minWidth: 20,
-  height: 20,
-  padding: "0 6px",
-
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-
-  fontSize: 11,
-  fontWeight: 700,
-}}
-
-
-
-{tabCounts[tab.key] || 0}
-
+);
+})}
   <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
     <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ fontWeight: 600 }}>Search by</span>
