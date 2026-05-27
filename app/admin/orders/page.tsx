@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Bell } from "lucide-react";
+import { Bell, Eye, Clock, ShieldCheck, ShoppingBag, Smartphone, Train, MapPin } from "lucide-react";
 import Link from "next/link";
 
 type TabKey =
@@ -70,7 +70,6 @@ const DELIVERED_REASONS = [
   "Bad Delivery",
 ];
 
-// MAPS EVERYTHING TO THE EXACT SUPABASE ENUM CASING
 const NEXT_MAP: Record<
   TabKey,
   {
@@ -141,7 +140,7 @@ export default function AdminOrdersPage() {
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>({} as Record<TabKey, Order[]>);
   const [loading, setLoading] = useState(false);
   
-  // Modal states
+  // Existing modal states retained completely
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [actionType, setActionType] = useState("");
@@ -161,6 +160,17 @@ export default function AdminOrdersPage() {
     }
     return 0;
   });
+
+  // Upgraded Diagnostics Real-time Analytics States
+  const [viewDrawerOpen, setViewDrawerOpen] = useState(false);
+  const [detailedOrder, setDetailedOrder] = useState<any>(null);
+  const [fetchedItems, setFetchedItems] = useState<any[]>([]);
+  const [fetchedRestro, setFetchedRestro] = useState<any>(null);
+  const [orderLogs, setOrderLogs] = useState<any[]>([]);
+  
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [loadingRestro, setLoadingRestro] = useState(false);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -311,6 +321,70 @@ export default function AdminOrdersPage() {
 
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
 
+  // Sync drawer context real-time state if global allOrders list transforms under active workflow
+  useEffect(() => {
+    if (detailedOrder) {
+      const liveFlatArray = Object.values(allOrders).flat();
+      const matchUpdate = liveFlatArray.find(o => o.id === detailedOrder.id);
+      if (matchUpdate) {
+        setDetailedOrder(matchUpdate);
+      }
+    }
+  }, [allOrders]);
+
+  /* ================= RELATIONAL DRAW DATA RECRUITER LAYER ================= */
+  const handleOpenDiagnosticsDrawer = async (order: Order) => {
+    setDetailedOrder(order);
+    setViewDrawerOpen(true);
+    
+    const targetOrderId = order.id;
+    const targetRestroCode = order.outletId;
+
+    // 1. Core OrderItems Grid Pull
+    if (targetOrderId) {
+      setLoadingItems(true);
+      setFetchedItems([]);
+      try {
+        const { data, error } = await supabase
+          .from("OrderItems")
+          .select("*")
+          .eq("OrderId", targetOrderId);
+        if (!error && data) setFetchedItems(data);
+      } catch (e) { console.error("Error connecting OrderItems database links:", e); }
+      finally { setLoadingItems(false); }
+    }
+
+    // 2. Core RestroMaster Compliance Pull
+    if (targetRestroCode) {
+      setLoadingRestro(true);
+      setFetchedRestro(null);
+      try {
+        const { data, error } = await supabase
+          .from("RestroMaster")
+          .select("*")
+          .eq("RestroCode", targetRestroCode)
+          .maybeSingle();
+        if (!error && data) setFetchedRestro(data);
+      } catch (e) { console.error("Error connecting RestroMaster database links:", e); }
+      finally { setLoadingRestro(false); }
+    }
+
+    // 3. Chronological Process OrderStatusHistory Pull
+    if (targetOrderId) {
+      setLoadingLogs(true);
+      setOrderLogs([]);
+      try {
+        const { data, error } = await supabase
+          .from("OrderStatusHistory")
+          .select("*")
+          .eq("OrderId", targetOrderId)
+          .order("ChangedAt", { ascending: true });
+        if (!error && data) setOrderLogs(data);
+      } catch (e) { console.error("Error connecting OrderStatusHistory database links:", e); }
+      finally { setLoadingLogs(false); }
+    }
+  };
+
   function moveOrderToNext(orderId: string) {
     const current = allOrders[activeTab] ?? [];
     const idx = current.findIndex((o) => o.id === orderId);
@@ -363,6 +437,18 @@ export default function AdminOrdersPage() {
           copy[nextStatus] = [updated, ...(copy[nextStatus] ?? [])];
           return copy;
         });
+
+        // Trigger dynamic history re-sync if administrative user transitions order state inside drawer view
+        if (viewDrawerOpen && detailedOrder && detailedOrder.id === orderId) {
+          try {
+            const { data: logReload } = await supabase
+              .from("OrderStatusHistory")
+              .select("*")
+              .eq("OrderId", orderId)
+              .order("ChangedAt", { ascending: true });
+            if (logReload) setOrderLogs(logReload);
+          } catch (err) { console.error(err); }
+        }
       } catch (e) {
         alert("Failed to change status (network error)");
       }
@@ -436,6 +522,18 @@ export default function AdminOrdersPage() {
         return copy;
       });
 
+      // Synchronous live sequence data fetch if action modal alters state parameters inside view
+      if (viewDrawerOpen && detailedOrder && detailedOrder.id === selectedOrder.id) {
+        try {
+          const { data: logReload } = await supabase
+            .from("OrderStatusHistory")
+            .select("*")
+            .eq("OrderId", selectedOrder.id)
+            .order("ChangedAt", { ascending: true });
+          if (logReload) setOrderLogs(logReload);
+        } catch (err) { console.error(err); }
+      }
+
       // Close modal and reset states
       setStatusModalOpen(false);
       setSelectedOrder(null);
@@ -507,6 +605,17 @@ export default function AdminOrdersPage() {
           return cp;
         });
 
+        if (viewDrawerOpen && detailedOrder && detailedOrder.id === order.id) {
+          try {
+            const { data: logReload } = await supabase
+              .from("OrderStatusHistory")
+              .select("*")
+              .eq("OrderId", order.id)
+              .order("ChangedAt", { ascending: true });
+            if (logReload) setOrderLogs(logReload);
+          } catch (err) { console.error(err); }
+        }
+
         setActiveTab(targetKey);
       } catch (e) {
         alert("Failed to change status (network error)");
@@ -573,7 +682,7 @@ export default function AdminOrdersPage() {
   const visibleOrders = useMemo(() => applyFilters(orders), [orders, searchText, searchDate, searchType, searchOutlet]);
 
   return (
-    <section style={{ padding: 12 }}>
+    <section style={{ padding: 12, minHeight: "100vh", background: "#f8fafc", fontFamily: "sans-serif" }}>
       <header
         style={{
           display: "flex",
@@ -581,11 +690,15 @@ export default function AdminOrdersPage() {
           alignItems: "center",
           gap: 12,
           marginBottom: 12,
+          background: "#fff",
+          padding: 16,
+          borderRadius: 12,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
         }}
       >
         <div>
-          <h1 style={{ margin: 0, fontSize: 28 }}>Orders</h1>
-          <p style={{ margin: 0, color: "#6b7280" }}>Manage orders &amp; mark statuses</p>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#0f172a" }}>Orders</h1>
+          <p style={{ margin: 0, color: "#6b7280", fontSize: 13, fontWeight: 500 }}>Manage orders &amp; mark statuses</p>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -628,8 +741,8 @@ export default function AdminOrdersPage() {
             )}
           </Link>
 
-          <div style={{ color: "#6b7280" }}>
-            Showing: <strong>{TABS.find((t) => t.key === activeTab)?.label}</strong>
+          <div style={{ color: "#6b7280", fontSize: 13, fontWeight: 600 }}>
+            Showing: <strong style={{ color: "#0f172a" }}>{TABS.find((t) => t.key === activeTab)?.label}</strong>
             {loading ? " • Loading…" : ""}
           </div>
         </div>
@@ -653,6 +766,7 @@ export default function AdminOrdersPage() {
                 background: active ? "#fff" : "#f8fafc",
                 fontWeight: active ? 700 : 600,
                 cursor: "pointer",
+                transition: "all 0.2s"
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -681,10 +795,10 @@ export default function AdminOrdersPage() {
       </div>
 
       {/* FILTER CONTROLS */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontWeight: 600 }}>Search by</span>
-          <select value={searchType} onChange={(e) => setSearchType(e.target.value as SearchType)}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap", background: "#fff", padding: 12, borderRadius: 10, border: "1px solid #e6e8eb" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "#475569" }}>
+          <span>Search by</span>
+          <select value={searchType} onChange={(e) => setSearchType(e.target.value as SearchType)} style={{ padding: 6, borderRadius: 6, border: "1px solid #cbd5e1" }}>
             <option value="orderId">Order ID</option>
             <option value="customerMobile">Customer Mobile</option>
             <option value="outletId">Outlet ID / Name</option>
@@ -695,7 +809,7 @@ export default function AdminOrdersPage() {
         </label>
 
         {searchType === "deliveryDate" ? (
-          <input type="date" value={searchDate} onChange={(e) => setSearchDate(e.target.value)} />
+          <input type="date" value={searchDate} onChange={(e) => setSearchDate(e.target.value)} style={{ padding: 6, borderRadius: 6, border: "1px solid #cbd5e1" }} />
         ) : (
           <input
             placeholder={
@@ -706,7 +820,7 @@ export default function AdminOrdersPage() {
             }
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ padding: 8, borderRadius: 6, border: "1px solid #e6e8eb", minWidth: 220 }}
+            style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", minWidth: 220, fontSize: 13 }}
           />
         )}
 
@@ -714,7 +828,7 @@ export default function AdminOrdersPage() {
           placeholder="Filter by outlet (optional)"
           value={searchOutlet}
           onChange={(e) => setSearchOutlet(e.target.value)}
-          style={{ padding: 8, borderRadius: 6, border: "1px solid #e6e8eb", minWidth: 180 }}
+          style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", minWidth: 180, fontSize: 13 }}
         />
 
         <button
@@ -723,224 +837,256 @@ export default function AdminOrdersPage() {
             setSearchDate("");
             setSearchOutlet("");
           }}
-          style={{ padding: "8px 12px", borderRadius: 6 }}
+          style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f1f5f9", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
         >
           Reset
         </button>
       </div>
 
       {/* TABLE VIEW */}
-      <div style={{ background: "#fff", borderRadius: 8, padding: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.03)" }}>
+      <div style={{ background: "#fff", borderRadius: 8, padding: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.03)", border: "1px solid #e2e8f0" }}>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1200 }}>
-            <thead style={{ textAlign: "left", borderBottom: "1px solid #e6e8eb" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1300 }}>
+            <thead style={{ textAlign: "left", borderBottom: "2px solid #edf2f7", background: "#f8fafc", fontSize: 13, color: "#475569" }}>
               <tr>
-                <th style={{ padding: 10 }}>Order ID</th>
-                <th style={{ padding: 10 }}>Outlet ID</th>
-                <th style={{ padding: 10 }}>Outlet Name</th>
-                <th style={{ padding: 10 }}>Station Code</th>
-                <th style={{ padding: 10 }}>Station Name</th>
-                <th style={{ padding: 10 }}>Delivery Date</th>
-                <th style={{ padding: 10 }}>Delivery Time</th>
-                <th style={{ padding: 10 }}>Train No.</th>
-                <th style={{ padding: 10 }}>Coach</th>
-                <th style={{ padding: 10 }}>Seat</th>
-                <th style={{ padding: 10 }}>Customer Name</th>
-                <th style={{ padding: 10 }}>Customer Mobile</th>
-                <th style={{ padding: 10 }}>Order History</th>
-                <th style={{ padding: 10 }}>Action</th>
+                <th style={{ padding: 12 }}>Order ID</th>
+                <th style={{ padding: 12 }}>Outlet ID</th>
+                <th style={{ padding: 12 }}>Outlet Name</th>
+                <th style={{ padding: 12 }}>Station Code</th>
+                <th style={{ padding: 12 }}>Station Name</th>
+                <th style={{ padding: 12 }}>Delivery Date</th>
+                <th style={{ padding: 12 }}>Delivery Time</th>
+                <th style={{ padding: 12 }}>Train No.</th>
+                <th style={{ padding: 12 }}>Coach</th>
+                <th style={{ padding: 12 }}>Seat</th>
+                <th style={{ padding: 12 }}>Customer Name</th>
+                <th style={{ padding: 12 }}>Customer Mobile</th>
+                <th style={{ padding: 12 }}>Order History</th>
+                <th style={{ padding: 12, textAlign: "center" }}>Action Module Logs</th>
               </tr>
             </thead>
 
-            <tbody>
+            <tbody style={{ fontSize: 13, color: "#334155" }}>
               {visibleOrders.map((o) => (
-                <tr key={o.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                  <td style={{ padding: 10 }}>{o.id}</td>
-                  <td style={{ padding: 10 }}>{o.outletId}</td>
-                  <td style={{ padding: 10 }}>{o.outletName}</td>
-                  <td style={{ padding: 10 }}>{o.stationCode}</td>
-                  <td style={{ padding: 10 }}>{o.stationName}</td>
-                  <td style={{ padding: 10 }}>{o.deliveryDate}</td>
-                  <td style={{ padding: 10 }}>{o.deliveryTime}</td>
-                  <td style={{ padding: 10 }}>{o.trainNo}</td>
-                  <td style={{ padding: 10 }}>{o.coach}</td>
-                  <td style={{ padding: 10 }}>{o.seat}</td>
-                  <td style={{ padding: 10 }}>{o.customerName}</td>
-                  <td style={{ padding: 10 }}>{o.customerMobile}</td>
+                <tr key={o.id} style={{ borderBottom: "1px solid #f1f5f9" }} className="table-row-hover">
+                  <td style={{ padding: 12, fontWeight: 700, color: "#1e3a8a" }}>#{o.id}</td>
+                  <td style={{ padding: 12 }}><span style={{ background: "#f1f5f9", padding: "3px 6px", borderRadius: 4, fontWeight: 600 }}>{o.outletId}</span></td>
+                  <td style={{ padding: 12, fontWeight: 600 }}>{o.outletName}</td>
+                  <td style={{ padding: 12 }}><span style={{ background: "#eff6ff", color: "#2563eb", padding: "3px 6px", borderRadius: 4, fontWeight: 600 }}>{o.stationCode}</span></td>
+                  <td style={{ padding: 12 }}>{o.stationName}</td>
+                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>{o.deliveryDate}</td>
+                  <td style={{ padding: 12, fontWeight: 600, color: "#0284c7" }}>{o.deliveryTime}</td>
+                  <td style={{ padding: 12 }}>🚂 {o.trainNo || "-"}</td>
+                  <td style={{ padding: 12 }}>{o.coach || "-"}</td>
+                  <td style={{ padding: 12 }}>{o.seat || "-"}</td>
+                  <td style={{ padding: 12, fontWeight: 600 }}>{o.customerName}</td>
+                  <td style={{ padding: 12, fontMono: "true" }}>{o.customerMobile}</td>
 
-                  <td style={{ padding: 10, maxWidth: 260 }}>
-                    <details>
-                      <summary style={{ cursor: "pointer", color: "#2563eb" }}>View ({o.history.length})</summary>
-                      <ul style={{ marginTop: 8, paddingLeft: 14 }}>
+                  <td style={{ padding: 12, maxWidth: 220 }}>
+                    <details style={{ background: "#f8fafc", padding: 6, borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                      <summary style={{ cursor: "pointer", color: "#2563eb", fontWeight: 700 }}>Logs Stream ({o.history.length})</summary>
+                      <ul style={{ marginTop: 8, paddingLeft: 14, listStyleType: "circle", maxHeight: 150, overflowY: "auto" }}>
                         {o.history.map((h, i) => (
-                          <li key={i} style={{ marginBottom: 6 }}>
-                            <div style={{ fontSize: 12, color: "#6b7280" }}>{new Date(h.at).toLocaleString()}</div>
-                            <div style={{ fontStretch: "normal", fontWeight: 600 }}>{h.by}</div>
-                            <div style={{ fontSize: 13 }}>{h.note ?? TABS.find((t) => t.key === h.status)?.label}</div>
+                          <li key={i} style={{ marginBottom: 6, fontSize: 12 }}>
+                            <div style={{ color: "#94a3b8", fontSize: 10 }}>{new Date(h.at).toLocaleString()}</div>
+                            <div><strong>{h.by}</strong>: <span style={{ color: "#475569" }}>{h.note ?? TABS.find((t) => t.key === h.status)?.label}</span></div>
                           </li>
                         ))}
                       </ul>
                     </details>
                   </td>
 
-                  <td style={{ padding: 10, verticalAlign: "top" }}>
-                    {[
-                      "booked",
-                      "verification",
-                      "neworder",
-                      "inkitchen",
-                      "outfordelivery",
-                    ].includes(o.status) ? (
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button
-                          onClick={() => {
-                            if (!confirm(`Move ${o.id} to next status?`)) return;
-                            moveOrderToNext(o.id);
-                          }}
-                          style={{
-                            padding: "8px 10px",
-                            borderRadius: 6,
-                            background: "#273e9a",
-                            color: "#fff",
-                            border: "none",
-                            cursor: "pointer",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {NEXT_MAP[o.status]?.actionLabel}
-                        </button>
-
-                        {(o.status === "booked" || o.status === "verification" || o.status === "neworder") && (
+                  <td style={{ padding: 12, verticalAlign: "middle" }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                      
+                      {/* INLINE BUTTON MATRIX ACTION CONTROLLERS */}
+                      {[
+                        "booked",
+                        "verification",
+                        "neworder",
+                        "inkitchen",
+                        "outfordelivery",
+                      ].includes(o.status) ? (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "nowrap" }}>
                           <button
                             onClick={() => {
-                              setSelectedOrder(o);
-                              setActionType("cancel");
-                              setSubStatus("");
-                              setRemarks("");
-                              setStatusModalOpen(true);
+                              if (!confirm(`Move ${o.id} to next status?`)) return;
+                              moveOrderToNext(o.id);
                             }}
                             style={{
-                              padding: "8px 10px",
+                              padding: "6px 10px",
                               borderRadius: 6,
-                              background: "#dc2626",
+                              background: "#273e9a",
                               color: "#fff",
                               border: "none",
                               cursor: "pointer",
                               fontWeight: "bold",
+                              fontSize: 11,
+                              whiteSpace: "nowrap"
                             }}
                           >
-                            Cancel
+                            {NEXT_MAP[o.status]?.actionLabel}
                           </button>
-                        )}
 
-                        {(o.status === "inkitchen" || o.status === "outfordelivery") && (
-                          <button
-                            onClick={() => {
-                              setSelectedOrder(o);
-                              setActionType("mark");
-                              setSubStatus("");
-                              setRemarks("");
-                              setStatusModalOpen(true);
-                            }}
-                            style={{
-                              padding: "8px 10px",
-                              borderRadius: 6,
-                              background: "#111827",
-                              color: "#fff",
-                              border: "none",
-                              cursor: "pointer",
-                              fontWeight: "bold",
-                            }}
+                          {(o.status === "booked" || o.status === "verification" || o.status === "neworder") && (
+                            <button
+                              onClick={() => {
+                                setSelectedOrder(o);
+                                setActionType("cancel");
+                                setSubStatus("");
+                                setRemarks("");
+                                setStatusModalOpen(true);
+                              }}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: 6,
+                                background: "#dc2626",
+                                color: "#fff",
+                                border: "none",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                fontSize: 11
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          )}
+
+                          {(o.status === "inkitchen" || o.status === "outfordelivery") && (
+                            <button
+                              onClick={() => {
+                                setSelectedOrder(o);
+                                setActionType("mark");
+                                setSubStatus("");
+                                setRemarks("");
+                                setStatusModalOpen(true);
+                              }}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: 6,
+                                background: "#475569",
+                                color: "#fff",
+                                border: "none",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                fontSize: 11,
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              Mark Status
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                          <select
+                            value={marking[o.id]?.status || ""}
+                            onChange={(e) =>
+                              setMarking((prev) => ({
+                                ...prev,
+                                [o.id]: {
+                                  ...(prev[o.id] || { remarks: "" }),
+                                  status: e.target.value,
+                                },
+                              }))
+                            }
+                            style={{ padding: 5, borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 11 }}
                           >
-                            Mark Status
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 200 }}>
-                        <select
-                          value={marking[o.id]?.status || ""}
-                          onChange={(e) =>
-                            setMarking((prev) => ({
-                              ...prev,
-                              [o.id]: {
-                                ...(prev[o.id] || { remarks: "" }),
-                                status: e.target.value,
-                              },
-                            }))
-                          }
-                          style={{ padding: 8, borderRadius: 6, border: "1px solid #e6e8eb" }}
-                        >
-                          <option value="">Select status</option>
-                          {FINAL_MARK_OPTIONS.map((opt) => (
-                            <option key={opt.key} value={opt.key}>{opt.label}</option>
-                          ))}
-                        </select>
+                            <option value="">Select status</option>
+                            {FINAL_MARK_OPTIONS.map((opt) => (
+                              <option key={opt.key} value={opt.key}>{opt.label}</option>
+                            ))}
+                          </select>
 
-                        <input
-                          placeholder="Remarks (optional)"
-                          value={marking[o.id]?.remarks || ""}
-                          onChange={(e) =>
-                            setMarking((prev) => ({
-                              ...prev,
-                              [o.id]: {
-                                ...(prev[o.id] || { status: "" }),
-                                remarks: e.target.value,
-                              },
-                            }))
-                          }
-                          style={{ padding: 8, borderRadius: 6, border: "1px solid #e6e8eb" }}
-                        />
+                          <input
+                            placeholder="Remarks"
+                            value={marking[o.id]?.remarks || ""}
+                            onChange={(e) =>
+                              setMarking((prev) => ({
+                                ...prev,
+                                [o.id]: {
+                                  ...(prev[o.id] || { status: "" }),
+                                  remarks: e.target.value,
+                                },
+                              }))
+                            }
+                            style={{ padding: 5, borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 11, width: 100 }}
+                          />
 
-                        <div style={{ display: "flex", gap: 8 }}>
                           <button
                             onClick={() => submitMark(o)}
                             style={{
-                              padding: "8px 10px",
+                              padding: "6px 8px",
                               borderRadius: 6,
                               background: "#0f172a",
                               color: "#fff",
                               cursor: "pointer",
-                              flex: 1,
                               border: "none",
+                              fontSize: 11,
+                              fontWeight: "bold"
                             }}
                           >
-                            Submit
+                            Go
                           </button>
-                          <button
-                            onClick={() =>
-                              setMarking((prev) => {
-                                const cp = { ...prev };
-                                delete cp[o.id];
-                                return cp;
-                              })
-                            }
-                            style={{
-                              padding: "8px 10px",
-                              borderRadius: 6,
-                              border: "1px solid #e6e8eb",
-                              background: "#fff",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Clear
-                          </button>
+                          {marking[o.id] && (
+                            <button
+                              onClick={() =>
+                                setMarking((prev) => {
+                                  const cp = { ...prev };
+                                  delete cp[o.id];
+                                  return cp;
+                                })
+                              }
+                              style={{
+                                padding: "5px 6px",
+                                borderRadius: 6,
+                                border: "1px solid #cbd5e1",
+                                background: "#fff",
+                                cursor: "pointer",
+                                fontSize: 11
+                              }}
+                            >
+                              ✕
+                            </button>
+                          )}
                         </div>
-                      </div>
-                    )}
+                      )}
+
+                      {/* UNINTERRUPTED COMPLIANCE INTEGRATION TRIGGER POINT BUTTON */}
+                      <button
+                        onClick={() => handleOpenDiagnosticsDrawer(o)}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          background: "#0284c7",
+                          color: "#fff",
+                          border: "none",
+                          cursor: "pointer",
+                          fontWeight: "bold",
+                          fontSize: 11,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+                        }}
+                      >
+                        <Eye size={13} /> View &amp; Logs
+                      </button>
+
+                    </div>
                   </td>
                 </tr>
               ))}
 
               {!loading && visibleOrders.length === 0 && (
                 <tr>
-                  <td colSpan={14} style={{ padding: 20, color: "#6b7280" }}>No orders found for this tab / filter.</td>
+                  <td colSpan={14} style={{ padding: 30, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>No orders found matching tab constraints or filters.</td>
                 </tr>
               )}
 
               {loading && (
                 <tr>
-                  <td colSpan={14} style={{ padding: 20, color: "#6b7280" }}>Loading orders…</td>
+                  <td colSpan={14} style={{ padding: 30, textAlign: "center", color: "#64748b", fontWeight: 600 }}>Syncing active stream pipelines...</td>
                 </tr>
               )}
             </tbody>
@@ -948,7 +1094,225 @@ export default function AdminOrdersPage() {
         </div>
       </div>
 
-      {/* MAIN STATUS ACTIONS MODAL (Properly Built & Closed) */}
+      {/* ========================================================================= */}
+      {/* DEEP DIAGNOSTICS ARCHITECTURE SLIDING DRAWER FRAMEWORK (NEW SYSTEM INTELLIGENCE) */}
+      {/* ========================================================================= */}
+      {viewDrawerOpen && detailedOrder && (
+        <div 
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            zIndex: 999,
+            display: "flex",
+            justifyContent: "flex-end",
+            animation: "fadeIn 0.2s ease"
+          }}
+          onClick={() => { setViewDrawerOpen(false); setDetailedOrder(null); }}
+        >
+          <div 
+            style={{
+              width: "100%",
+              maxWidth: "680px",
+              height: "100%",
+              background: "#ffffff",
+              boxShadow: "-10px 0 25px rgba(0,0,0,0.15)",
+              display: "flex",
+              flexDirection: "column",
+              animation: "slideLeft 0.25s ease-out",
+              overflow: "hidden"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            
+            {/* DRAWER HEADER CONSOLE ROW WITH PARALLEL UTILITY BUTTON DUPLICATES */}
+            <div style={{ background: "#f8fafc", padding: "18px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px" }}>Audit Diagnostics Sheet</h2>
+                  <span style={{ background: "#2563eb", color: "#fff", fontWeight: 800, fontSize: "11px", padding: "2px 8px", borderRadius: "5px" }}>#{detailedOrder.id}</span>
+                </div>
+                <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#64748b", fontWeight: 600 }}>
+                  CURRENT PIPELINE STATE: <span style={{ color: "#1e40af", fontWeight: 800 }}>"{detailedOrder.dbStatus || detailedOrder.status}"</span>
+                </p>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {["booked", "verification", "neworder", "inkitchen", "outfordelivery"].includes(detailedOrder.status) && (
+                  <button
+                    onClick={() => {
+                      if (!confirm(`Move ${detailedOrder.id} to next status?`)) return;
+                      moveOrderToNext(detailedOrder.id);
+                    }}
+                    style={{ padding: "8px 12px", background: "#2563eb", color: "#white", color: "#fff", border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "11px", cursor: "pointer" }}
+                  >
+                    🚀 Advance Stage
+                  </button>
+                )}
+                
+                {["booked", "verification", "neworder"].includes(detailedOrder.status) && (
+                  <button
+                    onClick={() => {
+                      setSelectedOrder(detailedOrder);
+                      setActionType("cancel");
+                      setSubStatus("");
+                      setRemarks("");
+                      setStatusModalOpen(true);
+                    }}
+                    style={{ padding: "8px 12px", background: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "8px", fontWeight: 700, fontSize: "11px", cursor: "pointer" }}
+                  >
+                    🚫 Cancel
+                  </button>
+                )}
+
+                <button 
+                  onClick={() => { setViewDrawerOpen(false); setDetailedOrder(null); }}
+                  style={{ width: "32px", height: "32px", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "50%", cursor: "pointer", fontWeight: "bold", color: "#64748b", display: "flex", alignItems: "center", justifyValue: "center", justifyContent: "center" }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* CORE INNER DRAWER AREA PANELS (SCROLLABLE CONTAINER) */}
+            <div style={{ flex: 1, padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "24px" }}>
+              
+              {/* PANEL BLOCK A: TRANSIT PROFILE METRIC DATA */}
+              <div style={{ background: "#f8fafc", borderRadius: "12px", padding: "16px", border: "1px solid #e2e8f0" }}>
+                <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Smartphone size={14} /> Client Transit Profile &amp; Route Schedule
+                </h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", fontSize: "13px", fontWeight: "600", color: "#334155" }}>
+                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Client Full Name:</span>{detailedOrder.customerName || "Guest User"}</div>
+                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Contact Phone:</span>{detailedOrder.customerMobile || "N/A"}</div>
+                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Transit Train Engine:</span>🚂 Train {detailedOrder.trainNo || "N/A"}</div>
+                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Coach &amp; Berth Location:</span>💺 Coach {detailedOrder.coach || "-"} / Seat {detailedOrder.seat || "-"}</div>
+                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Delivery Date Target:</span>📅 {detailedOrder.deliveryDate}</div>
+                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Delivery Window Time:</span>🕒 {detailedOrder.deliveryTime}</div>
+                  <div style={{ gridColumn: "span 2" }}><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Destination Station:</span>📍 {detailedOrder.stationName} ({detailedOrder.stationCode})</div>
+                </div>
+              </div>
+
+              {/* PANEL BLOCK B: DYNAMIC LIVE FETCHED BASKET BREAKDOWN GRID (OrderItems LINK) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <ShoppingBag size={14} /> Food Basket Summary Breakdown
+                </h3>
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", textAlignment: "left" }}>
+                    <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", textAlign: "left" }}>
+                      <tr>
+                        <th style={{ padding: "10px 16px" }}>Item Name &amp; Specifications</th>
+                        <th style={{ padding: "10px 16px", textAlign: "center" }}>Qty</th>
+                        <th style={{ padding: "10px 16px", textAlign: "right" }}>Line Total</th>
+                      </tr>
+                    </thead>
+                    <tbody style={{ color: "#334155", fontWeight: 600 }}>
+                      {loadingItems ? (
+                        <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>Pulling basket array logs rows stream...</td></tr>
+                      ) : fetchedItems.length > 0 ? (
+                        fetchedItems.map((item: any, idx: number) => (
+                          <tr key={item.ItemId || idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                            <td style={{ padding: "12px 16px", fontWeight: 700, color: "#0f172a" }}>{item.ItemName}</td>
+                            <td style={{ padding: "12px 16px", textAlign: "center", color: "#2563eb", fontWeight: 800 }}>× {item.Quantity}</td>
+                            <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "monospace" }}>₹{item.LineTotal || (Number(item.SellingPrice || 0) * Number(item.Quantity || 1))}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>No complementary data records found inside OrderItems table mapping this OrderId.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Gross Summary Overlay */}
+                <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", fontSize: "13px", fontWeight: 600, display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div style={{ display: "flex", justifyValue: "space-between", justifyContent: "space-between", color: "#64748b" }}><span>Total Base Value Collection:</span><span style={{ color: "#334155" }}>₹{detailedOrder.total || "0"}</span></div>
+                  <div style={{ display: "flex", justifyValue: "space-between", justifyContent: "space-between", color: "#0f172a", fontWeight: 800, fontSize: "14px", paddingTop: "6px", borderTop: "1px dashed #cbd5e1" }}>
+                    <span>Gross Account Payable:</span>
+                    <span style={{ color: "#1e3a8a" }}>₹{detailedOrder.total || "0"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* PANEL BLOCK C: LIVE VENDOR COMPLIANCE INTERACTION PANEL (RestroMaster LINK) */}
+              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "12px", padding: "16px" }}>
+                <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#1e40af", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <ShieldCheck size={14} style={{ color: "#2563eb" }} /> Restaurant Compliance &amp; Corporate License Audit
+                </h3>
+                {loadingRestro ? (
+                  <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Scanning vendor registration matrix indices data...</p>
+                ) : fetchedRestro ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px", fontSize: "13px", fontWeight: "600", color: "#334155" }}>
+                    <div><span style={{ color: "#3b82f6", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Restro Code Link:</span><span style={{ color: "#1e3a8a", fontWeight: 800 }}>{fetchedRestro.RestroCode || "N/A"}</span></div>
+                    <div><span style={{ color: "#3b82f6", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Registered Corporate Title:</span><span style={{ color: "#0f172a", fontWeight: 700 }}>{fetchedRestro.RestroName || "N/A"}</span></div>
+                    <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Operational Timing Window:</span>🕒 {fetchedRestro.open_time || "N/A"} - {fetchedRestro.closed_time || "N/A"}</div>
+                    <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Registration Number:</span><span style={{ fontFamily: "monospace", letterSpacing: "0.3px" }}>{fetchedRestro.FSSAINumber || "N/A"}</span></div>
+                    <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Legal Timeline Expiry:</span><span style={{ color: "#b45309" }}>{fetchedRestro.FSSAIExpiryDate || "N/A"}</span></div>
+                    <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Corporate GSTIN Ledger ID:</span><span style={{ fontFamily: "monospace" }}>{fetchedRestro.GSTNumber || "N/A"}</span></div>
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>No corresponding matching row located inside RestroMaster for code link: "{detailedOrder.outletId}"</p>
+                )}
+              </div>
+
+              {/* PANEL BLOCK D: CHRONOLOGICAL SEQUENCE STEP HISTORY TIMELINE (OrderStatusHistory LINK) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Clock size={14} /> Chronological Operational Lifecycle Milestones ({orderLogs.length})
+                </h3>
+                
+                {loadingLogs ? (
+                  <p style={{ fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Compiling log history checkpoints data chunks stream...</p>
+                ) : orderLogs.length === 0 ? (
+                  <div style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", padding: "12px", borderRadius: "8px", fontSize: "12px", fontWeight: 600 }}>
+                    ⚠️ No historic sequence checkpoints tracked for this pipeline order entity yet.
+                  </div>
+                ) : (
+                  <div style={{ position: "relative", borderLeft: "2px dashed #e2e8f0", paddingLeft: "18px", marginLeft: "6px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                    {orderLogs.map((log: any, idx: number) => (
+                      <div key={log.Id || idx} style={{ position: "relative" }}>
+                        
+                        {/* Circle Bullet Element Node */}
+                        <span style={{ position: "absolute", left: "-24px", top: "4px", background: "#2563eb", width: "10px", height: "10px", borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
+                        
+                        {/* Transaction Card Row Content Grid */}
+                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px", fontSize: "12px" }}>
+                            <span style={{ fontWeight: 800, color: "#0f172a" }}>Stage Traversed: <span style={{ color: "#2563eb" }}>"{log.NewStatus}"</span></span>
+                            <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700 }}>{log.ChangedAt ? new Date(log.ChangedAt).toLocaleString() : "N/A"}</span>
+                          </div>
+                          
+                          {log.OldStatus && <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>Previous Condition: <span style={{ textDecoration: "line-through" }}>"{log.OldStatus}"</span></div>}
+                          {(log.SubStatus || log.Remarks || log.Note) && (
+                            <div style={{ background: "#fff", border: "1px solid #f1f5f9", padding: "8px", borderRadius: "6px", fontSize: "11px", marginTop: "4px", color: "#475569" }}>
+                              {log.SubStatus && <div><strong style={{ color: "#e11d48" }}>Outcome Reason:</strong> {log.SubStatus}</div>}
+                              {(log.Remarks || log.Note) && <div style={{ marginTop: "2px" }}><strong style={{ color: "#64748b" }}>Admin Note:</strong> {log.Remarks || log.Note}</div>}
+                            </div>
+                          )}
+
+                          <div style={{ marginTop: "4px", pt: "4px", borderTop: "1px solid #f1f5f9", fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", display: "flex", justifyContent: "space-between" }}>
+                            <span>Action Initiator: <span style={{ color: "#475569", fontWeight: 800 }}>{log.ChangedBy || log.Actor || "Automated Infrastructure"}</span></span>
+                            <span>Channel Source: {log.ActionSource || "System Core"}</span>
+                          </div>
+                        </div>
+
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MAIN STATUS ACTIONS MODAL (RETAINED UNALTERED WORKFLOW LAYER) */}
+      {/* ========================================================================= */}
       {statusModalOpen && (
         <div
           style={{
@@ -969,13 +1333,13 @@ export default function AdminOrdersPage() {
               background: "#fff",
               borderRadius: 12,
               padding: 20,
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)"
             }}
           >
-            <h2 style={{ marginTop: 0, marginBottom: 16 }}>
-              {actionType === "cancel" ? "Cancel Order" : "Mark Order Status"}
+            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: "18px", fontWeight: 800, color: "#1e293b" }}>
+              {actionType === "cancel" ? "Cancel Order Entity" : "Mark Order Status Engine"}
             </h2>
 
-            {/* Select reason dropdown according to action source */}
             <select
               value={subStatus}
               onChange={(e) => setSubStatus(e.target.value)}
@@ -983,8 +1347,10 @@ export default function AdminOrdersPage() {
                 width: "100%",
                 padding: 10,
                 borderRadius: 8,
-                border: "1px solid #d1d5db",
+                border: "1px solid #cbd5e1",
                 marginBottom: 16,
+                fontSize: "13px",
+                fontWeight: 600
               }}
             >
               <option value="">
@@ -1006,7 +1372,7 @@ export default function AdminOrdersPage() {
             </select>
 
             <textarea
-              placeholder="Remarks (Optional)"
+              placeholder="Internal administrative remarks (Optional)"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               rows={4}
@@ -1014,9 +1380,10 @@ export default function AdminOrdersPage() {
                 width: "100%",
                 padding: 10,
                 borderRadius: 8,
-                border: "1px solid #d1d5db",
+                border: "1px solid #cbd5e1",
                 marginBottom: 16,
-                resize: "vertical"
+                resize: "vertical",
+                fontSize: "13px"
               }}
             />
 
@@ -1032,9 +1399,11 @@ export default function AdminOrdersPage() {
                 style={{
                   padding: "10px 14px",
                   borderRadius: 8,
-                  border: "1px solid #d1d5db",
+                  border: "1px solid #cbd5e1",
                   background: "#fff",
                   cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: "13px"
                 }}
               >
                 Close
@@ -1046,18 +1415,26 @@ export default function AdminOrdersPage() {
                   padding: "10px 14px",
                   borderRadius: 8,
                   border: "none",
-                  background: "#111827",
+                  background: "#1e293b",
                   color: "#fff",
                   cursor: "pointer",
                   fontWeight: 700,
+                  fontSize: "13px"
                 }}
               >
-                Submit
+                Submit Action
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Embedded UI CSS Animation Keyframes Injector */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .table-row-hover:hover { background-color: #f8fafc !important; transition: background-color 0.15s ease; }
+      `}} />
     </section>
   );
 }
