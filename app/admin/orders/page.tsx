@@ -751,7 +751,7 @@ const visibleOrders = useMemo(
 return (
 
   <section style={{ padding: 12 }}>
-</header>
+
     <header
   style={{
     display: "flex",
@@ -841,7 +841,7 @@ style={{
     : ""}
 
 </div>
-
+</header>
   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, marginBottom: 12 }}>
     {TABS.map((tab) => {
       const active = tab.key === activeTab;
