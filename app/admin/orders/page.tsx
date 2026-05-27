@@ -1561,54 +1561,82 @@ setRemarks("");
 
         )}
 
-        {mainStatus ===
-          "Cancelled" && (
+              <textarea
+        placeholder="Remarks"
+        value={remarks}
+        onChange={(e) =>
+          setRemarks(e.target.value)
+        }
+        rows={4}
+        style={{
+          width: "100%",
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #d1d5db",
+          marginBottom: 16,
+        }}
+      />
 
-          <>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 10,
+        }}
+      >
 
-            {CANCEL_REASONS.map(
-              (r) => (
+        <button
+          onClick={() => {
 
-                <option
-                  key={r}
-                  value={r}
-                >
-                  {r}
-                </option>
+            setStatusModalOpen(false);
 
-              )
-            )}
+            setSelectedOrder(null);
 
-          </>
+            setSubStatus("");
 
-        )}
+            setMainStatus("");
 
-        {mainStatus ===
-          "Not Delivered" && (
+            setRemarks("");
 
-          <>
+          }}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "1px solid #d1d5db",
+            background: "#fff",
+            cursor: "pointer",
+          }}
+        >
+          Close
+        </button>
 
-            {NOT_DELIVERED_REASONS.map(
-              (r) => (
+        <button
+          onClick={() => {
 
-                <option
-                  key={r}
-                  value={r}
-                >
-                  {r}
-                </option>
+            submitStatusAction();
 
-              )
-            )}
+          }}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "none",
+            background: "#111827",
+            color: "#fff",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          Submit
+        </button>
 
-          </>
+      </div>
 
-        )}
+    </div>
 
-      </select>
-
-    )}
-
-  </>
+  </div>
 
 )}
+
+    </section>
+  );
+}
