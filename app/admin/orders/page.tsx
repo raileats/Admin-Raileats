@@ -240,13 +240,25 @@ export default function AdminOrdersPage() {
     };
   }, []);
 
-  /* ================= AUTO REFRESH ================= */
-  useEffect(() => {
-    const interval = setInterval(() => {
-      window.location.reload();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  /* ================= SMART AUTO REFRESH ================= */
+
+useEffect(() => {
+
+  const interval = setInterval(() => {
+
+    setRefreshTick(
+      (prev) => prev + 1
+    );
+
+  }, 30000);
+
+  return () => {
+
+    clearInterval(interval);
+
+  };
+
+}, []);
 
   /* ================= LOAD ORDERS ================= */
   useEffect(() => {
