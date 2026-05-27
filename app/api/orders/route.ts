@@ -312,8 +312,25 @@ const dbStatus = statusFilter
       .order("CreatedAt", { ascending: false });
 
     if (statusFilter) {
-      query = query.eq("Status", dbStatus);
-    }
+
+  if (statusFilter === "baddelivery") {
+
+    query = query
+      .eq("Status", "Delivered")
+      .eq("SubStatus", "Bad Delivery");
+
+  }
+
+  else {
+
+    query = query.eq(
+      "Status",
+      dbStatus
+    );
+
+  }
+
+}
 
     const { data, error } = await query;
 
