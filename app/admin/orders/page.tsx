@@ -64,12 +64,15 @@ const DELIVERED_REASONS = [
 
 ];
 
-// MAPS EVERYTHING TO THE EXACT SUPABASE ENUM CASING (Matches 'Booked', 'In Verification' etc.)const NEXT_MAP: Record<
+// MAPS EVERYTHING TO THE EXACT SUPABASE ENUM CASING
+// (Matches 'Booked', 'In Verification' etc.)
+
+const NEXT_MAP: Record<
   TabKey,
   {
-    next: TabKey | null;
-    actionLabel: string;
-    dbValue: string;
+    next: TabKey | null
+    actionLabel: string
+    dbValue: string
   }
 > = {
 
