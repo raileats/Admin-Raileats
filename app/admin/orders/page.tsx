@@ -183,51 +183,199 @@ export default function AdminOrdersPage() {
   }, []);
 
   /* ================= REALTIME ORDERS ================= */
-  useEffect(() => {
-    const channel = supabase
-      .channel("admin-orders-live")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "Orders" },
-        async (payload) => {
-          setNewOrderCount((prev) => {
-            const updated = prev + 1;
-            localStorage.setItem("raileats_new_orders", String(updated));
-            return updated;
-          });
 
-          try {
-            if (audioRef.current) {
-              audioRef.current.currentTime = 0;
-              await audioRef.current.play();
-            }
-          } catch (e) {
-            console.log("Sound blocked by browser");
+useEffect(() => {
+
+  const channel = supabase
+
+    .channel("admin-orders-live")
+
+    /* NEW INSERT ORDER */
+
+    .on(
+      "postgres_changes",
+
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "Orders",
+      },
+
+      async (payload) => {
+
+        console.log("NEW ORDER:", payload);
+
+        setNewOrderCount((prev) => {
+
+          const updated = prev + 1;
+
+          localStorage.setItem(
+            "raileats_new_orders",
+            String(updated)
+          );
+
+          return updated;
+
+        });
+
+        /* SOUND */
+
+        try {
+
+          if (audioRef.current) {
+
+            audioRef.current.currentTime = 0;
+
+            await audioRef.current.play();
+
           }
 
-          try {
-            if (Notification.permission === "granted") {
-              new Notification("🚆 New RailEats Order", {
-                body: `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
-              });
-            }
-          } catch (e) {}
-        }
-      )
-      .subscribe();
+        } catch (e) {
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+          console.log(
+            "Sound blocked by browser"
+          );
+
+        }
+
+        /* NOTIFICATION */
+
+        try {
+
+          if (
+            Notification.permission ===
+            "granted"
+          ) {
+
+            new Notification(
+              "🚆 New RailEats Order",
+              {
+
+                body:
+                  `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
+
+              }
+            );
+
+          }
+
+        } catch (e) {}
+
+        /* REFRESH CURRENT TAB DATA */
+
+        setActiveTab((prev) => prev);
+
+      }
+    )
+
+    /* STATUS UPDATE */
+
+    .on(
+      "postgres_changes",
+
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "Orders",
+      },
+
+      async (payload) => {
+
+        console.log(
+          "ORDER UPDATED:",
+          payload
+        );
+
+        /* IF ORDER MOVED TO NEW ORDER */
+
+        if (
+          payload.new?.Status ===
+          "New Order"
+        ) {
+
+          setNewOrderCount((prev) => {
+
+            const updated =
+              prev + 1;
+
+            localStorage.setItem(
+              "raileats_new_orders",
+              String(updated)
+            );
+
+            return updated;
+
+          });
+
+          /* SOUND */
+
+          try {
+
+            if (audioRef.current) {
+
+              audioRef.current.currentTime = 0;
+
+              await audioRef.current.play();
+
+            }
+
+          } catch (e) {}
+
+          /* NOTIFICATION */
+
+          try {
+
+            if (
+              Notification.permission ===
+              "granted"
+            ) {
+
+              new Notification(
+                "🚆 Order Sent To Restaurant",
+                {
+
+                  body:
+                    `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
+
+                }
+              );
+
+            }
+
+          } catch (e) {}
+
+        }
+
+        /* REFRESH DATA */
+
+        setActiveTab((prev) => prev);
+
+      }
+    )
+
+    .subscribe();
+
+  return () => {
+
+    supabase.removeChannel(channel);
+
+  };
+
+}, []);
 
   /* ================= AUTO REFRESH ================= */
-  useEffect(() => {
-    const interval = setInterval(() => {
-      window.location.reload();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+
+useEffect(() => {
+
+  const interval = setInterval(() => {
+
+    setActiveTab((prev) => prev);
+
+  }, 30000);
+
+  return () => clearInterval(interval);
+
+}, []);
 
   /* ================= LOAD ORDERS ================= */
   useEffect(() => {
