@@ -156,40 +156,92 @@ export default function AdminOrdersPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   /* ================= INIT SOUND ================= */
-  useEffect(() => {
-    audioRef.current = new Audio("/sounds/order_announcement.mp3");
-    audioRef.current.preload = "auto";
 
-    const unlockAudio = async () => {
+useEffect(() => {
+
+  audioRef.current =
+    new Audio(
+      "/sounds/order_announcement.mp3"
+    );
+
+  audioRef.current.preload =
+    "auto";
+
+  if (audioRef.current) {
+
+    audioRef.current.volume = 1;
+
+  }
+
+  const unlockAudio =
+    async () => {
+
       try {
+
         if (audioRef.current) {
-          audioRef.current.muted = true;
+
+          audioRef.current.muted =
+            true;
+
           await audioRef.current.play();
+
           audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-          audioRef.current.muted = false;
+
+          audioRef.current.currentTime =
+            0;
+
+          audioRef.current.muted =
+            false;
+
         }
+
       } catch (e) {
-        console.log("Audio unlock failed");
+
+        console.log(
+          "Audio unlock failed"
+        );
+
       }
+
     };
 
-    document.body.addEventListener("click", unlockAudio, { once: true });
-    if (audioRef.current) audioRef.current.volume = 1;
+  document.body.addEventListener(
+    "click",
+    unlockAudio,
+    { once: true }
+  );
 
-    if (Notification.permission !== "granted") {
-      Notification.requestPermission();
-    }
-  }, []);
+  /* NOTIFICATION PERMISSION */
 
-  /* ================= REALTIME ORDERS ================= */
+  if (
+    typeof Notification !==
+      "undefined" &&
+    Notification.permission !==
+      "granted"
+  ) {
+
+    Notification.requestPermission();
+
+  }
+
+  return () => {
+
+    document.body.removeEventListener(
+      "click",
+      unlockAudio
+    );
+
+  };
+
+}, []);
+
+/* ================= REALTIME ORDERS ================= */
 
 useEffect(() => {
 
   const channel = supabase
 
     .channel("admin-orders-live")
-
     /* NEW INSERT ORDER */
 
     .on(
