@@ -760,6 +760,7 @@ return (
     gap: 12,
     marginBottom: 12,
   }}
+>
 
 
 
@@ -786,7 +787,9 @@ setNewOrderCount(0);
 
 localStorage.removeItem("raileats_new_orders");
 
-}}style={{position: "relative",display: "flex",alignItems: "center",color: "#111827",textDecoration: "none",}}>
+}}
+style={{
+  position: "relative",display: "flex",alignItems: "center",color: "#111827",textDecoration: "none",}}>
 
   <Bell size={24} />
 
@@ -851,13 +854,15 @@ setActiveTab(tab.key);
 
 localStorage.setItem("raileats_admin_tab",tab.key);
 
-}}style={{padding: "8px 12px",borderRadius: 8,border: active ? "2px solid #273e9a" : "1px solid #e6e8eb",background: active ? "#fff" : "#f8fafc",fontWeight: active ? 700 : 600,cursor: "pointer",}}
+}}
+style={{
+  padding: "8px 12px",borderRadius: 8,border: active ? "2px solid #273e9a" : "1px solid #e6e8eb",background: active ? "#fff" : "#f8fafc",fontWeight: active ? 700 : 600,cursor: "pointer",}}
 
 
 
 {tab.label}
-
-<spanstyle={{background: active? "#1d4ed8": "#e5e7eb",
+<span
+  style={{background: active? "#1d4ed8": "#e5e7eb",
 
   color: active
     ? "#fff"
@@ -991,7 +996,8 @@ style={{display: "flex",gap: 8,flexWrap: "wrap",}}
 
 
 
-<buttononClick={() => {if (!confirm(Move ${o.id} to next status?)) return;moveOrderToNext(o.id);}}style={{padding: "8px 10px",borderRadius: 6,background: "#273e9a",color: "#fff",border: "none",cursor: "pointer",fontWeight: "bold",}}
+<button
+  onClick={() => { {if (!confirm(Move ${o.id} to next status?)) return;moveOrderToNext(o.id);}}style={{padding: "8px 10px",borderRadius: 6,background: "#273e9a",color: "#fff",border: "none",cursor: "pointer",fontWeight: "bold",}}
 
 
 
