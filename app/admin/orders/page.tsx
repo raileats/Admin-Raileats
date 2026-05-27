@@ -214,18 +214,17 @@ useEffect(() => {
   /* NOTIFICATION PERMISSION */
 
   if (
-    typeof Notification !==
-      "undefined" &&
-    Notification.permission !==
-      "granted"
-  ) {
+  typeof Notification !==
+    "undefined" &&
+  Notification.permission !==
+    "granted"
+) {
 
-    Notification.requestPermission();
+  Notification.requestPermission();
 
-  }
+}
 
- return () => {
-
+return () => {
   document.body.removeEventListener(
     "click",
     unlockAudio
