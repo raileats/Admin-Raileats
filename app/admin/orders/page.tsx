@@ -224,17 +224,16 @@ useEffect(() => {
 
   }
 
-  return () => {
+ return () => {
 
-    document.body.removeEventListener(
-      "click",
-      unlockAudio
-    );
+  document.body.removeEventListener(
+    "click",
+    unlockAudio
+  );
 
-  };
+};
 
 }, []);
-
 /* ================= REALTIME ORDERS ================= */
 
 useEffect(() => {
