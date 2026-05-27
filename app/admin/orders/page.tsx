@@ -129,10 +129,7 @@ export default function AdminOrdersPage() {
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>({} as Record<TabKey, Order[]>);
   const [loading, setLoading] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
-  
-  // FIXED: Changed type from any to Order | null
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  
   const [actionType, setActionType] = useState("");
   const [subStatus, setSubStatus] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -141,8 +138,6 @@ export default function AdminOrdersPage() {
   const [searchText, setSearchText] = useState("");
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
-  
-  // FIXED: Added missing refreshTick state
   const [refreshTick, setRefreshTick] = useState(0);
   
   const [newOrderCount, setNewOrderCount] = useState<number>(() => {
@@ -154,7 +149,7 @@ export default function AdminOrdersPage() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  /* ================= INIT SOUND ================= */
+  /* ================= INIT SOUND & PERMISSIONS ================= */
   useEffect(() => {
     audioRef.current = new Audio("/sounds/order_announcement.mp3");
     audioRef.current.preload = "auto";
@@ -185,7 +180,17 @@ export default function AdminOrdersPage() {
     };
   }, []);
 
-  /* ================= REALTIME ORDERS ================= */
+  /* ================= BELL RESET AT INTENDED TAB FOCUS ================= */
+  useEffect(() => {
+    if (activeTab === "neworder") {
+      setNewOrderCount(0);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("raileats_new_orders");
+      }
+    }
+  }, [activeTab]);
+
+  /* ================= SUPABASE REALTIME HANDLERS ================= */
   useEffect(() => {
     const channel = supabase
       .channel("admin-orders-live")
@@ -196,37 +201,36 @@ export default function AdminOrdersPage() {
         async (payload) => {
           console.log("NEW ORDER:", payload);
           
-          // FIXED: Only count and notify if it's a freshly Booked order to avoid future stage overlaps
+          setRefreshTick((prev) => prev + 1);
+
+          // FIXED: Alerts/Sounds and Count are now properly gated together exclusively on 'Booked' stage
           if (payload.new?.Status === "Booked") {
             setNewOrderCount((prev) => {
               const updated = prev + 1;
-              localStorage.setItem("raileats_new_orders", String(updated));
+              if (typeof window !== "undefined") {
+                localStorage.setItem("raileats_new_orders", String(updated));
+              }
               return updated;
             });
-          }
 
-          // FIXED: Instantly refresh list on insert
-          setRefreshTick((prev) => prev + 1);
-
-          /* SOUND FIXED: Prevent overlap/spam issues by stopping previous playback */
-          try {
-            if (audioRef.current) {
-              audioRef.current.pause();
-              audioRef.current.currentTime = 0;
-              await audioRef.current.play();
+            try {
+              if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current.currentTime = 0;
+                await audioRef.current.play();
+              }
+            } catch (e) {
+              console.log("Sound blocked by browser configuration parameters");
             }
-          } catch (e) {
-            console.log("Sound blocked by browser");
-          }
 
-          /* NOTIFICATION */
-          try {
-            if (Notification.permission === "granted") {
-              new Notification("🚆 New RailEats Order", {
-                body: `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
-              });
-            }
-          } catch (e) {}
+            try {
+              if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+                new Notification("🚆 New RailEats Order Received", {
+                  body: `${payload.new.customerName || "Customer"} • Station: ${payload.new.stationName || "N/A"}`,
+                });
+              }
+            } catch (e) {}
+          }
         }
       )
       /* ================= UPDATE ================= */
@@ -238,18 +242,17 @@ export default function AdminOrdersPage() {
           const oldStatus = payload.old?.Status || "";
           const newStatus = payload.new?.Status || "";
 
-          // FIXED: Instantly refresh UI state on update event
           setRefreshTick((prev) => prev + 1);
 
-          /* ONLY WHEN ORDER MOVES TO NEW ORDER */
           if (oldStatus !== "New Order" && newStatus === "New Order") {
             setNewOrderCount((prev) => {
               const updated = prev + 1;
-              localStorage.setItem("raileats_new_orders", String(updated));
+              if (typeof window !== "undefined") {
+                localStorage.setItem("raileats_new_orders", String(updated));
+              }
               return updated;
             });
 
-            /* SOUND FIXED: Handled spam/overlap issues */
             try {
               if (audioRef.current) {
                 audioRef.current.pause();
@@ -257,14 +260,13 @@ export default function AdminOrdersPage() {
                 await audioRef.current.play();
               }
             } catch (e) {
-              console.log("Sound blocked");
+              console.log("Sound execution delayed/blocked");
             }
 
-            /* NOTIFICATION */
             try {
-              if (Notification.permission === "granted") {
-                new Notification("🚆 Order Sent To Restaurant", {
-                  body: `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
+              if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+                new Notification("🚆 Order Pushed to Restaurant", {
+                  body: `${payload.new.customerName || "Customer"} • Station: ${payload.new.stationName || "N/A"}`,
                 });
               }
             } catch (e) {}
@@ -278,7 +280,7 @@ export default function AdminOrdersPage() {
     };
   }, []);
 
-  /* ================= AUTO REFRESH ================= */
+  /* ================= AUTO POLLING SYSTEM (30s) ================= */
   useEffect(() => {
     const interval = setInterval(() => {
       setRefreshTick((prev) => prev + 1);
@@ -289,7 +291,7 @@ export default function AdminOrdersPage() {
     };
   }, []);
 
-  /* ================= LOAD ORDERS ================= */
+  /* ================= FETCH COMPONENT MOUNT ================= */
   useEffect(() => {
     const load = async () => {
       try {
@@ -354,7 +356,6 @@ export default function AdminOrdersPage() {
     };
 
     load();
-    // FIXED: Added refreshTick to dependencies array
   }, [activeTab, refreshTick]);
 
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
@@ -497,7 +498,7 @@ export default function AdminOrdersPage() {
     }
   }
 
-  function submitMark(order: Order) {
+  async function submitMark(order: Order) {
     const selection = marking[order.id];
     if (!selection || !selection.status) {
       alert("Select status first");
@@ -508,58 +509,56 @@ export default function AdminOrdersPage() {
     const targetDbValue = matchedOption ? matchedOption.dbValue : targetKey;
     const currentRemarks = selection.remarks || `Marked ${targetKey}`;
 
-    (async () => {
-      try {
-        const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            newStatus: targetDbValue,
-            remarks: currentRemarks,
-            changedBy: "admin",
-          }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok || !json?.ok) {
-          alert("Failed to change status");
-          return;
-        }
-
-        const updated: Order = {
-          ...order,
-          status: targetKey,
-          dbStatus: targetDbValue,
-          history: [
-            ...order.history,
-            {
-              at: new Date().toISOString(),
-              by: "admin",
-              note: currentRemarks,
-              status: targetKey,
-            },
-          ],
-        };
-
-        setAllOrders((prev) => {
-          const copy: Record<TabKey, Order[]> = { ...prev } as any;
-          (Object.keys(copy) as TabKey[]).forEach((k) => {
-            copy[k] = (copy[k] ?? []).filter((o) => o.id !== order.id);
-          });
-          copy[targetKey] = [updated, ...(copy[targetKey] ?? [])];
-          return copy;
-        });
-
-        setMarking((prev) => {
-          const cp = { ...prev };
-          delete cp[order.id];
-          return cp;
-        });
-
-        setActiveTab(targetKey);
-      } catch (e) {
-        alert("Failed to change status (network error)");
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          newStatus: targetDbValue,
+          remarks: currentRemarks,
+          changedBy: "admin",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        alert("Failed to change status");
+        return;
       }
-    })();
+
+      const updated: Order = {
+        ...order,
+        status: targetKey,
+        dbStatus: targetDbValue,
+        history: [
+          ...order.history,
+          {
+            at: new Date().toISOString(),
+            by: "admin",
+            note: currentRemarks,
+            status: targetKey,
+          },
+        ],
+      };
+
+      setAllOrders((prev) => {
+        const copy: Record<TabKey, Order[]> = { ...prev } as any;
+        (Object.keys(copy) as TabKey[]).forEach((k) => {
+          copy[k] = (copy[k] ?? []).filter((o) => o.id !== order.id);
+        });
+        copy[targetKey] = [updated, ...(copy[targetKey] ?? [])];
+        return copy;
+      });
+
+      setMarking((prev) => {
+        const cp = { ...prev };
+        delete cp[order.id];
+        return cp;
+      });
+
+      setActiveTab(targetKey);
+    } catch (e) {
+      alert("Failed to change status (network error)");
+    }
   }
 
   function applyFilters(list: Order[]) {
@@ -637,12 +636,9 @@ export default function AdminOrdersPage() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          {/* FIXED: Removed raw click handler logic to let the activeTab switch dictate safe resets */}
           <Link
             href="/admin/orders"
-            onClick={() => {
-              setNewOrderCount(0);
-              localStorage.removeItem("raileats_new_orders");
-            }}
             style={{
               position: "relative",
               display: "flex",
@@ -691,7 +687,9 @@ export default function AdminOrdersPage() {
               key={tab.key}
               onClick={() => {
                 setActiveTab(tab.key);
-                localStorage.setItem("raileats_admin_tab", tab.key);
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("raileats_admin_tab", tab.key);
+                }
               }}
               style={{
                 padding: "8px 12px",
@@ -768,7 +766,6 @@ export default function AdminOrdersPage() {
             setSearchText("");
             setSearchDate("");
             setSearchOutlet("");
-            // FIXED: Reverted searchType back to default on reset
             setSearchType("orderId");
           }}
           style={{ padding: "8px 12px", borderRadius: 6 }}
@@ -800,7 +797,24 @@ export default function AdminOrdersPage() {
             </thead>
 
             <tbody>
-              {visibleOrders.map((o) => (
+              {/* FIXED: Restored complete loaders and missing empty conditional arrays info */}
+              {loading && (
+                <tr>
+                  <td colSpan={14} style={{ padding: 24, textAlign: "center", color: "#6b7280" }}>
+                    Loading fresh orders from database...
+                  </td>
+                </tr>
+              )}
+
+              {!loading && visibleOrders.length === 0 && (
+                <tr>
+                  <td colSpan={14} style={{ padding: 32, textAlign: "center", color: "#9ca3af", fontWeight: 500 }}>
+                    No matching orders available in this status segment.
+                  </td>
+                </tr>
+              )}
+
+              {!loading && visibleOrders.map((o) => (
                 <tr key={o.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                   <td style={{ padding: 10 }}>{o.id}</td>
                   <td style={{ padding: 10 }}>{o.outletId}</td>
@@ -905,7 +919,9 @@ export default function AdminOrdersPage() {
                       </div>
                     ) : (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 200 }}>
+                        {/* FIXED: Dropdown and text field are now completely disabled for locked terminal rows to prevent state loop recursions */}
                         <select
+                          disabled={["delivered", "cancelled", "notdelivered", "baddelivery"].includes(o.status)}
                           value={marking[o.id]?.status || ""}
                           onChange={(e) =>
                             setMarking((prev) => ({
@@ -926,7 +942,8 @@ export default function AdminOrdersPage() {
                           ))}
                         </select>
                         <input
-                          placeholder="Remarks/Reason"
+                          disabled={["delivered", "cancelled", "notdelivered", "baddelivery"].includes(o.status)}
+                          placeholder={["delivered", "cancelled", "notdelivered", "baddelivery"].includes(o.status) ? "Terminal status locked" : "Remarks/Reason"}
                           value={marking[o.id]?.remarks || ""}
                           onChange={(e) =>
                             setMarking((prev) => ({
@@ -940,14 +957,15 @@ export default function AdminOrdersPage() {
                           style={{ padding: 6, borderRadius: 6, border: "1px solid #d1d5db" }}
                         />
                         <button
+                          disabled={["delivered", "cancelled", "notdelivered", "baddelivery"].includes(o.status)}
                           onClick={() => submitMark(o)}
                           style={{
                             padding: "6px 10px",
                             borderRadius: 6,
-                            background: "#111827",
+                            background: ["delivered", "cancelled", "notdelivered", "baddelivery"].includes(o.status) ? "#9ca3af" : "#111827",
                             color: "#fff",
                             border: "none",
-                            cursor: "pointer",
+                            cursor: ["delivered", "cancelled", "notdelivered", "baddelivery"].includes(o.status) ? "not-allowed" : "pointer",
                             fontWeight: "600",
                           }}
                         >
