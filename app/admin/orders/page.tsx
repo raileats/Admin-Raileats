@@ -145,6 +145,7 @@ export default function AdminOrdersPage() {
   const [searchText, setSearchText] = useState("");
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
+  const [refreshTick, setRefreshTick] = useState(0); // 👈 Yeh state missing thi, ab add kar di hai
   
   const [newOrderCount, setNewOrderCount] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -156,288 +157,80 @@ export default function AdminOrdersPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   /* ================= INIT SOUND ================= */
+  useEffect(() => {
+    audioRef.current = new Audio("/sounds/order_announcement.mp3");
+    audioRef.current.preload = "auto";
 
-useEffect(() => {
-
-  audioRef.current = new Audio(
-    "/sounds/order_announcement.mp3"
-  );
-
-  audioRef.current.preload = "auto";
-
-  audioRef.current.volume = 1;
-
-  const unlockAudio = async () => {
-
-    try {
-
-      if (audioRef.current) {
-
-        audioRef.current.muted = true;
-
-        await audioRef.current.play();
-
-        audioRef.current.pause();
-
-        audioRef.current.currentTime = 0;
-
-        audioRef.current.muted = false;
-
-      }
-
-    } catch (e) {
-
-      console.log(
-        "Audio unlock failed"
-      );
-
-    }
-
-  };
-
-  document.body.addEventListener(
-    "click",
-    unlockAudio,
-    { once: true }
-  );
-
-  /* NOTIFICATION PERMISSION */
-
-  if (
-    typeof Notification !==
-      "undefined" &&
-    Notification.permission !==
-      "granted"
-  ) {
-
-    Notification.requestPermission();
-
-  }
-
-  return () => {
-
-    document.body.removeEventListener(
-      "click",
-      unlockAudio
-    );
-
-  };
-
-}, []);
-
-/* ================= REALTIME ORDERS ================= */
-
-useEffect(() => {
-
-  const channel = supabase
-
-    .channel("admin-orders-live")
-
-    /* ================= INSERT ================= */
-
-    .on(
-      "postgres_changes",
-
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "Orders",
-      },
-
-      async (payload) => {
-
-        console.log(
-          "NEW ORDER:",
-          payload
-        );
-
-        setNewOrderCount((prev) => {
-
-          const updated =
-            prev + 1;
-
-          localStorage.setItem(
-            "raileats_new_orders",
-            String(updated)
-          );
-
-          return updated;
-
-        });
-
-        /* SOUND */
-
-        try {
-
-          if (audioRef.current) {
-
-            audioRef.current.currentTime =
-              0;
-
-            await audioRef.current.play();
-
-          }
-
-        } catch (e) {
-
-          console.log(
-            "Sound blocked by browser"
-          );
-
+    const unlockAudio = async () => {
+      try {
+        if (audioRef.current) {
+          audioRef.current.muted = true;
+          await audioRef.current.play();
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.muted = false;
         }
-
-        /* NOTIFICATION */
-
-        try {
-
-          if (
-            Notification.permission ===
-            "granted"
-          ) {
-
-            new Notification(
-              "🚆 New RailEats Order",
-              {
-
-                body:
-                  `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
-
-              }
-            );
-
-          }
-
-        } catch (e) {}
-
+      } catch (e) {
+        console.log("Audio unlock failed");
       }
-    )
+    };
 
-    /* ================= UPDATE ================= */
+    document.body.addEventListener("click", unlockAudio, { once: true });
+    if (audioRef.current) audioRef.current.volume = 1;
 
-    .on(
-      "postgres_changes",
+    if (Notification.permission !== "granted") {
+      Notification.requestPermission();
+    }
+  }, []);
 
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "Orders",
-      },
-
-      async (payload) => {
-
-        console.log(
-          "ORDER UPDATED:",
-          payload
-        );
-
-        const oldStatus =
-          payload.old?.Status || "";
-
-        const newStatus =
-          payload.new?.Status || "";
-
-        /* ONLY WHEN ORDER MOVES TO NEW ORDER */
-
-        if (
-          oldStatus !== "New Order" &&
-          newStatus === "New Order"
-        ) {
-
+  /* ================= REALTIME ORDERS ================= */
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin-orders-live")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "Orders" },
+        async (payload) => {
           setNewOrderCount((prev) => {
-
-            const updated =
-              prev + 1;
-
-            localStorage.setItem(
-              "raileats_new_orders",
-              String(updated)
-            );
-
+            const updated = prev + 1;
+            localStorage.setItem("raileats_new_orders", String(updated));
             return updated;
-
           });
 
-          /* SOUND */
-
           try {
-
             if (audioRef.current) {
-
-              audioRef.current.currentTime =
-                0;
-
+              audioRef.current.currentTime = 0;
               await audioRef.current.play();
-
             }
-
           } catch (e) {
-
-            console.log(
-              "Sound blocked"
-            );
-
+            console.log("Sound blocked by browser");
           }
 
-          /* NOTIFICATION */
-
           try {
-
-            if (
-              Notification.permission ===
-              "granted"
-            ) {
-
-              new Notification(
-                "🚆 Order Sent To Restaurant",
-                {
-
-                  body:
-                    `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
-
-                }
-              );
-
+            if (Notification.permission === "granted") {
+              new Notification("🚆 New RailEats Order", {
+                body: `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
+              });
             }
-
           } catch (e) {}
-
         }
+      )
+      .subscribe();
 
-      }
-    )
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
-    .subscribe();
-
-  return () => {
-
-    supabase.removeChannel(
-      channel
-    );
-
-  };
-
-}, []);
-
-/* ================= AUTO REFRESH ================= */
-
-useEffect(() => {
-
-  const interval =
-    setInterval(() => {
-
-      setRefreshTick(
-        (prev) => prev + 1
-      );
-
+  /* ================= AUTO REFRESH TICK ================= */
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshTick((prev) => prev + 1);
     }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
-  return () => {
-
-    clearInterval(interval);
-
-  };
-
-}, []);  /* ================= LOAD ORDERS ================= */
+  /* ================= LOAD ORDERS ================= */
   useEffect(() => {
     const load = async () => {
       try {
@@ -502,7 +295,7 @@ useEffect(() => {
     };
 
     load();
-  }, [activeTab]);
+  }, [activeTab, refreshTick]); // 👈 RefreshTick ko dependency me dala taaki auto updates fetch ho sakein
 
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
 
@@ -1146,337 +939,129 @@ useEffect(() => {
       </div>
 
       {/* ================= MODAL DIALOG ================= */}
-
-{statusModalOpen && (
-
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.45)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 9999,
-      padding: 16,
-    }}
-  >
-
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 460,
-        background: "#fff",
-        borderRadius: 12,
-        padding: 20,
-        boxShadow:
-          "0 10px 30px rgba(0,0,0,0.18)",
-      }}
-    >
-
-      <h2
-        style={{
-          marginTop: 0,
-          marginBottom: 16,
-          fontSize: 20,
-          fontWeight: 700,
-        }}
-      >
-        {actionType === "cancel"
-          ? "Cancel Order"
-          : "Mark Order Status"}
-      </h2>
-
-      {/* CANCEL FLOW */}
-
-      {actionType === "cancel" && (
-
-        <select
-          value={subStatus}
-          onChange={(e) =>
-            setSubStatus(
-              e.target.value
-            )
-          }
+      {statusModalOpen && (
+        <div
           style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 8,
-            marginBottom: 12,
-            border:
-              "1px solid #d1d5db",
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 16,
           }}
         >
+          <div style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 12, padding: 20 }}>
+            <h2 style={{ marginTop: 0, marginBottom: 16 }}>
+              {actionType === "cancel" ? "Cancel Order" : "Mark Order Status"}
+            </h2>
 
-          <option value="">
-            Select Cancel Reason
-          </option>
-
-          {CANCEL_REASONS.map(
-            (r) => (
-
-              <option
-                key={r}
-                value={r}
+            {actionType === "cancel" && (
+              <select
+                value={subStatus}
+                onChange={(e) => setSubStatus(e.target.value)}
+                style={{ width: "100%", padding: 10, borderRadius: 8, marginBottom: 12, border: "1px solid #d1d5db" }}
               >
-                {r}
-              </option>
+                <option value="">Select Cancel Reason</option>
+                {CANCEL_REASONS.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            )}
 
-            )
-          )}
+            {actionType === "mark" && (
+              <>
+                <select
+                  value={mainStatus}
+                  onChange={(e) => {
+                    setMainStatus(e.target.value);
+                    setSubStatus("");
+                  }}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, marginBottom: 12, border: "1px solid #d1d5db" }}
+                >
+                  <option value="">Select Main Status</option>
+                  <option value="Delivered">Delivered</option>
+                  <option value="Cancelled">Cancelled</option>
+                  <option value="Not Delivered">Not Delivered</option>
+                </select>
 
-        </select>
+                {mainStatus && (
+                  <select
+                    value={subStatus}
+                    onChange={(e) => setSubStatus(e.target.value)}
+                    style={{ width: "100%", padding: 10, borderRadius: 8, marginBottom: 12, border: "1px solid #d1d5db" }}
+                  >
+                    <option value="">Select Sub Status</option>
+                    {mainStatus === "Delivered" && (
+                      <>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Bad Delivery">Bad Delivery</option>
+                      </>
+                    )}
 
+                    {mainStatus === "Cancelled" && (
+                      <>
+                        {CANCEL_REASONS.map((r) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </>
+                    )}
+
+                    {mainStatus === "Not Delivered" && (
+                      <>
+                        {NOT_DELIVERED_REASONS.map((r) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                )}
+              </>
+            )}
+
+            <textarea
+              placeholder="Remarks"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              rows={4}
+              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #d1d5db", marginBottom: 16 }}
+            />
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => {
+                  setStatusModalOpen(false);
+                  setSelectedOrder(null);
+                  setSubStatus("");
+                  setMainStatus("");
+                  setRemarks("");
+                }}
+                style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", cursor: "pointer", fontWeight: 600 }}
+              >
+                Close
+              </button>
+
+              <button
+                onClick={() => {
+                  if (actionType === "cancel" && !subStatus) {
+                    alert("Please select cancel reason");
+                    return;
+                  }
+                  if (actionType === "mark" && (!mainStatus || !subStatus)) {
+                    alert("Please select status");
+                    return;
+                  }
+                  submitStatusAction();
+                }}
+                style={{ padding: "10px 14px", borderRadius: 8, border: "none", background: "#111827", color: "#fff", cursor: "pointer", fontWeight: 700 }}
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-
-      {/* MARK FLOW */}
-
-      {actionType === "mark" && (
-
-        <>
-
-          <select
-            value={mainStatus}
-            onChange={(e) => {
-
-              setMainStatus(
-                e.target.value
-              );
-
-              setSubStatus("");
-
-            }}
-            style={{
-              width: "100%",
-              padding: 10,
-              borderRadius: 8,
-              marginBottom: 12,
-              border:
-                "1px solid #d1d5db",
-            }}
-          >
-
-            <option value="">
-              Select Main Status
-            </option>
-
-            <option value="Delivered">
-              Delivered
-            </option>
-
-            <option value="Cancelled">
-              Cancelled
-            </option>
-
-            <option value="Not Delivered">
-              Not Delivered
-            </option>
-
-          </select>
-
-          {mainStatus && (
-
-            <select
-              value={subStatus}
-              onChange={(e) =>
-                setSubStatus(
-                  e.target.value
-                )
-              }
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                marginBottom: 12,
-                border:
-                  "1px solid #d1d5db",
-              }}
-            >
-
-              <option value="">
-                Select Sub Status
-              </option>
-
-              {mainStatus ===
-                "Delivered" && (
-
-                <>
-
-                  <option value="Delivered">
-                    Delivered
-                  </option>
-
-                  <option value="Bad Delivery">
-                    Bad Delivery
-                  </option>
-
-                </>
-
-              )}
-
-              {mainStatus ===
-                "Cancelled" && (
-
-                <>
-
-                  {CANCEL_REASONS.map(
-                    (r) => (
-
-                      <option
-                        key={r}
-                        value={r}
-                      >
-                        {r}
-                      </option>
-
-                    )
-                  )}
-
-                </>
-
-              )}
-
-              {mainStatus ===
-                "Not Delivered" && (
-
-                <>
-
-                  {NOT_DELIVERED_REASONS.map(
-                    (r) => (
-
-                      <option
-                        key={r}
-                        value={r}
-                      >
-                        {r}
-                      </option>
-
-                    )
-                  )}
-
-                </>
-
-              )}
-
-            </select>
-
-          )}
-
-        </>
-
-      )}
-
-      <textarea
-        placeholder="Remarks"
-        value={remarks}
-        onChange={(e) =>
-          setRemarks(
-            e.target.value
-          )
-        }
-        rows={4}
-        style={{
-          width: "100%",
-          padding: 10,
-          borderRadius: 8,
-          border:
-            "1px solid #d1d5db",
-          marginBottom: 16,
-          resize: "vertical",
-        }}
-      />
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          gap: 10,
-        }}
-      >
-
-        <button
-          onClick={() => {
-
-            setStatusModalOpen(false);
-
-            setSelectedOrder(null);
-
-            setSubStatus("");
-
-            setMainStatus("");
-
-            setRemarks("");
-
-          }}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 8,
-            border:
-              "1px solid #d1d5db",
-            background: "#fff",
-            cursor: "pointer",
-            fontWeight: 600,
-          }}
-        >
-          Close
-        </button>
-
-        <button
-          onClick={() => {
-
-            if (
-              actionType === "cancel" &&
-              !subStatus
-            ) {
-
-              alert(
-                "Please select cancel reason"
-              );
-
-              return;
-
-            }
-
-            if (
-              actionType === "mark" &&
-              (
-                !mainStatus ||
-                !subStatus
-              )
-            ) {
-
-              alert(
-                "Please select status"
-              );
-
-              return;
-
-            }
-
-            submitStatusAction();
-
-          }}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 8,
-            border: "none",
-            background: "#111827",
-            color: "#fff",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          Submit
-        </button>
-
-      </div>
-
-    </div>
-
-  </div>
-
-)}
-
     </section>
   );
 }
