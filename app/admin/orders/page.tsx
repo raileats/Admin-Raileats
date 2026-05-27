@@ -139,13 +139,20 @@ export default function AdminOrdersPage() {
   });
 
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>({} as Record<TabKey, Order[]>);
-  const [loading, setLoading] = useState(false);
-  
-  const [statusModalOpen, setStatusModalOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [actionType, setActionType] = useState("");
-  const [subStatus, setSubStatus] = useState("");
-  const [remarks, setRemarks] = useState("");
+
+const [loading, setLoading] = useState(false);
+
+const [refreshTick, setRefreshTick] = useState(0);
+
+const [statusModalOpen, setStatusModalOpen] = useState(false);
+
+const [selectedOrder, setSelectedOrder] = useState<any>(null);
+
+const [actionType, setActionType] = useState("");
+
+const [subStatus, setSubStatus] = useState("");
+
+const [remarks, setRemarks] = useState("");
 
   const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
   const [searchType, setSearchType] = useState<SearchType>("orderId");
