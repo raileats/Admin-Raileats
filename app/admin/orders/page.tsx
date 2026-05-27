@@ -616,10 +616,17 @@ useEffect(() => {
 
     /* MOVE UI */
 
-    const targetKey =
-      mainStatus
-        .toLowerCase()
-        .replace(/\s/g, "") as TabKey;
+    const targetKey: TabKey =
+
+  subStatus === "Bad Delivery"
+
+    ? "baddelivery"
+
+    : (
+        mainStatus
+          .toLowerCase()
+          .replace(/\s/g, "")
+      ) as TabKey;
 
     const updatedOrder = {
 
