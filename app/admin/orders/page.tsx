@@ -847,22 +847,23 @@ style={{
       const active = tab.key === activeTab;
       return (
         <button
-          key={tab.key}
-          onClick={() => {
+  key={tab.key}
+  onClick={() => {
 
-setActiveTab(tab.key);
+    setActiveTab(tab.key);
 
-localStorage.setItem("raileats_admin_tab",tab.key);
+    localStorage.setItem(
+      "raileats_admin_tab",
+      tab.key
+    );
 
-}}
-style={{
-  padding: "8px 12px",borderRadius: 8,border: active ? "2px solid #273e9a" : "1px solid #e6e8eb",background: active ? "#fff" : "#f8fafc",fontWeight: active ? 700 : 600,cursor: "pointer",}}
+  }}
+  style={{
+  padding: "8px 12px",borderRadius: 8,border: active ? "2px solid #273e9a" : "1px solid #e6e8eb",background: active ? "#fff" : "#f8fafc",fontWeight: active ? 700 : 600,cursor: "pointer",
+  }}
+>
 
-
-
-{tab.label}
-{tab.label}
-
+  {tab.label}
 <span
   style={{
     background: active ? "#1d4ed8" : "#e5e7eb",
@@ -886,7 +887,10 @@ style={{
 
 );
 })}
-  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+
+</div>
+
+<div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
     <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ fontWeight: 600 }}>Search by</span>
       <select value={searchType} onChange={(e) => setSearchType(e.target.value as SearchType)}>
