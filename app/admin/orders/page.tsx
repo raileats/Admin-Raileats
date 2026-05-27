@@ -1522,14 +1522,9 @@ const tabCounts = useMemo(() => {
         <button
           onClick={() => {
 
-            console.log({
-              selectedOrder,
-              actionType,
-              subStatus,
-              remarks,
-            });
+  submitStatusAction();
 
-          }}
+}}
           style={{
             padding: "10px 14px",
             borderRadius: 8,
