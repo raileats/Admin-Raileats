@@ -291,23 +291,24 @@ const dbStatus = statusFilter
     let query = supa
       .from("Orders")
       .select(
-        `
-        OrderId,
-        RestroCode,
-        RestroName,
-        StationCode,
-        StationName,
-        DeliveryDate,
-        DeliveryTime,
-        TrainNumber,
-        Coach,
-        Seat,
-        CustomerName,
-        CustomerMobile,
-        TotalAmount,
-        Status
-      `
-      )
+  `
+  OrderId,
+  RestroCode,
+  RestroName,
+  StationCode,
+  StationName,
+  DeliveryDate,
+  DeliveryTime,
+  TrainNumber,
+  Coach,
+  Seat,
+  CustomerName,
+  CustomerMobile,
+  TotalAmount,
+  Status,
+  SubStatus
+`
+)
       .order("CreatedAt", { ascending: false });
 
     if (statusFilter) {
