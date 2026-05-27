@@ -1474,84 +1474,134 @@ setRemarks("");
 
 {actionType === "mark" && (
 
-        )}
+  <>
 
-      <textarea
-        placeholder="Remarks"
-        value={remarks}
+    <select
+      value={mainStatus}
+      onChange={(e) => {
+
+        setMainStatus(
+          e.target.value
+        );
+
+        setSubStatus("");
+
+      }}
+      style={{
+        width: "100%",
+        padding: 10,
+        borderRadius: 8,
+        marginBottom: 12,
+        border: "1px solid #d1d5db",
+      }}
+    >
+
+      <option value="">
+        Select Main Status
+      </option>
+
+      <option value="Delivered">
+        Delivered
+      </option>
+
+      <option value="Cancelled">
+        Cancelled
+      </option>
+
+      <option value="Not Delivered">
+        Not Delivered
+      </option>
+
+    </select>
+
+    {mainStatus && (
+
+      <select
+        value={subStatus}
         onChange={(e) =>
-          setRemarks(e.target.value)
+          setSubStatus(
+            e.target.value
+          )
         }
-        rows={4}
         style={{
           width: "100%",
           padding: 10,
           borderRadius: 8,
-          border: "1px solid #d1d5db",
-          marginBottom: 16,
-        }}
-      />
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          gap: 10,
+          marginBottom: 12,
+          border:
+            "1px solid #d1d5db",
         }}
       >
 
-        <button
-          onClick={() => {
+        <option value="">
+          Select Sub Status
+        </option>
 
-            setStatusModalOpen(false);
+        {mainStatus ===
+          "Delivered" && (
 
-            setSelectedOrder(null);
+          <>
 
-            setSubStatus("");
+            <option value="Delivered">
+              Delivered
+            </option>
 
-            setMainStatus("");
+            <option value="Bad Delivery">
+              Bad Delivery
+            </option>
 
-            setRemarks("");
+          </>
 
-          }}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 8,
-            border: "1px solid #d1d5db",
-            background: "#fff",
-            cursor: "pointer",
-          }}
-        >
-          Close
-        </button>
+        )}
 
-        <button
-          onClick={() => {
+        {mainStatus ===
+          "Cancelled" && (
 
-            submitStatusAction();
+          <>
 
-          }}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 8,
-            border: "none",
-            background: "#111827",
-            color: "#fff",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          Submit
-        </button>
+            {CANCEL_REASONS.map(
+              (r) => (
 
-      </div>
+                <option
+                  key={r}
+                  value={r}
+                >
+                  {r}
+                </option>
 
-    </div>
+              )
+            )}
 
-  </div>
+          </>
+
+        )}
+
+        {mainStatus ===
+          "Not Delivered" && (
+
+          <>
+
+            {NOT_DELIVERED_REASONS.map(
+              (r) => (
+
+                <option
+                  key={r}
+                  value={r}
+                >
+                  {r}
+                </option>
+
+              )
+            )}
+
+          </>
+
+        )}
+
+      </select>
+
+    )}
+
+  </>
 
 )}
-
-    </section>
-  );
-}
