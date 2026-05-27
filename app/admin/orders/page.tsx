@@ -1161,6 +1161,203 @@ const tabCounts = useMemo(() => {
           </table>
         </div>
       </div>
+      {statusModalOpen && (
+
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.45)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 9999,
+      padding: 16,
+    }}
+  >
+
+    <div
+      style={{
+        width: "100%",
+        maxWidth: 460,
+        background: "#fff",
+        borderRadius: 12,
+        padding: 20,
+      }}
+    >
+
+      <h2
+        style={{
+          marginTop: 0,
+          marginBottom: 16,
+        }}
+      >
+        {actionType === "cancel"
+          ? "Cancel Order"
+          : "Mark Order Status"}
+      </h2>
+
+      {/* CANCEL FLOW */}
+
+      {actionType === "cancel" && (
+
+        <select
+          value={subStatus}
+          onChange={(e) =>
+            setSubStatus(e.target.value)
+          }
+          style={{
+            width: "100%",
+            padding: 10,
+            borderRadius: 8,
+            marginBottom: 12,
+            border: "1px solid #d1d5db",
+          }}
+        >
+
+          <option value="">
+            Select Cancel Reason
+          </option>
+
+          {CANCEL_REASONS.map((r) => (
+
+            <option
+              key={r}
+              value={r}
+            >
+              {r}
+            </option>
+
+          ))}
+
+        </select>
+
+      )}
+
+      {/* MARK FLOW */}
+
+      {actionType === "mark" && (
+
+        <>
+
+          <select
+            value={subStatus}
+            onChange={(e) =>
+              setSubStatus(e.target.value)
+            }
+            style={{
+              width: "100%",
+              padding: 10,
+              borderRadius: 8,
+              marginBottom: 12,
+              border: "1px solid #d1d5db",
+            }}
+          >
+
+            <option value="">
+              Select Status
+            </option>
+
+            <option value="Delivered">
+              Delivered
+            </option>
+
+            <option value="Bad Delivery">
+              Bad Delivery
+            </option>
+
+            <option value="Cancelled">
+              Cancelled
+            </option>
+
+            <option value="Not Delivered">
+              Not Delivered
+            </option>
+
+          </select>
+
+        </>
+
+      )}
+
+      <textarea
+        placeholder="Remarks"
+        value={remarks}
+        onChange={(e) =>
+          setRemarks(e.target.value)
+        }
+        rows={4}
+        style={{
+          width: "100%",
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #d1d5db",
+          marginBottom: 16,
+        }}
+      />
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 10,
+        }}
+      >
+
+        <button
+          onClick={() => {
+
+            setStatusModalOpen(false);
+
+            setSelectedOrder(null);
+
+            setSubStatus("");
+
+            setRemarks("");
+
+          }}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "1px solid #d1d5db",
+            background: "#fff",
+            cursor: "pointer",
+          }}
+        >
+          Close
+        </button>
+
+        <button
+          onClick={() => {
+
+            console.log({
+              selectedOrder,
+              actionType,
+              subStatus,
+              remarks,
+            });
+
+          }}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "none",
+            background: "#111827",
+            color: "#fff",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          Submit
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+)}
     </section>
   );
 }
