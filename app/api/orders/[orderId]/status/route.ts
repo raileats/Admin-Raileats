@@ -60,9 +60,14 @@ export async function PATCH(
     const { error: updateError } = await supa
       .from("Orders")
       .update({
-        Status: newStatus,
-        UpdatedAt: new Date().toISOString(),
-      })
+  Status: newStatus,
+
+  SubStatus:
+    body.subStatus || null,
+
+  UpdatedAt:
+    new Date().toISOString(),
+})
       .eq("OrderId", orderId);
 
     if (updateError) {
@@ -75,14 +80,36 @@ export async function PATCH(
     }
 
     // history insert
-    await supa.from("OrderStatusHistory").insert({
-      OrderId: orderId,
-      OldStatus: oldOrder.Status,
-      NewStatus: newStatus,
-      Note: remarks,
-      ChangedBy: changedBy,
-      ChangedAt: new Date().toISOString(),
-    });
+    await supa
+  .from("OrderStatusHistory")
+  .insert({
+
+    OrderId: orderId,
+
+    OldStatus:
+      oldOrder.Status,
+
+    NewStatus:
+      newStatus,
+
+    SubStatus:
+      body.subStatus || null,
+
+    Note: remarks,
+
+    Remarks: remarks,
+
+    ChangedBy:
+      changedBy,
+
+    ActionSource:
+      body.actionSource ||
+      "admin",
+
+    ChangedAt:
+      new Date().toISOString(),
+
+  });
 
     return NextResponse.json({
       ok: true,
