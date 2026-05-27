@@ -161,7 +161,7 @@ export default function AdminOrdersPage() {
     return 0;
   });
 
-  // Upgraded Diagnostics Real-time Analytics States
+  // Diagnostics Real-time Analytics States
   const [viewDrawerOpen, setViewDrawerOpen] = useState(false);
   const [detailedOrder, setDetailedOrder] = useState<any>(null);
   const [fetchedItems, setFetchedItems] = useState<any[]>([]);
@@ -547,7 +547,7 @@ export default function AdminOrdersPage() {
     }
   }
 
-  function submitMark(order: Order) {
+  async function submitMark(order: Order) {
     const selection = marking[order.id];
     if (!selection || !selection.status) {
       alert("Select status first");
@@ -558,69 +558,67 @@ export default function AdminOrdersPage() {
     const targetDbValue = matchedOption ? matchedOption.dbValue : targetKey;
     const currentRemarks = selection.remarks || `Marked ${targetKey}`;
 
-    (async () => {
-      try {
-        const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            newStatus: targetDbValue,
-            remarks: currentRemarks,
-            changedBy: "admin",
-          }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok || !json?.ok) {
-          alert("Failed to change status");
-          return;
-        }
-
-        const updated: Order = {
-          ...order,
-          status: targetKey,
-          dbStatus: targetDbValue,
-          history: [
-            ...order.history,
-            {
-              at: new Date().toISOString(),
-              by: "admin",
-              note: currentRemarks,
-              status: targetKey,
-            },
-          ],
-        };
-
-        setAllOrders((prev) => {
-          const copy: Record<TabKey, Order[]> = { ...prev } as any;
-          (Object.keys(copy) as TabKey[]).forEach((k) => {
-            copy[k] = (copy[k] ?? []).filter((o) => o.id !== order.id);
-          });
-          copy[targetKey] = [updated, ...(copy[targetKey] ?? [])];
-          return copy;
-        });
-
-        setMarking((prev) => {
-          const cp = { ...prev };
-          delete cp[order.id];
-          return cp;
-        });
-
-        if (viewDrawerOpen && detailedOrder && detailedOrder.id === order.id) {
-          try {
-            const { data: logReload } = await supabase
-              .from("OrderStatusHistory")
-              .select("*")
-              .eq("OrderId", order.id)
-              .order("ChangedAt", { ascending: true });
-            if (logReload) setOrderLogs(logReload);
-          } catch (err) { console.error(err); }
-        }
-
-        setActiveTab(targetKey);
-      } catch (e) {
-        alert("Failed to change status (network error)");
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          newStatus: targetDbValue,
+          remarks: currentRemarks,
+          changedBy: "admin",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        alert("Failed to change status");
+        return;
       }
-    })();
+
+      const updated: Order = {
+        ...order,
+        status: targetKey,
+        dbStatus: targetDbValue,
+        history: [
+          ...order.history,
+          {
+            at: new Date().toISOString(),
+            by: "admin",
+            note: currentRemarks,
+            status: targetKey,
+          },
+        ],
+      };
+
+      setAllOrders((prev) => {
+        const copy: Record<TabKey, Order[]> = { ...prev } as any;
+        (Object.keys(copy) as TabKey[]).forEach((k) => {
+          copy[k] = (copy[k] ?? []).filter((o) => o.id !== order.id);
+        });
+        copy[targetKey] = [updated, ...(copy[targetKey] ?? [])];
+        return copy;
+      });
+
+      setMarking((prev) => {
+        const cp = { ...prev };
+        delete cp[order.id];
+        return cp;
+      });
+
+      if (viewDrawerOpen && detailedOrder && detailedOrder.id === order.id) {
+        try {
+          const { data: logReload } = await supabase
+            .from("OrderStatusHistory")
+            .select("*")
+            .eq("OrderId", order.id)
+            .order("ChangedAt", { ascending: true });
+          if (logReload) setOrderLogs(logReload);
+        } catch (err) { console.error(err); }
+      }
+
+      setActiveTab(targetKey);
+    } catch (e) {
+      alert("Failed to change status (network error)");
+    }
   }
 
   function applyFilters(list: Order[]) {
@@ -880,7 +878,8 @@ export default function AdminOrdersPage() {
                   <td style={{ padding: 12 }}>{o.coach || "-"}</td>
                   <td style={{ padding: 12 }}>{o.seat || "-"}</td>
                   <td style={{ padding: 12, fontWeight: 600 }}>{o.customerName}</td>
-                  <td style={{ padding: 12, fontMono: "true" }}>{o.customerMobile}</td>
+                  {/* TypeScript Style Error Fixed here: Changed fontMono to fontFamily: "monospace" */}
+                  <td style={{ padding: 12, fontFamily: "monospace" }}>{o.customerMobile}</td>
 
                   <td style={{ padding: 12, maxWidth: 220 }}>
                     <details style={{ background: "#f8fafc", padding: 6, borderRadius: 6, border: "1px solid #e2e8f0" }}>
@@ -1052,7 +1051,7 @@ export default function AdminOrdersPage() {
                         </div>
                       )}
 
-                      {/* UNINTERRUPTED COMPLIANCE INTEGRATION TRIGGER POINT BUTTON */}
+                      {/* COMPLIANCE INTEGRATION TRIGGER POINT BUTTON */}
                       <button
                         onClick={() => handleOpenDiagnosticsDrawer(o)}
                         style={{
@@ -1095,7 +1094,7 @@ export default function AdminOrdersPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* DEEP DIAGNOSTICS ARCHITECTURE SLIDING DRAWER FRAMEWORK (NEW SYSTEM INTELLIGENCE) */}
+      {/* DEEP DIAGNOSTICS ARCHITECTURE SLIDING DRAWER FRAMEWORK */}
       {/* ========================================================================= */}
       {viewDrawerOpen && detailedOrder && (
         <div 
@@ -1106,6 +1105,7 @@ export default function AdminOrdersPage() {
             backdropFilter: "blur(4px)",
             zIndex: 999,
             display: "flex",
+            justifyValue: "flex-end",
             justifyContent: "flex-end",
             animation: "fadeIn 0.2s ease"
           }}
@@ -1145,7 +1145,7 @@ export default function AdminOrdersPage() {
                       if (!confirm(`Move ${detailedOrder.id} to next status?`)) return;
                       moveOrderToNext(detailedOrder.id);
                     }}
-                    style={{ padding: "8px 12px", background: "#2563eb", color: "#white", color: "#fff", border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "11px", cursor: "pointer" }}
+                    style={{ padding: "8px 12px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "11px", cursor: "pointer" }}
                   >
                     🚀 Advance Stage
                   </button>
@@ -1168,7 +1168,7 @@ export default function AdminOrdersPage() {
 
                 <button 
                   onClick={() => { setViewDrawerOpen(false); setDetailedOrder(null); }}
-                  style={{ width: "32px", height: "32px", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "50%", cursor: "pointer", fontWeight: "bold", color: "#64748b", display: "flex", alignItems: "center", justifyValue: "center", justifyContent: "center" }}
+                  style={{ width: "32px", height: "32px", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "50%", cursor: "pointer", fontWeight: "bold", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
                   ✕
                 </button>
@@ -1194,13 +1194,13 @@ export default function AdminOrdersPage() {
                 </div>
               </div>
 
-              {/* PANEL BLOCK B: DYNAMIC LIVE FETCHED BASKET BREAKDOWN GRID (OrderItems LINK) */}
+              {/* PANEL BLOCK B: DYNAMIC LIVE FETCHED BASKET BREAKDOWN GRID */}
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <ShoppingBag size={14} /> Food Basket Summary Breakdown
                 </h3>
                 <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", textAlignment: "left" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                     <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", textAlign: "left" }}>
                       <tr>
                         <th style={{ padding: "10px 16px" }}>Item Name &amp; Specifications</th>
@@ -1228,15 +1228,15 @@ export default function AdminOrdersPage() {
 
                 {/* Gross Summary Overlay */}
                 <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", fontSize: "13px", fontWeight: 600, display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <div style={{ display: "flex", justifyValue: "space-between", justifyContent: "space-between", color: "#64748b" }}><span>Total Base Value Collection:</span><span style={{ color: "#334155" }}>₹{detailedOrder.total || "0"}</span></div>
-                  <div style={{ display: "flex", justifyValue: "space-between", justifyContent: "space-between", color: "#0f172a", fontWeight: 800, fontSize: "14px", paddingTop: "6px", borderTop: "1px dashed #cbd5e1" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}><span>Total Base Value Collection:</span><span style={{ color: "#334155" }}>₹{detailedOrder.total || "0"}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: "#0f172a", fontWeight: 800, fontSize: "14px", paddingTop: "6px", borderTop: "1px dashed #cbd5e1" }}>
                     <span>Gross Account Payable:</span>
                     <span style={{ color: "#1e3a8a" }}>₹{detailedOrder.total || "0"}</span>
                   </div>
                 </div>
               </div>
 
-              {/* PANEL BLOCK C: LIVE VENDOR COMPLIANCE INTERACTION PANEL (RestroMaster LINK) */}
+              {/* PANEL BLOCK C: LIVE VENDOR COMPLIANCE INTERACTION PANEL */}
               <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "12px", padding: "16px" }}>
                 <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#1e40af", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <ShieldCheck size={14} style={{ color: "#2563eb" }} /> Restaurant Compliance &amp; Corporate License Audit
@@ -1257,7 +1257,7 @@ export default function AdminOrdersPage() {
                 )}
               </div>
 
-              {/* PANEL BLOCK D: CHRONOLOGICAL SEQUENCE STEP HISTORY TIMELINE (OrderStatusHistory LINK) */}
+              {/* PANEL BLOCK D: CHRONOLOGICAL SEQUENCE STEP HISTORY TIMELINE */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <Clock size={14} /> Chronological Operational Lifecycle Milestones ({orderLogs.length})
@@ -1292,7 +1292,7 @@ export default function AdminOrdersPage() {
                             </div>
                           )}
 
-                          <div style={{ marginTop: "4px", pt: "4px", borderTop: "1px solid #f1f5f9", fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", display: "flex", justifyContent: "space-between" }}>
+                          <div style={{ marginTop: "4px", paddingTop: "4px", borderTop: "1px solid #f1f5f9", fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", display: "flex", justifyContent: "space-between" }}>
                             <span>Action Initiator: <span style={{ color: "#475569", fontWeight: 800 }}>{log.ChangedBy || log.Actor || "Automated Infrastructure"}</span></span>
                             <span>Channel Source: {log.ActionSource || "System Core"}</span>
                           </div>
@@ -1311,7 +1311,7 @@ export default function AdminOrdersPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MAIN STATUS ACTIONS MODAL (RETAINED UNALTERED WORKFLOW LAYER) */}
+      {/* MAIN STATUS ACTIONS MODAL */}
       {/* ========================================================================= */}
       {statusModalOpen && (
         <div
