@@ -480,8 +480,15 @@ useEffect(() => {
       }
     };
 
-    load();
-  }, [activeTab]);
+       load();
+
+    return () => {
+
+      mounted = false;
+
+    };
+
+}, [activeTab]);
 
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
 
