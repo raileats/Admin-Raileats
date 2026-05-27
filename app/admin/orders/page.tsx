@@ -610,7 +610,9 @@ alert("Network error");
 
 }
 
-}function submitMark(order: Order) {const selection = marking[order.id];if (!selection || !selection.status) {alert("Select status first");return;}const targetKey = selection.status as TabKey;const matchedOption = FINAL_MARK_OPTIONS.find(o => o.key === targetKey);const targetDbValue = matchedOption ? matchedOption.dbValue : targetKey;const remarks = selection.remarks || Marked ${targetKey};
+function submitMark(order: Order) {const selection = marking[order.id];if (!selection || !selection.status) {alert("Select status first");return;}const targetKey = selection.status as TabKey;const matchedOption = FINAL_MARK_OPTIONS.find(o => o.key === targetKey);const targetDbValue = matchedOption ? matchedOption.dbValue : targetKey;const remarks =
+  selection.remarks ||
+  `Marked ${targetKey}`;
 
 (async () => {
   try {
@@ -733,9 +735,25 @@ Object.values(allOrders).flat().forEach((o) => {
 
 return counts;
 
-}, [allOrders]);const visibleOrders = useMemo(() => applyFilters(orders), [orders, searchText, searchDate, searchType, searchOutlet]);
+}, [allOrders]);
 
-return (<section style={{ padding: 12 }}><headerstyle={{display: "flex",justifyContent: "space-between",alignItems: "center",gap: 12,marginBottom: 12,}}
+const visibleOrders = useMemo(
+  () => applyFilters(orders),
+  [
+    orders,
+    searchText,
+    searchDate,
+    searchType,
+    searchOutlet,
+  ]
+);
+
+return (
+
+  <section style={{ padding: 12 }}>
+
+    <header
+      style={{ "flex",justifyContent: "space-between",alignItems: "center",gap: 12,marginBottom: 12,}}
 
 
 
