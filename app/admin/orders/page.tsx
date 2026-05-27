@@ -993,13 +993,31 @@ style={{
 
 <div
 
-style={{display: "flex",gap: 8,flexWrap: "wrap",}}
+<div
+  style={{
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  }}
+>
 
 
 
 <button
-  onClick={() => { {if (!confirm(Move ${o.id} to next status?)) return;moveOrderToNext(o.id);}}style={{padding: "8px 10px",borderRadius: 6,background: "#273e9a",color: "#fff",border: "none",cursor: "pointer",fontWeight: "bold",}}
-
+  onClick={() => {
+    if (!confirm(`Move ${o.id} to next status?`)) return;
+    moveOrderToNext(o.id);
+  }}
+  style={{
+    padding: "8px 10px",
+    borderRadius: 6,
+    background: "#273e9a",
+    color: "#fff",
+    border: "none",
+    cursor: "pointer",
+    fontWeight: "bold",
+  }}
+>
 
 
 {NEXT_MAP[o.status]?.actionLabel}
