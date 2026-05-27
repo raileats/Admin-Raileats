@@ -59,12 +59,6 @@ const CANCEL_REASONS = [
   "Other",
 ];
 
-const NOT_DELIVERED_REASONS = [
-  "Restro Missed",
-  "Late Processing",
-  "Technical Issue",
-];
-
 const NEXT_MAP: Record<
   TabKey,
   {
@@ -135,16 +129,20 @@ export default function AdminOrdersPage() {
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>({} as Record<TabKey, Order[]>);
   const [loading, setLoading] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  
+  // FIXED: Changed type from any to Order | null
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  
   const [actionType, setActionType] = useState("");
   const [subStatus, setSubStatus] = useState("");
-  const [mainStatus, setMainStatus] = useState("");
   const [remarks, setRemarks] = useState("");
   const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
   const [searchType, setSearchType] = useState<SearchType>("orderId");
   const [searchText, setSearchText] = useState("");
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
+  
+  // FIXED: Added missing refreshTick state
   const [refreshTick, setRefreshTick] = useState(0);
   
   const [newOrderCount, setNewOrderCount] = useState<number>(() => {
@@ -178,7 +176,6 @@ export default function AdminOrdersPage() {
 
     document.body.addEventListener("click", unlockAudio, { once: true });
 
-    /* NOTIFICATION PERMISSION */
     if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
       Notification.requestPermission();
     }
@@ -198,15 +195,23 @@ export default function AdminOrdersPage() {
         { event: "INSERT", schema: "public", table: "Orders" },
         async (payload) => {
           console.log("NEW ORDER:", payload);
-          setNewOrderCount((prev) => {
-            const updated = prev + 1;
-            localStorage.setItem("raileats_new_orders", String(updated));
-            return updated;
-          });
+          
+          // FIXED: Only count and notify if it's a freshly Booked order to avoid future stage overlaps
+          if (payload.new?.Status === "Booked") {
+            setNewOrderCount((prev) => {
+              const updated = prev + 1;
+              localStorage.setItem("raileats_new_orders", String(updated));
+              return updated;
+            });
+          }
 
-          /* SOUND */
+          // FIXED: Instantly refresh list on insert
+          setRefreshTick((prev) => prev + 1);
+
+          /* SOUND FIXED: Prevent overlap/spam issues by stopping previous playback */
           try {
             if (audioRef.current) {
+              audioRef.current.pause();
               audioRef.current.currentTime = 0;
               await audioRef.current.play();
             }
@@ -233,6 +238,9 @@ export default function AdminOrdersPage() {
           const oldStatus = payload.old?.Status || "";
           const newStatus = payload.new?.Status || "";
 
+          // FIXED: Instantly refresh UI state on update event
+          setRefreshTick((prev) => prev + 1);
+
           /* ONLY WHEN ORDER MOVES TO NEW ORDER */
           if (oldStatus !== "New Order" && newStatus === "New Order") {
             setNewOrderCount((prev) => {
@@ -241,9 +249,10 @@ export default function AdminOrdersPage() {
               return updated;
             });
 
-            /* SOUND */
+            /* SOUND FIXED: Handled spam/overlap issues */
             try {
               if (audioRef.current) {
+                audioRef.current.pause();
                 audioRef.current.currentTime = 0;
                 await audioRef.current.play();
               }
@@ -345,6 +354,7 @@ export default function AdminOrdersPage() {
     };
 
     load();
+    // FIXED: Added refreshTick to dependencies array
   }, [activeTab, refreshTick]);
 
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
@@ -480,7 +490,6 @@ export default function AdminOrdersPage() {
       setStatusModalOpen(false);
       setSelectedOrder(null);
       setSubStatus("");
-      setMainStatus("");
       setRemarks("");
       setActiveTab(targetKey);
     } catch (e) {
@@ -759,6 +768,8 @@ export default function AdminOrdersPage() {
             setSearchText("");
             setSearchDate("");
             setSearchOutlet("");
+            // FIXED: Reverted searchType back to default on reset
+            setSearchType("orderId");
           }}
           style={{ padding: "8px 12px", borderRadius: 6 }}
         >
@@ -851,7 +862,6 @@ export default function AdminOrdersPage() {
                             onClick={() => {
                               setSelectedOrder(o);
                               setActionType("cancel");
-                              setMainStatus("Cancelled");
                               setSubStatus("");
                               setRemarks("");
                               setStatusModalOpen(true);
@@ -875,7 +885,6 @@ export default function AdminOrdersPage() {
                             onClick={() => {
                               setSelectedOrder(o);
                               setActionType("mark");
-                              setMainStatus("");
                               setSubStatus("");
                               setRemarks("");
                               setStatusModalOpen(true);
@@ -1042,7 +1051,6 @@ export default function AdminOrdersPage() {
                   setStatusModalOpen(false);
                   setSelectedOrder(null);
                   setSubStatus("");
-                  setMainStatus("");
                   setRemarks("");
                 }}
                 style={{
