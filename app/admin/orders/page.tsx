@@ -206,7 +206,9 @@ const [actionType, setActionType] =
 
 const [subStatus, setSubStatus] =
   useState("");
-
+const [mainStatus, setMainStatus] =
+  useState("");
+  
 const [remarks, setRemarks] =
   useState("");
   const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
@@ -727,7 +729,9 @@ useEffect(() => {
 
     setSubStatus("");
 
-    setRemarks("");
+setMainStatus("");
+
+setRemarks("");
 
     setActiveTab(targetKey);
 
@@ -1219,7 +1223,9 @@ const tabCounts = useMemo(() => {
 
         setSubStatus("");
 
-        setRemarks("");
+setMainStatus("");
+
+setRemarks("");
 
         setStatusModalOpen(true);
 
@@ -1253,7 +1259,9 @@ const tabCounts = useMemo(() => {
 
         setSubStatus("");
 
-        setRemarks("");
+setMainStatus("");
+
+setRemarks("");
 
         setStatusModalOpen(true);
 
@@ -1537,7 +1545,9 @@ const tabCounts = useMemo(() => {
 
             setSubStatus("");
 
-            setRemarks("");
+setMainStatus("");
+
+setRemarks("");
 
           }}
           style={{
