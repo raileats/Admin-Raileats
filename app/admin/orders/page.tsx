@@ -145,7 +145,7 @@ export default function AdminOrdersPage() {
   const [searchText, setSearchText] = useState("");
   const [searchDate, setSearchDate] = useState<string>(""); 
   const [searchOutlet, setSearchOutlet] = useState("");
-  const [refreshTick, setRefreshTick] = useState(0); // 👈 Yeh state missing thi, ab add kar di hai
+  const [refreshTick, setRefreshTick] = useState(0);
   
   const [newOrderCount, setNewOrderCount] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -160,6 +160,7 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     audioRef.current = new Audio("/sounds/order_announcement.mp3");
     audioRef.current.preload = "auto";
+    audioRef.current.volume = 1;
 
     const unlockAudio = async () => {
       try {
@@ -176,27 +177,34 @@ export default function AdminOrdersPage() {
     };
 
     document.body.addEventListener("click", unlockAudio, { once: true });
-    if (audioRef.current) audioRef.current.volume = 1;
 
-    if (Notification.permission !== "granted") {
+    /* NOTIFICATION PERMISSION */
+    if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
       Notification.requestPermission();
     }
+
+    return () => {
+      document.body.removeEventListener("click", unlockAudio);
+    };
   }, []);
 
   /* ================= REALTIME ORDERS ================= */
   useEffect(() => {
     const channel = supabase
       .channel("admin-orders-live")
+      /* ================= INSERT ================= */
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "Orders" },
         async (payload) => {
+          console.log("NEW ORDER:", payload);
           setNewOrderCount((prev) => {
             const updated = prev + 1;
             localStorage.setItem("raileats_new_orders", String(updated));
             return updated;
           });
 
+          /* SOUND */
           try {
             if (audioRef.current) {
               audioRef.current.currentTime = 0;
@@ -206,6 +214,7 @@ export default function AdminOrdersPage() {
             console.log("Sound blocked by browser");
           }
 
+          /* NOTIFICATION */
           try {
             if (Notification.permission === "granted") {
               new Notification("🚆 New RailEats Order", {
@@ -215,6 +224,44 @@ export default function AdminOrdersPage() {
           } catch (e) {}
         }
       )
+      /* ================= UPDATE ================= */
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "Orders" },
+        async (payload) => {
+          console.log("ORDER UPDATED:", payload);
+          const oldStatus = payload.old?.Status || "";
+          const newStatus = payload.new?.Status || "";
+
+          /* ONLY WHEN ORDER MOVES TO NEW ORDER */
+          if (oldStatus !== "New Order" && newStatus === "New Order") {
+            setNewOrderCount((prev) => {
+              const updated = prev + 1;
+              localStorage.setItem("raileats_new_orders", String(updated));
+              return updated;
+            });
+
+            /* SOUND */
+            try {
+              if (audioRef.current) {
+                audioRef.current.currentTime = 0;
+                await audioRef.current.play();
+              }
+            } catch (e) {
+              console.log("Sound blocked");
+            }
+
+            /* NOTIFICATION */
+            try {
+              if (Notification.permission === "granted") {
+                new Notification("🚆 Order Sent To Restaurant", {
+                  body: `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
+                });
+              }
+            } catch (e) {}
+          }
+        }
+      )
       .subscribe();
 
     return () => {
@@ -222,12 +269,15 @@ export default function AdminOrdersPage() {
     };
   }, []);
 
-  /* ================= AUTO REFRESH TICK ================= */
+  /* ================= AUTO REFRESH ================= */
   useEffect(() => {
     const interval = setInterval(() => {
       setRefreshTick((prev) => prev + 1);
     }, 30000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   /* ================= LOAD ORDERS ================= */
@@ -295,7 +345,7 @@ export default function AdminOrdersPage() {
     };
 
     load();
-  }, [activeTab, refreshTick]); // 👈 RefreshTick ko dependency me dala taaki auto updates fetch ho sakein
+  }, [activeTab, refreshTick]);
 
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
 
@@ -852,180 +902,138 @@ export default function AdminOrdersPage() {
                             setMarking((prev) => ({
                               ...prev,
                               [o.id]: {
-                                ...(prev[o.id] || { remarks: "" }),
                                 status: e.target.value,
+                                remarks: prev[o.id]?.remarks || "",
                               },
                             }))
                           }
-                          style={{ padding: 8, borderRadius: 6, border: "1px solid #e6e8eb" }}
+                          style={{ padding: 6, borderRadius: 6, border: "1px solid #d1d5db" }}
                         >
-                          <option value="">Select status</option>
+                          <option value="">-- Change Status --</option>
                           {FINAL_MARK_OPTIONS.map((opt) => (
                             <option key={opt.key} value={opt.key}>
                               {opt.label}
                             </option>
                           ))}
                         </select>
-
                         <input
-                          placeholder="Remarks (optional)"
+                          placeholder="Remarks/Reason"
                           value={marking[o.id]?.remarks || ""}
                           onChange={(e) =>
                             setMarking((prev) => ({
                               ...prev,
                               [o.id]: {
-                                ...(prev[o.id] || { status: "" }),
+                                status: prev[o.id]?.status || "",
                                 remarks: e.target.value,
                               },
                             }))
                           }
-                          style={{ padding: 8, borderRadius: 6, border: "1px solid #e6e8eb" }}
+                          style={{ padding: 6, borderRadius: 6, border: "1px solid #d1d5db" }}
                         />
-
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button
-                            onClick={() => submitMark(o)}
-                            style={{
-                              padding: "8px 10px",
-                              borderRadius: 6,
-                              background: "#0f172a",
-                              color: "#fff",
-                              cursor: "pointer",
-                              flex: 1,
-                              border: "none",
-                            }}
-                          >
-                            Submit
-                          </button>
-                          <button
-                            onClick={() =>
-                              setMarking((prev) => {
-                                const cp = { ...prev };
-                                delete cp[o.id];
-                                return cp;
-                              })
-                            }
-                            style={{
-                              padding: "8px 10px",
-                              borderRadius: 6,
-                              border: "1px solid #e6e8eb",
-                              background: "#fff",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Clear
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => submitMark(o)}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: 6,
+                            background: "#111827",
+                            color: "#fff",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Submit
+                        </button>
                       </div>
                     )}
                   </td>
                 </tr>
               ))}
-
-              {!loading && visibleOrders.length === 0 && (
-                <tr>
-                  <td colSpan={14} style={{ padding: 20, color: "#6b7280" }}>No orders found for this tab / filter.</td>
-                </tr>
-              )}
-
-              {loading && (
-                <tr>
-                  <td colSpan={14} style={{ padding: 20, color: "#6b7280" }}>Loading orders…</td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ================= MODAL DIALOG ================= */}
-      {statusModalOpen && (
+      {/* STATUS ACTION DIALOG MODAL */}
+      {statusModalOpen && selectedOrder && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.45)",
+            background: "rgba(0,0,0,0.4)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 9999,
             padding: 16,
+            zIndex: 1000,
           }}
         >
-          <div style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 12, padding: 20 }}>
-            <h2 style={{ marginTop: 0, marginBottom: 16 }}>
-              {actionType === "cancel" ? "Cancel Order" : "Mark Order Status"}
-            </h2>
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              padding: 20,
+              width: "100%",
+              maxWidth: 480,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: 8, fontSize: 20 }}>
+              {actionType === "cancel" ? "Cancel Order" : "Mark Terminal Status"}
+            </h3>
+            <p style={{ color: "#4b5563", fontSize: 14, marginBottom: 16 }}>
+              Order ID: <strong>{selectedOrder.id}</strong> ({selectedOrder.customerName})
+            </p>
 
-            {actionType === "cancel" && (
-              <select
-                value={subStatus}
-                onChange={(e) => setSubStatus(e.target.value)}
-                style={{ width: "100%", padding: 10, borderRadius: 8, marginBottom: 12, border: "1px solid #d1d5db" }}
-              >
-                <option value="">Select Cancel Reason</option>
-                {CANCEL_REASONS.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            )}
-
-            {actionType === "mark" && (
-              <>
+            {actionType === "cancel" ? (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
+                  Cancellation Reason
+                </label>
                 <select
-                  value={mainStatus}
-                  onChange={(e) => {
-                    setMainStatus(e.target.value);
-                    setSubStatus("");
-                  }}
-                  style={{ width: "100%", padding: 10, borderRadius: 8, marginBottom: 12, border: "1px solid #d1d5db" }}
+                  value={subStatus}
+                  onChange={(e) => setSubStatus(e.target.value)}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #d1d5db" }}
                 >
-                  <option value="">Select Main Status</option>
+                  <option value="">-- Select Reason --</option>
+                  {CANCEL_REASONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>
+                  Select Outcome
+                </label>
+                <select
+                  value={subStatus}
+                  onChange={(e) => setSubStatus(e.target.value)}
+                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #d1d5db" }}
+                >
+                  <option value="">-- Select Status --</option>
                   <option value="Delivered">Delivered</option>
-                  <option value="Cancelled">Cancelled</option>
+                  <option value="Bad Delivery">Bad Delivery</option>
                   <option value="Not Delivered">Not Delivered</option>
                 </select>
-
-                {mainStatus && (
-                  <select
-                    value={subStatus}
-                    onChange={(e) => setSubStatus(e.target.value)}
-                    style={{ width: "100%", padding: 10, borderRadius: 8, marginBottom: 12, border: "1px solid #d1d5db" }}
-                  >
-                    <option value="">Select Sub Status</option>
-                    {mainStatus === "Delivered" && (
-                      <>
-                        <option value="Delivered">Delivered</option>
-                        <option value="Bad Delivery">Bad Delivery</option>
-                      </>
-                    )}
-
-                    {mainStatus === "Cancelled" && (
-                      <>
-                        {CANCEL_REASONS.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </>
-                    )}
-
-                    {mainStatus === "Not Delivered" && (
-                      <>
-                        {NOT_DELIVERED_REASONS.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                )}
-              </>
+              </div>
             )}
 
             <textarea
-              placeholder="Remarks"
+              placeholder="Remarks (optional)"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               rows={4}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #d1d5db", marginBottom: 16 }}
+              style={{
+                width: "100%",
+                padding: 10,
+                borderRadius: 8,
+                border: "1px solid #d1d5db",
+                marginBottom: 16,
+                fontFamily: "inherit",
+              }}
             />
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
@@ -1037,7 +1045,14 @@ export default function AdminOrdersPage() {
                   setMainStatus("");
                   setRemarks("");
                 }}
-                style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", cursor: "pointer", fontWeight: 600 }}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
               >
                 Close
               </button>
@@ -1048,13 +1063,21 @@ export default function AdminOrdersPage() {
                     alert("Please select cancel reason");
                     return;
                   }
-                  if (actionType === "mark" && (!mainStatus || !subStatus)) {
-                    alert("Please select status");
+                  if (actionType === "mark" && !subStatus) {
+                    alert("Please select status outcome");
                     return;
                   }
                   submitStatusAction();
                 }}
-                style={{ padding: "10px 14px", borderRadius: 8, border: "none", background: "#111827", color: "#fff", cursor: "pointer", fontWeight: 700 }}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#111827",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                }}
               >
                 Submit
               </button>
