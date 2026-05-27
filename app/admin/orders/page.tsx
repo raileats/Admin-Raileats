@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Bell, Eye, Clock, ShieldCheck, ShoppingBag, Smartphone, Train, MapPin } from "lucide-react";
+import { Bell, Clock, ShieldCheck, ShoppingBag, Smartphone } from "lucide-react";
 import Link from "next/link";
 
 type TabKey =
@@ -34,6 +34,7 @@ type Order = {
   customerMobile: string;
   total?: string;
   history: OrderHistoryItem[];
+  rawCreatedAt?: string; // Correct fallback sorting key for booking chronology
 };
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -144,7 +145,6 @@ export default function AdminOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [actionType, setActionType] = useState("");
   const [subStatus, setSubStatus] = useState("");
-  const [mainStatus, setMainStatus] = useState("");
   const [remarks, setRemarks] = useState("");
 
   const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
@@ -162,6 +162,8 @@ export default function AdminOrdersPage() {
 
   const [viewDrawerOpen, setViewDrawerOpen] = useState(false);
   const [detailedOrder, setDetailedOrder] = useState<any>(null);
+  const [activeDrawerSection, setActiveDrawerSection] = useState<"details" | "logs">("details");
+
   const [fetchedItems, setFetchedItems] = useState<any[]>([]);
   const [fetchedRestro, setFetchedRestro] = useState<any>(null);
   const [orderLogs, setOrderLogs] = useState<any[]>([]);
@@ -300,6 +302,7 @@ export default function AdminOrdersPage() {
             customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
             total: row.totalAmount != null ? String(row.totalAmount) : (row.TotalAmount != null ? String(row.TotalAmount) : undefined),
             history: Array.isArray(row.history) ? row.history : [],
+            rawCreatedAt: row.CreatedAt ?? row.createdAt ?? "",
           };
         });
 
@@ -328,8 +331,9 @@ export default function AdminOrdersPage() {
   }, [allOrders]);
 
   /* ================= DIAGNOSTICS LAUNCH PANEL ================= */
-  const handleOpenDiagnosticsDrawer = async (order: Order) => {
+  const handleOpenDiagnosticsDrawer = async (order: Order, preferredSection: "details" | "logs" = "details") => {
     setDetailedOrder(order);
+    setActiveDrawerSection(preferredSection);
     setViewDrawerOpen(true);
     
     const targetOrderId = order.id;
@@ -527,7 +531,6 @@ export default function AdminOrdersPage() {
       setStatusModalOpen(false);
       setSelectedOrder(null);
       setSubStatus("");
-      setMainStatus("");
       setRemarks("");
       setActiveTab(targetKey);
     } catch (e) {
@@ -610,9 +613,10 @@ export default function AdminOrdersPage() {
     }
   }
 
-  function applyFilters(list: Order[]) {
+  const applyFiltersAndSorting = (list: Order[]) => {
     let filtered = list.slice();
 
+    // 1. Appling Search Filters
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       if (searchType === "customerMobile") {
@@ -639,8 +643,23 @@ export default function AdminOrdersPage() {
       }
     }
 
+    // 2. Chronological Delivery Date + Time Ascending Sorting Engine (Tie-breaker: Latest Booked on Top)
+    filtered.sort((a, b) => {
+      const dateTimeA = new Date(`${a.deliveryDate}T${a.deliveryTime || "00:00:00"}`).getTime();
+      const dateTimeB = new Date(`${b.deliveryDate}T${b.deliveryTime || "00:00:00"}`).getTime();
+
+      if (dateTimeA !== dateTimeB) {
+        return dateTimeA - dateTimeB; // Earliest upcoming delivery window first
+      }
+
+      // Tie-breaker: If delivery timeline matches perfectly, sort by newest booked order creation
+      const bookedTimeA = a.rawCreatedAt ? new Date(a.rawCreatedAt).getTime() : 0;
+      const bookedTimeB = b.rawCreatedAt ? new Date(b.rawCreatedAt).getTime() : 0;
+      return bookedTimeB - bookedTimeA; 
+    });
+
     return filtered;
-  }
+  };
 
   const tabCounts = useMemo(() => {
     const counts: Record<string, number> = {
@@ -666,7 +685,7 @@ export default function AdminOrdersPage() {
     return counts;
   }, [allOrders]);
 
-  const visibleOrders = useMemo(() => applyFilters(orders), [orders, searchText, searchDate, searchType, searchOutlet]);
+  const visibleOrders = useMemo(() => applyFiltersAndSorting(orders), [orders, searchText, searchDate, searchType, searchOutlet]);
 
   return (
     <section style={{ padding: 12, minHeight: "100vh", background: "#f8fafc", fontFamily: "sans-serif" }}>
@@ -684,8 +703,8 @@ export default function AdminOrdersPage() {
         }}
       >
         <div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#0f172a" }}>Orders</h1>
-          <p style={{ margin: 0, color: "#6b7280", fontSize: 13, fontWeight: 500 }}>Manage orders &amp; mark statuses</p>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#0f172a" }}>Orders Dashboard</h1>
+          <p style={{ margin: 0, color: "#6b7280", fontSize: 13, fontWeight: 500 }}>Real-time dynamic monitoring console ordered by delivery schedule urgency</p>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -729,8 +748,8 @@ export default function AdminOrdersPage() {
           </Link>
 
           <div style={{ color: "#6b7280", fontSize: 13, fontWeight: 600 }}>
-            Showing: <strong style={{ color: "#0f172a" }}>{TABS.find((t) => t.key === activeTab)?.label}</strong>
-            {loading ? " • Loading…" : ""}
+            Active Stage: <strong style={{ color: "#2563eb" }}>{TABS.find((t) => t.key === activeTab)?.label}</strong>
+            {loading ? " • Syncing..." : ""}
           </div>
         </div>
       </header>
@@ -749,7 +768,7 @@ export default function AdminOrdersPage() {
               style={{
                 padding: "8px 12px",
                 borderRadius: 8,
-                border: active ? "2px solid #273e9a" : "1px solid #e6e8eb",
+                border: active ? "2px solid #2563eb" : "1px solid #e2e8f0",
                 background: active ? "#fff" : "#f8fafc",
                 fontWeight: active ? 700 : 600,
                 cursor: "pointer",
@@ -757,11 +776,11 @@ export default function AdminOrdersPage() {
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span>{tab.label}</span>
+                <span style={{ color: active ? "#0f172a" : "#475569" }}>{tab.label}</span>
                 <span
                   style={{
-                    background: active ? "#1d4ed8" : "#e5e7eb",
-                    color: active ? "#fff" : "#111827",
+                    background: active ? "#2563eb" : "#e2e8f0",
+                    color: active ? "#fff" : "#475569",
                     borderRadius: 999,
                     minWidth: 20,
                     height: 20,
@@ -782,9 +801,9 @@ export default function AdminOrdersPage() {
       </div>
 
       {/* FILTER CONTROLS */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap", background: "#fff", padding: 12, borderRadius: 10, border: "1px solid #e6e8eb" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap", background: "#fff", padding: 12, borderRadius: 10, border: "1px solid #e2e8f0" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "#475569" }}>
-          <span>Search by</span>
+          <span>Search Field</span>
           <select value={searchType} onChange={(e) => setSearchType(e.target.value as SearchType)} style={{ padding: 6, borderRadius: 6, border: "1px solid #cbd5e1" }}>
             <option value="orderId">Order ID</option>
             <option value="customerMobile">Customer Mobile</option>
@@ -812,7 +831,7 @@ export default function AdminOrdersPage() {
         )}
 
         <input
-          placeholder="Filter by outlet (optional)"
+          placeholder="Outlet Name filter fallback"
           value={searchOutlet}
           onChange={(e) => setSearchOutlet(e.target.value)}
           style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", minWidth: 180, fontSize: 13 }}
@@ -826,7 +845,7 @@ export default function AdminOrdersPage() {
           }}
           style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f1f5f9", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
         >
-          Reset
+          Reset Filters
         </button>
       </div>
 
@@ -856,7 +875,29 @@ export default function AdminOrdersPage() {
             <tbody style={{ fontSize: 13, color: "#334155" }}>
               {visibleOrders.map((o) => (
                 <tr key={o.id} style={{ borderBottom: "1px solid #f1f5f9" }} className="table-row-hover">
-                  <td style={{ padding: 12, fontWeight: 700, color: "#1e3a8a" }}>#{o.id}</td>
+                  
+                  {/* MODIFIED: Clickable Order ID triggers detailed information view */}
+                  <td style={{ padding: 12 }}>
+                    <button
+                      onClick={() => handleOpenDiagnosticsDrawer(o, "details")}
+                      title="Click to view detailed order profile"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        margin: 0,
+                        font: "inherit",
+                        fontWeight: 800,
+                        color: "#2563eb",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        textAlign: "left"
+                      }}
+                    >
+                      #{o.id}
+                    </button>
+                  </td>
+
                   <td style={{ padding: 12 }}><span style={{ background: "#f1f5f9", padding: "3px 6px", borderRadius: 4, fontWeight: 600 }}>{o.outletId}</span></td>
                   <td style={{ padding: 12, fontWeight: 600 }}>{o.outletName}</td>
                   <td style={{ padding: 12 }}><span style={{ background: "#eff6ff", color: "#2563eb", padding: "3px 6px", borderRadius: 4, fontWeight: 600 }}>{o.stationCode}</span></td>
@@ -869,18 +910,26 @@ export default function AdminOrdersPage() {
                   <td style={{ padding: 12, fontWeight: 600 }}>{o.customerName}</td>
                   <td style={{ padding: 12, fontFamily: "monospace" }}>{o.customerMobile}</td>
 
-                  <td style={{ padding: 12, maxWidth: 220 }}>
-                    <details style={{ background: "#f8fafc", padding: 6, borderRadius: 6, border: "1px solid #e2e8f0" }}>
-                      <summary style={{ cursor: "pointer", color: "#2563eb", fontWeight: 700 }}>Logs Stream ({o.history.length})</summary>
-                      <ul style={{ marginTop: 8, paddingLeft: 14, listStyleType: "circle", maxHeight: 150, overflowY: "auto" }}>
-                        {o.history.map((h, i) => (
-                          <li key={i} style={{ marginBottom: 6, fontSize: 12 }}>
-                            <div style={{ color: "#94a3b8", fontSize: 10 }}>{new Date(h.at).toLocaleString()}</div>
-                            <div><strong>{h.by}</strong>: <span style={{ color: "#475569" }}>{h.note ?? TABS.find((t) => t.key === h.status)?.label}</span></div>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
+                  {/* MODIFIED: Order History column now triggers directly the History Logs tab view */}
+                  <td style={{ padding: 12 }}>
+                    <button
+                      onClick={() => handleOpenDiagnosticsDrawer(o, "logs")}
+                      style={{
+                        background: "#f0fdf4",
+                        color: "#16a34a",
+                        border: "1px solid #bbf7d0",
+                        padding: "5px 10px",
+                        borderRadius: 6,
+                        fontWeight: 700,
+                        fontSize: 11,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4
+                      }}
+                    >
+                      📜 Log Stream ({o.history?.length || 0})
+                    </button>
                   </td>
 
                   <td style={{ padding: 12, verticalAlign: "middle" }}>
@@ -903,7 +952,7 @@ export default function AdminOrdersPage() {
                             style={{
                               padding: "6px 10px",
                               borderRadius: 6,
-                              background: "#273e9a",
+                              background: "#2563eb",
                               color: "#fff",
                               border: "none",
                               cursor: "pointer",
@@ -919,6 +968,7 @@ export default function AdminOrdersPage() {
                             <button
                               onClick={() => {
                                 setSelectedOrder(o);
+                                actionType === "cancel";
                                 setActionType("cancel");
                                 setSubStatus("");
                                 setRemarks("");
@@ -1038,27 +1088,6 @@ export default function AdminOrdersPage() {
                           )}
                         </div>
                       )}
-
-                      <button
-                        onClick={() => handleOpenDiagnosticsDrawer(o)}
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: 6,
-                          background: "#0284c7",
-                          color: "#fff",
-                          border: "none",
-                          cursor: "pointer",
-                          fontWeight: "bold",
-                          fontSize: 11,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 4,
-                          boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
-                        }}
-                      >
-                        <Eye size={13} /> View &amp; Logs
-                      </button>
-
                     </div>
                   </td>
                 </tr>
@@ -1066,13 +1095,13 @@ export default function AdminOrdersPage() {
 
               {!loading && visibleOrders.length === 0 && (
                 <tr>
-                  <td colSpan={14} style={{ padding: 30, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>No orders found matching tab constraints or filters.</td>
+                  <td colSpan={14} style={{ padding: 30, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>No active track records inside this tab scope constraints.</td>
                 </tr>
               )}
 
               {loading && (
                 <tr>
-                  <td colSpan={14} style={{ padding: 30, textAlign: "center", color: "#64748b", fontWeight: 600 }}>Syncing active stream pipelines...</td>
+                  <td colSpan={14} style={{ padding: 30, textAlign: "center", color: "#64748b", fontWeight: 600 }}>Syncing structural updates with live engine stream...</td>
                 </tr>
               )}
             </tbody>
@@ -1092,7 +1121,6 @@ export default function AdminOrdersPage() {
             backdropFilter: "blur(4px)",
             zIndex: 999,
             display: "flex",
-            // TypeError Fixed: Removed 'justifyValue: "flex-end"' property completely from here
             justifyContent: "flex-end",
             animation: "fadeIn 0.2s ease"
           }}
@@ -1121,38 +1149,11 @@ export default function AdminOrdersPage() {
                   <span style={{ background: "#2563eb", color: "#fff", fontWeight: 800, fontSize: "11px", padding: "2px 8px", borderRadius: "5px" }}>#{detailedOrder.id}</span>
                 </div>
                 <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#64748b", fontWeight: 600 }}>
-                  CURRENT PIPELINE STATE: <span style={{ color: "#1e40af", fontWeight: 800 }}>"{detailedOrder.dbStatus || detailedOrder.status}"</span>
+                  CURRENT PIPELINE STATE: <span style={{ color: "#2563eb", fontWeight: 800 }}>"{detailedOrder.dbStatus || detailedOrder.status}"</span>
                 </p>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {["booked", "verification", "neworder", "inkitchen", "outfordelivery"].includes(detailedOrder.status) && (
-                  <button
-                    onClick={() => {
-                      if (!confirm(`Move ${detailedOrder.id} to next status?`)) return;
-                      moveOrderToNext(detailedOrder.id);
-                    }}
-                    style={{ padding: "8px 12px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "11px", cursor: "pointer" }}
-                  >
-                    🚀 Advance Stage
-                  </button>
-                )}
-                
-                {["booked", "verification", "neworder"].includes(detailedOrder.status) && (
-                  <button
-                    onClick={() => {
-                      setSelectedOrder(detailedOrder);
-                      setActionType("cancel");
-                      setSubStatus("");
-                      setRemarks("");
-                      setStatusModalOpen(true);
-                    }}
-                    style={{ padding: "8px 12px", background: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "8px", fontWeight: 700, fontSize: "11px", cursor: "pointer" }}
-                  >
-                    🚫 Cancel
-                  </button>
-                )}
-
                 <button 
                   onClick={() => { setViewDrawerOpen(false); setDetailedOrder(null); }}
                   style={{ width: "32px", height: "32px", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "50%", cursor: "pointer", fontWeight: "bold", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -1162,129 +1163,175 @@ export default function AdminOrdersPage() {
               </div>
             </div>
 
+            {/* MODIFIED: TAB TOGGLES INSIDE THE DRAWER TO SWITCH PREFERENCES EASILY */}
+            <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", background: "#fff", padding: "0 24px" }}>
+              <button
+                onClick={() => setActiveDrawerSection("details")}
+                style={{
+                  padding: "14px 20px",
+                  background: "none",
+                  border: "none",
+                  borderBottom: activeDrawerSection === "details" ? "3px solid #2563eb" : "3px solid transparent",
+                  color: activeDrawerSection === "details" ? "#2563eb" : "#64748b",
+                  fontWeight: 700,
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  transition: "all 0.15s"
+                }}
+              >
+                📦 Order Profile Details
+              </button>
+              <button
+                onClick={() => setActiveDrawerSection("logs")}
+                style={{
+                  padding: "14px 20px",
+                  background: "none",
+                  border: "none",
+                  borderBottom: activeDrawerSection === "logs" ? "3px solid #2563eb" : "3px solid transparent",
+                  color: activeDrawerSection === "logs" ? "#2563eb" : "#64748b",
+                  fontWeight: 700,
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  transition: "all 0.15s"
+                }}
+              >
+                📜 Lifecycle History Logs
+              </button>
+            </div>
+
             {/* CORE INNER DRAWER PANEL */}
             <div style={{ flex: 1, padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "24px" }}>
               
-              {/* TRANSIT METRICS PANEL */}
-              <div style={{ background: "#f8fafc", borderRadius: "12px", padding: "16px", border: "1px solid #e2e8f0" }}>
-                <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Smartphone size={14} /> Client Transit Profile &amp; Route Schedule
-                </h3>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", fontSize: "13px", fontWeight: "600", color: "#334155" }}>
-                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Client Full Name:</span>{detailedOrder.customerName || "Guest User"}</div>
-                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Contact Phone:</span>{detailedOrder.customerMobile || "N/A"}</div>
-                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Transit Train Engine:</span>🚂 Train {detailedOrder.trainNo || "N/A"}</div>
-                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Coach &amp; Berth Location:</span>💺 Coach {detailedOrder.coach || "-"} / Seat {detailedOrder.seat || "-"}</div>
-                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Delivery Date Target:</span>📅 {detailedOrder.deliveryDate}</div>
-                  <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Delivery Window Time:</span>🕒 {detailedOrder.deliveryTime}</div>
-                  <div style={{ gridColumn: "span 2" }}><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Destination Station:</span>📍 {detailedOrder.stationName} ({detailedOrder.stationCode})</div>
-                </div>
-              </div>
+              {activeDrawerSection === "details" ? (
+                <>
+                  {/* TRANSIT METRICS PANEL */}
+                  <div style={{ background: "#f8fafc", borderRadius: "12px", padding: "16px", border: "1px solid #e2e8f0" }}>
+                    <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Smartphone size={14} /> Client Transit Profile &amp; Route Schedule
+                    </h3>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", fontSize: "13px", fontWeight: "600", color: "#334155" }}>
+                      <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Client Full Name:</span>{detailedOrder.customerName || "Guest User"}</div>
+                      <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Contact Phone:</span>{detailedOrder.customerMobile || "N/A"}</div>
+                      <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Transit Train Engine:</span>🚂 Train {detailedOrder.trainNo || "N/A"}</div>
+                      <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Coach &amp; Berth Location:</span>💺 Coach {detailedOrder.coach || "-"} / Seat {detailedOrder.seat || "-"}</div>
+                      <div style={{ background: "#eff6ff", padding: "6px 10px", borderRadius: "6px", border: "1px solid #bfdbfe" }}>
+                        <span style={{ color: "#2563eb", display: "block", fontSize: "10px", fontWeight: 800, textTransform: "uppercase", marginBottom: "2px" }}>Delivery Date Target:</span>
+                        📅 {detailedOrder.deliveryDate}
+                      </div>
+                      <div style={{ background: "#eff6ff", padding: "6px 10px", borderRadius: "6px", border: "1px solid #bfdbfe" }}>
+                        <span style={{ color: "#2563eb", display: "block", fontSize: "10px", fontWeight: 800, textTransform: "uppercase", marginBottom: "2px" }}>Delivery Window Time:</span>
+                        🕒 {detailedOrder.deliveryTime}
+                      </div>
+                      <div style={{ gridColumn: "span 2" }}><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Destination Station:</span>📍 {detailedOrder.stationName} ({detailedOrder.stationCode})</div>
+                    </div>
+                  </div>
 
-              {/* FOOD ITEMS SUM BLOCK */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <ShoppingBag size={14} /> Food Basket Summary Breakdown
-                </h3>
-                <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                    <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", textAlign: "left" }}>
-                      <tr>
-                        <th style={{ padding: "10px 16px" }}>Item Name &amp; Specifications</th>
-                        <th style={{ padding: "10px 16px", textAlign: "center" }}>Qty</th>
-                        <th style={{ padding: "10px 16px", textAlign: "right" }}>Line Total</th>
-                      </tr>
-                    </thead>
-                    <tbody style={{ color: "#334155", fontWeight: 600 }}>
-                      {loadingItems ? (
-                        <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>Pulling basket array logs rows stream...</td></tr>
-                      ) : fetchedItems.length > 0 ? (
-                        fetchedItems.map((item: any, idx: number) => (
-                          <tr key={item.ItemId || idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <td style={{ padding: "12px 16px", fontWeight: 700, color: "#0f172a" }}>{item.ItemName}</td>
-                            <td style={{ padding: "12px 16px", textAlign: "center", color: "#2563eb", fontWeight: 800 }}>× {item.Quantity}</td>
-                            <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "monospace" }}>₹{item.LineTotal || (Number(item.SellingPrice || 0) * Number(item.Quantity || 1))}</td>
+                  {/* FOOD ITEMS SUM BLOCK */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <ShoppingBag size={14} /> Food Basket Summary Breakdown
+                    </h3>
+                    <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                        <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", textAlign: "left" }}>
+                          <tr>
+                            <th style={{ padding: "10px 16px" }}>Item Name &amp; Specifications</th>
+                            <th style={{ padding: "10px 16px", textAlign: "center" }}>Qty</th>
+                            <th style={{ padding: "10px 16px", textAlign: "right" }}>Line Total</th>
                           </tr>
-                        ))
-                      ) : (
-                        <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>No complementary data records found inside OrderItems table mapping this OrderId.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", fontSize: "13px", fontWeight: 600, display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}><span>Total Base Value Collection:</span><span style={{ color: "#334155" }}>₹{detailedOrder.total || "0"}</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", color: "#0f172a", fontWeight: 800, fontSize: "14px", paddingTop: "6px", borderTop: "1px dashed #cbd5e1" }}>
-                    <span>Gross Account Payable:</span>
-                    <span style={{ color: "#1e3a8a" }}>₹{detailedOrder.total || "0"}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* RESTRO COMPLIANCE CARD */}
-              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "12px", padding: "16px" }}>
-                <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#1e40af", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <ShieldCheck size={14} style={{ color: "#2563eb" }} /> Restaurant Compliance &amp; Corporate License Audit
-                </h3>
-                {loadingRestro ? (
-                  <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Scanning vendor registration matrix indices data...</p>
-                ) : fetchedRestro ? (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px", fontSize: "13px", fontWeight: "600", color: "#334155" }}>
-                    <div><span style={{ color: "#3b82f6", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Restro Code Link:</span><span style={{ color: "#1e3a8a", fontWeight: 800 }}>{fetchedRestro.RestroCode || "N/A"}</span></div>
-                    <div><span style={{ color: "#3b82f6", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Registered Corporate Title:</span><span style={{ color: "#0f172a", fontWeight: 700 }}>{fetchedRestro.RestroName || "N/A"}</span></div>
-                    <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Operational Timing Window:</span>🕒 {fetchedRestro.open_time || "N/A"} - {fetchedRestro.closed_time || "N/A"}</div>
-                    <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Registration Number:</span><span style={{ fontFamily: "monospace", letterSpacing: "0.3px" }}>{fetchedRestro.FSSAINumber || "N/A"}</span></div>
-                    <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Legal Timeline Expiry:</span><span style={{ color: "#b45309" }}>{fetchedRestro.FSSAIExpiryDate || "N/A"}</span></div>
-                    <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Corporate GSTIN Ledger ID:</span><span style={{ fontFamily: "monospace" }}>{fetchedRestro.GSTNumber || "N/A"}</span></div>
-                  </div>
-                ) : (
-                  <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>No corresponding matching row located inside RestroMaster for code link: "{detailedOrder.outletId}"</p>
-                )}
-              </div>
-
-              {/* TIMELINE LOGGER NODES */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Clock size={14} /> Chronological Operational Lifecycle Milestones ({orderLogs.length})
-                </h3>
-                
-                {loadingLogs ? (
-                  <p style={{ fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Compiling log history checkpoints data chunks stream...</p>
-                ) : orderLogs.length === 0 ? (
-                  <div style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", padding: "12px", borderRadius: "8px", fontSize: "12px", fontWeight: 600 }}>
-                    ⚠️ No historic sequence checkpoints tracked for this pipeline order entity yet.
-                  </div>
-                ) : (
-                  <div style={{ position: "relative", borderLeft: "2px dashed #e2e8f0", paddingLeft: "18px", marginLeft: "6px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                    {orderLogs.map((log: any, idx: number) => (
-                      <div key={log.Id || idx} style={{ position: "relative" }}>
-                        <span style={{ position: "absolute", left: "-24px", top: "4px", background: "#2563eb", width: "10px", height: "10px", borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
-                        
-                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px", fontSize: "12px" }}>
-                            <span style={{ fontWeight: 800, color: "#0f172a" }}>Stage Traversed: <span style={{ color: "#2563eb" }}>"{log.NewStatus}"</span></span>
-                            <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700 }}>{log.ChangedAt ? new Date(log.ChangedAt).toLocaleString() : "N/A"}</span>
-                          </div>
-                          
-                          {log.OldStatus && <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>Previous Condition: <span style={{ textDecoration: "line-through" }}>"{log.OldStatus}"</span></div>}
-                          {(log.SubStatus || log.Remarks || log.Note) && (
-                            <div style={{ background: "#fff", border: "1px solid #f1f5f9", padding: "8px", borderRadius: "6px", fontSize: "11px", marginTop: "4px", color: "#475569" }}>
-                              {log.SubStatus && <div><strong style={{ color: "#e11d48" }}>Outcome Reason:</strong> {log.SubStatus}</div>}
-                              {(log.Remarks || log.Note) && <div style={{ marginTop: "2px" }}><strong style={{ color: "#64748b" }}>Admin Note:</strong> {log.Remarks || log.Note}</div>}
-                            </div>
+                        </thead>
+                        <tbody style={{ color: "#334155", fontWeight: 600 }}>
+                          {loadingItems ? (
+                            <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>Pulling basket records streams...</td></tr>
+                          ) : fetchedItems.length > 0 ? (
+                            fetchedItems.map((item: any, idx: number) => (
+                              <tr key={item.ItemId || idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                <td style={{ padding: "12px 16px", fontWeight: 700, color: "#0f172a" }}>{item.ItemName}</td>
+                                <td style={{ padding: "12px 16px", textAlign: "center", color: "#2563eb", fontWeight: 800 }}>× {item.Quantity}</td>
+                                <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "monospace" }}>₹{item.LineTotal || (Number(item.SellingPrice || 0) * Number(item.Quantity || 1))}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>No custom mapping inside OrderItems found.</td></tr>
                           )}
+                        </tbody>
+                      </table>
+                    </div>
 
-                          <div style={{ marginTop: "4px", paddingTop: "4px", borderTop: "1px solid #f1f5f9", fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", display: "flex", justifyContent: "space-between" }}>
-                            <span>Action Initiator: <span style={{ color: "#475569", fontWeight: 800 }}>{log.ChangedBy || log.Actor || "Automated Infrastructure"}</span></span>
-                            <span>Channel Source: {log.ActionSource || "System Core"}</span>
+                    <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", fontSize: "13px", fontWeight: 600, display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}><span>Total Base Value Collection:</span><span style={{ color: "#334155" }}>₹{detailedOrder.total || "0"}</span></div>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "#0f172a", fontWeight: 800, fontSize: "14px", paddingTop: "6px", borderTop: "1px dashed #cbd5e1" }}>
+                        <span>Gross Account Payable:</span>
+                        <span style={{ color: "#2563eb" }}>₹{detailedOrder.total || "0"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* RESTRO COMPLIANCE CARD */}
+                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "16px" }}>
+                    <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <ShieldCheck size={14} style={{ color: "#16a34a" }} /> Restaurant Compliance &amp; Regulatory License Audit
+                    </h3>
+                    {loadingRestro ? (
+                      <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Scanning registry index blocks...</p>
+                    ) : fetchedRestro ? (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px", fontSize: "13px", fontWeight: "600", color: "#334155" }}>
+                        <div><span style={{ color: "#16a34a", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Restro Code Link:</span><span style={{ color: "#111827", fontWeight: 800 }}>{fetchedRestro.RestroCode || "N/A"}</span></div>
+                        <div><span style={{ color: "#16a34a", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Registered Brand Name:</span><span style={{ color: "#0f172a", fontWeight: 700 }}>{fetchedRestro.RestroName || "N/A"}</span></div>
+                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Active Operating Window:</span>🕒 {fetchedRestro.open_time || "N/A"} - {fetchedRestro.closed_time || "N/A"}</div>
+                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Registration Code:</span><span style={{ fontFamily: "monospace" }}>{fetchedRestro.FSSAINumber || "N/A"}</span></div>
+                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Ledger Expiry Timeline:</span><span style={{ color: "#b45309" }}>{fetchedRestro.FSSAIExpiryDate || "N/A"}</span></div>
+                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Corporate GSTIN Tag:</span><span style={{ fontFamily: "monospace" }}>{fetchedRestro.GSTNumber || "N/A"}</span></div>
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>No linked vendor mapping located inside RestroMaster database index rows.</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                /* TIMELINE LOGGER NODES SECTION */
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Clock size={14} /> Chronological Operational Lifecycle Milestones ({orderLogs.length})
+                  </h3>
+                  
+                  {loadingLogs ? (
+                    <p style={{ fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Compiling sequential historic state indices...</p>
+                  ) : orderLogs.length === 0 ? (
+                    <div style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", padding: "12px", borderRadius: "8px", fontSize: "12px", fontWeight: 600 }}>
+                      ⚠️ No logged milestone state alterations tracked for this instance record.
+                    </div>
+                  ) : (
+                    <div style={{ position: "relative", borderLeft: "2px dashed #e2e8f0", paddingLeft: "18px", marginLeft: "6px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                      {orderLogs.map((log: any, idx: number) => (
+                        <div key={log.Id || idx} style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: "-24px", top: "4px", background: "#2563eb", width: "10px", height: "10px", borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
+                          
+                          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px", fontSize: "12px" }}>
+                              <span style={{ fontWeight: 800, color: "#0f172a" }}>Transition Stage: <span style={{ color: "#2563eb" }}>"{log.NewStatus}"</span></span>
+                              <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700 }}>{log.ChangedAt ? new Date(log.ChangedAt).toLocaleString() : "N/A"}</span>
+                            </div>
+                            
+                            {log.OldStatus && <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>Previous Condition State: <span style={{ textDecoration: "line-through" }}>"{log.OldStatus}"</span></div>}
+                            {(log.SubStatus || log.Remarks || log.Note) && (
+                              <div style={{ background: "#fff", border: "1px solid #f1f5f9", padding: "8px", borderRadius: "6px", fontSize: "11px", marginTop: "4px", color: "#475569" }}>
+                                {log.SubStatus && <div><strong style={{ color: "#e11d48" }}>Reason Attribute:</strong> {log.SubStatus}</div>}
+                                {(log.Remarks || log.Note) && <div style={{ marginTop: "2px" }}><strong style={{ color: "#64748b" }}>Admin Annotation Note:</strong> {log.Remarks || log.Note}</div>}
+                              </div>
+                            )}
+
+                            <div style={{ marginTop: "4px", paddingTop: "4px", borderTop: "1px solid #f1f5f9", fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", display: "flex", justifyContent: "space-between" }}>
+                              <span>Actor Entity: <span style={{ color: "#475569", fontWeight: 800 }}>{log.ChangedBy || log.Actor || "Automated Infrastructure"}</span></span>
+                              <span>Source Entry channel: {log.ActionSource || "System Core Link"}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1352,7 +1399,7 @@ export default function AdminOrdersPage() {
             </select>
 
             <textarea
-              placeholder="Internal administrative remarks (Optional)"
+              placeholder="Internal administrative remarks annotation ledger (Optional)"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               rows={4}
@@ -1373,7 +1420,6 @@ export default function AdminOrdersPage() {
                   setStatusModalOpen(false);
                   setSelectedOrder(null);
                   setSubStatus("");
-                  setMainStatus("");
                   setRemarks("");
                 }}
                 style={{
