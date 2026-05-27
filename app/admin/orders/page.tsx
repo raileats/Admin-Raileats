@@ -751,7 +751,7 @@ const visibleOrders = useMemo(
 return (
 
   <section style={{ padding: 12 }}>
-
+</header>
     <header
   style={{
     display: "flex",
@@ -992,8 +992,6 @@ style={{
 {["booked","verification","neworder","inkitchen","outfordelivery",].includes(o.status) ? (
 
 <div
-
-<div
   style={{
     display: "flex",
     gap: 8,
@@ -1021,6 +1019,7 @@ style={{
 
 
 {NEXT_MAP[o.status]?.actionLabel}
+  </button>
 
 {(o.status === "booked" ||o.status === "verification" ||o.status === "neworder") && (
 
@@ -1182,6 +1181,9 @@ setRemarks("");
 </div>
 
 )}
+              </td>
+            </tr>
+          ))}
 
           {!loading && visibleOrders.length === 0 && (
             <tr>
