@@ -775,7 +775,7 @@ export default function AdminOrdersPage() {
                         {o.history.map((h, i) => (
                           <li key={i} style={{ marginBottom: 6 }}>
                             <div style={{ fontSize: 12, color: "#6b7280" }}>{new Date(h.at).toLocaleString()}</div>
-                            <div style={{ fontSpread: "normal", fontWeight: 600 }}>{h.by}</div>
+                            <div style={{ fontStretch: "normal", fontWeight: 600 }}>{h.by}</div>
                             <div style={{ fontSize: 13 }}>{h.note ?? TABS.find((t) => t.key === h.status)?.label}</div>
                           </li>
                         ))}
