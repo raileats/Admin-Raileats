@@ -1259,6 +1259,8 @@ setRemarks("");
 
         setActionType("mark");
 
+        setMainStatus("");
+
         setSubStatus("");
 
 setMainStatus("");
