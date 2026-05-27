@@ -145,7 +145,6 @@ export default function OrdersPage() {
               triggerAlert();
             }
           } else if (payload.eventType === "UPDATE") {
-            // FIX REALTIME DUPLICATE SOUND PREVENTER INTERCEPTOR
             const oldStatus = payload.old?.Status;
             if (oldStatus === "New Order") {
               return; 
@@ -177,13 +176,21 @@ export default function OrdersPage() {
         console.log("Audio blocked by layout environment restriction metrics");
       }
 
+      // FIXED: Notification API को पूरी तरह सुरक्षित (Safe Check) किया गया है
       try {
-        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-          new Notification("🚆 New RailEats Order Received", {
+        if (
+          typeof window !== "undefined" && 
+          "Notification" in window && 
+          window.Notification && 
+          window.Notification.permission === "granted"
+        ) {
+          new window.Notification("🚆 New RailEats Order Received", {
             body: `Order waiting in kitchen production panel.`
           });
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error("Desktop notification blocked or unsupported:", e);
+      }
     }
 
     return () => {
@@ -217,7 +224,9 @@ export default function OrdersPage() {
 
   /* ================= DATA SEGMENTATION AND RE-FILTERING MACHINE ================= */
   const filteredOrders = useMemo(() => {
+    if (!Array.isArray(orders)) return [];
     return orders.filter((order) => {
+      if (!order) return false;
       const mainStatus = (order.Status || "").trim();
       const subStatus = (order.SubStatus || "").trim();
       const currentTabLower = activeTab.toLowerCase().trim();
@@ -259,7 +268,6 @@ export default function OrdersPage() {
       setSubStatus("");
       setRemarks("");
       
-      // Force instant refresh trigger
       setRefreshTick((prev) => prev + 1);
     } catch (e) {
       alert("Network transmission error updating status registry entries.");
@@ -270,31 +278,31 @@ export default function OrdersPage() {
 
   /* ================= DYNAMIC VISUAL BADGE ENGINE COLOR CODES ================= */
   function getStatusBadgeStyle(order: any) {
+    if (!order) return { bg: "#f3f4f6", text: "#374151", border: "#e5e7eb" };
     const main = (order.Status || "").toLowerCase().trim();
     const sub = (order.SubStatus || "").toLowerCase().trim();
 
     if (main === "delivered" && sub === "bad delivery") {
-      return { bg: "#fef2f2", text: "#991b1b", border: "#fca5a5" }; // Dark Red
+      return { bg: "#fef2f2", text: "#991b1b", border: "#fca5a5" };
     }
     if (main === "delivered") {
-      return { bg: "#f0fdf4", text: "#166534", border: "#bbf7d0" }; // Green
+      return { bg: "#f0fdf4", text: "#166534", border: "#bbf7d0" };
     }
     if (main === "cancelled") {
-      return { bg: "#fff5f5", text: "#c53030", border: "#feb2b2" }; // Red
+      return { bg: "#fff5f5", text: "#c53030", border: "#feb2b2" };
     }
     if (main === "in kitchen") {
-      return { bg: "#fef9c3", text: "#854d0e", border: "#fef08a" }; // Yellow
+      return { bg: "#fef9c3", text: "#854d0e", border: "#fef08a" };
     }
     if (main === "out for delivery") {
-      return { bg: "#eff6ff", text: "#1e40af", border: "#bfdbfe" }; // Blue
+      return { bg: "#eff6ff", text: "#1e40af", border: "#bfdbfe" };
     }
     if (main === "new order") {
-      return { bg: "#fff7ed", text: "#c2410c", border: "#ffedd5" }; // Orange
+      return { bg: "#fff7ed", text: "#c2410c", border: "#ffedd5" };
     }
-    return { bg: "#f3f4f6", text: "#374151", border: "#e5e7eb" }; // Grey default fallback
+    return { bg: "#f3f4f6", text: "#374151", border: "#e5e7eb" };
   }
 
-  // Confirm directly inside card view standard loops
   function handleDirectStep(order: any, nextStatus: string) {
     if (confirm(`Are you sure you want to transition this order to ${nextStatus}?`)) {
       updateOrderStatus(order.OrderId, nextStatus, "", `Moved straight into ${nextStatus} stage.`);
@@ -320,7 +328,6 @@ export default function OrdersPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* INTENT-BASED TAB SWITCH MECHANICS */}
           <button
             onClick={() => setActiveTab("New Order")}
             className="w-10 h-10 rounded-xl hover:bg-gray-50 flex items-center justify-center relative transition active:scale-95"
@@ -399,12 +406,13 @@ export default function OrdersPage() {
           </div>
         ) : (
           filteredOrders.map((order) => {
+            if (!order) return null;
             const styleMetrics = getStatusBadgeStyle(order);
             const itemsList = Array.isArray(order.Items) ? order.Items : [];
 
             return (
               <div
-                key={order.id || order.OrderId}
+                key={order.OrderId || order.id}
                 className="bg-white rounded-2xl border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.015)] overflow-hidden flex flex-col transition"
               >
                 {/* CARD ROW HEADER PANEL */}
@@ -462,7 +470,7 @@ export default function OrdersPage() {
                       ))}
                       {itemsList.length > 2 && (
                         <p className="text-[11px] text-[#2f54eb] font-semibold pt-0.5">
-                          + {itemsList.length - 2} more items inside checkout array...
+                          + {itemsList.length - 2} more items...
                         </p>
                       )}
                     </div>
@@ -477,7 +485,6 @@ export default function OrdersPage() {
 
                 {/* FOOTER ACTIONS SUBSECTION */}
                 <div className="p-3 bg-gray-50/50 border-t border-gray-100 flex flex-col gap-2">
-                  {/* EXPANDABLE COMPACT DETAILS MODAL LINK INTERACTION */}
                   <button
                     onClick={() => {
                       setDetailedOrder(order);
@@ -488,7 +495,6 @@ export default function OrdersPage() {
                     🔍 View Detailed Description Payload
                   </button>
 
-                  {/* ACTION TRIGGER INTERFACE BUTTON MATRICES */}
                   {activeTab.toLowerCase().trim() === "new order" && (
                     <div className="grid grid-cols-2 gap-2 mt-1">
                       <button
@@ -579,7 +585,7 @@ export default function OrdersPage() {
       {/* COMPACT VIEW DETAILS EXPANDABLE DRAWER OVERLAY MODAL */}
       {detailsModalOpen && detailedOrder && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end justify-center p-0 transition">
-          <div className="bg-white w-full max-w-md rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto flex flex-col animate-slide-up shadow-2xl">
+          <div className="bg-white w-full max-w-md rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto flex flex-col shadow-2xl">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
               <div>
                 <h3 className="font-black text-gray-900 text-base">Full Order Payload</h3>
@@ -597,14 +603,12 @@ export default function OrdersPage() {
             </div>
 
             <div className="space-y-4 text-xs flex-1">
-              {/* CUSTOMER INFORMATION CRITERIA */}
               <div className="bg-gray-50 p-3 rounded-xl space-y-1.5 border border-gray-100">
                 <h4 className="font-black text-[10px] tracking-wider uppercase text-gray-400">Customer Diagnostics</h4>
                 <p className="font-bold text-gray-800 text-sm">{detailedOrder.CustomerName || "N/A"}</p>
                 <p className="font-medium text-gray-500">Mobile: <strong className="text-gray-800">{detailedOrder.CustomerMobile || "N/A"}</strong></p>
               </div>
 
-              {/* LOGISTICAL TRANSPORTATION SPECIFICATION ARRAY */}
               <div className="bg-gray-50 p-3 rounded-xl space-y-1.5 border border-gray-100">
                 <h4 className="font-black text-[10px] tracking-wider uppercase text-gray-400">Logistics Parameters</h4>
                 <div className="grid grid-cols-2 gap-2 text-gray-600 font-medium">
@@ -617,7 +621,6 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              {/* THE FULL ARRAY ITEMS CHECKOUT LIST VIEW */}
               <div className="space-y-2">
                 <h4 className="font-black text-[10px] tracking-wider uppercase text-gray-400">Items Manifest Verification</h4>
                 <div className="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-50">
@@ -636,7 +639,6 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              {/* REMARKS AND METADATA */}
               {detailedOrder.Remarks && (
                 <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-100/60 text-amber-900">
                   <h4 className="font-black text-[10px] tracking-wider uppercase text-amber-500 mb-0.5">Order Remarks Memo</h4>
@@ -644,7 +646,6 @@ export default function OrdersPage() {
                 </div>
               )}
 
-              {/* FINAL AGGREGATE BLOCK PRICE */}
               <div className="bg-gray-900 text-white p-4 rounded-xl flex items-center justify-between">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Gross Aggregate Total:</span>
                 <span className="text-base font-black">₹{detailedOrder.TotalAmount || detailedOrder.totalAmount || "0.00"}</span>
@@ -657,7 +658,7 @@ export default function OrdersPage() {
       {/* STATUS SUB-MODAL DECISION FRAMEWORK INTERFACES */}
       {actionModalOpen && selectedOrder && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-2xl p-5 shadow-2xl animate-scale-up space-y-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-5 shadow-2xl space-y-4">
             <div>
               <h3 className="text-sm font-black text-gray-900 tracking-tight">
                 {actionType === "cancel" && "Confirm Order Cancellation"}
@@ -669,7 +670,6 @@ export default function OrdersPage() {
               </p>
             </div>
 
-            {/* SELECTION DROPDOWN CONDITIONAL MATRIX */}
             {actionType === "cancel" && (
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Reason Protocol</label>
@@ -708,11 +708,10 @@ export default function OrdersPage() {
               </div>
             )}
 
-            {/* REMARKS FIELD AREA */}
             <div className="space-y-1">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Additional Explanatory Notes</label>
               <textarea
-                placeholder="Write logs context for system records summary (optional)..."
+                placeholder="Write logs context for system records..."
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 rows={3}
@@ -720,7 +719,6 @@ export default function OrdersPage() {
               />
             </div>
 
-            {/* BUTTON PACK REGISTRY CONTROL ACTIONS */}
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50">
               <button
                 disabled={submittingAction}
