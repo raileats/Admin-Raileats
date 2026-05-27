@@ -159,51 +159,41 @@ export default function AdminOrdersPage() {
 
 useEffect(() => {
 
-  audioRef.current =
-    new Audio(
-      "/sounds/order_announcement.mp3"
-    );
+  audioRef.current = new Audio(
+    "/sounds/order_announcement.mp3"
+  );
 
-  audioRef.current.preload =
-    "auto";
+  audioRef.current.preload = "auto";
 
-  if (audioRef.current) {
+  audioRef.current.volume = 1;
 
-    audioRef.current.volume = 1;
+  const unlockAudio = async () => {
 
-  }
+    try {
 
-  const unlockAudio =
-    async () => {
+      if (audioRef.current) {
 
-      try {
+        audioRef.current.muted = true;
 
-        if (audioRef.current) {
+        await audioRef.current.play();
 
-          audioRef.current.muted =
-            true;
+        audioRef.current.pause();
 
-          await audioRef.current.play();
+        audioRef.current.currentTime = 0;
 
-          audioRef.current.pause();
-
-          audioRef.current.currentTime =
-            0;
-
-          audioRef.current.muted =
-            false;
-
-        }
-
-      } catch (e) {
-
-        console.log(
-          "Audio unlock failed"
-        );
+        audioRef.current.muted = false;
 
       }
 
-    };
+    } catch (e) {
+
+      console.log(
+        "Audio unlock failed"
+      );
+
+    }
+
+  };
 
   document.body.addEventListener(
     "click",
@@ -214,25 +204,27 @@ useEffect(() => {
   /* NOTIFICATION PERMISSION */
 
   if (
-  typeof Notification !==
-    "undefined" &&
-  Notification.permission !==
-    "granted"
-) {
+    typeof Notification !==
+      "undefined" &&
+    Notification.permission !==
+      "granted"
+  ) {
 
-  Notification.requestPermission();
+    Notification.requestPermission();
 
-}
+  }
 
-return () => {
-  document.body.removeEventListener(
-    "click",
-    unlockAudio
-  );
+  return () => {
 
-};
+    document.body.removeEventListener(
+      "click",
+      unlockAudio
+    );
+
+  };
 
 }, []);
+
 /* ================= REALTIME ORDERS ================= */
 
 useEffect(() => {
@@ -240,7 +232,8 @@ useEffect(() => {
   const channel = supabase
 
     .channel("admin-orders-live")
-    /* NEW INSERT ORDER */
+
+    /* ================= INSERT ================= */
 
     .on(
       "postgres_changes",
@@ -253,11 +246,15 @@ useEffect(() => {
 
       async (payload) => {
 
-        console.log("NEW ORDER:", payload);
+        console.log(
+          "NEW ORDER:",
+          payload
+        );
 
         setNewOrderCount((prev) => {
 
-          const updated = prev + 1;
+          const updated =
+            prev + 1;
 
           localStorage.setItem(
             "raileats_new_orders",
@@ -274,7 +271,8 @@ useEffect(() => {
 
           if (audioRef.current) {
 
-            audioRef.current.currentTime = 0;
+            audioRef.current.currentTime =
+              0;
 
             await audioRef.current.play();
 
@@ -311,113 +309,99 @@ useEffect(() => {
 
         } catch (e) {}
 
-        /* REFRESH CURRENT TAB DATA */
-
-        setActiveTab((prev) => prev);
-
       }
     )
 
-    /* STATUS UPDATE */
+    /* ================= UPDATE ================= */
 
-.on(
-  "postgres_changes",
+    .on(
+      "postgres_changes",
 
-  {
-    event: "UPDATE",
-    schema: "public",
-    table: "Orders",
-  },
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "Orders",
+      },
 
-  async (payload) => {
-
-    console.log(
-      "ORDER UPDATED:",
-      payload
-    );
-
-    const oldStatus =
-      payload.old?.Status || "";
-
-    const newStatus =
-      payload.new?.Status || "";
-
-    /* ONLY WHEN ORDER MOVES TO NEW ORDER */
-
-    if (
-      oldStatus !== "New Order" &&
-      newStatus === "New Order"
-    ) {
-
-      setNewOrderCount((prev) => {
-
-        const updated =
-          prev + 1;
-
-        localStorage.setItem(
-          "raileats_new_orders",
-          String(updated)
-        );
-
-        return updated;
-
-      });
-
-      /* SOUND */
-
-      try {
-
-        if (audioRef.current) {
-
-          audioRef.current.currentTime = 0;
-
-          await audioRef.current.play();
-
-        }
-
-      } catch (e) {
+      async (payload) => {
 
         console.log(
-          "Sound blocked"
+          "ORDER UPDATED:",
+          payload
         );
 
-      }
+        const oldStatus =
+          payload.old?.Status || "";
 
-      /* NOTIFICATION */
+        const newStatus =
+          payload.new?.Status || "";
 
-      try {
+        /* ONLY WHEN ORDER MOVES TO NEW ORDER */
 
         if (
-          Notification.permission ===
-          "granted"
+          oldStatus !== "New Order" &&
+          newStatus === "New Order"
         ) {
 
-          new Notification(
-            "🚆 Order Sent To Restaurant",
-            {
+          setNewOrderCount((prev) => {
 
-              body:
-                `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
+            const updated =
+              prev + 1;
+
+            localStorage.setItem(
+              "raileats_new_orders",
+              String(updated)
+            );
+
+            return updated;
+
+          });
+
+          /* SOUND */
+
+          try {
+
+            if (audioRef.current) {
+
+              audioRef.current.currentTime =
+                0;
+
+              await audioRef.current.play();
 
             }
-          );
+
+          } catch (e) {
+
+            console.log(
+              "Sound blocked"
+            );
+
+          }
+
+          /* NOTIFICATION */
+
+          try {
+
+            if (
+              Notification.permission ===
+              "granted"
+            ) {
+
+              new Notification(
+                "🚆 Order Sent To Restaurant",
+                {
+
+                  body:
+                    `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
+
+                }
+              );
+
+            }
+
+          } catch (e) {}
 
         }
-
-      } catch (e) {}
-
-    }
-
-    /* REFRESH DATA */
-
-    setActiveTab((prev) => prev);
-
-  }
-)
-
-        /* REFRESH DATA */
-
-        setActiveTab((prev) => prev);
 
       }
     )
@@ -426,27 +410,34 @@ useEffect(() => {
 
   return () => {
 
-    supabase.removeChannel(channel);
+    supabase.removeChannel(
+      channel
+    );
 
   };
 
 }, []);
 
-  /* ================= AUTO REFRESH ================= */
+/* ================= AUTO REFRESH ================= */
 
 useEffect(() => {
 
-  const interval = setInterval(() => {
+  const interval =
+    setInterval(() => {
 
-    setActiveTab((prev) => prev);
+      setRefreshTick(
+        (prev) => prev + 1
+      );
 
-  }, 30000);
+    }, 30000);
 
-  return () => clearInterval(interval);
+  return () => {
 
-}, []);
+    clearInterval(interval);
 
-  /* ================= LOAD ORDERS ================= */
+  };
+
+}, []);  /* ================= LOAD ORDERS ================= */
   useEffect(() => {
     const load = async () => {
       try {
