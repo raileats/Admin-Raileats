@@ -1086,119 +1086,337 @@ useEffect(() => {
       </div>
 
       {/* ================= MODAL DIALOG ================= */}
-      {statusModalOpen && (
-        <div
+
+{statusModalOpen && (
+
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.45)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 9999,
+      padding: 16,
+    }}
+  >
+
+    <div
+      style={{
+        width: "100%",
+        maxWidth: 460,
+        background: "#fff",
+        borderRadius: 12,
+        padding: 20,
+        boxShadow:
+          "0 10px 30px rgba(0,0,0,0.18)",
+      }}
+    >
+
+      <h2
+        style={{
+          marginTop: 0,
+          marginBottom: 16,
+          fontSize: 20,
+          fontWeight: 700,
+        }}
+      >
+        {actionType === "cancel"
+          ? "Cancel Order"
+          : "Mark Order Status"}
+      </h2>
+
+      {/* CANCEL FLOW */}
+
+      {actionType === "cancel" && (
+
+        <select
+          value={subStatus}
+          onChange={(e) =>
+            setSubStatus(
+              e.target.value
+            )
+          }
           style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: 16,
+            width: "100%",
+            padding: 10,
+            borderRadius: 8,
+            marginBottom: 12,
+            border:
+              "1px solid #d1d5db",
           }}
         >
-          <div style={{ width: "100%", maxWidth: 460, background: "#fff", borderRadius: 12, padding: 20 }}>
-            <h2 style={{ marginTop: 0, marginBottom: 16 }}>
-              {actionType === "cancel" ? "Cancel Order" : "Mark Order Status"}
-            </h2>
 
-            {actionType === "cancel" && (
-              <select
-                value={subStatus}
-                onChange={(e) => setSubStatus(e.target.value)}
-                style={{ width: "100%", padding: 10, borderRadius: 8, marginBottom: 12, border: "1px solid #d1d5db" }}
+          <option value="">
+            Select Cancel Reason
+          </option>
+
+          {CANCEL_REASONS.map(
+            (r) => (
+
+              <option
+                key={r}
+                value={r}
               >
-                <option value="">Select Cancel Reason</option>
-                {CANCEL_REASONS.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            )}
+                {r}
+              </option>
 
-            {actionType === "mark" && (
-              <>
-                <select
-                  value={mainStatus}
-                  onChange={(e) => {
-                    setMainStatus(e.target.value);
-                    setSubStatus("");
-                  }}
-                  style={{ width: "100%", padding: 10, borderRadius: 8, marginBottom: 12, border: "1px solid #d1d5db" }}
-                >
-                  <option value="">Select Main Status</option>
-                  <option value="Delivered">Delivered</option>
-                  <option value="Cancelled">Cancelled</option>
-                  <option value="Not Delivered">Not Delivered</option>
-                </select>
+            )
+          )}
 
-                {mainStatus && (
-                  <select
-                    value={subStatus}
-                    onChange={(e) => setSubStatus(e.target.value)}
-                    style={{ width: "100%", padding: 10, borderRadius: 8, marginBottom: 12, border: "1px solid #d1d5db" }}
-                  >
-                    <option value="">Select Sub Status</option>
-                    {mainStatus === "Delivered" && (
-                      <>
-                        <option value="Delivered">Delivered</option>
-                        <option value="Bad Delivery">Bad Delivery</option>
-                      </>
-                    )}
+        </select>
 
-                    {mainStatus === "Cancelled" && (
-                      <>
-                        {CANCEL_REASONS.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </>
-                    )}
-
-                    {mainStatus === "Not Delivered" && (
-                      <>
-                        {NOT_DELIVERED_REASONS.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                )}
-              </>
-            )}
-
-            <textarea
-              placeholder="Remarks"
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              rows={4}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #d1d5db", marginBottom: 16 }}
-            />
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button
-                onClick={() => {
-                  setStatusModalOpen(false);
-                  setSelectedOrder(null);
-                  setSubStatus("");
-                  setMainStatus("");
-                  setRemarks("");
-                }}
-                style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", cursor: "pointer" }}
-              >
-                Close
-              </button>
-
-              <button
-                onClick={submitStatusAction}
-                style={{ padding: "10px 14px", borderRadius: 8, border: "none", background: "#111827", color: "#fff", cursor: "pointer", fontWeight: 700 }}
-              >
-                Submit
-              </button>
-            </div>
-          </div>
-        </div>
       )}
+
+      {/* MARK FLOW */}
+
+      {actionType === "mark" && (
+
+        <>
+
+          <select
+            value={mainStatus}
+            onChange={(e) => {
+
+              setMainStatus(
+                e.target.value
+              );
+
+              setSubStatus("");
+
+            }}
+            style={{
+              width: "100%",
+              padding: 10,
+              borderRadius: 8,
+              marginBottom: 12,
+              border:
+                "1px solid #d1d5db",
+            }}
+          >
+
+            <option value="">
+              Select Main Status
+            </option>
+
+            <option value="Delivered">
+              Delivered
+            </option>
+
+            <option value="Cancelled">
+              Cancelled
+            </option>
+
+            <option value="Not Delivered">
+              Not Delivered
+            </option>
+
+          </select>
+
+          {mainStatus && (
+
+            <select
+              value={subStatus}
+              onChange={(e) =>
+                setSubStatus(
+                  e.target.value
+                )
+              }
+              style={{
+                width: "100%",
+                padding: 10,
+                borderRadius: 8,
+                marginBottom: 12,
+                border:
+                  "1px solid #d1d5db",
+              }}
+            >
+
+              <option value="">
+                Select Sub Status
+              </option>
+
+              {mainStatus ===
+                "Delivered" && (
+
+                <>
+
+                  <option value="Delivered">
+                    Delivered
+                  </option>
+
+                  <option value="Bad Delivery">
+                    Bad Delivery
+                  </option>
+
+                </>
+
+              )}
+
+              {mainStatus ===
+                "Cancelled" && (
+
+                <>
+
+                  {CANCEL_REASONS.map(
+                    (r) => (
+
+                      <option
+                        key={r}
+                        value={r}
+                      >
+                        {r}
+                      </option>
+
+                    )
+                  )}
+
+                </>
+
+              )}
+
+              {mainStatus ===
+                "Not Delivered" && (
+
+                <>
+
+                  {NOT_DELIVERED_REASONS.map(
+                    (r) => (
+
+                      <option
+                        key={r}
+                        value={r}
+                      >
+                        {r}
+                      </option>
+
+                    )
+                  )}
+
+                </>
+
+              )}
+
+            </select>
+
+          )}
+
+        </>
+
+      )}
+
+      <textarea
+        placeholder="Remarks"
+        value={remarks}
+        onChange={(e) =>
+          setRemarks(
+            e.target.value
+          )
+        }
+        rows={4}
+        style={{
+          width: "100%",
+          padding: 10,
+          borderRadius: 8,
+          border:
+            "1px solid #d1d5db",
+          marginBottom: 16,
+          resize: "vertical",
+        }}
+      />
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 10,
+        }}
+      >
+
+        <button
+          onClick={() => {
+
+            setStatusModalOpen(false);
+
+            setSelectedOrder(null);
+
+            setSubStatus("");
+
+            setMainStatus("");
+
+            setRemarks("");
+
+          }}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 8,
+            border:
+              "1px solid #d1d5db",
+            background: "#fff",
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          Close
+        </button>
+
+        <button
+          onClick={() => {
+
+            if (
+              actionType === "cancel" &&
+              !subStatus
+            ) {
+
+              alert(
+                "Please select cancel reason"
+              );
+
+              return;
+
+            }
+
+            if (
+              actionType === "mark" &&
+              (
+                !mainStatus ||
+                !subStatus
+              )
+            ) {
+
+              alert(
+                "Please select status"
+              );
+
+              return;
+
+            }
+
+            submitStatusAction();
+
+          }}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "none",
+            background: "#111827",
+            color: "#fff",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          Submit
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+)}
+
     </section>
   );
 }
