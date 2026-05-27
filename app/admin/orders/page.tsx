@@ -270,81 +270,100 @@ useEffect(() => {
 
     /* STATUS UPDATE */
 
-    .on(
-      "postgres_changes",
+.on(
+  "postgres_changes",
 
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "Orders",
-      },
+  {
+    event: "UPDATE",
+    schema: "public",
+    table: "Orders",
+  },
 
-      async (payload) => {
+  async (payload) => {
 
-        console.log(
-          "ORDER UPDATED:",
-          payload
+    console.log(
+      "ORDER UPDATED:",
+      payload
+    );
+
+    const oldStatus =
+      payload.old?.Status || "";
+
+    const newStatus =
+      payload.new?.Status || "";
+
+    /* ONLY WHEN ORDER MOVES TO NEW ORDER */
+
+    if (
+      oldStatus !== "New Order" &&
+      newStatus === "New Order"
+    ) {
+
+      setNewOrderCount((prev) => {
+
+        const updated =
+          prev + 1;
+
+        localStorage.setItem(
+          "raileats_new_orders",
+          String(updated)
         );
 
-        /* IF ORDER MOVED TO NEW ORDER */
+        return updated;
 
-        if (
-          payload.new?.Status ===
-          "New Order"
-        ) {
+      });
 
-          setNewOrderCount((prev) => {
+      /* SOUND */
 
-            const updated =
-              prev + 1;
+      try {
 
-            localStorage.setItem(
-              "raileats_new_orders",
-              String(updated)
-            );
+        if (audioRef.current) {
 
-            return updated;
+          audioRef.current.currentTime = 0;
 
-          });
-
-          /* SOUND */
-
-          try {
-
-            if (audioRef.current) {
-
-              audioRef.current.currentTime = 0;
-
-              await audioRef.current.play();
-
-            }
-
-          } catch (e) {}
-
-          /* NOTIFICATION */
-
-          try {
-
-            if (
-              Notification.permission ===
-              "granted"
-            ) {
-
-              new Notification(
-                "🚆 Order Sent To Restaurant",
-                {
-
-                  body:
-                    `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
-
-                }
-              );
-
-            }
-
-          } catch (e) {}
+          await audioRef.current.play();
 
         }
+
+      } catch (e) {
+
+        console.log(
+          "Sound blocked"
+        );
+
+      }
+
+      /* NOTIFICATION */
+
+      try {
+
+        if (
+          Notification.permission ===
+          "granted"
+        ) {
+
+          new Notification(
+            "🚆 Order Sent To Restaurant",
+            {
+
+              body:
+                `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
+
+            }
+          );
+
+        }
+
+      } catch (e) {}
+
+    }
+
+    /* REFRESH DATA */
+
+    setActiveTab((prev) => prev);
+
+  }
+)
 
         /* REFRESH DATA */
 
