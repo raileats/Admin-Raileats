@@ -1474,25 +1474,73 @@ setRemarks("");
 
       {actionType === "mark" && (
 
-        <>
+  <>
 
-          <select
-            value={subStatus}
-            onChange={(e) =>
-              setSubStatus(e.target.value)
-            }
-            style={{
-              width: "100%",
-              padding: 10,
-              borderRadius: 8,
-              marginBottom: 12,
-              border: "1px solid #d1d5db",
-            }}
-          >
+    <select
+      value={mainStatus}
+      onChange={(e) => {
 
-            <option value="">
-              Select Status
-            </option>
+        setMainStatus(
+          e.target.value
+        );
+
+        setSubStatus("");
+
+      }}
+      style={{
+        width: "100%",
+        padding: 10,
+        borderRadius: 8,
+        marginBottom: 12,
+        border: "1px solid #d1d5db",
+      }}
+    >
+
+      <option value="">
+        Select Main Status
+      </option>
+
+      <option value="Delivered">
+        Delivered
+      </option>
+
+      <option value="Cancelled">
+        Cancelled
+      </option>
+
+      <option value="Not Delivered">
+        Not Delivered
+      </option>
+
+    </select>
+
+    {mainStatus && (
+
+      <select
+        value={subStatus}
+        onChange={(e) =>
+          setSubStatus(
+            e.target.value
+          )
+        }
+        style={{
+          width: "100%",
+          padding: 10,
+          borderRadius: 8,
+          marginBottom: 12,
+          border:
+            "1px solid #d1d5db",
+        }}
+      >
+
+        <option value="">
+          Select Sub Status
+        </option>
+
+        {mainStatus ===
+          "Delivered" && (
+
+          <>
 
             <option value="Delivered">
               Delivered
@@ -1502,95 +1550,58 @@ setRemarks("");
               Bad Delivery
             </option>
 
-            <option value="Cancelled">
-              Cancelled
-            </option>
+          </>
 
-            <option value="Not Delivered">
-              Not Delivered
-            </option>
+        )}
 
-          </select>
+        {mainStatus ===
+          "Cancelled" && (
 
-        </>
+          <>
 
-      )}
+            {CANCEL_REASONS.map(
+              (r) => (
 
-      <textarea
-        placeholder="Remarks"
-        value={remarks}
-        onChange={(e) =>
-          setRemarks(e.target.value)
-        }
-        rows={4}
-        style={{
-          width: "100%",
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #d1d5db",
-          marginBottom: 16,
-        }}
-      />
+                <option
+                  key={r}
+                  value={r}
+                >
+                  {r}
+                </option>
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          gap: 10,
-        }}
-      >
+              )
+            )}
 
-        <button
-          onClick={() => {
+          </>
 
-            setStatusModalOpen(false);
+        )}
 
-            setSelectedOrder(null);
+        {mainStatus ===
+          "Not Delivered" && (
 
-            setSubStatus("");
+          <>
 
-setMainStatus("");
+            {NOT_DELIVERED_REASONS.map(
+              (r) => (
 
-setRemarks("");
+                <option
+                  key={r}
+                  value={r}
+                >
+                  {r}
+                </option>
 
-          }}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 8,
-            border: "1px solid #d1d5db",
-            background: "#fff",
-            cursor: "pointer",
-          }}
-        >
-          Close
-        </button>
+              )
+            )}
 
-        <button
-          onClick={() => {
+          </>
 
-  submitStatusAction();
+        )}
 
-}}
-          style={{
-            padding: "10px 14px",
-            borderRadius: 8,
-            border: "none",
-            background: "#111827",
-            color: "#fff",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          Submit
-        </button>
+      </select>
 
-      </div>
+    )}
 
-    </div>
-
-  </div>
+  </>
 
 )}
-    </section>
-  );
-}
