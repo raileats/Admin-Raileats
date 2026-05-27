@@ -516,6 +516,198 @@ useEffect(() => {
     })();
   }
 
+  async function submitStatusAction() {
+
+  if (!selectedOrder) return;
+
+  if (!subStatus) {
+
+    alert("Please select reason/status");
+
+    return;
+
+  }
+
+  try {
+
+    let mainStatus = "";
+
+    /* CANCEL FLOW */
+
+    if (actionType === "cancel") {
+
+      mainStatus = "Cancelled";
+
+    }
+
+    /* MARK FLOW */
+
+    else {
+
+      if (
+        subStatus === "Delivered" ||
+        subStatus === "Bad Delivery"
+      ) {
+
+        mainStatus = "Delivered";
+
+      }
+
+      else if (
+        subStatus === "Not Delivered"
+      ) {
+
+        mainStatus = "Not Delivered";
+
+      }
+
+      else if (
+        subStatus === "Cancelled"
+      ) {
+
+        mainStatus = "Cancelled";
+
+      }
+
+    }
+
+    const res = await fetch(
+
+      `/api/orders/${encodeURIComponent(
+        selectedOrder.id
+      )}/status`,
+
+      {
+        method: "PATCH",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+
+        body: JSON.stringify({
+
+          newStatus: mainStatus,
+
+          subStatus,
+
+          remarks,
+
+          changedBy: "admin",
+
+          actionSource: "admin",
+
+        }),
+
+      }
+
+    );
+
+    const json =
+      await res.json();
+
+    if (!res.ok || !json?.ok) {
+
+      alert("Failed to update order");
+
+      return;
+
+    }
+
+    /* MOVE UI */
+
+    const targetKey =
+      mainStatus
+        .toLowerCase()
+        .replace(/\s/g, "") as TabKey;
+
+    const updatedOrder = {
+
+      ...selectedOrder,
+
+      status: targetKey,
+
+      dbStatus: mainStatus,
+
+      history: [
+
+        ...selectedOrder.history,
+
+        {
+
+          at: new Date().toISOString(),
+
+          by: "admin",
+
+          note:
+            `${subStatus}${remarks ? ` • ${remarks}` : ""}`,
+
+          status: targetKey,
+
+        },
+
+      ],
+
+    };
+
+    setAllOrders((prev) => {
+
+      const copy = {
+        ...prev,
+      };
+
+      (
+        Object.keys(
+          copy
+        ) as TabKey[]
+      ).forEach((k) => {
+
+        copy[k] =
+          (
+            copy[k] || []
+          ).filter(
+            (o) =>
+              o.id !==
+              selectedOrder.id
+          );
+
+      });
+
+      copy[targetKey] = [
+
+        updatedOrder,
+
+        ...(copy[
+          targetKey
+        ] || []),
+
+      ];
+
+      return copy;
+
+    });
+
+    /* RESET */
+
+    setStatusModalOpen(false);
+
+    setSelectedOrder(null);
+
+    setSubStatus("");
+
+    setRemarks("");
+
+    setActiveTab(targetKey);
+
+  } catch (e) {
+
+    console.error(e);
+
+    alert("Network error");
+
+  }
+
+}
   function submitMark(order: Order) {
     const selection = marking[order.id];
     if (!selection || !selection.status) {
