@@ -1220,6 +1220,8 @@ const tabCounts = useMemo(() => {
         setSelectedOrder(o);
 
         setActionType("cancel");
+        
+        setMainStatus("Cancelled");
 
         setSubStatus("");
 
