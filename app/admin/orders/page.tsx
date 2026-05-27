@@ -1547,6 +1547,9 @@ setRemarks("");
         {mainStatus ===
           "Delivered" && (
 
+                  {mainStatus ===
+          "Delivered" && (
+
           <>
 
             <option value="Delivered">
@@ -1561,7 +1564,59 @@ setRemarks("");
 
         )}
 
-              <textarea
+        {mainStatus ===
+          "Cancelled" && (
+
+          <>
+
+            {CANCEL_REASONS.map(
+              (r) => (
+
+                <option
+                  key={r}
+                  value={r}
+                >
+                  {r}
+                </option>
+
+              )
+            )}
+
+          </>
+
+        )}
+
+        {mainStatus ===
+          "Not Delivered" && (
+
+          <>
+
+            {NOT_DELIVERED_REASONS.map(
+              (r) => (
+
+                <option
+                  key={r}
+                  value={r}
+                >
+                  {r}
+                </option>
+
+              )
+            )}
+
+          </>
+
+        )}
+
+      </select>
+
+    )}
+
+  </>
+
+)}
+
+      <textarea
         placeholder="Remarks"
         value={remarks}
         onChange={(e) =>
