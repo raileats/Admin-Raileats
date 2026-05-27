@@ -753,7 +753,13 @@ return (
   <section style={{ padding: 12 }}>
 
     <header
-      style={{ "flex",justifyContent: "space-between",alignItems: "center",gap: 12,marginBottom: 12,}}
+  style={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  }}
 
 
 
