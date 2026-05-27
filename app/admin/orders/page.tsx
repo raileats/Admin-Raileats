@@ -140,7 +140,6 @@ export default function AdminOrdersPage() {
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>({} as Record<TabKey, Order[]>);
   const [loading, setLoading] = useState(false);
   
-  // Existing modal states retained completely
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [actionType, setActionType] = useState("");
@@ -161,7 +160,6 @@ export default function AdminOrdersPage() {
     return 0;
   });
 
-  // Diagnostics Real-time Analytics States
   const [viewDrawerOpen, setViewDrawerOpen] = useState(false);
   const [detailedOrder, setDetailedOrder] = useState<any>(null);
   const [fetchedItems, setFetchedItems] = useState<any[]>([]);
@@ -215,7 +213,6 @@ export default function AdminOrdersPage() {
             return updated;
           });
 
-          /* PLAY SOUND */
           try {
             if (audioRef.current) {
               audioRef.current.currentTime = 0;
@@ -225,7 +222,6 @@ export default function AdminOrdersPage() {
             console.log("sound blocked");
           }
 
-          /* NOTIFICATION */
           try {
             if (Notification.permission === "granted") {
               new Notification("🚆 New RailEats Order", {
@@ -321,7 +317,6 @@ export default function AdminOrdersPage() {
 
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
 
-  // Sync drawer context real-time state if global allOrders list transforms under active workflow
   useEffect(() => {
     if (detailedOrder) {
       const liveFlatArray = Object.values(allOrders).flat();
@@ -332,7 +327,7 @@ export default function AdminOrdersPage() {
     }
   }, [allOrders]);
 
-  /* ================= RELATIONAL DRAW DATA RECRUITER LAYER ================= */
+  /* ================= DIAGNOSTICS LAUNCH PANEL ================= */
   const handleOpenDiagnosticsDrawer = async (order: Order) => {
     setDetailedOrder(order);
     setViewDrawerOpen(true);
@@ -340,7 +335,6 @@ export default function AdminOrdersPage() {
     const targetOrderId = order.id;
     const targetRestroCode = order.outletId;
 
-    // 1. Core OrderItems Grid Pull
     if (targetOrderId) {
       setLoadingItems(true);
       setFetchedItems([]);
@@ -354,7 +348,6 @@ export default function AdminOrdersPage() {
       finally { setLoadingItems(false); }
     }
 
-    // 2. Core RestroMaster Compliance Pull
     if (targetRestroCode) {
       setLoadingRestro(true);
       setFetchedRestro(null);
@@ -369,7 +362,6 @@ export default function AdminOrdersPage() {
       finally { setLoadingRestro(false); }
     }
 
-    // 3. Chronological Process OrderStatusHistory Pull
     if (targetOrderId) {
       setLoadingLogs(true);
       setOrderLogs([]);
@@ -438,7 +430,6 @@ export default function AdminOrdersPage() {
           return copy;
         });
 
-        // Trigger dynamic history re-sync if administrative user transitions order state inside drawer view
         if (viewDrawerOpen && detailedOrder && detailedOrder.id === orderId) {
           try {
             const { data: logReload } = await supabase
@@ -522,7 +513,6 @@ export default function AdminOrdersPage() {
         return copy;
       });
 
-      // Synchronous live sequence data fetch if action modal alters state parameters inside view
       if (viewDrawerOpen && detailedOrder && detailedOrder.id === selectedOrder.id) {
         try {
           const { data: logReload } = await supabase
@@ -534,7 +524,6 @@ export default function AdminOrdersPage() {
         } catch (err) { console.error(err); }
       }
 
-      // Close modal and reset states
       setStatusModalOpen(false);
       setSelectedOrder(null);
       setSubStatus("");
@@ -878,7 +867,6 @@ export default function AdminOrdersPage() {
                   <td style={{ padding: 12 }}>{o.coach || "-"}</td>
                   <td style={{ padding: 12 }}>{o.seat || "-"}</td>
                   <td style={{ padding: 12, fontWeight: 600 }}>{o.customerName}</td>
-                  {/* TypeScript Style Error Fixed here: Changed fontMono to fontFamily: "monospace" */}
                   <td style={{ padding: 12, fontFamily: "monospace" }}>{o.customerMobile}</td>
 
                   <td style={{ padding: 12, maxWidth: 220 }}>
@@ -898,7 +886,7 @@ export default function AdminOrdersPage() {
                   <td style={{ padding: 12, verticalAlign: "middle" }}>
                     <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
                       
-                      {/* INLINE BUTTON MATRIX ACTION CONTROLLERS */}
+                      {/* INLINE BUTTON CONTROLLERS */}
                       {[
                         "booked",
                         "verification",
@@ -1051,7 +1039,6 @@ export default function AdminOrdersPage() {
                         </div>
                       )}
 
-                      {/* COMPLIANCE INTEGRATION TRIGGER POINT BUTTON */}
                       <button
                         onClick={() => handleOpenDiagnosticsDrawer(o)}
                         style={{
@@ -1094,7 +1081,7 @@ export default function AdminOrdersPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* DEEP DIAGNOSTICS ARCHITECTURE SLIDING DRAWER FRAMEWORK */}
+      {/* AUDIT DIAGNOSTICS SLIDING DRAWER FRAMEWORK */}
       {/* ========================================================================= */}
       {viewDrawerOpen && detailedOrder && (
         <div 
@@ -1105,7 +1092,7 @@ export default function AdminOrdersPage() {
             backdropFilter: "blur(4px)",
             zIndex: 999,
             display: "flex",
-            justifyValue: "flex-end",
+            // TypeError Fixed: Removed 'justifyValue: "flex-end"' property completely from here
             justifyContent: "flex-end",
             animation: "fadeIn 0.2s ease"
           }}
@@ -1126,7 +1113,7 @@ export default function AdminOrdersPage() {
             onClick={(e) => e.stopPropagation()}
           >
             
-            {/* DRAWER HEADER CONSOLE ROW WITH PARALLEL UTILITY BUTTON DUPLICATES */}
+            {/* DRAWER HEADER CONSOLE ROW */}
             <div style={{ background: "#f8fafc", padding: "18px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1175,10 +1162,10 @@ export default function AdminOrdersPage() {
               </div>
             </div>
 
-            {/* CORE INNER DRAWER AREA PANELS (SCROLLABLE CONTAINER) */}
+            {/* CORE INNER DRAWER PANEL */}
             <div style={{ flex: 1, padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "24px" }}>
               
-              {/* PANEL BLOCK A: TRANSIT PROFILE METRIC DATA */}
+              {/* TRANSIT METRICS PANEL */}
               <div style={{ background: "#f8fafc", borderRadius: "12px", padding: "16px", border: "1px solid #e2e8f0" }}>
                 <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <Smartphone size={14} /> Client Transit Profile &amp; Route Schedule
@@ -1194,7 +1181,7 @@ export default function AdminOrdersPage() {
                 </div>
               </div>
 
-              {/* PANEL BLOCK B: DYNAMIC LIVE FETCHED BASKET BREAKDOWN GRID */}
+              {/* FOOD ITEMS SUM BLOCK */}
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <ShoppingBag size={14} /> Food Basket Summary Breakdown
@@ -1226,7 +1213,6 @@ export default function AdminOrdersPage() {
                   </table>
                 </div>
 
-                {/* Gross Summary Overlay */}
                 <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", fontSize: "13px", fontWeight: 600, display: "flex", flexDirection: "column", gap: "6px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}><span>Total Base Value Collection:</span><span style={{ color: "#334155" }}>₹{detailedOrder.total || "0"}</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", color: "#0f172a", fontWeight: 800, fontSize: "14px", paddingTop: "6px", borderTop: "1px dashed #cbd5e1" }}>
@@ -1236,7 +1222,7 @@ export default function AdminOrdersPage() {
                 </div>
               </div>
 
-              {/* PANEL BLOCK C: LIVE VENDOR COMPLIANCE INTERACTION PANEL */}
+              {/* RESTRO COMPLIANCE CARD */}
               <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "12px", padding: "16px" }}>
                 <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#1e40af", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <ShieldCheck size={14} style={{ color: "#2563eb" }} /> Restaurant Compliance &amp; Corporate License Audit
@@ -1257,7 +1243,7 @@ export default function AdminOrdersPage() {
                 )}
               </div>
 
-              {/* PANEL BLOCK D: CHRONOLOGICAL SEQUENCE STEP HISTORY TIMELINE */}
+              {/* TIMELINE LOGGER NODES */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <Clock size={14} /> Chronological Operational Lifecycle Milestones ({orderLogs.length})
@@ -1273,11 +1259,8 @@ export default function AdminOrdersPage() {
                   <div style={{ position: "relative", borderLeft: "2px dashed #e2e8f0", paddingLeft: "18px", marginLeft: "6px", display: "flex", flexDirection: "column", gap: "14px" }}>
                     {orderLogs.map((log: any, idx: number) => (
                       <div key={log.Id || idx} style={{ position: "relative" }}>
-                        
-                        {/* Circle Bullet Element Node */}
                         <span style={{ position: "absolute", left: "-24px", top: "4px", background: "#2563eb", width: "10px", height: "10px", borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
                         
-                        {/* Transaction Card Row Content Grid */}
                         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "4px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px", fontSize: "12px" }}>
                             <span style={{ fontWeight: 800, color: "#0f172a" }}>Stage Traversed: <span style={{ color: "#2563eb" }}>"{log.NewStatus}"</span></span>
@@ -1297,21 +1280,18 @@ export default function AdminOrdersPage() {
                             <span>Channel Source: {log.ActionSource || "System Core"}</span>
                           </div>
                         </div>
-
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-
             </div>
-
           </div>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* MAIN STATUS ACTIONS MODAL */}
+      {/* STATUS ACTIONS MODAL */}
       {/* ========================================================================= */}
       {statusModalOpen && (
         <div
@@ -1429,7 +1409,6 @@ export default function AdminOrdersPage() {
         </div>
       )}
 
-      {/* Embedded UI CSS Animation Keyframes Injector */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
