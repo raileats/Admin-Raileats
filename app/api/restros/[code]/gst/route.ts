@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -48,7 +51,14 @@ export async function GET(
     fileurl: r.fileurl || null,
   }));
 
-  return NextResponse.json({ ok: true, rows });
+  return NextResponse.json(
+    { ok: true, rows },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      },
+    }
+  );
 }
 
 /* ================= POST ================= */
@@ -134,5 +144,12 @@ export async function POST(
     return NextResponse.json({ ok: false, error: masterError.message });
   }
 
-  return NextResponse.json({ ok: true, row });
+  return NextResponse.json(
+    { ok: true, row },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      },
+    }
+  );
 }
