@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Bell, Clock, MapPin, ShieldCheck, ShoppingBag, Smartphone, X } from "lucide-react";
 import Link from "next/link";
+import AdminPage from "@/components/admin/AdminPage";
 
 type TabKey =
   | "booked"
@@ -842,25 +843,10 @@ useEffect(() => {
   const visibleOrders = useMemo(() => applyFiltersAndSorting(orders), [orders, searchText, searchDate, searchType, searchOutlet]);
 
   return (
-    <section style={{ padding: 12, minHeight: "100vh", background: "#f8fafc", fontFamily: "sans-serif" }}>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          marginBottom: 12,
-          background: "#fff",
-          padding: 16,
-          borderRadius: 12,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#0f172a" }}>Orders Dashboard</h1>
-          <p style={{ margin: 0, color: "#6b7280", fontSize: 13, fontWeight: 500 }}>Real-time dynamic monitoring console ordered by delivery schedule urgency</p>
-        </div>
-
+    <AdminPage
+      title="Orders Dashboard"
+      subtitle="Real-time dynamic monitoring console ordered by delivery schedule urgency"
+      actions={
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <Link
             href="/admin/orders"
@@ -906,7 +892,8 @@ useEffect(() => {
             {loading ? " • Syncing..." : ""}
           </div>
         </div>
-      </header>
+      }
+    >
 
       {/* TABS VIEW */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, marginBottom: 12 }}>
@@ -1829,6 +1816,6 @@ useEffect(() => {
         @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
         .table-row-hover:hover { background-color: #f8fafc !important; transition: background-color 0.15s ease; }
       `}} />
-    </section>
+    </AdminPage>
   );
 }
