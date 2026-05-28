@@ -1298,7 +1298,7 @@ useEffect(() => {
               background: "#fff",
               borderRadius: 12,
               width: "100%",
-              maxWidth: 560,
+              maxWidth: 920,
               maxHeight: "80vh",
               display: "flex",
               flexDirection: "column",
@@ -1307,9 +1307,19 @@ useEffect(() => {
             }}
           >
             <div style={{ padding: 16, borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: 8 }}>
-                <MapPin size={18} /> Route Map: {routeModal.trainNo}
-              </h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: 8 }}>
+                  <MapPin size={18} /> Route Map: {routeModal.trainNo}
+                  {routeModal.data[0]?.trainName ? (
+                    <span style={{ color: "#2563eb" }}>- {routeModal.data[0].trainName}</span>
+                  ) : null}
+                </h3>
+                {routeModal.data[0] && (
+                  <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
+                    {routeModal.data[0].stationFrom || "-"} to {routeModal.data[0].stationTo || "-"} · {routeModal.data.length} stations · {routeModal.data[0].runningDays || "Running days N/A"}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => setRouteModal((prev) => ({ ...prev, open: false, message: "" }))}
                 title="Close route map"
@@ -1319,8 +1329,20 @@ useEffect(() => {
               </button>
             </div>
 
-            <div style={{ overflowY: "auto", padding: 16 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <div style={{ overflow: "auto", padding: 16 }}>
+              <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 1, borderBottom: "1px solid #e2e8f0", color: "#64748b", textAlign: "left" }}>
+                    <th style={{ padding: "9px 8px", width: 56 }}>No.</th>
+                    <th style={{ padding: "9px 8px" }}>Station</th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Arrives</th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Departs</th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Stop</th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Distance</th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Platform</th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Day</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {routeModal.data.length > 0 ? (
                     routeModal.data.map((r, idx) => {
@@ -1328,6 +1350,11 @@ useEffect(() => {
                       const stationName = normalizeRouteValue(getRouteField(r, "StationName", "stationName", "stationname"));
                       const stnNumber = getRouteField(r, "StnNumber", "stnNumber", "stnnumber");
                       const arrives = normalizeRouteValue(getRouteField(r, "Arrives", "arrives"));
+                      const departs = normalizeRouteValue(getRouteField(r, "Departs", "departs"));
+                      const stopTime = normalizeRouteValue(getRouteField(r, "Stoptime", "stoptime", "StopTime"));
+                      const distance = normalizeRouteValue(getRouteField(r, "Distance", "distance"));
+                      const platform = normalizeRouteValue(getRouteField(r, "Platform", "platform"));
+                      const day = normalizeRouteValue(getRouteField(r, "Day", "day"));
                       const isTarget = stationCode === routeModal.stationCode;
                       return (
                         <tr
@@ -1346,12 +1373,27 @@ useEffect(() => {
                           <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
                             {arrives || "-"}
                           </td>
+                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                            {departs || "-"}
+                          </td>
+                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                            {stopTime || "-"}
+                          </td>
+                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                            {distance || "-"}
+                          </td>
+                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                            {platform || "-"}
+                          </td>
+                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                            {day || "-"}
+                          </td>
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={3} style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>
+                      <td colSpan={8} style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>
                         {routeModal.message || "No route rows found for this train number in TrainRoute table."}
                       </td>
                     </tr>
