@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import AdminButton from "@/components/admin/AdminButton";
+import AdminCard from "@/components/admin/AdminCard";
+import { AdminField, AdminInput, AdminTextarea } from "@/components/admin/AdminField";
 
 type Props = {
   initialData?: any;
@@ -39,11 +42,7 @@ const fssaiRegex = /^\d{14}$/;
 const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
 
-const sectionClass = "rounded-md border border-sky-100 bg-sky-50 p-5";
-const labelClass = "mb-1 block text-xs font-semibold text-slate-600";
-const inputClass = "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500";
-const btnPrimary = "rounded-md bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700";
-const btnCyan = "rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-600";
+const modalInputClass = "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
 function fmt(d?: string | null) {
   return d ? new Date(d).toLocaleDateString("en-GB") : "-";
@@ -317,21 +316,23 @@ export default function AddressDocsClient({
   const oldPan = panRows.filter((r) => r.status !== "active");
 
   return (
-    <div className="p-5">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className={sectionClass}>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-base font-semibold text-slate-800">Address</h3>
-            <button type="button" onClick={saveAddress} disabled={savingAddress} className={btnPrimary}>
+    <div className="space-y-5">
+      <div className="space-y-5">
+        <AdminCard
+          title="Address"
+          actions={
+            <AdminButton type="button" onClick={saveAddress} disabled={savingAddress}>
               {savingAddress ? "Saving..." : "Save Address"}
-            </button>
-          </div>
-
-          <textarea
-            value={local.RestroAddress ?? ""}
-            onChange={(e) => update("RestroAddress", e.target.value)}
-            className={`${inputClass} min-h-16 resize-y`}
-          />
+            </AdminButton>
+          }
+        >
+          <AdminField label="Restro Address">
+            <AdminTextarea
+              value={local.RestroAddress ?? ""}
+              onChange={(e) => update("RestroAddress", e.target.value)}
+              className="min-h-16"
+            />
+          </AdminField>
 
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6">
             <Field label="City / Village" value={local.City} onChange={(v) => update("City", v)} />
@@ -343,7 +344,7 @@ export default function AddressDocsClient({
           </div>
 
           {message && <div className="mt-3 text-sm font-semibold text-green-700">{message}</div>}
-        </section>
+        </AdminCard>
 
         <DocSection title="FSSAI" actionLabel="Add New FSSAI" onAction={() => setShowFssai(true)}>
           <div className="grid grid-cols-5 gap-3 border-b border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600">
@@ -409,8 +410,8 @@ export default function AddressDocsClient({
 
       {showFssai && (
         <Modal title="Add FSSAI" onClose={() => setShowFssai(false)}>
-          <input value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value.replace(/\D/g, "").slice(0, 14))} placeholder="14 Digit FSSAI Number" className={inputClass} />
-          <input type="date" value={fssaiExpiry} onChange={(e) => setFssaiExpiry(e.target.value)} className={inputClass} />
+          <input value={fssaiNumber} onChange={(e) => setFssaiNumber(e.target.value.replace(/\D/g, "").slice(0, 14))} placeholder="14 Digit FSSAI Number" className={modalInputClass} />
+          <input type="date" value={fssaiExpiry} onChange={(e) => setFssaiExpiry(e.target.value)} className={modalInputClass} />
           <input type="file" onChange={(e) => setFssaiFile(e.target.files?.[0] || null)} />
           <ModalActions saving={savingFssai} onCancel={() => setShowFssai(false)} onSave={submitFssai} />
         </Modal>
@@ -418,8 +419,8 @@ export default function AddressDocsClient({
 
       {showGst && (
         <Modal title="Add GST" onClose={() => setShowGst(false)}>
-          <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15))} placeholder="15 Digit GST Number" className={inputClass} />
-          <select value={gstType} onChange={(e) => setGstType(e.target.value)} className={inputClass}>
+          <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15))} placeholder="15 Digit GST Number" className={modalInputClass} />
+          <select value={gstType} onChange={(e) => setGstType(e.target.value)} className={modalInputClass}>
             <option value="Regular">Regular</option>
             <option value="Composition">Composition</option>
           </select>
@@ -430,8 +431,8 @@ export default function AddressDocsClient({
 
       {showPan && (
         <Modal title="Add PAN" onClose={() => setShowPan(false)}>
-          <input value={panNumber} onChange={(e) => setPanNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10))} placeholder="ABCDE1234F" className={inputClass} />
-          <select value={panType} onChange={(e) => setPanType(e.target.value)} className={inputClass}>
+          <input value={panNumber} onChange={(e) => setPanNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10))} placeholder="ABCDE1234F" className={modalInputClass} />
+          <select value={panType} onChange={(e) => setPanType(e.target.value)} className={modalInputClass}>
             <option value="">Select PAN Type</option>
             <option value="Proprietor">Proprietor</option>
             <option value="Company">Company</option>
@@ -448,24 +449,25 @@ export default function AddressDocsClient({
 
 function Field({ label, value, onChange }: { label: string; value: any; onChange: (v: string) => void }) {
   return (
-    <label>
-      <span className={labelClass}>{label}</span>
-      <input value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={inputClass} />
-    </label>
+    <AdminField label={label}>
+      <AdminInput value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+    </AdminField>
   );
 }
 
 function DocSection({ title, actionLabel, onAction, children }: { title: string; actionLabel: string; onAction: () => void; children: React.ReactNode }) {
   return (
-    <section className={sectionClass}>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-base font-semibold text-slate-800">{title}</h3>
-        <button type="button" onClick={onAction} className={btnCyan}>
+    <AdminCard
+      title={title}
+      actions={
+        <AdminButton type="button" variant="primary" onClick={onAction}>
           {actionLabel}
-        </button>
-      </div>
+        </AdminButton>
+      }
+      bodyClassName="p-0"
+    >
       {children}
-    </section>
+    </AdminCard>
   );
 }
 
@@ -505,12 +507,12 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 function ModalActions({ saving, onCancel, onSave }: { saving: boolean; onCancel: () => void; onSave: () => void }) {
   return (
     <div className="flex justify-end gap-2 pt-2">
-      <button type="button" onClick={onCancel} className="rounded-md border px-4 py-2 text-sm font-semibold">
+      <AdminButton type="button" variant="secondary" onClick={onCancel}>
         Cancel
-      </button>
-      <button type="button" onClick={onSave} disabled={saving} className={btnPrimary}>
+      </AdminButton>
+      <AdminButton type="button" onClick={onSave} disabled={saving}>
         {saving ? "Saving..." : "Save"}
-      </button>
+      </AdminButton>
     </div>
   );
 }
