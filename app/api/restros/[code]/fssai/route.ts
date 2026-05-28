@@ -12,7 +12,14 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  const restroCode = params.code;
+  const restroCode = Number(params.code);
+
+  if (!restroCode || Number.isNaN(restroCode)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Invalid RestroCode",
+    });
+  }
 
   const { data, error } = await supabase
     .from("RestroFSSAI")
@@ -24,7 +31,16 @@ export async function GET(
     return NextResponse.json({ ok: false, error: error.message });
   }
 
-  return NextResponse.json({ ok: true, rows: data });
+  const rows = (data || []).map((r: any, idx: number) => ({
+    id: r.id ?? r.FssaiId ?? `${r.RestroCode}-${r.fssai_number}-${idx}`,
+    fssai_number: r.fssai_number,
+    expiry_date: r.expiry_date,
+    file_url: r.file_url ?? null,
+    status: String(r.status || "").toLowerCase() === "active" ? "active" : "inactive",
+    created_at: r.created_at ?? r.CreatedDate ?? null,
+  }));
+
+  return NextResponse.json({ ok: true, rows });
 }
 
 /* ========================= POST ========================= */
@@ -32,11 +48,19 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  const restroCode = params.code;
+  const restroCode = Number(params.code);
+
+  if (!restroCode || Number.isNaN(restroCode)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Invalid RestroCode",
+    });
+  }
+
   const form = await req.formData();
 
   const fssai_number = form.get("fssai_number") as string;
-  const expiry_date = form.get("expiry_date") as string | null;
+  const expiry_date = (form.get("expiry_date") as string | null) || null;
   const file = form.get("file") as File | null;
 
   if (!fssai_number) {
@@ -79,13 +103,17 @@ export async function POST(
   }
 
   /* 🔥 STEP 3: INSERT NEW ACTIVE FSSAI */
-  const { error } = await supabase.from("RestroFSSAI").insert({
-    RestroCode: restroCode,
-    fssai_number,      // ✅ CORRECT COLUMN NAME
-    expiry_date,
-    file_url,
-    status: "active",
-  });
+  const { data: row, error } = await supabase
+    .from("RestroFSSAI")
+    .insert({
+      RestroCode: restroCode,
+      fssai_number, // ✅ CORRECT COLUMN NAME
+      expiry_date,
+      file_url,
+      status: "active",
+    })
+    .select("*")
+    .single();
 
   if (error) {
     return NextResponse.json({
@@ -94,5 +122,24 @@ export async function POST(
     });
   }
 
-  return NextResponse.json({ ok: true });
+  /* 🔥 STEP 4: SYNC LATEST FSSAI INTO RESTRO MASTER */
+  const { error: masterError } = await supabase
+    .from("RestroMaster")
+    .update({
+      FSSAINumber: fssai_number,
+      FSSAIExpiryDate: expiry_date,
+      FSSAICopyUpload: file_url,
+      FSSAIStatus: "Active",
+      UpdatedAt: new Date().toISOString(),
+    })
+    .eq("RestroCode", restroCode);
+
+  if (masterError) {
+    return NextResponse.json({
+      ok: false,
+      error: masterError.message,
+    });
+  }
+
+  return NextResponse.json({ ok: true, row });
 }
