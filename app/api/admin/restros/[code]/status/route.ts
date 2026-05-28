@@ -4,9 +4,6 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-/* ================================
-   SUPABASE CLIENT
-================================ */
 function srv() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,9 +12,32 @@ function srv() {
   );
 }
 
-/* ================================
-   GET (TEST PURPOSE ONLY)
-================================ */
+function toStatusNumber(value: any) {
+  const normalized = String(value ?? "").toLowerCase().trim();
+
+  if (
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "on" ||
+    normalized === "active"
+  ) {
+    return 1;
+  }
+
+  if (
+    normalized === "0" ||
+    normalized === "false" ||
+    normalized === "off" ||
+    normalized === "inactive" ||
+    normalized === "deactive" ||
+    normalized === "deactivate"
+  ) {
+    return 0;
+  }
+
+  return null;
+}
+
 export async function GET(
   req: Request,
   { params }: { params: { code: string } }
@@ -29,19 +49,14 @@ export async function GET(
   });
 }
 
-/* ================================
-   UPDATE API (PATCH)
-================================ */
 export async function PATCH(
   req: Request,
   { params }: { params: { code: string } }
 ) {
   try {
-    console.log("===== PATCH START =====");
-
     const restroCode = Number(params.code);
 
-    if (!restroCode || isNaN(restroCode)) {
+    if (!restroCode || Number.isNaN(restroCode)) {
       return NextResponse.json(
         { ok: false, error: "Invalid restro code" },
         { status: 400 }
@@ -49,22 +64,13 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    console.log("Incoming Body:", body);
-
     const supabase = srv();
-
-    /* ================================
-       SAFE PAYLOAD BUILDER
-    ================================= */
     const updateData: any = {};
 
     const setIfDefined = (key: string, value: any) => {
       if (value !== undefined) updateData[key] = value;
     };
 
-    /* ================================
-       BASIC INFO
-    ================================= */
     setIfDefined("RestroName", body.RestroName);
     setIfDefined("OwnerName", body.OwnerName);
     setIfDefined("OwnerEmail", body.OwnerEmail);
@@ -72,9 +78,6 @@ export async function PATCH(
     setIfDefined("RestroEmail", body.RestroEmail);
     setIfDefined("RestroPhone", body.RestroPhone);
 
-    /* ================================
-       ADDRESS
-    ================================= */
     setIfDefined("RestroAddress", body.RestroAddress);
     setIfDefined("City", body.City);
     setIfDefined("State", body.State);
@@ -83,66 +86,57 @@ export async function PATCH(
     setIfDefined("RestroLatitude", body.RestroLatitude);
     setIfDefined("RestroLongitude", body.RestroLongitude);
 
-    /* ================================
-       STATUS
-    ================================= */
     setIfDefined("IsIrctcApproved", body.IsIrctcApproved);
-    setIfDefined("RaileatsStatus", body.RaileatsStatus);
 
-    /* ================================
-       SETTINGS
-    ================================= */
+    const incomingRaileatsStatus =
+      body.RaileatsStatus !== undefined ? body.RaileatsStatus : body.raileatsStatus;
+
+    if (incomingRaileatsStatus !== undefined) {
+      const normalizedStatus = toStatusNumber(incomingRaileatsStatus);
+
+      if (normalizedStatus === null) {
+        return NextResponse.json(
+          { ok: false, error: "Invalid RaileatsStatus value" },
+          { status: 400 }
+        );
+      }
+
+      updateData.RaileatsStatus = normalizedStatus;
+    }
+
     setIfDefined("WeeklyOff", body.WeeklyOff);
     setIfDefined("MinimumOrderValue", body.MinimumOrderValue);
     setIfDefined("CutOffTime", body.CutOffTime);
 
-    /* ================================
-       TIME
-    ================================= */
     setIfDefined("open_time", body.open_time);
     setIfDefined("closed_time", body.closed_time);
 
-    /* ================================
-       DELIVERY
-    ================================= */
     setIfDefined(
       "RaileatsCustomerDeliveryCharge",
       body.RaileatsCustomerDeliveryCharge
     );
-
     setIfDefined(
       "RaileatsCustomerDeliveryChargeGSTRate",
       body.RaileatsCustomerDeliveryChargeGSTRate
     );
-
     setIfDefined(
       "RaileatsCustomerDeliveryChargeGST",
       body.RaileatsCustomerDeliveryChargeGST
     );
-
     setIfDefined(
       "RaileatsCustomerDeliveryChargeTotalInclGST",
       body.RaileatsCustomerDeliveryChargeTotalInclGST
     );
 
-    /* ================================
-       TIMESTAMP
-    ================================= */
     updateData.updated_at = new Date().toISOString();
 
-    console.log("Final Update Data:", updateData);
-
-    /* ================================
-       UPDATE QUERY
-    ================================= */
     const { data, error } = await supabase
       .from("RestroMaster")
       .update(updateData)
       .eq("RestroCode", restroCode)
-      .select();
+      .select("RestroCode,RaileatsStatus,updated_at");
 
     if (error) {
-      console.error("❌ Supabase error:", error);
       return NextResponse.json(
         { ok: false, error: error.message },
         { status: 500 }
@@ -161,7 +155,6 @@ export async function PATCH(
       row: data[0],
     });
   } catch (e: any) {
-    console.error("❌ PATCH ERROR:", e);
     return NextResponse.json(
       { ok: false, error: e.message || "Internal Server Error" },
       { status: 500 }
