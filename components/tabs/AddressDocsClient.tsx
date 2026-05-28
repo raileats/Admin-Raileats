@@ -118,10 +118,11 @@ export default function AddressDocsClient({
     if (!code) return;
     setLoadingDocs(true);
     try {
+      const bust = Date.now();
       const [fssaiRes, gstRes, panRes] = await Promise.all([
-        fetch(`/api/restros/${encodeURIComponent(String(code))}/fssai`, { cache: "no-store" }),
-        fetch(`/api/restros/${encodeURIComponent(String(code))}/gst`, { cache: "no-store" }),
-        fetch(`/api/restros/${encodeURIComponent(String(code))}/pan`, { cache: "no-store" }),
+        fetch(`/api/restros/${encodeURIComponent(String(code))}/fssai?t=${bust}`, { cache: "no-store" }),
+        fetch(`/api/restros/${encodeURIComponent(String(code))}/gst?t=${bust}`, { cache: "no-store" }),
+        fetch(`/api/restros/${encodeURIComponent(String(code))}/pan?t=${bust}`, { cache: "no-store" }),
       ]);
 
       const [fssaiJson, gstJson, panJson] = await Promise.all([
@@ -190,11 +191,25 @@ export default function AddressDocsClient({
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "FSSAI save failed");
 
+      const savedRow: FssaiRow = {
+        id: json.row?.id ?? json.row?.FssaiId ?? `${code}-${fssaiNumber}-${Date.now()}`,
+        fssai_number: json.row?.fssai_number ?? fssaiNumber,
+        expiry_date: json.row?.expiry_date ?? (fssaiExpiry || null),
+        file_url: json.row?.file_url ?? null,
+        status: "active",
+        created_at: json.row?.created_at ?? new Date().toISOString(),
+      };
+
+      setFssaiRows((prev) => [
+        savedRow,
+        ...prev.map((r) => (r.status === "active" ? { ...r, status: "inactive" as const } : r)),
+      ]);
+
       setShowFssai(false);
       setFssaiNumber("");
       setFssaiExpiry("");
       setFssaiFile(null);
-      await loadDocs();
+      window.setTimeout(() => loadDocs(), 700);
     } catch (err: any) {
       alert(err?.message || "FSSAI save failed");
     } finally {
@@ -222,11 +237,25 @@ export default function AddressDocsClient({
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "GST save failed");
 
+      const savedRow: GstRow = {
+        id: json.row?.id ?? `${code}-${gstNumber}-${Date.now()}`,
+        GstNumber: json.row?.GstNumber ?? gstNumber,
+        GstType: json.row?.GstType ?? gstType,
+        fileurl: json.row?.fileurl ?? null,
+        Gststatus: "Active",
+        createdDate: json.row?.createdDate ?? new Date().toISOString(),
+      };
+
+      setGstRows((prev) => [
+        savedRow,
+        ...prev.map((r) => (r.Gststatus === "Active" ? { ...r, Gststatus: "Inactive" as const } : r)),
+      ]);
+
       setShowGst(false);
       setGstNumber("");
       setGstType("Regular");
       setGstFile(null);
-      await loadDocs();
+      window.setTimeout(() => loadDocs(), 700);
     } catch (err: any) {
       alert(err?.message || "GST save failed");
     } finally {
@@ -254,11 +283,25 @@ export default function AddressDocsClient({
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "PAN save failed");
 
+      const savedRow: PanRow = {
+        id: json.row?.id ?? `${code}-${panNumber}-${Date.now()}`,
+        pan_number: json.row?.PanNumber ?? panNumber,
+        pan_type: json.row?.PanType ?? (panType || null),
+        status: "active",
+        created_at: json.row?.CreatedDate ?? new Date().toISOString(),
+        file_url: json.row?.fileurl ?? null,
+      };
+
+      setPanRows((prev) => [
+        savedRow,
+        ...prev.map((r) => (r.status === "active" ? { ...r, status: "inactive" as const } : r)),
+      ]);
+
       setShowPan(false);
       setPanNumber("");
       setPanType("");
       setPanFile(null);
-      await loadDocs();
+      window.setTimeout(() => loadDocs(), 700);
     } catch (err: any) {
       alert(err?.message || "PAN save failed");
     } finally {
