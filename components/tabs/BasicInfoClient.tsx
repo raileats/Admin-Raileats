@@ -3,6 +3,9 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import AdminButton from "@/components/admin/AdminButton";
+import AdminCard from "@/components/admin/AdminCard";
+import { AdminField, AdminInput, AdminSelect } from "@/components/admin/AdminField";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -152,164 +155,141 @@ export default function BasicInfoClient({
   };
 
   return (
-    <div style={{ padding: 18 }}>
-      <h3 style={{ textAlign: "center", marginBottom: 18 }}>
-        Basic Information
-      </h3>
+    <AdminCard
+      title="Basic Information"
+      actions={
+        <div className="flex gap-2">
+          <AdminButton variant="secondary" onClick={() => router.back()}>
+            Cancel
+          </AdminButton>
+          <AdminButton onClick={save} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </AdminButton>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <AdminField label="Restro Code">
+          <div className="flex h-10 items-center rounded-md bg-slate-100 px-3 text-sm font-semibold text-slate-700">
+            {local?.RestroCode ?? "-"}
+          </div>
+        </AdminField>
 
-      <div className="grid">
-        <Field label="Restro Code">
-          <div className="readonly">{local?.RestroCode ?? "-"}</div>
-        </Field>
-
-        <Field label="Restro Name">
-          <input
+        <AdminField label="Restro Name">
+          <AdminInput
             value={local?.RestroName ?? ""}
             onChange={(e) => update("RestroName", e.target.value)}
           />
-        </Field>
+        </AdminField>
 
-        <Field label="Brand Name">
-          <input
+        <AdminField label="Brand Name">
+          <AdminInput
             value={local?.BrandNameifAny ?? ""}
             onChange={(e) => update("BrandNameifAny", e.target.value)}
           />
-        </Field>
+        </AdminField>
 
-        <Field label="Owner Name">
-          <input
+        <AdminField label="Owner Name">
+          <AdminInput
             value={local?.OwnerName ?? ""}
             onChange={(e) => update("OwnerName", e.target.value)}
           />
-        </Field>
+        </AdminField>
 
-        <Field label="Owner Email">
-          <input
+        <AdminField label="Owner Email">
+          <AdminInput
             value={local?.OwnerEmail ?? ""}
             onChange={(e) => update("OwnerEmail", e.target.value)}
           />
-        </Field>
+        </AdminField>
 
-        <Field label="Owner Phone">
-          <input
+        <AdminField label="Owner Phone">
+          <AdminInput
             value={local?.OwnerPhone ?? ""}
             onChange={(e) => update("OwnerPhone", e.target.value)}
           />
-        </Field>
+        </AdminField>
 
-        <Field label="Restro Email">
-          <input
+        <AdminField label="Restro Email">
+          <AdminInput
             value={local?.RestroEmail ?? ""}
             onChange={(e) => update("RestroEmail", e.target.value)}
           />
-        </Field>
+        </AdminField>
 
-        <Field label="Restro Phone">
-          <input
+        <AdminField label="Restro Phone">
+          <AdminInput
             value={local?.RestroPhone ?? ""}
             onChange={(e) => update("RestroPhone", e.target.value)}
           />
-        </Field>
+        </AdminField>
 
-        <Field label="Raileats Status">
-          <select
+        <AdminField label="Raileats Status">
+          <AdminSelect
             value={toStatusNumber(local?.RaileatsStatus)}
             onChange={(e) => update("RaileatsStatus", Number(e.target.value))}
           >
             <option value={1}>On</option>
             <option value={0}>Off</option>
-          </select>
-        </Field>
+          </AdminSelect>
+        </AdminField>
 
-        <Field label="IRCTC Status">
-          <select
+        <AdminField label="IRCTC Status">
+          <AdminSelect
             value={toStatusNumber(local?.IRCTCStatus)}
             onChange={(e) => update("IRCTCStatus", Number(e.target.value))}
           >
             <option value={1}>On</option>
             <option value={0}>Off</option>
-          </select>
-        </Field>
+          </AdminSelect>
+        </AdminField>
 
-        <Field label="IRCTC Approved">
-          <select
+        <AdminField label="IRCTC Approved">
+          <AdminSelect
             value={local?.IsIrctcApproved ?? "0"}
             onChange={(e) => update("IsIrctcApproved", e.target.value)}
           >
             <option value="1">Yes</option>
             <option value="0">No</option>
-          </select>
-        </Field>
+          </AdminSelect>
+        </AdminField>
 
-        <Field label="Restro Rating">
-          <input
+        <AdminField label="Restro Rating">
+          <AdminInput
             type="number"
             value={local?.RestroRating ?? ""}
             onChange={(e) => update("RestroRating", e.target.value)}
           />
-        </Field>
+        </AdminField>
 
-        <Field label="Display Photo">
-          <input
+        <AdminField label="Display Photo">
+          <AdminInput
             value={local?.RestroDisplayPhoto ?? ""}
             onChange={(e) => update("RestroDisplayPhoto", e.target.value)}
           />
-        </Field>
+        </AdminField>
 
-        <Field label="Preview">
+        <AdminField label="Preview">
           {local?.RestroDisplayPhoto ? (
             <img
               src={imgSrc(local.RestroDisplayPhoto)}
-              style={{ height: 80 }}
+              className="h-20 rounded-md border border-slate-200 object-cover"
               alt="Restro display preview"
             />
           ) : (
-            <div className="readonly">No image</div>
+            <div className="flex h-20 items-center rounded-md bg-slate-100 px-3 text-sm text-slate-500">
+              No image
+            </div>
           )}
-        </Field>
+        </AdminField>
       </div>
 
-      <div className="actions">
-        <button onClick={() => router.back()}>Cancel</button>
-        <button onClick={save} disabled={saving}>
-          {saving ? "Saving..." : "Save"}
-        </button>
-      </div>
-
-      {msg && <div style={{ color: "green" }}>{msg}</div>}
-      {err && <div style={{ color: "red" }}>{err}</div>}
-
-      <style jsx>{`
-        .grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 14px;
-        }
-        .readonly {
-          padding: 8px;
-          background: #f5f5f5;
-        }
-        input,
-        select {
-          width: 100%;
-          padding: 8px;
-        }
-        .actions {
-          margin-top: 20px;
-          display: flex;
-          justify-content: flex-end;
-          gap: 10px;
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function Field({ label, children }: any) {
-  return (
-    <div>
-      <label style={{ fontWeight: 600, fontSize: 13 }}>{label}</label>
-      {children}
-    </div>
+      {(msg || err) && (
+        <div className="mt-4">
+          {msg && <div className="text-sm font-semibold text-green-700">{msg}</div>}
+          {err && <div className="text-sm font-semibold text-red-700">{err}</div>}
+        </div>
+      )}
+    </AdminCard>
   );
 }
