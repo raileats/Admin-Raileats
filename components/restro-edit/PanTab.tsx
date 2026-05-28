@@ -9,6 +9,7 @@ type Props = {
 type PanRow = {
   id: string;
   pan_number: string;
+  pan_type: string | null;
   status: "active" | "inactive";
   created_at: string;
   file_url: string | null;
@@ -25,6 +26,7 @@ export default function PanTab({ restroCode }: Props) {
 
   const [showAdd, setShowAdd] = useState(false);
   const [pan, setPan] = useState("");
+  const [panType, setPanType] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
   /* ================= LOAD ================= */
@@ -55,6 +57,7 @@ export default function PanTab({ restroCode }: Props) {
 
     const fd = new FormData();
     fd.append("pan_number", pan);
+    fd.append("pan_type", panType);
     if (file) fd.append("file", file);
 
     const res = await fetch(`/api/restros/${restroCode}/pan`, {
@@ -70,6 +73,7 @@ export default function PanTab({ restroCode }: Props) {
 
     setShowAdd(false);
     setPan("");
+    setPanType("");
     setFile(null);
     loadData();
   }
@@ -80,13 +84,14 @@ export default function PanTab({ restroCode }: Props) {
   /* ================= ROW ================= */
   const Row = ({ r }: { r: PanRow }) => (
     <div
-      className={`grid grid-cols-4 gap-3 items-center px-3 py-2 rounded text-sm ${
+      className={`grid grid-cols-5 gap-3 items-center px-3 py-2 rounded text-sm ${
         r.status === "active"
           ? "bg-green-50 border border-green-300"
           : "bg-red-50 border border-red-300"
       }`}
     >
       <div className="font-semibold">{r.pan_number}</div>
+      <div>{r.pan_type || "—"}</div>
 
       <div
         className={
@@ -132,8 +137,9 @@ export default function PanTab({ restroCode }: Props) {
       </div>
 
       {/* Column Header */}
-      <div className="grid grid-cols-4 gap-3 px-3 py-2 text-xs font-semibold text-gray-600 border-b">
+      <div className="grid grid-cols-5 gap-3 px-3 py-2 text-xs font-semibold text-gray-600 border-b">
         <div>PAN Number</div>
+        <div>PAN Type</div>
         <div>Status</div>
         <div>Created</div>
         <div>Document</div>
@@ -181,6 +187,18 @@ export default function PanTab({ restroCode }: Props) {
                 : "border-red-500"
             }`}
           />
+
+          <select
+            value={panType}
+            onChange={(e) => setPanType(e.target.value)}
+            className="w-full p-2 border rounded mb-2"
+          >
+            <option value="">Select PAN Type</option>
+            <option value="Proprietor">Proprietor</option>
+            <option value="Company">Company</option>
+            <option value="Partnership">Partnership</option>
+            <option value="Individual">Individual</option>
+          </select>
 
           <input
             type="file"
