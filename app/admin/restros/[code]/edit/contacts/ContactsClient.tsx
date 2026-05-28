@@ -1,6 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
+import AdminCard from "@/components/admin/AdminCard";
+import { AdminField, AdminInput } from "@/components/admin/AdminField";
 
 type Item = {
   id: string;
@@ -12,8 +14,8 @@ type Item = {
 function makeEmpty(prefix: string, count: number): Item[] {
   return Array.from({ length: count }).map((_, i) => ({
     id: `${prefix}-${i + 1}`,
-    name: '',
-    value: '',
+    name: "",
+    value: "",
     active: false,
   }));
 }
@@ -23,125 +25,95 @@ export default function ContactsClient() {
   const [whatsapps, setWhatsapps] = useState<Item[]>([]);
 
   useEffect(() => {
-    setEmails(makeEmpty('email', 2));
-    setWhatsapps(makeEmpty('wa', 3));
+    setEmails(makeEmpty("email", 2));
+    setWhatsapps(makeEmpty("wa", 3));
   }, []);
 
-  // 🔥 RailEats Admin CSS Breaker
-  const inputStyle: React.CSSProperties = {
-    ...( { all: 'unset' } as React.CSSProperties ),
-    boxSizing: 'border-box',
-    width: '100%',
-    height: '44px',
-    padding: '8px 12px',
-    border: '1px solid #cbd5e1',
-    borderRadius: '6px',
-    backgroundColor: '#ffffff',
-    color: '#000000',
-    fontSize: '14px',
-    cursor: 'text',
-    pointerEvents: 'auto',
-    display: 'block',
-  };
+  function updateEmail(index: number, key: keyof Item, value: string | boolean) {
+    setEmails((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [key]: value } : row))
+    );
+  }
 
-  const rowStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: '1fr 2fr 120px',
-    gap: '16px',
-    alignItems: 'center',
-    marginBottom: '14px',
-  };
+  function updateWhatsapp(index: number, key: keyof Item, value: string | boolean) {
+    setWhatsapps((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [key]: value } : row))
+    );
+  }
 
   return (
-    <div style={{ paddingBottom: 30 }}>
+    <div className="space-y-5">
+      <AdminCard title="Emails" subtitle="Up to 2 email recipients for order notifications">
+        <div className="space-y-4">
+          {emails.map((row, index) => (
+            <div key={row.id} className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_2fr_140px] lg:items-end">
+              <AdminField label={`Name ${index + 1}`}>
+                <AdminInput
+                  placeholder={`Name ${index + 1}`}
+                  value={row.name}
+                  onChange={(event) => updateEmail(index, "name", event.target.value)}
+                />
+              </AdminField>
 
-      <h3 style={{ fontWeight: 600, marginBottom: 16 }}>
-        Emails (max 2)
-      </h3>
+              <AdminField label={`Email ${index + 1}`}>
+                <AdminInput
+                  placeholder={`Email ${index + 1}`}
+                  value={row.value}
+                  onChange={(event) => updateEmail(index, "value", event.target.value)}
+                />
+              </AdminField>
 
-      {emails.map((e, i) => (
-        <div key={e.id} style={rowStyle}>
-          <input
-            style={inputStyle}
-            placeholder={`Name ${i + 1}`}
-            value={e.name}
-            onChange={(ev) => {
-              const v = [...emails];
-              v[i].name = ev.target.value;
-              setEmails(v);
-            }}
-          />
-
-          <input
-            style={inputStyle}
-            placeholder={`Email ${i + 1}`}
-            value={e.value}
-            onChange={(ev) => {
-              const v = [...emails];
-              v[i].value = ev.target.value;
-              setEmails(v);
-            }}
-          />
-
-          <label style={{ display: 'flex', gap: 6 }}>
-            <input
-              type="checkbox"
-              checked={e.active}
-              onChange={(ev) => {
-                const v = [...emails];
-                v[i].active = ev.target.checked;
-                setEmails(v);
-              }}
-            />
-            <span>{e.active ? 'ON' : 'OFF'}</span>
-          </label>
+              <label className="flex h-10 items-center gap-2 text-sm font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={row.active}
+                  onChange={(event) => updateEmail(index, "active", event.target.checked)}
+                />
+                {row.active ? "ON" : "OFF"}
+              </label>
+            </div>
+          ))}
         </div>
-      ))}
+      </AdminCard>
 
-      <hr style={{ margin: '24px 0' }} />
+      <AdminCard title="WhatsApp Numbers" subtitle="Up to 3 mobile recipients for order notifications">
+        <div className="space-y-4">
+          {whatsapps.map((row, index) => (
+            <div key={row.id} className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_2fr_140px] lg:items-end">
+              <AdminField label={`Name ${index + 1}`}>
+                <AdminInput
+                  placeholder={`Name ${index + 1}`}
+                  value={row.name}
+                  onChange={(event) => updateWhatsapp(index, "name", event.target.value)}
+                />
+              </AdminField>
 
-      <h3 style={{ fontWeight: 600, marginBottom: 16 }}>
-        WhatsApp numbers (max 3)
-      </h3>
+              <AdminField label={`Mobile ${index + 1}`}>
+                <AdminInput
+                  placeholder={`Mobile ${index + 1}`}
+                  value={row.value}
+                  onChange={(event) =>
+                    updateWhatsapp(
+                      index,
+                      "value",
+                      event.target.value.replace(/\D/g, "").slice(0, 10)
+                    )
+                  }
+                />
+              </AdminField>
 
-      {whatsapps.map((w, i) => (
-        <div key={w.id} style={rowStyle}>
-          <input
-            style={inputStyle}
-            placeholder={`Name ${i + 1}`}
-            value={w.name}
-            onChange={(ev) => {
-              const v = [...whatsapps];
-              v[i].name = ev.target.value;
-              setWhatsapps(v);
-            }}
-          />
-
-          <input
-            style={inputStyle}
-            placeholder={`Mobile ${i + 1}`}
-            value={w.value}
-            onChange={(ev) => {
-              const v = [...whatsapps];
-              v[i].value = ev.target.value.replace(/\D/g, '').slice(0, 10);
-              setWhatsapps(v);
-            }}
-          />
-
-          <label style={{ display: 'flex', gap: 6 }}>
-            <input
-              type="checkbox"
-              checked={w.active}
-              onChange={(ev) => {
-                const v = [...whatsapps];
-                v[i].active = ev.target.checked;
-                setWhatsapps(v);
-              }}
-            />
-            <span>{w.active ? 'ON' : 'OFF'}</span>
-          </label>
+              <label className="flex h-10 items-center gap-2 text-sm font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={row.active}
+                  onChange={(event) => updateWhatsapp(index, "active", event.target.checked)}
+                />
+                {row.active ? "ON" : "OFF"}
+              </label>
+            </div>
+          ))}
         </div>
-      ))}
+      </AdminCard>
     </div>
   );
 }
