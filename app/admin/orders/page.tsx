@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Bell, Clock, ShieldCheck, ShoppingBag, Smartphone } from "lucide-react";
+import { Bell, Clock, MapPin, ShieldCheck, ShoppingBag, Smartphone, X } from "lucide-react";
 import Link from "next/link";
 
 type TabKey =
@@ -130,6 +130,14 @@ type SearchType =
   | "deliveryDate"
   | "trainNo";
 
+type TrainRouteRow = {
+  StnNumber?: number | string;
+  StationCode?: string;
+  StationName?: string;
+  Arrives?: string;
+  Departs?: string;
+};
+
 export default function AdminOrdersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     if (typeof window !== "undefined") {
@@ -178,8 +186,15 @@ const [remarks, setRemarks] = useState("");
   const [loadingItems, setLoadingItems] = useState(false);
   const [loadingRestro, setLoadingRestro] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [routeModal, setRouteModal] = useState({
+    open: false,
+    trainNo: "",
+    stationCode: "",
+    data: [] as TrainRouteRow[],
+  });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hasLoadedTabRef = useRef<Partial<Record<TabKey, boolean>>>({});
 
   /* ================= INIT SOUND ================= */
   useEffect(() => {
@@ -270,8 +285,10 @@ useEffect(() => {
   /* ================= LOAD ORDERS ================= */
   useEffect(() => {
     const load = async () => {
+      const shouldShowLoader = !hasLoadedTabRef.current[activeTab];
+
       try {
-        setLoading(true);
+        if (shouldShowLoader) setLoading(true);
         const params = new URLSearchParams();
         params.set("status", activeTab);
         
@@ -330,12 +347,13 @@ useEffect(() => {
         console.error("orders fetch error", e);
         setAllOrders((prev) => ({ ...prev, [activeTab]: [] }));
       } finally {
-        setLoading(false);
+        hasLoadedTabRef.current[activeTab] = true;
+        if (shouldShowLoader) setLoading(false);
       }
     };
 
     load();
-  }, [activeTab]);
+  }, [activeTab, refreshTick]);
 
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
 
@@ -348,6 +366,41 @@ useEffect(() => {
       }
     }
   }, [allOrders]);
+
+  /* ================= TRAIN ROUTE MODAL ================= */
+  const openRouteModal = async (trainNo?: string, stationCode?: string) => {
+    const normalizedTrainNo = String(trainNo || "").trim();
+    const normalizedStationCode = String(stationCode || "").trim();
+
+    if (!normalizedTrainNo) {
+      alert("Train number not available for this order");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("TrainRoute")
+      .select("*")
+      .eq("trainNumber", normalizedTrainNo)
+      .order("StnNumber", { ascending: true });
+
+    if (error) {
+      console.error("Train route fetch failed", error);
+      alert("Unable to fetch train route");
+      return;
+    }
+
+    setRouteModal({
+      open: true,
+      trainNo: normalizedTrainNo,
+      stationCode: normalizedStationCode,
+      data: data || [],
+    });
+
+    setTimeout(() => {
+      const el = document.getElementById(`stn-${normalizedStationCode}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 500);
+  };
 
   /* ================= DIAGNOSTICS LAUNCH PANEL ================= */
   const handleOpenDiagnosticsDrawer = async (order: Order, preferredSection: "details" | "logs" = "details") => {
@@ -423,6 +476,7 @@ useEffect(() => {
             newStatus: targetDbValue,
             remarks: mapping.actionLabel,
             changedBy: "admin",
+            actionSource: "Admin",
           }),
         });
         const json = await res.json().catch(() => ({}));
@@ -498,7 +552,7 @@ useEffect(() => {
           subStatus,
           remarks,
           changedBy: "admin",
-          actionSource: "admin",
+          actionSource: "Admin",
         }),
       });
 
@@ -577,6 +631,7 @@ useEffect(() => {
           newStatus: targetDbValue,
           remarks: currentRemarks,
           changedBy: "admin",
+          actionSource: "Admin",
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -923,7 +978,32 @@ useEffect(() => {
                   <td style={{ padding: 12 }}>{o.stationName}</td>
                   <td style={{ padding: 12, whiteSpace: "nowrap" }}>{o.deliveryDate}</td>
                   <td style={{ padding: 12, fontWeight: 600, color: "#0284c7" }}>{o.deliveryTime}</td>
-                  <td style={{ padding: 12 }}>🚂 {o.trainNo || "-"}</td>
+                  <td style={{ padding: 12 }}>
+                    {o.trainNo ? (
+                      <button
+                        onClick={() => openRouteModal(o.trainNo, o.stationCode)}
+                        title="Open train route map"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          margin: 0,
+                          color: "#2563eb",
+                          cursor: "pointer",
+                          font: "inherit",
+                          fontWeight: 800,
+                          textDecoration: "underline",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <MapPin size={14} /> {o.trainNo}
+                      </button>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
                   <td style={{ padding: 12 }}>{o.coach || "-"}</td>
                   <td style={{ padding: 12 }}>{o.seat || "-"}</td>
                   <td style={{ padding: 12, fontWeight: 600 }}>{o.customerName}</td>
@@ -1128,6 +1208,87 @@ useEffect(() => {
         </div>
       </div>
 
+
+      {/* TRAIN ROUTE MODAL */}
+      {routeModal.open && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              width: "100%",
+              maxWidth: 560,
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ padding: 16, borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: 8 }}>
+                <MapPin size={18} /> Route Map: {routeModal.trainNo}
+              </h3>
+              <button
+                onClick={() => setRouteModal((prev) => ({ ...prev, open: false }))}
+                title="Close route map"
+                style={{ width: 34, height: 34, borderRadius: "50%", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ overflowY: "auto", padding: 16 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <tbody>
+                  {routeModal.data.length > 0 ? (
+                    routeModal.data.map((r, idx) => {
+                      const stationCode = String(r.StationCode || "");
+                      const isTarget = stationCode === routeModal.stationCode;
+                      return (
+                        <tr
+                          key={`${r.StnNumber || idx}-${stationCode}`}
+                          id={`stn-${stationCode}`}
+                          style={{
+                            background: isTarget ? "#fef08a" : "transparent",
+                            fontWeight: isTarget ? 800 : 600,
+                            borderBottom: "1px solid #f1f5f9",
+                          }}
+                        >
+                          <td style={{ padding: "10px 8px", width: 52, color: "#94a3b8", fontWeight: 800 }}>{r.StnNumber || idx + 1}</td>
+                          <td style={{ padding: "10px 8px", color: "#0f172a" }}>
+                            {r.StationName || "Unknown Station"} <span style={{ color: "#2563eb" }}>({stationCode || "-"})</span>
+                          </td>
+                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                            {r.Arrives || "-"}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={3} style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>
+                        No route data found for this train.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ========================================================================= */}
       {/* AUDIT DIAGNOSTICS SLIDING DRAWER FRAMEWORK */}
       {/* ========================================================================= */}
@@ -1342,7 +1503,7 @@ useEffect(() => {
 
                             <div style={{ marginTop: "4px", paddingTop: "4px", borderTop: "1px solid #f1f5f9", fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", display: "flex", justifyContent: "space-between" }}>
                               <span>Actor Entity: <span style={{ color: "#475569", fontWeight: 800 }}>{log.ChangedBy || log.Actor || "Automated Infrastructure"}</span></span>
-                              <span>Source Entry channel: {log.ActionSource || "System Core Link"}</span>
+                              <span>Source Entry channel: {log.ActionSource || log.actionSource || "System Core Link"}</span>
                             </div>
                           </div>
                         </div>
@@ -1482,3 +1643,5 @@ useEffect(() => {
     </section>
   );
 }
+
+
