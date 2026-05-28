@@ -1,7 +1,7 @@
 import {
   Home,
   ListOrdered,
-  MapPinned,
+  MapPin,
   Train,
   Utensils,
   Users,
@@ -37,7 +37,7 @@ export const adminNavItems = [
   {
     href: "/admin/stations",
     label: "Stations",
-    icon: MapPinned,
+    icon: MapPin,
   },
   {
     href: "/admin/users",
