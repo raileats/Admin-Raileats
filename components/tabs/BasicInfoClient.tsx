@@ -121,7 +121,7 @@ export default function BasicInfoClient({
       const statusRes = await fetch(`/api/admin/restros/${encodeURIComponent(id)}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ RaileatsStatus: statusToSave }),
+        body: JSON.stringify({ RaileatsStatus: statusToSave, commit: "save" }),
       });
 
       if (!statusRes.ok) {
@@ -233,7 +233,8 @@ export default function BasicInfoClient({
             onClick={() => {
               const next = pendingRaileatsStatus === 1 ? 0 : 1;
               setPendingRaileatsStatus(next);
-              update("RaileatsStatus", next);
+              setMsg(null);
+              setErr(null);
             }}
             style={{
               display: "inline-flex",
