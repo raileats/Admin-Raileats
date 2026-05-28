@@ -9,133 +9,81 @@ export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  function handleIdentifierChange(v: string) {
-    setIdentifier(v);
-  }
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit() {
     if (submitting) return;
     setSubmitting(true);
-    // allow native submit so browser handles Set-Cookie + redirect
     setTimeout(() => setSubmitting(false), 5000);
   }
 
-  // compute mobile/email values to put into hidden inputs
   const mobileVal = identifier && !identifier.includes("@") ? identifier.trim() : "";
   const emailVal = identifier && identifier.includes("@") ? identifier.trim() : "";
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#f6f7fb",
-        padding: 24,
-      }}
-    >
+    <div className="flex min-h-[calc(100vh-96px)] items-center justify-center px-4 py-8">
       <form
         method="post"
         action="/api/auth/login"
         onSubmit={handleSubmit}
-        style={{
-          width: 380,
-          padding: 28,
-          background: "#fff",
-          borderRadius: 8,
-          boxShadow: "0 6px 20px rgba(10,10,25,0.06)",
-          border: "1px solid rgba(0,0,0,0.04)",
-        }}
+        className="w-full max-w-md rounded-md border border-slate-200 bg-white p-7 shadow-sm"
         aria-label="Admin login form"
       >
-        <div style={{ textAlign: "center", marginBottom: 14 }}>
-          <img src="/logo.png" alt="RailEats" style={{ width: 56, height: 56 }} />
-          <h2 style={{ margin: "8px 0 0" }}>RailEats Admin</h2>
+        <div className="mb-6 text-center">
+          <img src="/logo.png" alt="RailEats" className="mx-auto h-14 w-14 rounded-md object-contain" />
+          <h1 className="mt-3 text-2xl font-bold text-slate-950">RailEats Admin</h1>
+          <p className="mt-1 text-sm font-medium text-slate-500">
+            Sign in to the operations console
+          </p>
         </div>
 
-        <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
+        <label className="mb-1 block text-xs font-semibold text-slate-600">
           User ID (mobile or email)
         </label>
         <input
           name="identifier"
           value={identifier}
-          onChange={(e) => handleIdentifierChange(e.target.value)}
+          onChange={(event) => setIdentifier(event.target.value)}
           required
-          style={{
-            width: "100%",
-            padding: 10,
-            marginBottom: 12,
-            borderRadius: 6,
-            border: "1px solid #e6e6e6",
-            boxSizing: "border-box",
-          }}
-          placeholder="eg. 8888888888 or name@example.com"
+          className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          placeholder="8888888888 or name@example.com"
         />
 
-        {/* Hidden inputs updated on every change so they are always present in the POST */}
         <input type="hidden" name="mobile" value={mobileVal} />
         <input type="hidden" name="email" value={emailVal} />
 
-        <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Password</label>
-        <div style={{ position: "relative" }}>
+        <label className="mb-1 mt-4 block text-xs font-semibold text-slate-600">
+          Password
+        </label>
+        <div className="flex gap-2">
           <input
             name="password"
             type={showPassword ? "text" : "password"}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(event) => setPassword(event.target.value)}
             required
-            style={{
-              width: "100%",
-              padding: "10px 40px 10px 10px",
-              marginBottom: 14,
-              borderRadius: 6,
-              border: "1px solid #e6e6e6",
-              boxSizing: "border-box",
-            }}
+            className="h-10 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             autoComplete="current-password"
           />
           <button
             type="button"
-            onClick={() => setShowPassword((s) => !s)}
-            aria-label="Toggle password visibility"
-            style={{
-              position: "absolute",
-              right: 8,
-              top: 8,
-              height: 32,
-              width: 32,
-              borderRadius: 6,
-              border: "none",
-              background: "transparent",
-              cursor: "pointer",
-            }}
+            onClick={() => setShowPassword((value) => !value)}
+            className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             title={showPassword ? "Hide password" : "Show password"}
           >
-            {showPassword ? "🙈" : "👁️"}
+            {showPassword ? "Hide" : "Show"}
           </button>
         </div>
 
         <button
           type="submit"
           disabled={submitting}
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 6,
-            background: "#f6b900",
-            color: "#111",
-            border: "none",
-            fontWeight: 600,
-            cursor: submitting ? "default" : "pointer",
-          }}
+          className="mt-5 h-10 w-full rounded-md border border-blue-600 bg-blue-600 px-4 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {submitting ? "Logging in…" : "Log in"}
+          {submitting ? "Logging in..." : "Log in"}
         </button>
 
-        <div style={{ marginTop: 12, fontSize: 12, textAlign: "center", color: "#777" }}>
+        <p className="mt-4 text-center text-xs font-medium text-slate-500">
           Please use your admin credentials.
-        </div>
+        </p>
       </form>
     </div>
   );
