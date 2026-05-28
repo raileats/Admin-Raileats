@@ -2,11 +2,17 @@
 "use client";
 
 import React, {
-  useEffect,
-  useState,
-  useRef,
   ChangeEvent,
+  useEffect,
+  useRef,
+  useState,
 } from "react";
+import Link from "next/link";
+import AdminButton from "@/components/admin/AdminButton";
+import AdminCard from "@/components/admin/AdminCard";
+import { AdminInput } from "@/components/admin/AdminField";
+import AdminPage from "@/components/admin/AdminPage";
+import AdminToolbar from "@/components/admin/AdminToolbar";
 
 type TrainRow = {
   trainId: number;
@@ -28,21 +34,21 @@ type ApiResponse = {
   error?: string;
 };
 
+function dateOnly(value?: string | null) {
+  return value ? value.slice(0, 10) : "-";
+}
+
 export default function AdminTrainsPage() {
   const [trains, setTrains] = useState<TrainRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
-
-  // last used combined search string (CSV upload ke baad refresh ke liye)
   const [searchText, setSearchText] = useState("");
 
-  // 🔹 individual search boxes
   const [searchTrainId, setSearchTrainId] = useState("");
   const [searchTrainNumber, setSearchTrainNumber] = useState("");
   const [searchTrainName, setSearchTrainName] = useState("");
   const [searchStationCode, setSearchStationCode] = useState("");
 
-  // CSV upload state
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -54,7 +60,6 @@ export default function AdminTrainsPage() {
 
       const params = new URLSearchParams();
       if (q && q.trim()) {
-        // combined search param (Train ID / Number / Name / Station)
         params.set("q", q.trim());
       }
 
@@ -84,9 +89,7 @@ export default function AdminTrainsPage() {
     loadTrains();
   }, []);
 
-  // 🔍 Search button click
   function onSearchClick() {
-    // 4 alag boxes ko ek string me jodo (backend old `q` param use karega)
     const parts = [
       searchTrainId,
       searchTrainNumber,
@@ -97,12 +100,10 @@ export default function AdminTrainsPage() {
       .filter(Boolean);
 
     const combined = parts.join(" ");
-
     setSearchText(combined);
     loadTrains(combined);
   }
 
-  // 🔄 Reset button
   function onReset() {
     setSearchTrainId("");
     setSearchTrainNumber("");
@@ -112,7 +113,9 @@ export default function AdminTrainsPage() {
     loadTrains("");
   }
 
-  // ---------- CSV upload handlers ----------
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") onSearchClick();
+  }
 
   function openUploadDialog() {
     setUploadMsg("");
@@ -145,16 +148,15 @@ export default function AdminTrainsPage() {
         setUploadMsg(
           json?.error
             ? `Upload failed: ${json.error}`
-            : "Upload failed. Please check CSV.",
+            : "Upload failed. Please check CSV."
         );
         return;
       }
 
       setUploadMsg(
-        `Upload successful. Trains affected: ${json.trainsAffected}, rows inserted: ${json.inserted}.`,
+        `Upload successful. Trains affected: ${json.trainsAffected}, rows inserted: ${json.inserted}.`
       );
 
-      // refresh list with current search
       loadTrains(searchText);
     } catch (err) {
       console.error("upload error", err);
@@ -165,174 +167,142 @@ export default function AdminTrainsPage() {
   }
 
   return (
-    <div className="page-root">
-      {/* Header + Upload button */}
-      <div className="flex items-center justify-between mb-1">
-        <div>
-          <h1 className="text-2xl font-semibold">Trains</h1>
-          <p className="text-sm text-gray-600">Manage trains here.</p>
-        </div>
-
-        <div className="flex items-center gap-2">
+    <AdminPage
+      title="Trains"
+      subtitle="Manage train master records and upload train route CSV files"
+      actions={
+        <>
           <input
             ref={fileInputRef}
             type="file"
             accept=".csv"
             onChange={onFileChange}
-            style={{ display: "none" }}
+            className="hidden"
           />
-          <button
-            type="button"
-            className="px-3 py-2 rounded border text-sm"
+          <AdminButton
+            variant="secondary"
             onClick={openUploadDialog}
             disabled={uploading}
           >
-            {uploading ? "Uploading…" : "Upload CSV"}
-          </button>
+            {uploading ? "Uploading..." : "Upload CSV"}
+          </AdminButton>
+        </>
+      }
+    >
+      <AdminToolbar
+        actions={
+          <>
+            <AdminButton onClick={onSearchClick} disabled={loading}>
+              Search
+            </AdminButton>
+            <AdminButton
+              variant="secondary"
+              onClick={onReset}
+              disabled={loading && !searchText}
+            >
+              Reset
+            </AdminButton>
+          </>
+        }
+      >
+        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminInput
+            placeholder="Train ID"
+            value={searchTrainId}
+            onChange={(e) => setSearchTrainId(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+          />
+          <AdminInput
+            placeholder="Train Number"
+            value={searchTrainNumber}
+            onChange={(e) => setSearchTrainNumber(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+          />
+          <AdminInput
+            placeholder="Train Name"
+            value={searchTrainName}
+            onChange={(e) => setSearchTrainName(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+          />
+          <AdminInput
+            placeholder="Station Code"
+            value={searchStationCode}
+            onChange={(e) => setSearchStationCode(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+          />
         </div>
-      </div>
+      </AdminToolbar>
 
-      {/* Search bar */}
-      <div className="flex flex-wrap items-end gap-2 mb-3 mt-2">
-        <input
-          className="border rounded px-3 py-2 text-sm w-32"
-          placeholder="Train ID"
-          value={searchTrainId}
-          onChange={(e) => setSearchTrainId(e.target.value)}
-        />
-        <input
-          className="border rounded px-3 py-2 text-sm w-40"
-          placeholder="Train Number"
-          value={searchTrainNumber}
-          onChange={(e) => setSearchTrainNumber(e.target.value)}
-        />
-        <input
-          className="border rounded px-3 py-2 text-sm flex-1 min-w-[160px]"
-          placeholder="Train Name"
-          value={searchTrainName}
-          onChange={(e) => setSearchTrainName(e.target.value)}
-        />
-        <input
-          className="border rounded px-3 py-2 text-sm w-36"
-          placeholder="Station Code"
-          value={searchStationCode}
-          onChange={(e) => setSearchStationCode(e.target.value)}
-        />
-
-        <button
-          className="px-4 py-2 rounded bg-blue-600 text-white text-sm"
-          onClick={onSearchClick}
-          disabled={loading}
-        >
-          Search
-        </button>
-        <button
-          className="px-3 py-2 rounded border text-sm"
-          onClick={onReset}
-          disabled={loading && !searchText}
-        >
-          Reset
-        </button>
-      </div>
-
-      {loading && (
-        <p className="text-sm text-gray-500 mb-2">Loading trains…</p>
-      )}
-      {error && (
-        <p className="text-sm text-red-600 mb-2">{error}</p>
-      )}
-      {uploadMsg && (
-        <p className="text-sm text-gray-700 mb-2">{uploadMsg}</p>
+      {(loading || error || uploadMsg) && (
+        <div className="space-y-2">
+          {loading && <p className="text-sm font-medium text-slate-500">Loading trains...</p>}
+          {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
+          {uploadMsg && <p className="text-sm font-semibold text-slate-700">{uploadMsg}</p>}
+        </div>
       )}
 
-      <div className="border rounded bg-white overflow-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-100 text-xs uppercase text-gray-600">
-            <tr>
-              <th className="px-3 py-2 text-left">Train ID</th>
-              <th className="px-3 py-2 text-left">Train Number</th>
-              <th className="px-3 py-2 text-left">Train Name</th>
-              <th className="px-3 py-2 text-left">Stn No.</th>
-              <th className="px-3 py-2 text-left">Station Code</th>
-              <th className="px-3 py-2 text-left">Distance</th>
-              <th className="px-3 py-2 text-left">Stoptime</th>
-              <th className="px-3 py-2 text-left">Running Days</th>
-              <th className="px-3 py-2 text-left">Status</th>
-              <th className="px-3 py-2 text-left">Created</th>
-              <th className="px-3 py-2 text-left">Updated</th>
-              <th className="px-3 py-2 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {trains.length === 0 ? (
+      <AdminCard bodyClassName="p-0">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
               <tr>
-                <td
-                  className="px-3 py-4 text-center text-gray-500"
-                  colSpan={12}
-                >
-                  No trains found.
-                </td>
+                <th className="px-4 py-3 text-left">Train ID</th>
+                <th className="px-4 py-3 text-left">Train Number</th>
+                <th className="px-4 py-3 text-left">Train Name</th>
+                <th className="px-4 py-3 text-left">Stn No.</th>
+                <th className="px-4 py-3 text-left">Station Code</th>
+                <th className="px-4 py-3 text-left">Distance</th>
+                <th className="px-4 py-3 text-left">Stoptime</th>
+                <th className="px-4 py-3 text-left">Running Days</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Created</th>
+                <th className="px-4 py-3 text-left">Updated</th>
+                <th className="px-4 py-3 text-left">Actions</th>
               </tr>
-            ) : (
-              trains.map((t) => (
-                <tr
-                  key={`${t.trainId}-${t.trainNumber ?? "null"}`}
-                  className="border-t"
-                >
-                  <td className="px-3 py-2 align-top">{t.trainId}</td>
-                  <td className="px-3 py-2 align-top">
-                    {t.trainNumber ?? "-"}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    {t.trainName ?? "-"}
-                  </td>
-
-                  {/* DATA FROM FIRST ROUTE ROW */}
-                  <td className="px-3 py-2 align-top">
-                    {t.StnNumber ?? "-"}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    {t.StationCode ?? "-"}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    {t.Distance ?? "-"}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    {t.Stoptime ?? "-"}
-                  </td>
-
-                  <td className="px-3 py-2 align-top">
-                    {t.runningDays ?? "-"}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    {t.status ?? "N/A"}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    {t.created_at ? t.created_at.slice(0, 10) : "-"}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    {t.updated_at ? t.updated_at.slice(0, 10) : "-"}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    {t.trainNumber != null ? (
-                      <a
-                        href={`/admin/trains/${encodeURIComponent(
-                          String(t.trainNumber),
-                        )}`}
-                        className="text-blue-600 hover:underline text-xs"
-                      >
-                        Edit
-                      </a>
-                    ) : (
-                      "-"
-                    )}
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {trains.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-8 text-center text-slate-500" colSpan={12}>
+                    No trains found.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+              ) : (
+                trains.map((t) => (
+                  <tr
+                    key={`${t.trainId}-${t.trainNumber ?? "null"}`}
+                    className="bg-white hover:bg-slate-50"
+                  >
+                    <td className="px-4 py-3 align-top font-semibold">{t.trainId}</td>
+                    <td className="px-4 py-3 align-top">{t.trainNumber ?? "-"}</td>
+                    <td className="px-4 py-3 align-top">{t.trainName ?? "-"}</td>
+                    <td className="px-4 py-3 align-top">{t.StnNumber ?? "-"}</td>
+                    <td className="px-4 py-3 align-top">{t.StationCode ?? "-"}</td>
+                    <td className="px-4 py-3 align-top">{t.Distance ?? "-"}</td>
+                    <td className="px-4 py-3 align-top">{t.Stoptime ?? "-"}</td>
+                    <td className="px-4 py-3 align-top">{t.runningDays ?? "-"}</td>
+                    <td className="px-4 py-3 align-top">{t.status ?? "N/A"}</td>
+                    <td className="px-4 py-3 align-top">{dateOnly(t.created_at)}</td>
+                    <td className="px-4 py-3 align-top">{dateOnly(t.updated_at)}</td>
+                    <td className="px-4 py-3 align-top">
+                      {t.trainNumber != null ? (
+                        <Link
+                          href={`/admin/trains/${encodeURIComponent(String(t.trainNumber))}`}
+                          className="text-sm font-semibold text-blue-600 hover:underline"
+                        >
+                          Edit
+                        </Link>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </AdminCard>
+    </AdminPage>
   );
 }
