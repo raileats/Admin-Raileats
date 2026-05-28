@@ -67,24 +67,6 @@ export async function PATCH(
     const supabase = srv();
     const updateData: any = {};
 
-    if (body.commit !== "save") {
-      const { data: currentRow } = await supabase
-        .from("RestroMaster")
-        .select("RestroCode,RaileatsStatus,updated_at")
-        .eq("RestroCode", restroCode)
-        .maybeSingle();
-
-      return NextResponse.json(
-        {
-          ok: true,
-          ignored: true,
-          message: "RaileatsStatus update ignored until Save button is clicked",
-          row: currentRow,
-        },
-        { status: 200 }
-      );
-    }
-
     const setIfDefined = (key: string, value: any) => {
       if (value !== undefined) updateData[key] = value;
     };
