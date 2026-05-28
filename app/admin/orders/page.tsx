@@ -216,6 +216,7 @@ const [remarks, setRemarks] = useState("");
     trainNo: "",
     stationCode: "",
     data: [] as TrainRouteRow[],
+    message: "",
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -402,69 +403,67 @@ useEffect(() => {
       return;
     }
 
-    let routeRows: TrainRouteRow[] = [];
-    let lastError: any = null;
+    const routeSelect = `
+      trainId,
+      trainNumber,
+      trainName,
+      stationFrom,
+      stationTo,
+      runningDays,
+      StnNumber,
+      StationCode,
+      StationName,
+      Arrives,
+      Departs,
+      Stoptime,
+      Distance,
+      Platform,
+      Route,
+      Day,
+      status,
+      trainNumber_text
+    `;
 
-    const textQuery = await supabase
+    const numericTrainNo = Number(normalizedTrainNo);
+    const filters = [`trainNumber_text.eq.${normalizedTrainNo}`];
+    if (Number.isFinite(numericTrainNo)) filters.push(`trainNumber.eq.${numericTrainNo}`);
+
+    const { data, error } = await supabase
       .from("TrainRoute")
-      .select("*")
-      .eq("trainNumber_text", normalizedTrainNo)
+      .select(routeSelect)
+      .or(filters.join(","))
       .order("StnNumber", { ascending: true });
 
-    if (textQuery.error) {
-      lastError = textQuery.error;
-      console.warn("TrainRoute trainNumber_text query failed", textQuery.error);
-    } else {
-      routeRows = textQuery.data || [];
-    }
-
-    if (routeRows.length === 0 && /^\d+$/.test(normalizedTrainNo)) {
-      const numberQuery = await supabase
-        .from("TrainRoute")
-        .select("*")
-        .eq("trainNumber", Number(normalizedTrainNo))
-        .order("StnNumber", { ascending: true });
-
-      if (numberQuery.error) {
-        lastError = numberQuery.error;
-        console.warn("TrainRoute trainNumber query failed", numberQuery.error);
-      } else {
-        routeRows = numberQuery.data || [];
-      }
-    }
-
-    if (routeRows.length === 0) {
-      const { data, error } = await supabase
-        .from("TrainRoute")
-        .select("*")
-        .limit(10000);
-
-      if (error) {
-        lastError = error;
-      } else {
-        routeRows = (data || [])
-          .filter((row: TrainRouteRow) => rowMatchesTrain(row, normalizedTrainNo))
-          .sort((a: TrainRouteRow, b: TrainRouteRow) => {
-            const aNo = Number(getRouteField(a, "StnNumber", "stnNumber", "stnnumber") || 0);
-            const bNo = Number(getRouteField(b, "StnNumber", "stnNumber", "stnnumber") || 0);
-            return aNo - bNo;
-          });
-      }
-    }
-
-    if (lastError && routeRows.length === 0) {
-      console.error("Train route fetch failed", lastError);
-      alert("Unable to fetch train route. Check TrainRoute table access/columns.");
+    if (error) {
+      console.error("TrainRoute query failed", error);
+      setRouteModal({
+        open: true,
+        trainNo: normalizedTrainNo,
+        stationCode: normalizedStationCode,
+        data: [],
+        message: `TrainRoute query failed: ${error.message}`,
+      });
       return;
     }
 
-    console.log("Train route rows", { trainNo: normalizedTrainNo, stationCode: normalizedStationCode, count: routeRows.length });
+    const routeRows = data || [];
+    const message = routeRows.length === 0
+      ? `Supabase returned 0 TrainRoute rows for train ${normalizedTrainNo}. If rows exist in table editor, enable SELECT policy/RLS access for anon/authenticated users.`
+      : "";
+
+    console.log("TrainRoute query result", {
+      trainNo: normalizedTrainNo,
+      stationCode: normalizedStationCode,
+      count: routeRows.length,
+      sample: routeRows[0] || null,
+    });
 
     setRouteModal({
       open: true,
       trainNo: normalizedTrainNo,
       stationCode: normalizedStationCode,
       data: routeRows,
+      message,
     });
 
     setTimeout(() => {
@@ -1312,7 +1311,7 @@ useEffect(() => {
                 <MapPin size={18} /> Route Map: {routeModal.trainNo}
               </h3>
               <button
-                onClick={() => setRouteModal((prev) => ({ ...prev, open: false }))}
+                onClick={() => setRouteModal((prev) => ({ ...prev, open: false, message: "" }))}
                 title="Close route map"
                 style={{ width: 34, height: 34, borderRadius: "50%", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
@@ -1353,7 +1352,7 @@ useEffect(() => {
                   ) : (
                     <tr>
                       <td colSpan={3} style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>
-                        No route rows found for this train number in TrainRoute table.
+                        {routeModal.message || "No route rows found for this train number in TrainRoute table."}
                       </td>
                     </tr>
                   )}
@@ -1717,6 +1716,7 @@ useEffect(() => {
     </section>
   );
 }
+
 
 
 
