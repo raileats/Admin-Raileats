@@ -140,6 +140,28 @@ export default function GstTab({ restroCode }: Props) {
         </div>
       ))}
 
+      {inactiveRows.length > 0 && (
+        <div className="mt-3 mb-1 text-xs font-semibold text-red-600">
+          Old / Inactive GST
+        </div>
+      )}
+
+      {inactiveRows.map((r) => (
+        <div key={r.id} className="grid grid-cols-5 gap-3 text-sm items-center p-2 border border-red-300 bg-red-50 rounded mb-1">
+          <div className="font-semibold">{r.GstNumber}</div>
+          <div>{r.GstType || "—"}</div>
+          <div className="text-red-700 font-semibold">Inactive</div>
+          <div>{formatDate(r.createdDate)}</div>
+          <div>
+            {r.fileurl ? (
+              <a href={r.fileurl} target="_blank" className="text-blue-600 underline">
+                View
+              </a>
+            ) : "—"}
+          </div>
+        </div>
+      ))}
+
       {/* ADD FORM */}
       {showAdd && (
         <div className="mt-3 p-3 bg-gray-50 border rounded">
