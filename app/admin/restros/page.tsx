@@ -107,31 +107,30 @@ export default function RestroMasterPage() {
   }
 
   async function toggleRaileats(row: Restro) {
-    const current = Number(row.RaileatsStatus ?? 0);
-    const next = current === 1 ? 0 : 1;
+    const currentOn = isRaileatsActive(row.RaileatsStatus);
+    const next = currentOn ? 0 : 1;
+    const previousResults = results;
+    const previousFilteredResults = filteredResults;
 
-    try {
-      const res = await fetch(
-        `/api/admin/restros/${encodeURIComponent(row.RestroCode)}/status`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            raileatsStatus: next,
-          }),
-        }
+    const applyLocalStatus = (list: Restro[]) =>
+      list.map((item) =>
+        String(item.RestroCode) === String(row.RestroCode)
+          ? { ...item, RaileatsStatus: next }
+          : item
       );
 
-      if (!res.ok) {
-        alert("Failed to update Raileats status");
-        return;
-      }
+    setResults(applyLocalStatus);
+    setFilteredResults(applyLocalStatus);
 
-      fetchRestros();
-    } catch (e) {
-      alert("Network error while updating status");
+    const { error } = await supabase
+      .from("RestroMaster")
+      .update({ RaileatsStatus: next })
+      .eq("RestroCode", row.RestroCode);
+
+    if (error) {
+      setResults(previousResults);
+      setFilteredResults(previousFilteredResults);
+      alert(`Failed to update Raileats status: ${error.message}`);
     }
   }
 
@@ -337,7 +336,7 @@ export default function RestroMasterPage() {
         columns={columns}
         data={filteredResults}
         loading={loading}
-        pageSize={10}
+        pageSize={30}
         actions={(row) => (
           <button
             onClick={() => openEdit(row.RestroCode)}
