@@ -3,9 +3,18 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, UserRound } from "lucide-react";
+import {
+  Home,
+  ListOrdered,
+  LogOut,
+  MapPin,
+  Menu,
+  Train,
+  Users,
+  Utensils,
+  WalletCards,
+} from "lucide-react";
 import AuthGuard from "@/components/admin/AuthGuard";
-import { adminNavItems } from "@/components/admin/adminNav";
 
 type User = {
   id?: string;
@@ -22,6 +31,44 @@ type Props = {
   currentUser?: User;
   requireAuth?: boolean;
 };
+
+const adminNavItems = [
+  {
+    href: "/admin/home",
+    label: "Dashboard",
+    icon: Home,
+  },
+  {
+    href: "/admin/orders",
+    label: "Orders",
+    icon: ListOrdered,
+  },
+  {
+    href: "/admin/restros",
+    label: "Restro Master",
+    icon: Utensils,
+  },
+  {
+    href: "/admin/menu",
+    label: "Menu",
+    icon: WalletCards,
+  },
+  {
+    href: "/admin/trains",
+    label: "Trains",
+    icon: Train,
+  },
+  {
+    href: "/admin/stations",
+    label: "Stations",
+    icon: MapPin,
+  },
+  {
+    href: "/admin/users",
+    label: "Users",
+    icon: Users,
+  },
+] as const;
 
 function userLabel(user?: User) {
   if (!user) return "Admin";
@@ -146,7 +193,7 @@ export default function AdminShell({
                 />
               ) : (
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-700">
-                  <UserRound size={20} />
+                  <Users size={20} />
                 </div>
               )}
             </div>
