@@ -131,11 +131,16 @@ type SearchType =
   | "trainNo";
 
 type TrainRouteRow = {
+  trainNumber?: number | string;
+  trainNumber_text?: string;
+  trainName?: string;
   StnNumber?: number | string;
   StationCode?: string;
   StationName?: string;
   Arrives?: string;
   Departs?: string;
+  Platform?: string;
+  Day?: number | string;
 };
 
 export default function AdminOrdersPage() {
@@ -370,21 +375,37 @@ useEffect(() => {
   /* ================= TRAIN ROUTE MODAL ================= */
   const openRouteModal = async (trainNo?: string, stationCode?: string) => {
     const normalizedTrainNo = String(trainNo || "").trim();
-    const normalizedStationCode = String(stationCode || "").trim();
+    const normalizedStationCode = String(stationCode || "").trim().toUpperCase();
 
     if (!normalizedTrainNo) {
       alert("Train number not available for this order");
       return;
     }
 
-    const { data, error } = await supabase
+    let routeRows: TrainRouteRow[] = [];
+    let routeError: any = null;
+
+    const textQuery = await supabase
       .from("TrainRoute")
       .select("*")
-      .eq("trainNumber", normalizedTrainNo)
+      .eq("trainNumber_text", normalizedTrainNo)
       .order("StnNumber", { ascending: true });
 
-    if (error) {
-      console.error("Train route fetch failed", error);
+    if (!textQuery.error && textQuery.data && textQuery.data.length > 0) {
+      routeRows = textQuery.data;
+    } else {
+      const numberQuery = await supabase
+        .from("TrainRoute")
+        .select("*")
+        .eq("trainNumber", normalizedTrainNo)
+        .order("StnNumber", { ascending: true });
+
+      routeRows = numberQuery.data || [];
+      routeError = numberQuery.error || textQuery.error;
+    }
+
+    if (routeError && routeRows.length === 0) {
+      console.error("Train route fetch failed", routeError);
       alert("Unable to fetch train route");
       return;
     }
@@ -393,7 +414,7 @@ useEffect(() => {
       open: true,
       trainNo: normalizedTrainNo,
       stationCode: normalizedStationCode,
-      data: data || [],
+      data: routeRows,
     });
 
     setTimeout(() => {
@@ -1254,7 +1275,7 @@ useEffect(() => {
                 <tbody>
                   {routeModal.data.length > 0 ? (
                     routeModal.data.map((r, idx) => {
-                      const stationCode = String(r.StationCode || "");
+                      const stationCode = String(r.StationCode || "").trim().toUpperCase();
                       const isTarget = stationCode === routeModal.stationCode;
                       return (
                         <tr
@@ -1643,5 +1664,6 @@ useEffect(() => {
     </section>
   );
 }
+
 
 
