@@ -3,6 +3,11 @@
 import React, { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import AdminButton from "@/components/admin/AdminButton";
+import AdminCard from "@/components/admin/AdminCard";
+import { AdminInput, AdminSelect } from "@/components/admin/AdminField";
+import AdminPage from "@/components/admin/AdminPage";
+import AdminToolbar from "@/components/admin/AdminToolbar";
 import AdminTable, { Column } from "@/components/AdminTable";
 import RestroEditModal from "@/components/RestroEditModal";
 
@@ -52,12 +57,20 @@ export default function RestroMasterPage() {
   async function fetchRestros() {
     setLoading(true);
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("RestroMaster")
       .select("*")
       .order("RestroCode", {
         ascending: false,
       });
+
+    if (error) {
+      alert(`Failed to load restros: ${error.message}`);
+      setResults([]);
+      setFilteredResults([]);
+      setLoading(false);
+      return;
+    }
 
     const finalData = (data ?? []).map((r: any) => ({
       id: r.RestroCode,
@@ -106,6 +119,19 @@ export default function RestroMasterPage() {
     setFilteredResults(filtered);
   }
 
+  function resetFilters() {
+    setRestroCode("");
+    setOwnerName("");
+    setStationCode("");
+    setStationName("");
+    setRestroName("");
+    setOwnerPhone("");
+    setFssaiNumber("");
+    setGstNumber("");
+    setStatusFilter("");
+    setFilteredResults(results);
+  }
+
   async function toggleRaileats(row: Restro) {
     const currentOn = isRaileatsActive(row.RaileatsStatus);
     const next = currentOn ? 0 : 1;
@@ -144,9 +170,6 @@ export default function RestroMasterPage() {
     }
   };
 
-  const inputClass =
-    "h-10 border border-slate-300 rounded-md px-3 text-sm bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
-
   const columns: Column<Restro>[] = [
     {
       key: "RestroCode",
@@ -160,7 +183,7 @@ export default function RestroMasterPage() {
     {
       key: "StationCode",
       title: "Station Code",
-      width: "100px",
+      width: "110px",
     },
     {
       key: "StationName",
@@ -190,162 +213,148 @@ export default function RestroMasterPage() {
     {
       key: "RaileatsStatus",
       title: "Raileats",
+      width: "110px",
       render: (row) => {
         const on = isRaileatsActive(row.RaileatsStatus);
 
         return (
-          <div
+          <button
+            type="button"
             onClick={() => toggleRaileats(row)}
-            style={{
-              width: 44,
-              height: 22,
-              borderRadius: 999,
-              backgroundColor: on ? "#0ea5e9" : "#9ca3af",
-              cursor: "pointer",
-              position: "relative",
-            }}
+            className={[
+              "relative h-6 w-12 rounded-full transition",
+              on ? "bg-sky-500" : "bg-slate-400",
+            ].join(" ")}
+            aria-label={on ? "Deactivate RailEats" : "Activate RailEats"}
           >
-            <div
-              style={{
-                width: 18,
-                height: 18,
-                background: "#fff",
-                borderRadius: "50%",
-                position: "absolute",
-                top: 2,
-                left: on ? 24 : 2,
-                transition: "left 0.2s ease",
-              }}
+            <span
+              className={[
+                "absolute top-1 h-4 w-4 rounded-full bg-white transition-all",
+                on ? "left-7" : "left-1",
+              ].join(" ")}
             />
-          </div>
+          </button>
         );
       },
     },
   ];
 
   return (
-    <main className="mx-6 my-4 max-w-full">
-      <h2 className="text-xl font-semibold mb-5">Restro Master</h2>
-
-      <div className="bg-white p-3 rounded-lg border border-slate-200 mb-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 xl:grid-cols-10 gap-2 items-end">
-          <input
+    <AdminPage
+      title="Restro Master"
+      subtitle="Search, manage, and update RailEats restaurant outlets"
+      actions={
+        <AdminButton variant="success" onClick={() => setOpenAddRestro(true)}>
+          + Add New Restro
+        </AdminButton>
+      }
+    >
+      <AdminToolbar
+        actions={
+          <>
+            <AdminButton onClick={handleSearch}>Search</AdminButton>
+            <AdminButton variant="secondary" onClick={resetFilters}>
+              Reset
+            </AdminButton>
+          </>
+        }
+      >
+        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9">
+          <AdminInput
             type="text"
             placeholder="RestroCode"
             value={restroCode}
             onChange={(e) => setRestroCode(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            className={inputClass}
           />
 
-          <input
+          <AdminInput
             type="text"
             placeholder="OwnerName"
             value={ownerName}
             onChange={(e) => setOwnerName(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            className={inputClass}
           />
 
-          <input
+          <AdminInput
             type="text"
             placeholder="StationCode"
             value={stationCode}
             onChange={(e) => setStationCode(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            className={inputClass}
           />
 
-          <input
+          <AdminInput
             type="text"
             placeholder="StationName"
             value={stationName}
             onChange={(e) => setStationName(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            className={inputClass}
           />
 
-          <input
+          <AdminInput
             type="text"
             placeholder="RestroName"
             value={restroName}
             onChange={(e) => setRestroName(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            className={inputClass}
           />
 
-          <input
+          <AdminInput
             type="text"
             placeholder="OwnerPhone"
             value={ownerPhone}
             onChange={(e) => setOwnerPhone(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            className={inputClass}
           />
 
-          <input
+          <AdminInput
             type="text"
             placeholder="FSSAINumber"
             value={fssaiNumber}
             onChange={(e) => setFssaiNumber(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            className={inputClass}
           />
 
-          <input
+          <AdminInput
             type="text"
             placeholder="GSTNumber"
             value={gstNumber}
             onChange={(e) => setGstNumber(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            className={inputClass}
           />
 
-          <select
+          <AdminSelect
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            className={inputClass}
           >
             <option value="">RaileatsStatus</option>
             <option value="active">Active</option>
             <option value="deactive">Deactivate</option>
-          </select>
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleSearch}
-              className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-semibold"
-            >
-              Search
-            </button>
-
-            <button
-              onClick={() => setOpenAddRestro(true)}
-              className="h-10 px-5 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-semibold whitespace-nowrap"
-            >
-              + Add New Restro
-            </button>
-          </div>
+          </AdminSelect>
         </div>
-      </div>
+      </AdminToolbar>
 
-      <AdminTable
-        title=""
-        subtitle=""
-        columns={columns}
-        data={filteredResults}
-        loading={loading}
-        pageSize={30}
-        actions={(row) => (
-          <button
-            onClick={() => openEdit(row.RestroCode)}
-            className="px-3 py-1 rounded-md bg-amber-400 text-black"
-          >
-            Edit
-          </button>
-        )}
-      />
+      <AdminCard bodyClassName="p-0">
+        <AdminTable
+          title=""
+          subtitle=""
+          columns={columns}
+          data={filteredResults}
+          loading={loading}
+          pageSize={30}
+          actions={(row) => (
+            <AdminButton
+              variant="secondary"
+              className="h-9 bg-amber-400 text-black hover:bg-amber-500"
+              onClick={() => openEdit(row.RestroCode)}
+            >
+              Edit
+            </AdminButton>
+          )}
+        />
+      </AdminCard>
 
       {openAddRestro && (
         <RestroEditModal
@@ -354,6 +363,6 @@ export default function RestroMasterPage() {
           onClose={() => setOpenAddRestro(false)}
         />
       )}
-    </main>
+    </AdminPage>
   );
 }
