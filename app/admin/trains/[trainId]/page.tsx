@@ -3,6 +3,10 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import AdminButton from "@/components/admin/AdminButton";
+import AdminCard from "@/components/admin/AdminCard";
+import { AdminField, AdminInput } from "@/components/admin/AdminField";
+import AdminPage from "@/components/admin/AdminPage";
 
 type TrainHead = {
   trainId: number;
@@ -43,9 +47,16 @@ type ApiResponse = {
   error?: string;
 };
 
+function formatDateTime(value?: string | null) {
+  return value ? value.slice(0, 19).replace("T", " ") : "-";
+}
+
+function toNumberOrNull(value: string) {
+  return value === "" ? null : Number(value) || null;
+}
+
 export default function AdminTrainEditPage() {
   const router = useRouter();
-  // params ko hamesha string bana diya
   const rawParams = useParams() as { trainId?: string | string[] };
   const trainIdParam =
     Array.isArray(rawParams.trainId)
@@ -58,7 +69,6 @@ export default function AdminTrainEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>("");
 
-  /* -------- LOAD BY trainId -------- */
   useEffect(() => {
     if (!trainIdParam) return;
 
@@ -69,7 +79,7 @@ export default function AdminTrainEditPage() {
 
         const res = await fetch(
           `/api/admin/trains/${encodeURIComponent(trainIdParam)}`,
-          { cache: "no-store" },
+          { cache: "no-store" }
         );
         const json: ApiResponse = await res.json();
 
@@ -96,7 +106,6 @@ export default function AdminTrainEditPage() {
     fetchData();
   }, [trainIdParam]);
 
-  /* -------- HELPERS -------- */
   function updateHead<K extends keyof TrainHead>(key: K, value: TrainHead[K]) {
     setHead((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
@@ -104,7 +113,7 @@ export default function AdminTrainEditPage() {
   function updateRouteRow<K extends keyof TrainRouteRow>(
     index: number,
     key: K,
-    value: TrainRouteRow[K],
+    value: TrainRouteRow[K]
   ) {
     setRouteRows((prev) => {
       const copy = [...prev];
@@ -129,7 +138,7 @@ export default function AdminTrainEditPage() {
             train: head,
             route: routeRows,
           }),
-        },
+        }
       );
 
       const json = await res.json();
@@ -138,6 +147,7 @@ export default function AdminTrainEditPage() {
         setError("Failed to save changes.");
         return;
       }
+
       router.refresh();
     } catch (e) {
       console.error("save error", e);
@@ -147,270 +157,202 @@ export default function AdminTrainEditPage() {
     }
   }
 
-  /* -------- UI -------- */
   if (loading && !head) {
     return (
-      <div className="page-root">
-        <p className="text-sm text-gray-500">Loading train…</p>
-      </div>
+      <AdminPage title="Edit Train" subtitle="Loading train details">
+        <AdminCard>
+          <p className="text-sm text-slate-500">Loading train...</p>
+        </AdminCard>
+      </AdminPage>
     );
   }
 
   if (!head) {
     return (
-      <div className="page-root">
-        <p className="text-sm text-red-600">Train not found.</p>
-      </div>
+      <AdminPage title="Edit Train" subtitle="Train details unavailable">
+        <AdminCard>
+          <p className="text-sm font-semibold text-red-600">Train not found.</p>
+        </AdminCard>
+      </AdminPage>
     );
   }
 
   const statusValue = head.status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
 
   return (
-    <div className="page-root">
-      {/* top bar – subtitle hata diya */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-semibold">
-            Edit Train #{head.trainNumber ?? head.trainId}
-          </h1>
-        </div>
-        <div className="flex gap-2">
-          <button
-            className="px-3 py-2 rounded border text-sm"
-            type="button"
-            onClick={() => router.push("/admin/trains")}
-          >
+    <AdminPage
+      title={`Edit Train #${head.trainNumber ?? head.trainId}`}
+      subtitle="Update train master details and route station rows"
+      actions={
+        <>
+          <AdminButton variant="secondary" onClick={() => router.push("/admin/trains")}>
             Back
-          </button>
-          <button
-            className="px-4 py-2 rounded bg-green-600 text-white text-sm"
-            type="button"
-            onClick={onSave}
-            disabled={saving}
-          >
-            {saving ? "Saving…" : "Save Changes"}
-          </button>
-        </div>
-      </div>
-
+          </AdminButton>
+          <AdminButton variant="success" onClick={onSave} disabled={saving}>
+            {saving ? "Saving..." : "Save Changes"}
+          </AdminButton>
+        </>
+      }
+    >
       {error && (
-        <p className="text-sm text-red-600 mb-3">{error}</p>
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {error}
+        </div>
       )}
 
-      {/* Train details */}
-      <section className="bg-white border rounded p-4 mb-4">
-        <h2 className="font-semibold mb-3">Train Details</h2>
+      <AdminCard title="Train Details">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <AdminField label="Train ID">
+            <AdminInput value={head.trainId} readOnly />
+          </AdminField>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-          <div>
-            <label className="text-xs text-gray-600 block mb-1">Train ID</label>
-            <input className="input w-full" value={head.trainId} readOnly />
-          </div>
-          <div>
-            <label className="text-xs text-gray-600 block mb-1">
-              Train Number
-            </label>
-            <input
-              className="input w-full"
+          <AdminField label="Train Number">
+            <AdminInput
               value={head.trainNumber ?? ""}
-              onChange={(e) =>
-                updateHead("trainNumber", Number(e.target.value) || null)
-              }
+              onChange={(e) => updateHead("trainNumber", toNumberOrNull(e.target.value))}
             />
-          </div>
+          </AdminField>
 
-          <div>
-            <label className="text-xs text-gray-600 block mb-1">
-              Train Name
-            </label>
-            <input
-              className="input w-full"
+          <AdminField label="Train Name">
+            <AdminInput
               value={head.trainName ?? ""}
               onChange={(e) => updateHead("trainName", e.target.value)}
             />
-          </div>
+          </AdminField>
 
-          {/* STATUS SLIDER */}
-          <div>
-            <label className="text-xs text-gray-600 block mb-1">Status</label>
-            <div className="flex items-center gap-3">
+          <AdminField label="Status">
+            <div className="flex h-10 items-center gap-3">
               <button
                 type="button"
                 onClick={() =>
                   updateHead(
                     "status",
-                    statusValue === "ACTIVE" ? "INACTIVE" : "ACTIVE",
+                    statusValue === "ACTIVE" ? "INACTIVE" : "ACTIVE"
                   )
                 }
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                  statusValue === "ACTIVE" ? "bg-green-500" : "bg-gray-300"
-                }`}
+                className={[
+                  "relative h-6 w-12 rounded-full transition",
+                  statusValue === "ACTIVE" ? "bg-emerald-500" : "bg-slate-300",
+                ].join(" ")}
               >
                 <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
-                    statusValue === "ACTIVE"
-                      ? "translate-x-5"
-                      : "translate-x-1"
-                  }`}
+                  className={[
+                    "absolute top-1 h-4 w-4 rounded-full bg-white transition-all",
+                    statusValue === "ACTIVE" ? "left-7" : "left-1",
+                  ].join(" ")}
                 />
               </button>
-              <span className="text-sm">
-                {statusValue === "ACTIVE" ? "ACTIVE" : "INACTIVE"}
-              </span>
+              <span className="text-sm font-semibold text-slate-700">{statusValue}</span>
             </div>
-          </div>
+          </AdminField>
 
-          <div>
-            <label className="text-xs text-gray-600 block mb-1">
-              Station From
-            </label>
-            <input
-              className="input w-full"
+          <AdminField label="Station From">
+            <AdminInput
               value={head.stationFrom ?? ""}
               onChange={(e) => updateHead("stationFrom", e.target.value)}
             />
-          </div>
-          <div>
-            <label className="text-xs text-gray-600 block mb-1">
-              Station To
-            </label>
-            <input
-              className="input w-full"
+          </AdminField>
+
+          <AdminField label="Station To">
+            <AdminInput
               value={head.stationTo ?? ""}
               onChange={(e) => updateHead("stationTo", e.target.value)}
             />
-          </div>
+          </AdminField>
 
-          <div className="md:col-span-2">
-            <label className="text-xs text-gray-600 block mb-1">
-              Running Days
-            </label>
-            <input
-              className="input w-full"
+          <AdminField label="Running Days" className="md:col-span-2">
+            <AdminInput
               value={head.runningDays ?? ""}
               onChange={(e) => updateHead("runningDays", e.target.value)}
             />
-          </div>
+          </AdminField>
         </div>
 
-        <div className="text-xs text-gray-500">
-          Created:{" "}
-          {head.created_at ? head.created_at.slice(0, 19).replace("T", " ") : "-"}{" "}
-          | Updated:{" "}
-          {head.updated_at ? head.updated_at.slice(0, 19).replace("T", " ") : "-"}
+        <div className="mt-4 rounded-md bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+          Created: {formatDateTime(head.created_at)} | Updated: {formatDateTime(head.updated_at)}
         </div>
-      </section>
+      </AdminCard>
 
-      {/* Route table */}
-      <section className="bg-white border rounded p-4">
-        <h2 className="font-semibold mb-3">Route (stations)</h2>
-
-        <div className="overflow-auto">
+      <AdminCard title="Route (stations)" bodyClassName="p-0">
+        <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
-            <thead className="bg-gray-100 text-gray-600">
+            <thead className="bg-slate-50 text-left font-bold uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-2 py-1 text-left">Stn #</th>
-                <th className="px-2 py-1 text-left">Code</th>
-                <th className="px-2 py-1 text-left">Name</th>
-                <th className="px-2 py-1 text-left">Arrives</th>
-                <th className="px-2 py-1 text-left">Departs</th>
-                <th className="px-2 py-1 text-left">Stop Time</th>
-                <th className="px-2 py-1 text-left">Distance</th>
-                <th className="px-2 py-1 text-left">Platform</th>
-                <th className="px-2 py-1 text-left">Day</th>
+                <th className="px-3 py-3">Stn #</th>
+                <th className="px-3 py-3">Code</th>
+                <th className="px-3 py-3">Name</th>
+                <th className="px-3 py-3">Arrives</th>
+                <th className="px-3 py-3">Departs</th>
+                <th className="px-3 py-3">Stop Time</th>
+                <th className="px-3 py-3">Distance</th>
+                <th className="px-3 py-3">Platform</th>
+                <th className="px-3 py-3">Day</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {routeRows.map((r, idx) => (
-                <tr key={r.id ?? idx} className="border-t">
-                  <td className="px-2 py-1">
-                    <input
-                      className="input input-xs w-16"
+                <tr key={r.id ?? idx} className="bg-white hover:bg-slate-50">
+                  <td className="px-3 py-2">
+                    <AdminInput
+                      className="h-8 w-20"
                       value={r.StnNumber ?? ""}
-                      onChange={(e) =>
-                        updateRouteRow(
-                          idx,
-                          "StnNumber",
-                          Number(e.target.value) || null,
-                        )
-                      }
+                      onChange={(e) => updateRouteRow(idx, "StnNumber", toNumberOrNull(e.target.value))}
                     />
                   </td>
-                  <td className="px-2 py-1">
-                    <input
-                      className="input input-xs w-20"
+                  <td className="px-3 py-2">
+                    <AdminInput
+                      className="h-8 w-24"
                       value={r.StationCode ?? ""}
-                      onChange={(e) =>
-                        updateRouteRow(idx, "StationCode", e.target.value)
-                      }
+                      onChange={(e) => updateRouteRow(idx, "StationCode", e.target.value)}
                     />
                   </td>
-                  <td className="px-2 py-1">
-                    <input
-                      className="input input-xs w-48"
+                  <td className="px-3 py-2">
+                    <AdminInput
+                      className="h-8 w-56"
                       value={r.StationName ?? ""}
-                      onChange={(e) =>
-                        updateRouteRow(idx, "StationName", e.target.value)
-                      }
+                      onChange={(e) => updateRouteRow(idx, "StationName", e.target.value)}
                     />
                   </td>
-                  <td className="px-2 py-1">
-                    <input
-                      className="input input-xs w-24"
+                  <td className="px-3 py-2">
+                    <AdminInput
+                      className="h-8 w-28"
                       value={r.Arrives ?? ""}
-                      onChange={(e) =>
-                        updateRouteRow(idx, "Arrives", e.target.value)
-                      }
+                      onChange={(e) => updateRouteRow(idx, "Arrives", e.target.value)}
                     />
                   </td>
-                  <td className="px-2 py-1">
-                    <input
-                      className="input input-xs w-24"
+                  <td className="px-3 py-2">
+                    <AdminInput
+                      className="h-8 w-28"
                       value={r.Departs ?? ""}
-                      onChange={(e) =>
-                        updateRouteRow(idx, "Departs", e.target.value)
-                      }
+                      onChange={(e) => updateRouteRow(idx, "Departs", e.target.value)}
                     />
                   </td>
-                  <td className="px-2 py-1">
-                    <input
-                      className="input input-xs w-24"
+                  <td className="px-3 py-2">
+                    <AdminInput
+                      className="h-8 w-28"
                       value={r.Stoptime ?? ""}
-                      onChange={(e) =>
-                        updateRouteRow(idx, "Stoptime", e.target.value)
-                      }
+                      onChange={(e) => updateRouteRow(idx, "Stoptime", e.target.value)}
                     />
                   </td>
-                  <td className="px-2 py-1">
-                    <input
-                      className="input input-xs w-20"
+                  <td className="px-3 py-2">
+                    <AdminInput
+                      className="h-8 w-24"
                       value={r.Distance ?? ""}
-                      onChange={(e) =>
-                        updateRouteRow(idx, "Distance", e.target.value)
-                      }
+                      onChange={(e) => updateRouteRow(idx, "Distance", e.target.value)}
                     />
                   </td>
-                  <td className="px-2 py-1">
-                    <input
-                      className="input input-xs w-16"
+                  <td className="px-3 py-2">
+                    <AdminInput
+                      className="h-8 w-20"
                       value={r.Platform ?? ""}
-                      onChange={(e) =>
-                        updateRouteRow(idx, "Platform", e.target.value)
-                      }
+                      onChange={(e) => updateRouteRow(idx, "Platform", e.target.value)}
                     />
                   </td>
-                  <td className="px-2 py-1">
-                    <input
-                      className="input input-xs w-16"
+                  <td className="px-3 py-2">
+                    <AdminInput
+                      className="h-8 w-20"
                       value={r.Day ?? ""}
-                      onChange={(e) =>
-                        updateRouteRow(
-                          idx,
-                          "Day",
-                          Number(e.target.value) || null,
-                        )
-                      }
+                      onChange={(e) => updateRouteRow(idx, "Day", toNumberOrNull(e.target.value))}
                     />
                   </td>
                 </tr>
@@ -418,7 +360,7 @@ export default function AdminTrainEditPage() {
             </tbody>
           </table>
         </div>
-      </section>
-    </div>
+      </AdminCard>
+    </AdminPage>
   );
 }
