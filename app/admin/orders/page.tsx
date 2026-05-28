@@ -71,6 +71,20 @@ const DELIVERED_REASONS = [
   "Bad Delivery",
 ];
 
+type MainOutcomeStatus = "Delivered" | "Cancelled" | "Not Delivered";
+
+const MAIN_STATUS_OPTIONS: MainOutcomeStatus[] = [
+  "Delivered",
+  "Cancelled",
+  "Not Delivered",
+];
+
+const SUB_STATUS_OPTIONS: Record<MainOutcomeStatus, string[]> = {
+  Delivered: DELIVERED_REASONS,
+  Cancelled: CANCEL_REASONS,
+  "Not Delivered": NOT_DELIVERED_REASONS,
+};
+
 const NEXT_MAP: Record<
   TabKey,
   {
@@ -182,6 +196,8 @@ const [statusModalOpen, setStatusModalOpen] = useState(false);
 const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
 const [actionType, setActionType] = useState("");
+
+const [mainStatus, setMainStatus] = useState<MainOutcomeStatus | "">("");
 
 const [subStatus, setSubStatus] = useState("");
 
@@ -595,24 +611,17 @@ useEffect(() => {
 
   async function submitStatusAction() {
     if (!selectedOrder) return;
+    if (actionType === "mark" && !mainStatus) {
+      alert("Please select main status");
+      return;
+    }
     if (!subStatus) {
-      alert("Please select reason/status");
+      alert("Please select sub status");
       return;
     }
 
     try {
-      let computedMainStatus = "";
-      if (actionType === "cancel") {
-        computedMainStatus = "Cancelled";
-      } else {
-        if (subStatus === "Delivered" || subStatus === "Bad Delivery") {
-          computedMainStatus = "Delivered";
-        } else if (subStatus === "Not Delivered") {
-          computedMainStatus = "Not Delivered";
-        } else if (subStatus === "Cancelled") {
-          computedMainStatus = "Cancelled";
-        }
-      }
+      const computedMainStatus = actionType === "cancel" ? "Cancelled" : mainStatus;
 
       const res = await fetch(`/api/orders/${encodeURIComponent(selectedOrder.id)}/status`, {
         method: "PATCH",
@@ -673,6 +682,7 @@ useEffect(() => {
 
       setStatusModalOpen(false);
       setSelectedOrder(null);
+      setMainStatus("");
       setSubStatus("");
       setRemarks("");
       setActiveTab(targetKey);
@@ -1159,6 +1169,7 @@ useEffect(() => {
                                 setSelectedOrder(o);
                                 actionType === "cancel";
                                 setActionType("cancel");
+                                setMainStatus("");
                                 setSubStatus("");
                                 setRemarks("");
                                 setStatusModalOpen(true);
@@ -1183,6 +1194,7 @@ useEffect(() => {
                               onClick={() => {
                                 setSelectedOrder(o);
                                 setActionType("mark");
+                                setMainStatus("");
                                 setSubStatus("");
                                 setRemarks("");
                                 setStatusModalOpen(true);
@@ -1682,36 +1694,77 @@ useEffect(() => {
               {actionType === "cancel" ? "Cancel Order Entity" : "Mark Order Status Engine"}
             </h2>
 
-            <select
-              value={subStatus}
-              onChange={(e) => setSubStatus(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #cbd5e1",
-                marginBottom: 16,
-                fontSize: "13px",
-                fontWeight: 600
-              }}
-            >
-              <option value="">
-                {actionType === "cancel" ? "-- Select Cancel Reason --" : "-- Select Outcome Status --"}
-              </option>
+            {actionType === "cancel" ? (
+              <select
+                value={subStatus}
+                onChange={(e) => setSubStatus(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #cbd5e1",
+                  marginBottom: 16,
+                  fontSize: "13px",
+                  fontWeight: 600
+                }}
+              >
+                <option value="">-- Select Cancel Reason --</option>
+                {CANCEL_REASONS.map((reason) => (
+                  <option key={reason} value={reason}>{reason}</option>
+                ))}
+              </select>
+            ) : (
+              <>
+                <select
+                  value={mainStatus}
+                  onChange={(e) => {
+                    setMainStatus(e.target.value as MainOutcomeStatus | "");
+                    setSubStatus("");
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: 10,
+                    borderRadius: 8,
+                    border: "1px solid #cbd5e1",
+                    marginBottom: 12,
+                    fontSize: "13px",
+                    fontWeight: 600
+                  }}
+                >
+                  <option value="">-- Select Main Status --</option>
+                  {MAIN_STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
 
-              {actionType === "cancel"
-                ? CANCEL_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>{reason}</option>
-                  ))
-                : selectedOrder?.status === "inkitchen"
-                ? NOT_DELIVERED_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>{reason}</option>
-                  ))
-                : DELIVERED_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>{reason}</option>
-                  ))
-              }
-            </select>
+                <select
+                  value={subStatus}
+                  onChange={(e) => setSubStatus(e.target.value)}
+                  disabled={!mainStatus}
+                  style={{
+                    width: "100%",
+                    padding: 10,
+                    borderRadius: 8,
+                    border: "1px solid #cbd5e1",
+                    marginBottom: 16,
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    background: mainStatus ? "#fff" : "#f8fafc",
+                    color: mainStatus ? "#0f172a" : "#94a3b8"
+                  }}
+                >
+                  <option value="">
+                    {mainStatus ? `-- Select ${mainStatus} Sub Status --` : "-- Select Main Status First --"}
+                  </option>
+
+                  {mainStatus &&
+                    SUB_STATUS_OPTIONS[mainStatus].map((reason) => (
+                      <option key={reason} value={reason}>{reason}</option>
+                    ))
+                  }
+                </select>
+              </>
+            )}
 
             <textarea
               placeholder="Internal administrative remarks annotation ledger (Optional)"
@@ -1734,6 +1787,7 @@ useEffect(() => {
                 onClick={() => {
                   setStatusModalOpen(false);
                   setSelectedOrder(null);
+                  setMainStatus("");
                   setSubStatus("");
                   setRemarks("");
                 }}
@@ -1778,10 +1832,3 @@ useEffect(() => {
     </section>
   );
 }
-
-
-
-
-
-
-
