@@ -29,24 +29,18 @@ export default function BasicInfoClient({
   const router = useRouter();
 
   const [local, setLocal] = useState<any>({});
-  const [raileatsStatus, setRaileatsStatus] = useState(0);
-  const [pendingRaileatsStatus, setPendingRaileatsStatus] = useState(0);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!initialData) return;
-    const normalizedRaileatsStatus = toStatusNumber(initialData.RaileatsStatus);
-
     setLocal({
       ...initialData,
-      RaileatsStatus: normalizedRaileatsStatus,
+      RaileatsStatus: toStatusNumber(initialData.RaileatsStatus),
       IRCTCStatus: toStatusNumber(initialData.IRCTCStatus),
     });
-    setRaileatsStatus(normalizedRaileatsStatus);
-    setPendingRaileatsStatus(normalizedRaileatsStatus);
-  }, [initialData?.RestroCode]);
+  }, [initialData]);
 
   function update(key: string, value: any) {
     setLocal((prev: any) => ({
@@ -58,6 +52,8 @@ export default function BasicInfoClient({
   }
 
   function buildPayload() {
+    const raileatsStatus = toStatusNumber(local.RaileatsStatus);
+
     const payload: any = {
       RestroCode: Number(local.RestroCode),
 
@@ -75,8 +71,8 @@ export default function BasicInfoClient({
       StationName: local.StationName || null,
 
       IRCTCStatus: toStatusNumber(local.IRCTCStatus),
-      RaileatsStatus: pendingRaileatsStatus,
-      raileatsStatus: pendingRaileatsStatus,
+      RaileatsStatus: raileatsStatus,
+      raileatsStatus,
       IsIrctcApproved: String(local.IsIrctcApproved || "0"),
 
       RestroRating: local.RestroRating === "" ? null : Number(local.RestroRating),
@@ -104,7 +100,7 @@ export default function BasicInfoClient({
 
       const id = Number(local.RestroCode);
       const payload = buildPayload();
-      const statusToSave = pendingRaileatsStatus;
+      const raileatsStatus = toStatusNumber(local.RaileatsStatus);
 
       const res = await fetch(`/api/restros/${id}`, {
         method: "PATCH",
@@ -118,41 +114,29 @@ export default function BasicInfoClient({
         throw new Error(json?.error || "Save failed");
       }
 
-      const statusRes = await fetch(`/api/admin/restros/${encodeURIComponent(id)}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ RaileatsStatus: statusToSave, commit: "save" }),
-      });
-
-      if (!statusRes.ok) {
-        const statusJson = await statusRes.json().catch(() => null);
-        throw new Error(statusJson?.error || "Basic info saved, but RailEats status update failed");
-      }
-
-      const { data: verifiedRow, error: verifyError } = await supabase
+      const { error: statusError } = await supabase
         .from("RestroMaster")
-        .select("*")
-        .eq("RestroCode", id)
-        .maybeSingle();
+        .update({ RaileatsStatus: raileatsStatus })
+        .eq("RestroCode", id);
 
-      if (verifyError) {
-        throw new Error(`RailEats status saved but verify failed: ${verifyError.message}`);
+      if (statusError) {
+        const statusRes = await fetch(`/api/admin/restros/${encodeURIComponent(id)}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ raileatsStatus }),
+        });
+
+        if (!statusRes.ok) {
+          throw new Error(`Basic info saved, but RailEats status update failed: ${statusError.message}`);
+        }
       }
 
-      if (toStatusNumber(verifiedRow?.RaileatsStatus) !== statusToSave) {
-        throw new Error(
-          "RailEats status API returned success, but Supabase value did not change. Please fix /api/admin/restros/[code]/status route to update RestroMaster.RaileatsStatus."
-        );
-      }
-
-      setLocal({
-        ...verifiedRow,
-        RaileatsStatus: toStatusNumber(verifiedRow.RaileatsStatus),
-        IRCTCStatus: toStatusNumber(verifiedRow.IRCTCStatus),
-      });
-      setRaileatsStatus(toStatusNumber(verifiedRow.RaileatsStatus));
-      setPendingRaileatsStatus(toStatusNumber(verifiedRow.RaileatsStatus));
+      setLocal((prev: any) => ({
+        ...prev,
+        RaileatsStatus: raileatsStatus,
+      }));
       setMsg("Saved successfully");
+      window.location.reload();
     } catch (e: any) {
       console.error("Save error:", e);
       setErr(e?.message || "Save failed");
@@ -228,54 +212,13 @@ export default function BasicInfoClient({
         </Field>
 
         <Field label="Raileats Status">
-          <button
-            type="button"
-            onClick={() => {
-              const next = pendingRaileatsStatus === 1 ? 0 : 1;
-              setPendingRaileatsStatus(next);
-              setMsg(null);
-              setErr(null);
-            }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              border: 0,
-              background: "transparent",
-              padding: 0,
-              cursor: "pointer",
-            }}
+          <select
+            value={toStatusNumber(local?.RaileatsStatus)}
+            onChange={(e) => update("RaileatsStatus", Number(e.target.value))}
           >
-            <span
-              style={{
-                width: 50,
-                height: 26,
-                borderRadius: 999,
-                background: raileatsStatus === 1 ? "#06b6d4" : "#9ca3af",
-                position: "relative",
-                display: "inline-block",
-              }}
-            >
-              <span
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: "50%",
-                  background: "#fff",
-                  position: "absolute",
-                  top: 3,
-                  left: raileatsStatus === 1 ? 27 : 3,
-                  transition: "left 0.2s ease",
-                }}
-              />
-            </span>
-            <span>{raileatsStatus === 1 ? "On" : "Off"}</span>
-            {pendingRaileatsStatus !== raileatsStatus && (
-              <span style={{ color: "#2563eb", fontSize: 12, fontWeight: 600 }}>
-                Save pending: {pendingRaileatsStatus === 1 ? "On" : "Off"}
-              </span>
-            )}
-          </button>
+            <option value={1}>On</option>
+            <option value={0}>Off</option>
+          </select>
         </Field>
 
         <Field label="IRCTC Status">
