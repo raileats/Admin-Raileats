@@ -30,6 +30,7 @@ export default function BasicInfoClient({
 
   const [local, setLocal] = useState<any>({});
   const [raileatsStatus, setRaileatsStatus] = useState(0);
+  const [pendingRaileatsStatus, setPendingRaileatsStatus] = useState(0);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -44,6 +45,7 @@ export default function BasicInfoClient({
       IRCTCStatus: toStatusNumber(initialData.IRCTCStatus),
     });
     setRaileatsStatus(normalizedRaileatsStatus);
+    setPendingRaileatsStatus(normalizedRaileatsStatus);
   }, [initialData?.RestroCode]);
 
   function update(key: string, value: any) {
@@ -73,8 +75,8 @@ export default function BasicInfoClient({
       StationName: local.StationName || null,
 
       IRCTCStatus: toStatusNumber(local.IRCTCStatus),
-      RaileatsStatus: raileatsStatus,
-      raileatsStatus,
+      RaileatsStatus: pendingRaileatsStatus,
+      raileatsStatus: pendingRaileatsStatus,
       IsIrctcApproved: String(local.IsIrctcApproved || "0"),
 
       RestroRating: local.RestroRating === "" ? null : Number(local.RestroRating),
@@ -102,6 +104,7 @@ export default function BasicInfoClient({
 
       const id = Number(local.RestroCode);
       const payload = buildPayload();
+      const statusToSave = pendingRaileatsStatus;
 
       const res = await fetch(`/api/restros/${id}`, {
         method: "PATCH",
@@ -118,7 +121,7 @@ export default function BasicInfoClient({
       const statusRes = await fetch(`/api/admin/restros/${encodeURIComponent(id)}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ raileatsStatus }),
+        body: JSON.stringify({ RaileatsStatus: statusToSave }),
       });
 
       if (!statusRes.ok) {
@@ -136,7 +139,7 @@ export default function BasicInfoClient({
         throw new Error(`RailEats status saved but verify failed: ${verifyError.message}`);
       }
 
-      if (toStatusNumber(verifiedRow?.RaileatsStatus) !== raileatsStatus) {
+      if (toStatusNumber(verifiedRow?.RaileatsStatus) !== statusToSave) {
         throw new Error(
           "RailEats status API returned success, but Supabase value did not change. Please fix /api/admin/restros/[code]/status route to update RestroMaster.RaileatsStatus."
         );
@@ -148,6 +151,7 @@ export default function BasicInfoClient({
         IRCTCStatus: toStatusNumber(verifiedRow.IRCTCStatus),
       });
       setRaileatsStatus(toStatusNumber(verifiedRow.RaileatsStatus));
+      setPendingRaileatsStatus(toStatusNumber(verifiedRow.RaileatsStatus));
       setMsg("Saved successfully");
     } catch (e: any) {
       console.error("Save error:", e);
@@ -227,8 +231,8 @@ export default function BasicInfoClient({
           <button
             type="button"
             onClick={() => {
-              const next = raileatsStatus === 1 ? 0 : 1;
-              setRaileatsStatus(next);
+              const next = pendingRaileatsStatus === 1 ? 0 : 1;
+              setPendingRaileatsStatus(next);
               update("RaileatsStatus", next);
             }}
             style={{
@@ -265,6 +269,11 @@ export default function BasicInfoClient({
               />
             </span>
             <span>{raileatsStatus === 1 ? "On" : "Off"}</span>
+            {pendingRaileatsStatus !== raileatsStatus && (
+              <span style={{ color: "#2563eb", fontSize: 12, fontWeight: 600 }}>
+                Save pending: {pendingRaileatsStatus === 1 ? "On" : "Off"}
+              </span>
+            )}
           </button>
         </Field>
 
