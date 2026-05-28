@@ -67,6 +67,16 @@ export async function PATCH(
     const supabase = srv();
     const updateData: any = {};
 
+    if (body.commit !== "save") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "RaileatsStatus can be changed only from Save button",
+        },
+        { status: 409 }
+      );
+    }
+
     const setIfDefined = (key: string, value: any) => {
       if (value !== undefined) updateData[key] = value;
     };
