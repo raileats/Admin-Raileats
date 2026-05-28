@@ -1042,7 +1042,27 @@ useEffect(() => {
                     </button>
                   </td>
 
-                  <td style={{ padding: 12 }}><span style={{ background: "#f1f5f9", padding: "3px 6px", borderRadius: 4, fontWeight: 600 }}>{o.outletId}</span></td>
+                  <td style={{ padding: 12 }}>
+  {o.outletId ? (
+    <Link
+      href={`/admin/restros/${encodeURIComponent(o.outletId)}/edit`}
+      title={`Open restro ${o.outletId} edit page`}
+      style={{
+        background: "#f1f5f9",
+        color: "#0f172a",
+        padding: "3px 6px",
+        borderRadius: 4,
+        fontWeight: 700,
+        textDecoration: "underline",
+        display: "inline-block",
+      }}
+    >
+      {o.outletId}
+    </Link>
+  ) : (
+    <span style={{ background: "#f1f5f9", padding: "3px 6px", borderRadius: 4, fontWeight: 600 }}>-</span>
+  )}
+</td>
                   <td style={{ padding: 12, fontWeight: 600 }}>{o.outletName}</td>
                   <td style={{ padding: 12 }}><span style={{ background: "#eff6ff", color: "#2563eb", padding: "3px 6px", borderRadius: 4, fontWeight: 600 }}>{o.stationCode}</span></td>
                   <td style={{ padding: 12 }}>{o.stationName}</td>
@@ -1758,6 +1778,7 @@ useEffect(() => {
     </section>
   );
 }
+
 
 
 
