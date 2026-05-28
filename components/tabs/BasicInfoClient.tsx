@@ -29,18 +29,22 @@ export default function BasicInfoClient({
   const router = useRouter();
 
   const [local, setLocal] = useState<any>({});
+  const [raileatsStatus, setRaileatsStatus] = useState(0);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!initialData) return;
+    const normalizedRaileatsStatus = toStatusNumber(initialData.RaileatsStatus);
+
     setLocal({
       ...initialData,
-      RaileatsStatus: toStatusNumber(initialData.RaileatsStatus),
+      RaileatsStatus: normalizedRaileatsStatus,
       IRCTCStatus: toStatusNumber(initialData.IRCTCStatus),
     });
-  }, [initialData]);
+    setRaileatsStatus(normalizedRaileatsStatus);
+  }, [initialData?.RestroCode]);
 
   function update(key: string, value: any) {
     setLocal((prev: any) => ({
@@ -52,8 +56,6 @@ export default function BasicInfoClient({
   }
 
   function buildPayload() {
-    const raileatsStatus = toStatusNumber(local.RaileatsStatus);
-
     const payload: any = {
       RestroCode: Number(local.RestroCode),
 
@@ -100,7 +102,6 @@ export default function BasicInfoClient({
 
       const id = Number(local.RestroCode);
       const payload = buildPayload();
-      const raileatsStatus = toStatusNumber(local.RaileatsStatus);
 
       const res = await fetch(`/api/restros/${id}`, {
         method: "PATCH",
@@ -146,6 +147,7 @@ export default function BasicInfoClient({
         RaileatsStatus: toStatusNumber(verifiedRow.RaileatsStatus),
         IRCTCStatus: toStatusNumber(verifiedRow.IRCTCStatus),
       });
+      setRaileatsStatus(toStatusNumber(verifiedRow.RaileatsStatus));
       setMsg("Saved successfully");
     } catch (e: any) {
       console.error("Save error:", e);
@@ -222,13 +224,48 @@ export default function BasicInfoClient({
         </Field>
 
         <Field label="Raileats Status">
-          <select
-            value={toStatusNumber(local?.RaileatsStatus)}
-            onChange={(e) => update("RaileatsStatus", Number(e.target.value))}
+          <button
+            type="button"
+            onClick={() => {
+              const next = raileatsStatus === 1 ? 0 : 1;
+              setRaileatsStatus(next);
+              update("RaileatsStatus", next);
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              border: 0,
+              background: "transparent",
+              padding: 0,
+              cursor: "pointer",
+            }}
           >
-            <option value={1}>On</option>
-            <option value={0}>Off</option>
-          </select>
+            <span
+              style={{
+                width: 50,
+                height: 26,
+                borderRadius: 999,
+                background: raileatsStatus === 1 ? "#06b6d4" : "#9ca3af",
+                position: "relative",
+                display: "inline-block",
+              }}
+            >
+              <span
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  position: "absolute",
+                  top: 3,
+                  left: raileatsStatus === 1 ? 27 : 3,
+                  transition: "left 0.2s ease",
+                }}
+              />
+            </span>
+            <span>{raileatsStatus === 1 ? "On" : "Off"}</span>
+          </button>
         </Field>
 
         <Field label="IRCTC Status">
