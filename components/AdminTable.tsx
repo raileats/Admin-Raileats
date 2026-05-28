@@ -1,5 +1,6 @@
 // components/AdminTable.tsx
 "use client";
+
 import React, { useMemo, useState } from "react";
 
 export type Column<T = any> = {
@@ -16,12 +17,7 @@ type AdminTableProps<T = any> = {
   subtitle?: string;
   data: T[];
   columns: Column<T>[];
-  /** Optional placeholder kept for backward compatibility.
-   * Component currently doesn't render a built-in search input,
-   * but pages might pass this prop — keep it optional to avoid TS errors.
-   */
   searchPlaceholder?: string;
-  // removed built-in search input (use page-level filters instead)
   filters?: React.ReactNode;
   actions?: (row: T) => React.ReactNode;
   pageSize?: number;
@@ -30,8 +26,6 @@ type AdminTableProps<T = any> = {
   compact?: boolean;
   highlightStriped?: boolean;
   rowHoverShadow?: boolean;
-
-  // allow extra legacy/unknown props so passing pages don't fail the build
   [key: string]: any;
 };
 
@@ -42,18 +36,22 @@ function StatusPill({
   children: React.ReactNode;
   tone?: "muted" | "success" | "info" | "danger" | "warning";
 }) {
-  const base = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium";
   const cls =
     tone === "success"
-      ? "bg-green-50 text-green-700"
+      ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
       : tone === "info"
-      ? "bg-blue-50 text-blue-700"
+      ? "bg-blue-50 text-blue-700 ring-blue-200"
       : tone === "danger"
-      ? "bg-red-50 text-red-700"
+      ? "bg-red-50 text-red-700 ring-red-200"
       : tone === "warning"
-      ? "bg-amber-50 text-amber-700"
-      : "bg-gray-50 text-gray-700";
-  return <span className={`${base} ${cls}`}>{children}</span>;
+      ? "bg-amber-50 text-amber-700 ring-amber-200"
+      : "bg-slate-50 text-slate-700 ring-slate-200";
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${cls}`}>
+      {children}
+    </span>
+  );
 }
 
 export default function AdminTable<T extends { id?: string | number }>({
@@ -61,8 +59,6 @@ export default function AdminTable<T extends { id?: string | number }>({
   subtitle,
   data,
   columns,
-  // searchPlaceholder is accepted but not rendered here (kept for compatibility)
-  searchPlaceholder,
   filters,
   actions,
   pageSize = 10,
@@ -70,12 +66,9 @@ export default function AdminTable<T extends { id?: string | number }>({
   loading = false,
   compact = false,
   highlightStriped = true,
-  rowHoverShadow = true,
+  rowHoverShadow = false,
 }: AdminTableProps<T>) {
-  // NO built-in search state here — page-level filters should control data
   const [page, setPage] = useState(1);
-
-  // data is assumed already filtered by page
   const filtered = useMemo(() => data ?? [], [data]);
 
   const total = filtered.length;
@@ -86,13 +79,19 @@ export default function AdminTable<T extends { id?: string | number }>({
     const avatars: string[] = row?.avatars ?? row?.members ?? [];
     if (!avatars || !avatars.length) return null;
     const toShow = avatars.slice(0, 3);
+
     return (
       <div className="flex items-center -space-x-2">
         {toShow.map((src, i) => (
-          <img key={i} src={src} alt={`a${i}`} className="w-7 h-7 rounded-full border-2 border-white shadow-sm object-cover" />
+          <img
+            key={i}
+            src={src}
+            alt={`avatar ${i + 1}`}
+            className="h-7 w-7 rounded-full border-2 border-white object-cover shadow-sm"
+          />
         ))}
         {avatars.length > 3 && (
-          <div className="w-7 h-7 rounded-full bg-gray-100 border-2 border-white text-xs flex items-center justify-center text-gray-600 font-medium">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-xs font-semibold text-slate-600">
             +{avatars.length - 3}
           </div>
         )}
@@ -101,95 +100,104 @@ export default function AdminTable<T extends { id?: string | number }>({
   };
 
   return (
-    <section className="w-full max-w-full bg-white rounded-2xl shadow-sm">
-      {/* Header: title/subtitle and optional filters (no built-in search) */}
-      <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div className="min-w-0">
-          {title && <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 leading-tight">{title}</h1>}
-          {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
-          <div className="mt-3">{filters}</div>
-        </div>
+    <section className="w-full max-w-full bg-white">
+      {(title || subtitle || filters || showAddButton) && (
+        <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            {title && <h2 className="text-xl font-bold text-slate-950">{title}</h2>}
+            {subtitle && <p className="mt-1 text-sm font-medium text-slate-500">{subtitle}</p>}
+            {filters && <div className="mt-3">{filters}</div>}
+          </div>
 
-        <div className="flex items-center gap-3 ml-auto pr-6">
           {showAddButton && (
-            <button onClick={() => showAddButton.onClick?.()} className="inline-flex items-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-full shadow-sm">
+            <button
+              type="button"
+              onClick={() => showAddButton.onClick?.()}
+              className="inline-flex h-10 items-center justify-center rounded-md border border-blue-600 bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+            >
               {showAddButton.label ?? "+ Add"}
             </button>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Table */}
-      <div className="overflow-x-auto border-t border-gray-100">
-        <table className="min-w-full w-full table-fixed">
-          <thead className="bg-white">
-            <tr className="text-left text-xs sm:text-sm text-gray-500">
+      <div className="overflow-x-auto">
+        <table className="min-w-full table-fixed">
+          <thead className="bg-slate-50">
+            <tr className="text-left text-xs font-bold uppercase tracking-wide text-slate-500">
               {columns.map((col) => (
-                <th key={col.key} className={`py-3 px-4 font-medium tracking-wide ${col.className ?? ""}`} style={col.width ? ({ width: col.width } as React.CSSProperties) : undefined}>
+                <th
+                  key={col.key}
+                  className={`px-4 py-3 ${col.className ?? ""}`}
+                  style={col.width ? ({ width: col.width } as React.CSSProperties) : undefined}
+                >
                   <div className="flex items-center gap-2">
                     <span>{col.title}</span>
-                    {col.sortable && (
-                      <svg className="w-3 h-3 text-gray-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M6 9l6-6 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M18 15l-6 6-6-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
+                    {col.sortable && <span className="text-slate-300">↕</span>}
                   </div>
                 </th>
               ))}
-              {actions && <th className="py-3 px-4 font-medium tracking-wide text-gray-500">Actions</th>}
+              {actions && <th className="px-4 py-3">Actions</th>}
             </tr>
           </thead>
 
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={columns.length + (actions ? 1 : 0)} className="py-8 px-4 text-center text-gray-500">
+                <td colSpan={columns.length + (actions ? 1 : 0)} className="px-4 py-8 text-center text-sm font-medium text-slate-500">
                   Loading...
                 </td>
               </tr>
             ) : pageData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + (actions ? 1 : 0)} className="py-8 px-4 text-center text-gray-400">
+                <td colSpan={columns.length + (actions ? 1 : 0)} className="px-4 py-8 text-center text-sm font-medium text-slate-400">
                   No records found
                 </td>
               </tr>
             ) : (
               pageData.map((row, idx) => {
                 const globalIndex = (page - 1) * pageSize + idx;
-                const zebra = highlightStriped ? (globalIndex % 2 === 0 ? "bg-white" : "bg-gray-50") : "bg-white";
-                const hoverClass = rowHoverShadow ? "hover:shadow-sm hover:bg-white" : "hover:bg-gray-100";
+                const zebra = highlightStriped ? (globalIndex % 2 === 0 ? "bg-white" : "bg-slate-50/70") : "bg-white";
+                const hoverClass = rowHoverShadow ? "hover:shadow-sm hover:bg-white" : "hover:bg-blue-50/40";
+
                 return (
-                  <tr key={(row.id ?? globalIndex).toString()} className={`align-top transition-colors ${zebra} ${hoverClass}`}>
+                  <tr key={(row.id ?? globalIndex).toString()} className={`align-top transition ${zebra} ${hoverClass}`}>
                     {columns.map((col) => (
-                      <td key={col.key} className={`py-${compact ? "2" : "4"} px-4 align-middle text-sm text-gray-700`} style={col.width ? ({ width: col.width } as React.CSSProperties) : undefined}>
-                        <div className="flex items-center gap-3">
-                          {col.render ? (
-                            col.render(row)
-                          ) : (
-                            (() => {
-                              const v = (row as any)[col.key];
-                              if ((typeof v === "boolean" || col.key.toLowerCase().includes("status")) && (typeof v === "boolean" || typeof v === "string")) {
-                                let tone: any = "muted";
-                                const sval = typeof v === "boolean" ? (v ? "on" : "off") : String(v).toLowerCase();
-                                if (sval.includes("on") || sval.includes("active") || sval.includes("done") || sval.includes("delivered")) tone = "success";
-                                else if (sval.includes("booked") || sval.includes("in progress") || sval.includes("pending")) tone = "info";
-                                else if (sval.includes("cancel") || sval.includes("blocked") || sval.includes("off")) tone = "danger";
-                                else tone = "muted";
-                                return <StatusPill tone={tone}>{typeof v === "boolean" ? (v ? "On" : "Off") : v ?? "-"}</StatusPill>;
-                              }
-                              if (col.key.toLowerCase().includes("member") || col.key.toLowerCase().includes("avatar") || col.key.toLowerCase().includes("owner")) {
-                                const av = renderAvatarCluster(row);
-                                if (av) return av;
-                              }
-                              return <span className="truncate block max-w-[48rem]">{v ?? "-"}</span>;
-                            })()
-                          )}
-                        </div>
+                      <td
+                        key={col.key}
+                        className={`${compact ? "px-4 py-2" : "px-4 py-4"} align-middle text-sm text-slate-700`}
+                        style={col.width ? ({ width: col.width } as React.CSSProperties) : undefined}
+                      >
+                        {col.render ? (
+                          col.render(row)
+                        ) : (
+                          (() => {
+                            const v = (row as any)[col.key];
+                            if (
+                              (typeof v === "boolean" || col.key.toLowerCase().includes("status")) &&
+                              (typeof v === "boolean" || typeof v === "string")
+                            ) {
+                              let tone: any = "muted";
+                              const sval = typeof v === "boolean" ? (v ? "on" : "off") : String(v).toLowerCase();
+                              if (sval.includes("on") || sval.includes("active") || sval.includes("done") || sval.includes("delivered")) tone = "success";
+                              else if (sval.includes("booked") || sval.includes("in progress") || sval.includes("pending")) tone = "info";
+                              else if (sval.includes("cancel") || sval.includes("blocked") || sval.includes("off")) tone = "danger";
+                              else tone = "muted";
+                              return <StatusPill tone={tone}>{typeof v === "boolean" ? (v ? "On" : "Off") : v ?? "-"}</StatusPill>;
+                            }
+
+                            if (col.key.toLowerCase().includes("member") || col.key.toLowerCase().includes("avatar")) {
+                              const avatars = renderAvatarCluster(row);
+                              if (avatars) return avatars;
+                            }
+
+                            return <span className="block max-w-[48rem] truncate">{v ?? "-"}</span>;
+                          })()
+                        )}
                       </td>
                     ))}
                     {actions && (
-                      <td className={`py-${compact ? "2" : "4"} px-4 align-middle`}>
+                      <td className={`${compact ? "px-4 py-2" : "px-4 py-4"} align-middle`}>
                         <div className="flex items-center gap-2">{actions(row)}</div>
                       </td>
                     )}
@@ -201,18 +209,17 @@ export default function AdminTable<T extends { id?: string | number }>({
         </table>
       </div>
 
-      {/* footer / pagination */}
-      <div className="px-6 py-3 flex items-center justify-between gap-3 mt-2">
-        <div className="text-sm text-gray-600">
+      <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm font-medium text-slate-500">
           Showing {(page - 1) * pageSize + (total === 0 ? 0 : 1)} - {Math.min(page * pageSize, total)} of {total}
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={() => setPage(1)} disabled={page === 1} className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50">«</button>
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50">Prev</button>
-          <div className="px-3 py-1 border rounded-full bg-white text-sm">{page}</div>
-          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50">Next</button>
-          <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-3 py-1 border rounded-full bg-white hover:bg-gray-50 disabled:opacity-50">»</button>
+          <button onClick={() => setPage(1)} disabled={page === 1} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">«</button>
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">Prev</button>
+          <div className="flex h-9 min-w-9 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold">{page}</div>
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">Next</button>
+          <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">»</button>
         </div>
       </div>
     </section>
