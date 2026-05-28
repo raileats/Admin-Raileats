@@ -114,29 +114,39 @@ export default function BasicInfoClient({
         throw new Error(json?.error || "Save failed");
       }
 
-      const { error: statusError } = await supabase
-        .from("RestroMaster")
-        .update({ RaileatsStatus: raileatsStatus })
-        .eq("RestroCode", id);
+      const statusRes = await fetch(`/api/admin/restros/${encodeURIComponent(id)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raileatsStatus }),
+      });
 
-      if (statusError) {
-        const statusRes = await fetch(`/api/admin/restros/${encodeURIComponent(id)}/status`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ raileatsStatus }),
-        });
-
-        if (!statusRes.ok) {
-          throw new Error(`Basic info saved, but RailEats status update failed: ${statusError.message}`);
-        }
+      if (!statusRes.ok) {
+        const statusJson = await statusRes.json().catch(() => null);
+        throw new Error(statusJson?.error || "Basic info saved, but RailEats status update failed");
       }
 
-      setLocal((prev: any) => ({
-        ...prev,
-        RaileatsStatus: raileatsStatus,
-      }));
+      const { data: verifiedRow, error: verifyError } = await supabase
+        .from("RestroMaster")
+        .select("*")
+        .eq("RestroCode", id)
+        .maybeSingle();
+
+      if (verifyError) {
+        throw new Error(`RailEats status saved but verify failed: ${verifyError.message}`);
+      }
+
+      if (toStatusNumber(verifiedRow?.RaileatsStatus) !== raileatsStatus) {
+        throw new Error(
+          "RailEats status API returned success, but Supabase value did not change. Please fix /api/admin/restros/[code]/status route to update RestroMaster.RaileatsStatus."
+        );
+      }
+
+      setLocal({
+        ...verifiedRow,
+        RaileatsStatus: toStatusNumber(verifiedRow.RaileatsStatus),
+        IRCTCStatus: toStatusNumber(verifiedRow.IRCTCStatus),
+      });
       setMsg("Saved successfully");
-      router.refresh();
     } catch (e: any) {
       console.error("Save error:", e);
       setErr(e?.message || "Save failed");
