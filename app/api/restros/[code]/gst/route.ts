@@ -13,6 +13,13 @@ export async function GET(
 ) {
   const restroCode = Number(params.code);
 
+  if (!restroCode || Number.isNaN(restroCode)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Invalid RestroCode",
+    });
+  }
+
   const { data, error } = await supabase
     .from("RestroGST")
     .select(`
@@ -50,6 +57,14 @@ export async function POST(
   { params }: { params: { code: string } }
 ) {
   const restroCode = Number(params.code);
+
+  if (!restroCode || Number.isNaN(restroCode)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Invalid RestroCode",
+    });
+  }
+
   const form = await req.formData();
 
   const gstNumber = form.get("gst_number") as string;
@@ -64,7 +79,8 @@ export async function POST(
   await supabase
     .from("RestroGST")
     .update({ Gststatus: "Inactive" })
-    .eq("RestroCode", restroCode);
+    .eq("RestroCode", restroCode)
+    .eq("Gststatus", "Active");
 
   let fileurl: string | null = null;
 
@@ -86,18 +102,37 @@ export async function POST(
     fileurl = data.publicUrl;
   }
 
-  const { error } = await supabase.from("RestroGST").insert({
-    RestroCode: restroCode,
-    GstNumber: gstNumber,
-    GstType: gstType,
-    Gststatus: "Active",
-    fileurl,
-    // createdDate → DB default now()
-  });
+  const { data: row, error } = await supabase
+    .from("RestroGST")
+    .insert({
+      RestroCode: restroCode,
+      GstNumber: gstNumber,
+      GstType: gstType,
+      Gststatus: "Active",
+      fileurl,
+      // createdDate -> DB default now()
+    })
+    .select("*")
+    .single();
 
   if (error) {
     return NextResponse.json({ ok: false, error: error.message });
   }
 
-  return NextResponse.json({ ok: true });
+  const { error: masterError } = await supabase
+    .from("RestroMaster")
+    .update({
+      GSTNumber: gstNumber,
+      GSTType: gstType,
+      GSTCopyUpload: fileurl,
+      GSTStatus: "Active",
+      UpdatedAt: new Date().toISOString(),
+    })
+    .eq("RestroCode", restroCode);
+
+  if (masterError) {
+    return NextResponse.json({ ok: false, error: masterError.message });
+  }
+
+  return NextResponse.json({ ok: true, row });
 }
