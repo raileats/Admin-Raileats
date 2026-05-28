@@ -136,7 +136,7 @@ export default function BasicInfoClient({
         RaileatsStatus: raileatsStatus,
       }));
       setMsg("Saved successfully");
-      window.location.reload();
+      window.location.replace(`${window.location.pathname}?refresh=${Date.now()}`);
     } catch (e: any) {
       console.error("Save error:", e);
       setErr(e?.message || "Save failed");
