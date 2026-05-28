@@ -13,42 +13,37 @@ const supabase = createClient(
 
 type Restro = { [k: string]: any; id?: string | number };
 
+function normalize(value: unknown) {
+  return String(value ?? "").toLowerCase().trim();
+}
+
+function valueIncludes(value: unknown, searchValue: string) {
+  const query = normalize(searchValue);
+  return query === "" || normalize(value).includes(query);
+}
+
+function isRaileatsActive(value: unknown) {
+  const status = normalize(value);
+  return status === "1" || status === "active" || status === "true" || status === "on";
+}
+
 export default function RestroMasterPage() {
   const router = useRouter();
 
   const [results, setResults] = useState<Restro[]>([]);
-  const [filteredResults, setFilteredResults] = useState<
-    Restro[]
-  >([]);
-
+  const [filteredResults, setFilteredResults] = useState<Restro[]>([]);
   const [loading, setLoading] = useState(false);
+  const [openAddRestro, setOpenAddRestro] = useState(false);
 
-  const [openAddRestro, setOpenAddRestro] =
-    useState(false);
-
-  // ✅ SEARCH STATES
-  const [ownerPhone, setOwnerPhone] =
-    useState("");
-
-  const [restroCode, setRestroCode] =
-    useState("");
-
-  const [fssai, setFssai] = useState("");
-
-  const [restroName, setRestroName] =
-    useState("");
-
-  const [ownerName, setOwnerName] =
-    useState("");
-
-  const [stationCode, setStationCode] =
-    useState("");
-
-  const [stationName, setStationName] =
-    useState("");
-
-  const [statusFilter, setStatusFilter] =
-    useState("");
+  const [restroCode, setRestroCode] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [stationCode, setStationCode] = useState("");
+  const [stationName, setStationName] = useState("");
+  const [restroName, setRestroName] = useState("");
+  const [ownerPhone, setOwnerPhone] = useState("");
+  const [fssaiNumber, setFssaiNumber] = useState("");
+  const [gstNumber, setGstNumber] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
     fetchRestros();
@@ -64,99 +59,46 @@ export default function RestroMasterPage() {
         ascending: false,
       });
 
-    const finalData = (data ?? []).map(
-      (r: any) => ({
-        id: r.RestroCode,
-        ...r,
-      })
-    );
+    const finalData = (data ?? []).map((r: any) => ({
+      id: r.RestroCode,
+      ...r,
+    }));
 
     setResults(finalData);
     setFilteredResults(finalData);
-
     setLoading(false);
   }
 
-  // ✅ SEARCH FUNCTION
   function handleSearch() {
     const filtered = results.filter((item) => {
-
-      const matchOwnerPhone =
-        ownerPhone.trim() === "" ||
-        String(item?.OwnerPhone || "")
-          .toLowerCase()
-          .includes(
-            ownerPhone.toLowerCase().trim()
-          );
-
-      const matchRestroCode =
-        restroCode.trim() === "" ||
-        String(item?.RestroCode || "")
-          .toLowerCase()
-          .includes(
-            restroCode.toLowerCase().trim()
-          );
-
-      const matchFssai =
-        fssai.trim() === "" ||
-        String(item?.FSSAI || "")
-          .toLowerCase()
-          .includes(
-            fssai.toLowerCase().trim()
-          );
-
-      const matchRestroName =
-        restroName.trim() === "" ||
-        String(item?.RestroName || "")
-          .toLowerCase()
-          .includes(
-            restroName.toLowerCase().trim()
-          );
-
-      const matchOwnerName =
-        ownerName.trim() === "" ||
-        String(item?.OwnerName || "")
-          .toLowerCase()
-          .includes(
-            ownerName.toLowerCase().trim()
-          );
-
-      const matchStationCode =
-        stationCode.trim() === "" ||
-        String(item?.StationCode || "")
-          .toLowerCase()
-          .includes(
-            stationCode.toLowerCase().trim()
-          );
-
-      const matchStationName =
-        stationName.trim() === "" ||
-        String(item?.StationName || "")
-          .toLowerCase()
-          .includes(
-            stationName.toLowerCase().trim()
-          );
+      const matchRestroCode = valueIncludes(item?.RestroCode, restroCode);
+      const matchOwnerName = valueIncludes(item?.OwnerName, ownerName);
+      const matchStationCode = valueIncludes(item?.StationCode, stationCode);
+      const matchStationName = valueIncludes(item?.StationName, stationName);
+      const matchRestroName = valueIncludes(item?.RestroName, restroName);
+      const matchOwnerPhone = valueIncludes(item?.OwnerPhone, ownerPhone);
+      const matchFssai = valueIncludes(item?.FSSAINumber ?? item?.FSSAI, fssaiNumber);
+      const matchGst = valueIncludes(item?.GSTNumber, gstNumber);
 
       let matchStatus = true;
 
       if (statusFilter === "active") {
-        matchStatus =
-          Number(item.RaileatsStatus) === 1;
+        matchStatus = isRaileatsActive(item?.RaileatsStatus);
       }
 
       if (statusFilter === "deactive") {
-        matchStatus =
-          Number(item.RaileatsStatus) === 0;
+        matchStatus = !isRaileatsActive(item?.RaileatsStatus);
       }
 
       return (
         matchRestroCode &&
-        matchRestroName &&
+        matchOwnerName &&
         matchStationCode &&
         matchStationName &&
+        matchRestroName &&
         matchOwnerPhone &&
-        matchOwnerName &&
         matchFssai &&
+        matchGst &&
         matchStatus
       );
     });
@@ -164,24 +106,17 @@ export default function RestroMasterPage() {
     setFilteredResults(filtered);
   }
 
-  /* 🔥 SAME API AS BasicInformationTab */
   async function toggleRaileats(row: Restro) {
-    const current = Number(
-      row.RaileatsStatus ?? 0
-    );
-
+    const current = Number(row.RaileatsStatus ?? 0);
     const next = current === 1 ? 0 : 1;
 
     try {
       const res = await fetch(
-        `/api/admin/restros/${encodeURIComponent(
-          row.RestroCode
-        )}/status`,
+        `/api/admin/restros/${encodeURIComponent(row.RestroCode)}/status`,
         {
           method: "PATCH",
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             raileatsStatus: next,
@@ -190,28 +125,28 @@ export default function RestroMasterPage() {
       );
 
       if (!res.ok) {
-        alert(
-          "Failed to update Raileats status"
-        );
-
+        alert("Failed to update Raileats status");
         return;
       }
 
       fetchRestros();
     } catch (e) {
-      alert(
-        "Network error while updating status"
-      );
+      alert("Network error while updating status");
     }
   }
 
-  function openEdit(
-    code: string | number
-  ) {
-    router.push(
-      `/admin/restros/${code}/edit`
-    );
+  function openEdit(code: string | number) {
+    router.push(`/admin/restros/${code}/edit`);
   }
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
+
+  const inputClass =
+    "h-10 border border-slate-300 rounded-md px-3 text-sm bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
   const columns: Column<Restro>[] = [
     {
@@ -219,56 +154,54 @@ export default function RestroMasterPage() {
       title: "Restro Code",
       width: "110px",
     },
-
     {
       key: "RestroName",
       title: "Restro Name",
     },
-
     {
       key: "StationCode",
       title: "Station Code",
       width: "100px",
     },
-
     {
       key: "StationName",
       title: "Station Name",
     },
-
     {
       key: "OwnerName",
       title: "Owner Name",
     },
-
     {
       key: "OwnerPhone",
       title: "Owner Phone",
       width: "140px",
     },
-
+    {
+      key: "FSSAINumber",
+      title: "FSSAI",
+      width: "150px",
+      render: (row) => <span>{row.FSSAINumber ?? row.FSSAI ?? "-"}</span>,
+    },
+    {
+      key: "GSTNumber",
+      title: "GST Number",
+      width: "160px",
+      render: (row) => <span>{row.GSTNumber ?? "-"}</span>,
+    },
     {
       key: "RaileatsStatus",
       title: "Raileats",
-
       render: (row) => {
-        const on =
-          Number(
-            row.RaileatsStatus ?? 0
-          ) === 1;
+        const on = isRaileatsActive(row.RaileatsStatus);
 
         return (
           <div
-            onClick={() =>
-              toggleRaileats(row)
-            }
+            onClick={() => toggleRaileats(row)}
             style={{
               width: 44,
               height: 22,
               borderRadius: 999,
-              backgroundColor: on
-                ? "#0ea5e9"
-                : "#9ca3af",
+              backgroundColor: on ? "#0ea5e9" : "#9ca3af",
               cursor: "pointer",
               position: "relative",
             }}
@@ -282,8 +215,7 @@ export default function RestroMasterPage() {
                 position: "absolute",
                 top: 2,
                 left: on ? 24 : 2,
-                transition:
-                  "left 0.2s ease",
+                transition: "left 0.2s ease",
               }}
             />
           </div>
@@ -294,145 +226,108 @@ export default function RestroMasterPage() {
 
   return (
     <main className="mx-6 my-4 max-w-full">
+      <h2 className="text-xl font-semibold mb-5">Restro Master</h2>
 
-      <h2 className="text-xl font-semibold mb-5">
-        Restro Master
-      </h2>
-
-      {/* ✅ SEARCH SECTION */}
-      <div className="bg-white p-3 rounded-lg border mb-4">
-
-        <div className="flex flex-wrap gap-2 items-center">
-
-          {/* RESTRO CODE */}
+      <div className="bg-white p-3 rounded-lg border border-slate-200 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 xl:grid-cols-10 gap-2 items-end">
           <input
             type="text"
-            placeholder="Restro Code"
+            placeholder="RestroCode"
             value={restroCode}
-            onChange={(e) =>
-              setRestroCode(
-                e.target.value
-              )
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[105px]"
+            onChange={(e) => setRestroCode(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className={inputClass}
           />
 
-          {/* RESTRO NAME */}
           <input
             type="text"
-            placeholder="Restro Name"
-            value={restroName}
-            onChange={(e) =>
-              setRestroName(
-                e.target.value
-              )
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[125px]"
-          />
-
-          {/* STATION CODE */}
-          <input
-            type="text"
-            placeholder="STN Code"
-            value={stationCode}
-            onChange={(e) =>
-              setStationCode(
-                e.target.value
-              )
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[90px]"
-          />
-
-          {/* STATION NAME */}
-          <input
-            type="text"
-            placeholder="Station Name"
-            value={stationName}
-            onChange={(e) =>
-              setStationName(
-                e.target.value
-              )
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[125px]"
-          />
-
-          {/* OWNER MOBILE */}
-          <input
-            type="text"
-            placeholder="Owner Mobile"
-            value={ownerPhone}
-            onChange={(e) =>
-              setOwnerPhone(
-                e.target.value
-              )
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[120px]"
-          />
-
-          {/* OWNER NAME */}
-          <input
-            type="text"
-            placeholder="Owner Name"
+            placeholder="OwnerName"
             value={ownerName}
-            onChange={(e) =>
-              setOwnerName(
-                e.target.value
-              )
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[120px]"
+            onChange={(e) => setOwnerName(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className={inputClass}
           />
 
-          {/* FSSAI */}
           <input
             type="text"
-            placeholder="FSSAI"
-            value={fssai}
-            onChange={(e) =>
-              setFssai(e.target.value)
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[90px]"
+            placeholder="StationCode"
+            value={stationCode}
+            onChange={(e) => setStationCode(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className={inputClass}
           />
 
-          {/* STATUS */}
+          <input
+            type="text"
+            placeholder="StationName"
+            value={stationName}
+            onChange={(e) => setStationName(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className={inputClass}
+          />
+
+          <input
+            type="text"
+            placeholder="RestroName"
+            value={restroName}
+            onChange={(e) => setRestroName(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className={inputClass}
+          />
+
+          <input
+            type="text"
+            placeholder="OwnerPhone"
+            value={ownerPhone}
+            onChange={(e) => setOwnerPhone(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className={inputClass}
+          />
+
+          <input
+            type="text"
+            placeholder="FSSAINumber"
+            value={fssaiNumber}
+            onChange={(e) => setFssaiNumber(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className={inputClass}
+          />
+
+          <input
+            type="text"
+            placeholder="GSTNumber"
+            value={gstNumber}
+            onChange={(e) => setGstNumber(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className={inputClass}
+          />
+
           <select
             value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(
-                e.target.value
-              )
-            }
-            className="border rounded-md px-2 py-1.5 text-sm w-[110px]"
+            onChange={(e) => setStatusFilter(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className={inputClass}
           >
-            <option value="">
-              All Status
-            </option>
-
-            <option value="active">
-              Active
-            </option>
-
-            <option value="deactive">
-              Deactivate
-            </option>
+            <option value="">RaileatsStatus</option>
+            <option value="active">Active</option>
+            <option value="deactive">Deactivate</option>
           </select>
 
-          {/* SEARCH BUTTON */}
-          <button
-            onClick={handleSearch}
-            className="px-4 py-1.5 bg-blue-600 text-white rounded-md text-sm"
-          >
-            Search
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSearch}
+              className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-semibold"
+            >
+              Search
+            </button>
 
-          {/* ADD BUTTON */}
-          <button
-            onClick={() =>
-              setOpenAddRestro(true)
-            }
-            className="px-4 py-1.5 bg-green-600 text-white rounded-md text-sm"
-          >
-            + Add New Restro
-          </button>
+            <button
+              onClick={() => setOpenAddRestro(true)}
+              className="h-10 px-5 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-semibold whitespace-nowrap"
+            >
+              + Add New Restro
+            </button>
+          </div>
         </div>
       </div>
 
@@ -445,11 +340,7 @@ export default function RestroMasterPage() {
         pageSize={10}
         actions={(row) => (
           <button
-            onClick={() =>
-              openEdit(
-                row.RestroCode
-              )
-            }
+            onClick={() => openEdit(row.RestroCode)}
             className="px-3 py-1 rounded-md bg-amber-400 text-black"
           >
             Edit
@@ -461,9 +352,7 @@ export default function RestroMasterPage() {
         <RestroEditModal
           restro={null}
           initialTab="Basic Information"
-          onClose={() =>
-            setOpenAddRestro(false)
-          }
+          onClose={() => setOpenAddRestro(false)}
         />
       )}
     </main>
