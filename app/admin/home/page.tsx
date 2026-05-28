@@ -1,28 +1,39 @@
-// app/admin/home/page.tsx
+import AdminCard from "@/components/admin/AdminCard";
+import AdminPage from "@/components/admin/AdminPage";
+
+const stats = [
+  {
+    label: "Orders",
+    value: "12",
+    helper: "Pending orders",
+  },
+  {
+    label: "Active Outlets",
+    value: "34",
+    helper: "Restaurants currently enabled",
+  },
+  {
+    label: "Menu Items",
+    value: "128",
+    helper: "Published menu records",
+  },
+];
+
 export default function AdminHome() {
   return (
-    <>
-      <header style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 36, margin: 0 }}>Dashboard</h1>
-        <p style={{ color: "#6b7280" }}>Welcome to the RailEats admin dashboard.</p>
-      </header>
-
-      <section style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-        <div style={{ padding: 18, background: "#fff", borderRadius: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-          <h3 style={{ margin: 0 }}>Orders</h3>
-          <p style={{ marginTop: 8, color: "#6b7280" }}>Pending orders: 12</p>
-        </div>
-
-        <div style={{ padding: 18, background: "#fff", borderRadius: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-          <h3 style={{ margin: 0 }}>Active Outlets</h3>
-          <p style={{ marginTop: 8, color: "#6b7280" }}>Total: 34</p>
-        </div>
-
-        <div style={{ padding: 18, background: "#fff", borderRadius: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-          <h3 style={{ margin: 0 }}>Menu Items</h3>
-          <p style={{ marginTop: 8, color: "#6b7280" }}>Total: 128</p>
-        </div>
-      </section>
-    </>
+    <AdminPage
+      title="Dashboard"
+      subtitle="Welcome to the RailEats admin dashboard"
+    >
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {stats.map((item) => (
+          <AdminCard key={item.label}>
+            <div className="text-sm font-semibold text-slate-500">{item.label}</div>
+            <div className="mt-3 text-3xl font-bold text-slate-950">{item.value}</div>
+            <div className="mt-1 text-sm text-slate-500">{item.helper}</div>
+          </AdminCard>
+        ))}
+      </div>
+    </AdminPage>
   );
 }
