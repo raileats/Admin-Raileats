@@ -73,6 +73,7 @@ function buildStationDisplay(obj: any) {
 export default function RestroEditModal({
   restro: restroProp,
   onClose,
+  onSave,
   initialTab = "Basic Information",
 }: any) {
   const router = useRouter();
@@ -198,6 +199,17 @@ export default function RestroEditModal({
 
   const stationDisplay =
     buildStationDisplay(local);
+
+  function normalizeSavedRow(row: any) {
+    if (!row) return row;
+
+    return {
+      ...row,
+      BrandName: row.BrandNameifAny,
+      OpenTime: row.open_time,
+      ClosedTime: row.closed_time,
+    };
+  }
 
   /* ================= SAVE ================= */
   async function handleSave() {
@@ -362,63 +374,84 @@ export default function RestroEditModal({
         payload
       );
 
-      const res = await fetch(
-        `/api/restros/${encodeURIComponent(
-          String(restroCode || "")
-        )}`,
-        {
-          method: "PATCH",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify(
-            payload
-          ),
-        }
-      );
-
       let json: any = {};
 
-      try {
-        json = await res.json();
-      } catch {
-        const text =
-          await res.text();
+      if (typeof onSave === "function") {
+        json = await onSave(payload);
+      } else {
+        const res = await fetch(
+          `/api/restros/${encodeURIComponent(
+            String(restroCode || "")
+          )}`,
+          {
+            method: "PATCH",
 
-        console.error(
-          "❌ HTML RESPONSE:",
-          text
+            headers: {
+              "Content-Type":
+                "application/json",
+              "Cache-Control":
+                "no-store",
+            },
+
+            body: JSON.stringify(
+              payload
+            ),
+          }
         );
 
-        throw new Error(
-          "Server returned HTML (API issue)"
-        );
+        try {
+          json = await res.json();
+        } catch {
+          const text =
+            await res.text();
+
+          console.error(
+            "❌ HTML RESPONSE:",
+            text
+          );
+
+          throw new Error(
+            "Server returned HTML (API issue)"
+          );
+        }
+
+        if (
+          !res.ok ||
+          json?.ok === false
+        ) {
+          throw new Error(
+            json?.error ||
+              "Update failed"
+          );
+        }
       }
 
       console.log(
-        "✅ API RESPONSE:",
+        "✅ SAVE RESPONSE:",
         json
       );
 
-      if (
-        !res.ok ||
-        json?.ok === false
-      ) {
+      if (json?.ok === false) {
         throw new Error(
           json?.error ||
             "Update failed"
         );
       }
 
+      const savedRow =
+        json?.row ?? json?.data ?? null;
+
+      if (savedRow) {
+        setLocal((prev: any) => ({
+          ...prev,
+          ...normalizeSavedRow(savedRow),
+        }));
+      }
+
       setNotification({
         type: "success",
         text: "Saved successfully ✅",
       });
-
-      router.refresh();
     } catch (e: any) {
       console.error(
         "SAVE ERROR:",
