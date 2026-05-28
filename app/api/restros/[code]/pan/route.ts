@@ -13,12 +13,20 @@ export async function GET(
 ) {
   const restroCode = Number(params.code);
 
+  if (!restroCode || Number.isNaN(restroCode)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Invalid RestroCode",
+    });
+  }
+
   const { data, error } = await supabase
     .from("RestroPAN")
     .select(`
       id,
       RestroCode,
       PanNumber,
+      PanType,
       PANStatus,
       CreatedDate,
       fileurl
@@ -33,6 +41,7 @@ export async function GET(
   const rows = (data || []).map((r: any) => ({
     id: r.id,
     pan_number: r.PanNumber,
+    pan_type: r.PanType ?? "",
     status: r.PANStatus === "Active" ? "active" : "inactive",
     created_at: r.CreatedDate,
     file_url: r.fileurl ?? null,
@@ -47,9 +56,18 @@ export async function POST(
   { params }: { params: { code: string } }
 ) {
   const restroCode = Number(params.code);
+
+  if (!restroCode || Number.isNaN(restroCode)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Invalid RestroCode",
+    });
+  }
+
   const form = await req.formData();
 
   const pan_number = form.get("pan_number") as string;
+  const pan_type = ((form.get("pan_type") as string | null) || "").trim();
   const file = form.get("file") as File | null;
 
   if (!pan_number) {
@@ -60,7 +78,8 @@ export async function POST(
   await supabase
     .from("RestroPAN")
     .update({ PANStatus: "Inactive" })
-    .eq("RestroCode", restroCode);
+    .eq("RestroCode", restroCode)
+    .eq("PANStatus", "Active");
 
   let fileurl: string | null = null;
 
@@ -82,16 +101,36 @@ export async function POST(
     fileurl = data.publicUrl;
   }
 
-  const { error } = await supabase.from("RestroPAN").insert({
-    RestroCode: restroCode,
-    PanNumber: pan_number,
-    PANStatus: "Active",
-    fileurl,
-  });
+  const { data: row, error } = await supabase
+    .from("RestroPAN")
+    .insert({
+      RestroCode: restroCode,
+      PanNumber: pan_number,
+      PanType: pan_type || null,
+      PANStatus: "Active",
+      fileurl,
+    })
+    .select("*")
+    .single();
 
   if (error) {
     return NextResponse.json({ ok: false, error: error.message });
   }
 
-  return NextResponse.json({ ok: true });
+  const { error: masterError } = await supabase
+    .from("RestroMaster")
+    .update({
+      PANNumber: pan_number,
+      PANType: pan_type || null,
+      UploadPanCopy: fileurl,
+      PANStatus: "Active",
+      UpdatedAt: new Date().toISOString(),
+    })
+    .eq("RestroCode", restroCode);
+
+  if (masterError) {
+    return NextResponse.json({ ok: false, error: masterError.message });
+  }
+
+  return NextResponse.json({ ok: true, row });
 }
