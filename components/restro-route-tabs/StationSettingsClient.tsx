@@ -25,8 +25,6 @@ function normalize(row: Restro) {
     ...row,
     OpenTime: row?.OpenTime ?? row?.open_time ?? "",
     ClosedTime: row?.ClosedTime ?? row?.closed_time ?? "",
-    DeliveryTime: row?.DeliveryTime ?? row?.delivery_time ?? row?.DeliveryTimeInMinutes ?? "",
-    DeliveryRadius: row?.DeliveryRadius ?? row?.delivery_radius ?? row?.DeliveryRadiusInKm ?? "",
   };
 }
 
@@ -69,8 +67,6 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
         ClosedTime: local.ClosedTime || null,
         MinimumOrderValue: local.MinimumOrderValue || null,
         CutOffTime: local.CutOffTime || null,
-        DeliveryTime: local.DeliveryTime || null,
-        DeliveryRadius: local.DeliveryRadius || null,
         RaileatsCustomerDeliveryCharge: local.RaileatsCustomerDeliveryCharge || null,
         RaileatsCustomerDeliveryChargeGSTRate: local.RaileatsCustomerDeliveryChargeGSTRate || null,
         RaileatsCustomerDeliveryChargeGST: local.RaileatsCustomerDeliveryChargeGST || null,
@@ -146,12 +142,6 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
         </AdminField>
         <AdminField label="Cut Off Time (mins)">
           <AdminInput value={local.CutOffTime ?? ""} onChange={(e) => updateField("CutOffTime", e.target.value)} />
-        </AdminField>
-        <AdminField label="Delivery Time (mins)">
-          <AdminInput value={local.DeliveryTime ?? ""} onChange={(e) => updateField("DeliveryTime", e.target.value)} />
-        </AdminField>
-        <AdminField label="Delivery Radius (km)">
-          <AdminInput value={local.DeliveryRadius ?? ""} onChange={(e) => updateField("DeliveryRadius", e.target.value)} />
         </AdminField>
         <AdminField label="Raileats Orders Payment Option">
           <AdminSelect value={local.RaileatsOrdersPaymentOptionforCustomer ?? "Both"} onChange={(e) => updateField("RaileatsOrdersPaymentOptionforCustomer", e.target.value)}>
