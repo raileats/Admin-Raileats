@@ -3,6 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import AdminButton from "@/components/admin/AdminButton";
 
 function readBasic() {
@@ -24,7 +25,9 @@ function stationLine(data: any) {
 }
 
 export default function NewRestroHeader() {
+  const pathname = usePathname();
   const [data, setData] = useState<any>({});
+  const isBasicPage = pathname === "/admin/restros/new/basic" || pathname === "/admin/restros/new";
 
   useEffect(() => {
     function refresh() {
@@ -41,14 +44,17 @@ export default function NewRestroHeader() {
   }, []);
 
   const title = useMemo(() => {
+    if (isBasicPage) return "Add New Restro";
     const code = String(data?.RestroCode ?? "").trim();
     const name = String(data?.RestroName ?? "").trim();
     if (code && name) return `${code} / ${name}`;
     if (code) return `${code} / Add New Restro`;
     return "Add New Restro";
-  }, [data]);
+  }, [data, isBasicPage]);
 
-  const subtitle = stationLine(data) || "Create restaurant setup step by step";
+  const subtitle = isBasicPage
+    ? "Create restaurant setup step by step"
+    : stationLine(data) || "Create restaurant setup step by step";
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
