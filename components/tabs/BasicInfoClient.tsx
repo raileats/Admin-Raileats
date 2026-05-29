@@ -134,9 +134,14 @@ export default function BasicInfoClient({
         }
       }
 
+      const savedRow = json?.row || {};
+
       setLocal((prev: any) => ({
         ...prev,
+        ...savedRow,
         RaileatsStatus: raileatsStatus,
+        RestroDisplayPhoto:
+          savedRow.RestroDisplayPhoto ?? payload.RestroDisplayPhoto ?? prev.RestroDisplayPhoto,
       }));
       setMsg("Saved successfully");
       window.location.replace(`${window.location.pathname}?refresh=${Date.now()}`);
