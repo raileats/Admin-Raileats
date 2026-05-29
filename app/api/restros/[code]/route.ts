@@ -41,13 +41,9 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
   const missingColumn = /column .* does not exist/i.test(error.message || "");
   if (!missingColumn) return { data, error };
 
-  // Some deployments do not yet have optional timing/login alias columns.
+  // Some deployments do not yet have optional login alias columns.
   // Retry with the core RestroMaster columns so normal saves never break.
   const optionalKeys = [
-    "DeliveryTime",
-    "DeliveryRadius",
-    "DeliveryTimeInMinutes",
-    "DeliveryRadiusInKm",
     "RestroUserName",
     "RestroUsername",
     "UserName",
@@ -149,10 +145,6 @@ export async function PATCH(
     setIfDefined(payload, "closed_time", text(body.closed_time ?? body.ClosedTime));
     setIfDefined(payload, "MinimumOrderValue", num(body.MinimumOrderValue));
     setIfDefined(payload, "CutOffTime", num(body.CutOffTime));
-    setIfDefined(payload, "DeliveryTime", num(body.DeliveryTime));
-    setIfDefined(payload, "DeliveryRadius", num(body.DeliveryRadius));
-    setIfDefined(payload, "DeliveryTimeInMinutes", num(body.DeliveryTimeInMinutes));
-    setIfDefined(payload, "DeliveryRadiusInKm", num(body.DeliveryRadiusInKm));
     setIfDefined(payload, "WeeklyOff", text(body.WeeklyOff));
     setIfDefined(payload, "RaileatsCustomerDeliveryCharge", num(body.RaileatsCustomerDeliveryCharge));
     setIfDefined(payload, "RaileatsCustomerDeliveryChargeGSTRate", num(body.RaileatsCustomerDeliveryChargeGSTRate));
