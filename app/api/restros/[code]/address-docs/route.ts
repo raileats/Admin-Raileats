@@ -10,22 +10,59 @@ const supabase = createClient(
   { auth: { persistSession: false } }
 );
 
-function cleanText(value: any) {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  const next = String(value).trim();
-  return next === "" ? null : next;
-}
-
-function cleanNumber(value: any) {
+function num(value: any) {
   if (value === undefined) return undefined;
   if (value === "" || value === null) return null;
-  const next = Number(value);
-  return Number.isNaN(next) ? null : next;
+  const n = Number(value);
+  return Number.isNaN(n) ? null : n;
+}
+
+function text(value: any) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const cleaned = String(value).trim();
+  return cleaned === "" ? null : cleaned;
 }
 
 function setIfDefined(payload: Record<string, any>, key: string, value: any) {
   if (value !== undefined) payload[key] = value;
+}
+
+async function updateRestro(restroCode: number, payload: Record<string, any>) {
+  const { data, error } = await supabase
+    .from("RestroMaster")
+    .update(payload)
+    .eq("RestroCode", restroCode)
+    .select("*")
+    .single();
+
+  if (!error) return { data, error };
+
+  const missingColumn = /column .* does not exist/i.test(error.message || "");
+  if (!missingColumn) return { data, error };
+
+  // Some deployments do not yet have optional timing/login alias columns.
+  // Retry with the core RestroMaster columns so normal saves never break.
+  const optionalKeys = [
+    "DeliveryTime",
+    "DeliveryRadius",
+    "DeliveryTimeInMinutes",
+    "DeliveryRadiusInKm",
+    "RestroUserName",
+    "RestroUsername",
+    "UserName",
+    "Password",
+  ];
+
+  const safePayload = { ...payload };
+  optionalKeys.forEach((key) => delete safePayload[key]);
+
+  return supabase
+    .from("RestroMaster")
+    .update(safePayload)
+    .eq("RestroCode", restroCode)
+    .select("*")
+    .single();
 }
 
 export async function GET(
@@ -33,9 +70,9 @@ export async function GET(
   { params }: { params: { code: string } }
 ) {
   try {
-    const restroCode = Number(params.code);
+    const RestroCode = Number(params.code);
 
-    if (!restroCode || Number.isNaN(restroCode)) {
+    if (!RestroCode || Number.isNaN(RestroCode)) {
       return NextResponse.json(
         { ok: false, error: "Invalid RestroCode" },
         { status: 400 }
@@ -44,10 +81,8 @@ export async function GET(
 
     const { data, error } = await supabase
       .from("RestroMaster")
-      .select(
-        "RestroCode,RestroAddress,City,State,District,PinCode,RestroLatitude,RestroLongitude,FSSAINumber,FSSAIExpiryDate,FSSAICopyUpload,FSSAIStatus,GSTNumber,GSTType,GSTCopyUpload,GSTStatus,PANNumber,PANType,PANCopyUpload,PANStatus"
-      )
-      .eq("RestroCode", restroCode)
+      .select("*")
+      .eq("RestroCode", RestroCode)
       .single();
 
     if (error) {
@@ -66,14 +101,14 @@ export async function GET(
   }
 }
 
-async function saveAddress(
+export async function PATCH(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
   try {
-    const restroCode = Number(params.code);
+    const RestroCode = Number(params.code);
 
-    if (!restroCode || Number.isNaN(restroCode)) {
+    if (!RestroCode || Number.isNaN(RestroCode)) {
       return NextResponse.json(
         { ok: false, error: "Invalid RestroCode" },
         { status: 400 }
@@ -83,22 +118,56 @@ async function saveAddress(
     const body = await req.json();
     const payload: Record<string, any> = {};
 
-    setIfDefined(payload, "RestroAddress", cleanText(body.RestroAddress));
-    setIfDefined(payload, "City", cleanText(body.City));
-    setIfDefined(payload, "State", cleanText(body.State));
-    setIfDefined(payload, "District", cleanText(body.District));
-    setIfDefined(payload, "PinCode", cleanText(body.PinCode));
-    setIfDefined(payload, "RestroLatitude", cleanNumber(body.RestroLatitude));
-    setIfDefined(payload, "RestroLongitude", cleanNumber(body.RestroLongitude));
+    setIfDefined(payload, "StationCode", text(body.StationCode));
+    setIfDefined(payload, "StationName", text(body.StationName));
+    setIfDefined(payload, "State", text(body.State));
+
+    setIfDefined(payload, "RestroName", text(body.RestroName));
+    setIfDefined(payload, "OwnerName", text(body.OwnerName));
+    setIfDefined(payload, "OwnerEmail", text(body.OwnerEmail));
+    setIfDefined(payload, "OwnerPhone", text(body.OwnerPhone));
+    setIfDefined(payload, "RestroEmail", text(body.RestroEmail));
+    setIfDefined(payload, "RestroPhone", text(body.RestroPhone));
+    setIfDefined(payload, "BrandNameifAny", text(body.BrandNameifAny));
+
+    setIfDefined(payload, "IRCTCStatus", num(body.IRCTCStatus));
+    setIfDefined(payload, "RaileatsStatus", num(body.RaileatsStatus));
+    setIfDefined(payload, "IsIrctcApproved", body.IsIrctcApproved);
+    setIfDefined(payload, "RestroRating", num(body.RestroRating));
+    setIfDefined(payload, "IsPureVeg", num(body.IsPureVeg));
+
+    // Important: keep the exact path/URL typed by admin. Do not auto-clean it.
+    setIfDefined(payload, "RestroDisplayPhoto", text(body.RestroDisplayPhoto));
+
+    setIfDefined(payload, "open_time", text(body.open_time ?? body.OpenTime));
+    setIfDefined(payload, "closed_time", text(body.closed_time ?? body.ClosedTime));
+    setIfDefined(payload, "MinimumOrderValue", num(body.MinimumOrderValue));
+    setIfDefined(payload, "CutOffTime", num(body.CutOffTime));
+    setIfDefined(payload, "DeliveryTime", num(body.DeliveryTime));
+    setIfDefined(payload, "DeliveryRadius", num(body.DeliveryRadius));
+    setIfDefined(payload, "DeliveryTimeInMinutes", num(body.DeliveryTimeInMinutes));
+    setIfDefined(payload, "DeliveryRadiusInKm", num(body.DeliveryRadiusInKm));
+    setIfDefined(payload, "WeeklyOff", text(body.WeeklyOff));
+    setIfDefined(payload, "RaileatsCustomerDeliveryCharge", num(body.RaileatsCustomerDeliveryCharge));
+    setIfDefined(payload, "RaileatsCustomerDeliveryChargeGSTRate", num(body.RaileatsCustomerDeliveryChargeGSTRate));
+    setIfDefined(payload, "RaileatsCustomerDeliveryChargeGST", num(body.RaileatsCustomerDeliveryChargeGST));
+    setIfDefined(payload, "RaileatsCustomerDeliveryChargeTotalInclGST", num(body.RaileatsCustomerDeliveryChargeTotalInclGST));
+    setIfDefined(payload, "RaileatsOrdersPaymentOptionforCustomer", text(body.RaileatsOrdersPaymentOptionforCustomer));
+    setIfDefined(payload, "IRCTCOrdersPaymentOptionforCustomer", text(body.IRCTCOrdersPaymentOptionforCustomer));
+    setIfDefined(payload, "RestroTypeofDeliveryRailEatsorVendor", text(body.RestroTypeofDeliveryRailEatsorVendor));
+
+    setIfDefined(payload, "RestroLoginMobile", text(body.RestroLoginMobile));
+    setIfDefined(payload, "RestroUserName", text(body.RestroUserName));
+    setIfDefined(payload, "RestroUsername", text(body.RestroUsername));
+    setIfDefined(payload, "UserName", text(body.UserName));
+    setIfDefined(payload, "RestroPassword", text(body.RestroPassword));
+    setIfDefined(payload, "Password", text(body.Password));
+    setIfDefined(payload, "HolidayStatus", num(body.HolidayStatus));
+    setIfDefined(payload, "MinimumOrderAmount", num(body.MinimumOrderAmount));
 
     payload.UpdatedAt = new Date().toISOString();
 
-    const { data, error } = await supabase
-      .from("RestroMaster")
-      .update(payload)
-      .eq("RestroCode", restroCode)
-      .select("*")
-      .single();
+    const { data, error } = await updateRestro(RestroCode, payload);
 
     if (error) {
       return NextResponse.json(
@@ -115,6 +184,3 @@ async function saveAddress(
     );
   }
 }
-
-export const POST = saveAddress;
-export const PATCH = saveAddress;
