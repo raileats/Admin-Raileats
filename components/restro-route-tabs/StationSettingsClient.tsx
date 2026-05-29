@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput, AdminSelect } from "@/components/admin/AdminField";
@@ -12,6 +13,7 @@ type Props = {
   initialData?: Restro;
   restroCode?: string | number;
   mode?: "edit" | "new";
+  nextHref?: string;
 };
 
 const paymentOptions = ["Both", "Online", "COD", "Prepaid", "Postpaid", "None"];
@@ -36,7 +38,8 @@ function stationDisplay(restro: Restro) {
   return `${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}`;
 }
 
-export default function StationSettingsClient({ initialData = {}, restroCode, mode = "edit" }: Props) {
+export default function StationSettingsClient({ initialData = {}, restroCode, mode = "edit", nextHref }: Props) {
+  const router = useRouter();
   const [local, setLocal] = useState<Restro>(() => normalize({ ...initialData, RestroCode: restroCode ?? initialData?.RestroCode }));
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -86,6 +89,9 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
       if (!res.ok || json?.ok === false) throw new Error(json?.error || "Save failed");
       if (json?.row) setLocal(normalize(json.row));
       setMsg("Saved successfully");
+      if (nextHref) {
+        router.push(nextHref);
+      }
     } catch (error: any) {
       setMsg(error?.message || "Save failed");
     } finally {
