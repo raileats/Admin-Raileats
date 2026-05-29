@@ -54,6 +54,10 @@ export default function StationsTable() {
   const [editing, setEditing] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 50;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // Build q param by combining fields — backend likely expects q
   function buildQ() {
@@ -64,11 +68,13 @@ export default function StationsTable() {
     return parts.join(" ").trim();
   }
 
-  async function fetchStations(overrideSearch?: string) {
+  async function fetchStations(overrideSearch?: string, nextPage = page) {
     setLoading(true);
     setError(null);
     try {
       const url = new URL("/api/stations", location.origin);
+      url.searchParams.set("page", String(nextPage));
+      url.searchParams.set("pageSize", String(pageSize));
 
       // If override provided, send it as q
       if (typeof overrideSearch === "string") {
@@ -91,6 +97,8 @@ export default function StationsTable() {
       } else {
         const rows = Array.isArray(json) ? json : json?.rows ?? json?.data ?? [];
         setStations(Array.isArray(rows) ? rows : []);
+        setTotal(Number(json?.total ?? rows.length ?? 0));
+        setPage(Number(json?.page ?? nextPage));
       }
     } catch (e: any) {
       console.error("fetchStations error", e);
@@ -102,7 +110,7 @@ export default function StationsTable() {
   }
 
   useEffect(() => {
-    fetchStations();
+    fetchStations(undefined, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -233,7 +241,7 @@ export default function StationsTable() {
     setStationId("");
     setStationName("");
     setStationCode("");
-    fetchStations("");
+    fetchStations("", 1);
   }
 
   return (
@@ -246,7 +254,7 @@ export default function StationsTable() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          fetchStations();
+          fetchStations(undefined, 1);
         }}
         className="mb-4"
       >
@@ -347,6 +355,47 @@ export default function StationsTable() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          Showing {total === 0 ? 0 : (page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} of {total}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fetchStations(undefined, 1)}
+            disabled={loading || page <= 1}
+            className="rounded border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            «
+          </button>
+          <button
+            type="button"
+            onClick={() => fetchStations(undefined, Math.max(1, page - 1))}
+            disabled={loading || page <= 1}
+            className="rounded border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Prev
+          </button>
+          <span className="rounded border px-3 py-2 font-semibold">{page} / {totalPages}</span>
+          <button
+            type="button"
+            onClick={() => fetchStations(undefined, Math.min(totalPages, page + 1))}
+            disabled={loading || page >= totalPages}
+            className="rounded border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Next
+          </button>
+          <button
+            type="button"
+            onClick={() => fetchStations(undefined, totalPages)}
+            disabled={loading || page >= totalPages}
+            className="rounded border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            »
+          </button>
+        </div>
       </div>
 
       {/* Edit modal */}
