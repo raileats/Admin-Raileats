@@ -2,11 +2,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import AdminCard from "@/components/admin/AdminCard";
 import NewRestroCodeGate from "@/components/restro-route-tabs/NewRestroCodeGate";
 import StationSettingsClient from "@/components/restro-route-tabs/StationSettingsClient";
 
-function readBasicFromStorage(code: string) {
+function readCachedBasic(code: string) {
   try {
     const raw = localStorage.getItem("new_restro_basic");
     if (!raw) return null;
@@ -19,59 +18,54 @@ function readBasicFromStorage(code: string) {
 }
 
 function StationSettingsLoader({ code }: { code: string }) {
-  const [restro, setRestro] = useState<any>(() => readBasicFromStorage(code) ?? { RestroCode: code });
-  const [loading, setLoading] = useState(false);
+  const [initialData, setInitialData] = useState<any>(() => readCachedBasic(code) ?? { RestroCode: code });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
 
-    async function load() {
-      const cached = readBasicFromStorage(code);
-      if (cached && mounted) {
-        setRestro((prev: any) => ({ ...prev, ...cached }));
-      }
-
+    async function loadRestro() {
       setLoading(true);
       try {
-        // /api/restrosmaster?q=CODE can miss numeric RestroCode on some schemas, so load list and match exactly.
-        const res = await fetch(`/api/restrosmaster?t=${Date.now()}`, { cache: "no-store" });
-        const json = await res.json().catch(() => []);
-        const rows = Array.isArray(json) ? json : json?.rows ?? json?.data ?? [];
-        const found = rows.find((row: any) => String(row?.RestroCode ?? "") === String(code));
-
-        if (found && mounted) {
-          const merged = { ...(cached ?? {}), ...found, RestroCode: code };
-          setRestro(merged);
-          try {
-            localStorage.setItem("new_restro_basic", JSON.stringify(merged));
-          } catch {}
-        } else if (cached && mounted) {
-          setRestro({ ...cached, RestroCode: code });
-        }
-      } catch {
+        const cached = readCachedBasic(code);
         if (cached && mounted) {
-          setRestro({ ...cached, RestroCode: code });
+          setInitialData((prev: any) => ({ ...prev, ...cached, RestroCode: code }));
         }
+
+        const res = await fetch(`/api/restrosmaster?t=${Date.now()}`, { cache: "no-store" });
+        const json = await res.json().catch(() => ({}));
+        const rows = Array.isArray(json) ? json : json?.rows ?? json?.data ?? [];
+        const row = rows.find((r: any) => String(r?.RestroCode ?? "") === String(code));
+
+        if (mounted && row) {
+          const next = { ...(cached ?? {}), ...row, RestroCode: code };
+          setInitialData(next);
+          localStorage.setItem("new_restro_basic", JSON.stringify(next));
+        }
+      } catch (error) {
+        console.error("New restro station settings load failed", error);
       } finally {
         if (mounted) setLoading(false);
       }
     }
 
-    load();
+    loadRestro();
     return () => {
       mounted = false;
     };
   }, [code]);
 
-  if (loading && !restro?.StationCode && !restro?.StationName) {
-    return (
-      <AdminCard title="Station Settings">
-        <p className="text-sm font-semibold text-slate-500">Loading station settings...</p>
-      </AdminCard>
-    );
-  }
-
-  return <StationSettingsClient initialData={restro ?? { RestroCode: code }} restroCode={code} mode="new" />;
+  return (
+    <>
+      {loading ? <div className="mb-3 text-sm font-semibold text-slate-500">Loading saved basic details...</div> : null}
+      <StationSettingsClient
+        mode="new"
+        restroCode={code}
+        initialData={initialData}
+        nextHref="/admin/restros/new/address-docs"
+      />
+    </>
+  );
 }
 
 export default function NewStationSettingsPage() {
