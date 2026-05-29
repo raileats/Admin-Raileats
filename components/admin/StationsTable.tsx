@@ -71,8 +71,8 @@ export default function StationsTable() {
       const url = new URL("/api/stations", location.origin);
 
       // If override provided, send it as q
-      if (typeof overrideSearch === "string" && overrideSearch.length > 0) {
-        url.searchParams.set("q", overrideSearch);
+      if (typeof overrideSearch === "string") {
+        if (overrideSearch.length > 0) url.searchParams.set("q", overrideSearch);
       } else {
         const q = buildQ();
         if (q) url.searchParams.set("q", q);
@@ -89,8 +89,8 @@ export default function StationsTable() {
         setStations([]);
         setError(json?.error ?? "Failed to load stations");
       } else {
-        // ensure array
-        setStations(Array.isArray(json) ? json : []);
+        const rows = Array.isArray(json) ? json : json?.rows ?? json?.data ?? [];
+        setStations(Array.isArray(rows) ? rows : []);
       }
     } catch (e: any) {
       console.error("fetchStations error", e);
@@ -164,10 +164,11 @@ export default function StationsTable() {
         );
       } else {
         // merge server response
+        const updatedRow = json?.row ?? json?.data ?? json;
         setStations((prev) =>
           prev.map((s) => {
             const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
-            if (sid === id) return { ...s, ...json };
+            if (sid === id) return { ...s, ...updatedRow };
             return s;
           })
         );
@@ -210,10 +211,11 @@ export default function StationsTable() {
         console.error("saveEdit failed", json);
         alert("Save failed: " + (json?.error ?? "unknown"));
       } else {
+        const updatedRow = json?.row ?? json?.data ?? json;
         setStations((prev) =>
           prev.map((s) => {
             const sid = getField(s, "StationId") ?? getField(s, "stationid") ?? s.id;
-            if (sid === id) return { ...s, ...json };
+            if (sid === id) return { ...s, ...updatedRow };
             return s;
           })
         );
@@ -231,7 +233,7 @@ export default function StationsTable() {
     setStationId("");
     setStationName("");
     setStationCode("");
-    fetchStations();
+    fetchStations("");
   }
 
   return (
