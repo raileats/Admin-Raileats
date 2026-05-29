@@ -1,9 +1,0 @@
-// app/admin/restros/new/address-docs/page.tsx
-"use client";
-
-import NewRestroCodeGate from "@/components/restro-route-tabs/NewRestroCodeGate";
-import AddressDocsClient from "@/components/tabs/AddressDocsClient";
-
-export default function NewAddressDocsPage() {
-  return <NewRestroCodeGate>{(code) => <AddressDocsClient restroCode={code} initialData={{ RestroCode: code }} />}</NewRestroCodeGate>;
-}
