@@ -45,6 +45,39 @@ export default function BasicInfoClient({
     });
   }, [initialData]);
 
+  useEffect(() => {
+    const restroCode = initialData?.RestroCode;
+    if (!restroCode) return;
+
+    let cancelled = false;
+
+    async function loadFreshRestro() {
+      try {
+        const res = await fetch(`/api/restros/${encodeURIComponent(String(restroCode))}`, {
+          cache: "no-store",
+        });
+        const json = await res.json().catch(() => ({}));
+
+        if (!res.ok || json?.ok === false || !json?.row || cancelled) return;
+
+        setLocal((prev: any) => ({
+          ...prev,
+          ...json.row,
+          RaileatsStatus: toStatusNumber(json.row.RaileatsStatus),
+          IRCTCStatus: toStatusNumber(json.row.IRCTCStatus),
+        }));
+      } catch (error) {
+        console.error("Fresh restro load failed:", error);
+      }
+    }
+
+    loadFreshRestro();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialData?.RestroCode]);
+
   function update(key: string, value: any) {
     setLocal((prev: any) => ({
       ...prev,
