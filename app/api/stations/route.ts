@@ -5,7 +5,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PAGE_SIZE = 1000;
+const PAGE_SIZE = 50;
 
 export async function GET(req: Request) {
   try {
@@ -14,6 +14,10 @@ export async function GET(req: Request) {
     const stationId = (url.searchParams.get("stationId") ?? "").trim();
     const stationName = (url.searchParams.get("stationName") ?? "").trim();
     const stationCode = (url.searchParams.get("stationCode") ?? "").trim();
+    const page = Math.max(1, Number(url.searchParams.get("page") ?? "1") || 1);
+    const pageSize = Math.min(50, Math.max(1, Number(url.searchParams.get("pageSize") ?? PAGE_SIZE) || PAGE_SIZE));
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
 
     const cols = [
       "StationId",
@@ -34,64 +38,46 @@ export async function GET(req: Request) {
       "StationImage",
     ].join(",");
 
-    let allRows: any[] = [];
-    let from = 0;
-    let to = PAGE_SIZE - 1;
+    let query = supabaseServer
+      .from("Stations")
+      .select(cols, { count: "exact" })
+      .order("StationId", { ascending: true })
+      .range(from, to);
 
-    while (true) {
-      let query = supabaseServer
-        .from("Stations")
-        .select(cols)
-        .order("StationId", { ascending: true })
-        .range(from, to);
+    if (stationId && /^\d+$/.test(stationId)) {
+      query = query.eq("StationId", Number(stationId));
+    }
 
-      if (stationId && /^\d+$/.test(stationId)) {
-        query = query.eq("StationId", Number(stationId));
-      }
+    if (stationName) {
+      query = query.ilike("StationName", `%${stationName}%`);
+    }
 
-      if (stationName) {
-        query = query.ilike("StationName", `%${stationName}%`);
-      }
+    if (stationCode) {
+      query = query.ilike("StationCode", `%${stationCode}%`);
+    }
 
-      if (stationCode) {
-        query = query.ilike("StationCode", `%${stationCode}%`);
-      }
+    if (!stationId && !stationName && !stationCode && q.length >= 1) {
+      query = query.or(
+        `StationName.ilike.%${q}%,StationCode.ilike.%${q}%,State.ilike.%${q}%,District.ilike.%${q}%`
+      );
+    }
 
-      if (!stationId && !stationName && !stationCode && q.length >= 1) {
-        query = query.or(
-          `StationName.ilike.%${q}%,StationCode.ilike.%${q}%,State.ilike.%${q}%,District.ilike.%${q}%`
-        );
-      }
+    const { data, error, count } = await query;
 
-      const { data, error } = await query;
-
-      if (error) {
-        console.error("stations api error:", error);
-        return NextResponse.json(
-          { error: error.message },
-          { status: 500 }
-        );
-      }
-
-      if (!data || data.length === 0) {
-        break; // no more rows
-      }
-
-      allRows.push(...data);
-
-      // stop if last page
-      if (data.length < PAGE_SIZE) {
-        break;
-      }
-
-      from += PAGE_SIZE;
-      to += PAGE_SIZE;
+    if (error) {
+      console.error("stations api error:", error);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       ok: true,
-      rows: allRows,
-      total: allRows.length,
+      rows: data ?? [],
+      total: count ?? 0,
+      page,
+      pageSize,
     });
   } catch (e: any) {
     console.error("api/stations GET error", e);
