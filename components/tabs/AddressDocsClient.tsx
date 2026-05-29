@@ -63,6 +63,38 @@ function detectState(value: string) {
   return STATE_HINTS.find((entry) => entry.terms.some((term) => normalized.includes(term)))?.state || "";
 }
 
+function pick(row: any, ...keys: string[]) {
+  for (const key of keys) {
+    if (row?.[key] !== undefined && row?.[key] !== null) return row[key];
+  }
+  return "";
+}
+
+function addressFrom(row: any) {
+  return {
+    RestroAddress: pick(row, "RestroAddress", "restro_address", "RestroAdress", "RestroAddres", "Address", "address", "OutletAddress", "outlet_address"),
+    City: pick(row, "City", "city", "CityVillage", "City_Village", "City / Village", "city_village"),
+    State: pick(row, "State", "state"),
+    District: pick(row, "District", "district"),
+    PinCode: pick(row, "PinCode", "pin_code", "Pincode", "PINCode", "Pin", "pin"),
+    RestroLatitude: pick(row, "RestroLatitude", "restro_latitude", "Latitude", "latitude", "Lat", "lat"),
+    RestroLongitude: pick(row, "RestroLongitude", "restro_longitude", "Longitude", "longitude", "Long", "long", "Lng", "lng"),
+  };
+}
+
+function hasAddressValue(row: any) {
+  const next = addressFrom(row);
+  return Object.values(next).some((value) => String(value ?? "").trim() !== "");
+}
+
+function mergeFilledAddress(prev: any, next: any) {
+  const out = { ...prev };
+  Object.entries(addressFrom(next)).forEach(([key, value]) => {
+    if (String(value ?? "").trim() !== "") out[key] = value;
+  });
+  return out;
+}
+
 export default function AddressDocsClient({
   initialData = {},
   restroCode = "",
@@ -73,13 +105,7 @@ export default function AddressDocsClient({
   );
 
   const [local, setLocal] = useState<any>({
-    RestroAddress: initialData?.RestroAddress ?? "",
-    City: initialData?.City ?? "",
-    State: initialData?.State ?? "",
-    District: initialData?.District ?? "",
-    PinCode: initialData?.PinCode ?? "",
-    RestroLatitude: initialData?.RestroLatitude ?? initialData?.Latitude ?? "",
-    RestroLongitude: initialData?.RestroLongitude ?? initialData?.Longitude ?? "",
+    ...addressFrom(initialData),
   });
 
   const [fssaiRows, setFssaiRows] = useState<FssaiRow[]>([]);
@@ -108,15 +134,8 @@ export default function AddressDocsClient({
   const [savingPan, setSavingPan] = useState(false);
 
   useEffect(() => {
-    setLocal({
-      RestroAddress: initialData?.RestroAddress ?? "",
-      City: initialData?.City ?? "",
-      State: initialData?.State ?? "",
-      District: initialData?.District ?? "",
-      PinCode: initialData?.PinCode ?? "",
-      RestroLatitude: initialData?.RestroLatitude ?? initialData?.Latitude ?? "",
-      RestroLongitude: initialData?.RestroLongitude ?? initialData?.Longitude ?? "",
-    });
+    if (!hasAddressValue(initialData)) return;
+    setLocal((prev: any) => mergeFilledAddress(prev, initialData));
   }, [initialData]);
 
   useEffect(() => {
@@ -142,18 +161,23 @@ export default function AddressDocsClient({
     setLoadingDocs(true);
     try {
       const bust = Date.now();
-      const [fssaiRes, gstRes, panRes] = await Promise.all([
+      const [addressRes, fssaiRes, gstRes, panRes] = await Promise.all([
+        fetch(`/api/restros/${encodeURIComponent(String(code))}/address-docs?t=${bust}`, { cache: "no-store" }),
         fetch(`/api/restros/${encodeURIComponent(String(code))}/fssai?t=${bust}`, { cache: "no-store" }),
         fetch(`/api/restros/${encodeURIComponent(String(code))}/gst?t=${bust}`, { cache: "no-store" }),
         fetch(`/api/restros/${encodeURIComponent(String(code))}/pan?t=${bust}`, { cache: "no-store" }),
       ]);
 
-      const [fssaiJson, gstJson, panJson] = await Promise.all([
+      const [addressJson, fssaiJson, gstJson, panJson] = await Promise.all([
+        addressRes.json().catch(() => ({})),
         fssaiRes.json(),
         gstRes.json(),
         panRes.json(),
       ]);
 
+      if (addressJson?.ok && addressJson?.row) {
+        setLocal((prev: any) => mergeFilledAddress(prev, addressJson.row));
+      }
       setFssaiRows(fssaiJson?.ok ? fssaiJson.rows || [] : []);
       setGstRows(gstJson?.ok ? gstJson.rows || [] : []);
       setPanRows(panJson?.ok ? panJson.rows || [] : []);
@@ -205,20 +229,17 @@ export default function AddressDocsClient({
         throw new Error(json?.error || `Save failed (${res.status})`);
       }
 
-      if (json?.row) {
-        setLocal((prev: any) => ({
-          ...prev,
-          RestroAddress: json.row.RestroAddress ?? prev.RestroAddress,
-          City: json.row.City ?? prev.City,
-          State: json.row.State ?? prev.State,
-          District: json.row.District ?? prev.District,
-          PinCode: json.row.PinCode ?? prev.PinCode,
-          RestroLatitude: json.row.RestroLatitude ?? prev.RestroLatitude,
-          RestroLongitude: json.row.RestroLongitude ?? prev.RestroLongitude,
-        }));
+      const savedAddress = json?.row ? addressFrom(json.row) : payload;
+      const savedText = String(savedAddress.RestroAddress ?? "").trim();
+      const inputText = String(payload.RestroAddress ?? "").trim();
+
+      if (inputText && savedText !== inputText) {
+        throw new Error("Address update verify failed. RestroMaster row did not return the saved address.");
       }
 
-      setMessage("Address saved");
+      setLocal((prev: any) => mergeFilledAddress({ ...prev, ...payload }, savedAddress));
+
+      setMessage("Address saved in RestroMaster");
     } catch (err: any) {
       console.error("Address save failed", err);
       alert(err?.message || "Address save failed");
