@@ -25,19 +25,13 @@ export async function PATCH(
   try {
     console.log("===== PATCH CALLED =====");
 
-    const RestroCode = Number(
-      params.code
-    );
+    const RestroCode = Number(params.code);
 
-    if (
-      !RestroCode ||
-      isNaN(RestroCode)
-    ) {
+    if (!RestroCode || isNaN(RestroCode)) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Invalid RestroCode",
+          error: "Invalid RestroCode",
         },
         { status: 400 }
       );
@@ -45,286 +39,129 @@ export async function PATCH(
 
     const body = await req.json();
 
-    console.log(
-      "Incoming body:",
-      body
-    );
+    console.log("Incoming body:", body);
 
     /* ================= SAFE PAYLOAD ================= */
 
     const payload: any = {};
 
     const num = (v: any) =>
-      v === "" ||
-      v === null ||
-      v === undefined
-        ? null
-        : Number(v);
+      v === "" || v === null || v === undefined ? null : Number(v);
 
-    /* 🔥 ================= STATION FIX ================= */
+    /* ================= STATION FIX ================= */
 
-    if (
-      body.StationCode !==
-      undefined
-    )
-      payload.StationCode =
-        body.StationCode;
+    if (body.StationCode !== undefined) payload.StationCode = body.StationCode;
+    if (body.StationName !== undefined) payload.StationName = body.StationName;
+    if (body.State !== undefined) payload.State = body.State;
 
-    if (
-      body.StationName !==
-      undefined
-    )
-      payload.StationName =
-        body.StationName;
+    /* ================= TIME FIX ================= */
 
-    if (body.State !== undefined)
-      payload.State = body.State;
+    if (body.open_time !== undefined) payload.open_time = body.open_time;
+    if (body.closed_time !== undefined) payload.closed_time = body.closed_time;
 
-    /* 🔥 ================= TIME FIX ================= */
+    /* ================= ORDER SETTINGS ================= */
 
-    if (
-      body.open_time !==
-      undefined
-    )
-      payload.open_time =
-        body.open_time;
+    if (body.MinimumOrderValue !== undefined)
+      payload.MinimumOrderValue = num(body.MinimumOrderValue);
 
-    if (
-      body.closed_time !==
-      undefined
-    )
-      payload.closed_time =
-        body.closed_time;
+    if (body.CutOffTime !== undefined)
+      payload.CutOffTime = num(body.CutOffTime);
 
-    /* 🔥 ================= ORDER SETTINGS ================= */
+    if (body.WeeklyOff !== undefined) payload.WeeklyOff = body.WeeklyOff;
 
-    if (
-      body.MinimumOrderValue !==
-      undefined
-    )
-      payload.MinimumOrderValue =
-        num(
-          body.MinimumOrderValue
-        );
-
-    if (
-      body.CutOffTime !==
-      undefined
-    )
-      payload.CutOffTime = num(
-        body.CutOffTime
+    if (body.RaileatsCustomerDeliveryCharge !== undefined)
+      payload.RaileatsCustomerDeliveryCharge = num(
+        body.RaileatsCustomerDeliveryCharge
       );
 
-    if (
-      body.WeeklyOff !==
-      undefined
-    )
-      payload.WeeklyOff =
-        body.WeeklyOff;
+    if (body.RaileatsCustomerDeliveryChargeGSTRate !== undefined)
+      payload.RaileatsCustomerDeliveryChargeGSTRate = num(
+        body.RaileatsCustomerDeliveryChargeGSTRate
+      );
 
-    if (
-      body.RaileatsCustomerDeliveryCharge !==
-      undefined
-    )
-      payload.RaileatsCustomerDeliveryCharge =
-        num(
-          body.RaileatsCustomerDeliveryCharge
-        );
+    if (body.RaileatsCustomerDeliveryChargeGST !== undefined)
+      payload.RaileatsCustomerDeliveryChargeGST = num(
+        body.RaileatsCustomerDeliveryChargeGST
+      );
 
-    /* 🔥🔥🔥 MAIN FIX (GST VALUES NOW SAVE PROPERLY) */
+    if (body.RaileatsCustomerDeliveryChargeTotalInclGST !== undefined)
+      payload.RaileatsCustomerDeliveryChargeTotalInclGST = num(
+        body.RaileatsCustomerDeliveryChargeTotalInclGST
+      );
 
-    if (
-      body.RaileatsCustomerDeliveryChargeGSTRate !==
-      undefined
-    )
-      payload.RaileatsCustomerDeliveryChargeGSTRate =
-        num(
-          body.RaileatsCustomerDeliveryChargeGSTRate
-        );
-
-    if (
-      body.RaileatsCustomerDeliveryChargeGST !==
-      undefined
-    )
-      payload.RaileatsCustomerDeliveryChargeGST =
-        num(
-          body.RaileatsCustomerDeliveryChargeGST
-        );
-
-    if (
-      body.RaileatsCustomerDeliveryChargeTotalInclGST !==
-      undefined
-    )
-      payload.RaileatsCustomerDeliveryChargeTotalInclGST =
-        num(
-          body.RaileatsCustomerDeliveryChargeTotalInclGST
-        );
-
-    /* 🔥 ============================================== */
-
-    if (
-      body.RaileatsOrdersPaymentOptionforCustomer !==
-      undefined
-    )
+    if (body.RaileatsOrdersPaymentOptionforCustomer !== undefined)
       payload.RaileatsOrdersPaymentOptionforCustomer =
         body.RaileatsOrdersPaymentOptionforCustomer;
 
-    if (
-      body.IRCTCOrdersPaymentOptionforCustomer !==
-      undefined
-    )
+    if (body.IRCTCOrdersPaymentOptionforCustomer !== undefined)
       payload.IRCTCOrdersPaymentOptionforCustomer =
         body.IRCTCOrdersPaymentOptionforCustomer;
 
-    if (
-      body.RestroTypeofDeliveryRailEatsorVendor !==
-      undefined
-    )
+    if (body.RestroTypeofDeliveryRailEatsorVendor !== undefined)
       payload.RestroTypeofDeliveryRailEatsorVendor =
         body.RestroTypeofDeliveryRailEatsorVendor;
 
-    /* 🔥 ================= BASIC INFO FIX ================= */
+    /* ================= BASIC INFO FIX ================= */
 
-    if (
-      body.RestroName !==
-      undefined
-    )
-      payload.RestroName =
-        body.RestroName;
+    if (body.RestroName !== undefined) payload.RestroName = body.RestroName;
+    if (body.OwnerName !== undefined) payload.OwnerName = body.OwnerName;
+    if (body.OwnerEmail !== undefined) payload.OwnerEmail = body.OwnerEmail;
+    if (body.OwnerPhone !== undefined) payload.OwnerPhone = body.OwnerPhone;
+    if (body.RestroEmail !== undefined) payload.RestroEmail = body.RestroEmail;
+    if (body.RestroPhone !== undefined) payload.RestroPhone = body.RestroPhone;
 
-    if (
-      body.OwnerName !==
-      undefined
-    )
-      payload.OwnerName =
-        body.OwnerName;
+    if (body.BrandNameifAny !== undefined)
+      payload.BrandNameifAny = body.BrandNameifAny;
 
-    if (
-      body.OwnerEmail !==
-      undefined
-    )
-      payload.OwnerEmail =
-        body.OwnerEmail;
+    if (body.RestroRating !== undefined)
+      payload.RestroRating = num(body.RestroRating);
 
-    if (
-      body.OwnerPhone !==
-      undefined
-    )
-      payload.OwnerPhone =
-        body.OwnerPhone;
+    if (body.IsIrctcApproved !== undefined)
+      payload.IsIrctcApproved = body.IsIrctcApproved;
 
-    if (
-      body.RestroEmail !==
-      undefined
-    )
-      payload.RestroEmail =
-        body.RestroEmail;
+    if (body.RaileatsStatus !== undefined)
+      payload.RaileatsStatus = body.RaileatsStatus;
 
-    if (
-      body.RestroPhone !==
-      undefined
-    )
-      payload.RestroPhone =
-        body.RestroPhone;
+    // ✅ Display photo path / URL save fix
+    if (body.RestroDisplayPhoto !== undefined)
+      payload.RestroDisplayPhoto = body.RestroDisplayPhoto;
 
-    if (
-      body.BrandNameifAny !==
-      undefined
-    )
-      payload.BrandNameifAny =
-        body.BrandNameifAny;
+    /* ================= RESTRO LOGIN ================= */
 
-    if (
-      body.RestroRating !==
-      undefined
-    )
-      payload.RestroRating = num(
-        body.RestroRating
-      );
+    if (body.RestroLoginMobile !== undefined)
+      payload.RestroLoginMobile = body.RestroLoginMobile;
 
-    if (
-      body.IsIrctcApproved !==
-      undefined
-    )
-      payload.IsIrctcApproved =
-        body.IsIrctcApproved;
+    if (body.RestroPassword !== undefined)
+      payload.RestroPassword = body.RestroPassword;
 
-    if (
-      body.RaileatsStatus !==
-      undefined
-    )
-      payload.RaileatsStatus =
-        body.RaileatsStatus;
+    /* ================= HOLIDAY ================= */
 
-    /* ✅ RESTRO LOGIN */
+    if (body.HolidayStatus !== undefined)
+      payload.HolidayStatus = num(body.HolidayStatus);
 
-    if (
-      body.RestroLoginMobile !==
-      undefined
-    )
-      payload.RestroLoginMobile =
-        body.RestroLoginMobile;
+    /* ================= MINIMUM ORDER ================= */
 
-    if (
-      body.RestroPassword !==
-      undefined
-    )
-      payload.RestroPassword =
-        body.RestroPassword;
+    if (body.MinimumOrderAmount !== undefined)
+      payload.MinimumOrderAmount = num(body.MinimumOrderAmount);
 
-    /* ✅ HOLIDAY */
+    /* ================= TIMESTAMP ================= */
 
-    if (
-      body.HolidayStatus !==
-      undefined
-    )
-      payload.HolidayStatus = num(
-        body.HolidayStatus
-      );
+    payload.UpdatedAt = new Date().toISOString();
 
-    /* ✅ MINIMUM ORDER */
-
-    if (
-      body.MinimumOrderAmount !==
-      undefined
-    )
-      payload.MinimumOrderAmount =
-        num(
-          body.MinimumOrderAmount
-        );
-
-    /* ✅ TIMESTAMP */
-
-    payload.UpdatedAt =
-      new Date().toISOString();
-
-    console.log(
-      "🔥 Final payload:",
-      payload
-    );
+    console.log("Final payload:", payload);
 
     /* ================= UPDATE ================= */
 
-    const { data, error } =
-      await supabase
-        .from("RestroMaster")
-        .update(payload)
-        .eq(
-          "RestroCode",
-          RestroCode
-        )
-        .select();
+    const { data, error } = await supabase
+      .from("RestroMaster")
+      .update(payload)
+      .eq("RestroCode", RestroCode)
+      .select();
 
-    console.log(
-      "✅ Updated row:",
-      data
-    );
+    console.log("Updated row:", data);
 
     if (error) {
-      console.error(
-        "❌ Supabase error:",
-        error
-      );
+      console.error("Supabase error:", error);
 
       return NextResponse.json(
         {
@@ -339,8 +176,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "No rows updated. Check RestroCode",
+          error: "No rows updated. Check RestroCode",
         },
         { status: 400 }
       );
@@ -348,22 +184,16 @@ export async function PATCH(
 
     return NextResponse.json({
       ok: true,
-      message:
-        "Restro updated successfully",
+      message: "Restro updated successfully",
       row: data[0],
     });
   } catch (err: any) {
-    console.error(
-      "❌ PATCH FAILED:",
-      err
-    );
+    console.error("PATCH FAILED:", err);
 
     return NextResponse.json(
       {
         ok: false,
-        error:
-          err?.message ||
-          "Server error",
+        error: err?.message || "Server error",
       },
       { status: 500 }
     );
