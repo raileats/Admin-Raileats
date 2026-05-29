@@ -7,7 +7,7 @@ import ContactsClient from "@/components/tabs/ContactsClient";
 export default function NewContactsPage() {
   return (
     <NewRestroCodeGate>
-      {() => <ContactsClient />}
+      {(code) => <ContactsClient restroCode={code} />}
     </NewRestroCodeGate>
   );
 }
