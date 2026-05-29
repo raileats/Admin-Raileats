@@ -1,8 +1,6 @@
 // app/admin/restros/new/contacts/page.tsx
-"use client";
-
-import NewRestroCodeGate from "@/components/restro-route-tabs/NewRestroCodeGate";
 import ContactsClient from "@/components/tabs/ContactsClient";
+import NewRestroCodeGate from "@/components/restro-route-tabs/NewRestroCodeGate";
 
 export default function NewContactsPage() {
   return (
