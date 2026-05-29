@@ -19,10 +19,14 @@ type Props = {
 
 function toStatusNumber(value: any) {
   const normalized = String(value ?? "").toLowerCase().trim();
-  if (normalized === "1" || normalized === "true" || normalized === "on" || normalized === "active") {
+  if (normalized === "1" || normalized === "true" || normalized === "on" || normalized === "active" || normalized === "yes") {
     return 1;
   }
   return 0;
+}
+
+function phoneDigits(value: any) {
+  return String(value ?? "").replace(/\D/g, "").slice(0, 10);
 }
 
 export default function BasicInfoClient({
@@ -98,10 +102,10 @@ export default function BasicInfoClient({
 
       OwnerName: local.OwnerName || null,
       OwnerEmail: local.OwnerEmail || null,
-      OwnerPhone: local.OwnerPhone ? Number(local.OwnerPhone) : null,
+      OwnerPhone: phoneDigits(local.OwnerPhone) || null,
 
       RestroEmail: local.RestroEmail || null,
-      RestroPhone: local.RestroPhone ? Number(local.RestroPhone) : null,
+      RestroPhone: phoneDigits(local.RestroPhone) || null,
 
       StationCode: local.StationCode || null,
       StationName: local.StationName || null,
@@ -112,7 +116,7 @@ export default function BasicInfoClient({
       IsIrctcApproved: String(local.IsIrctcApproved || "0"),
 
       RestroRating: local.RestroRating === "" ? null : Number(local.RestroRating),
-      IsPureVeg: Number(local.IsPureVeg || 0),
+      IsPureVeg: toStatusNumber(local.IsPureVeg),
       RestroDisplayPhoto: local.RestroDisplayPhoto || null,
       State: local.State || null,
     };
@@ -243,8 +247,10 @@ export default function BasicInfoClient({
 
         <AdminField label="Owner Phone">
           <AdminInput
-            value={local?.OwnerPhone ?? ""}
-            onChange={(e) => update("OwnerPhone", e.target.value)}
+            inputMode="numeric"
+            maxLength={10}
+            value={phoneDigits(local?.OwnerPhone)}
+            onChange={(e) => update("OwnerPhone", phoneDigits(e.target.value))}
           />
         </AdminField>
 
@@ -257,8 +263,10 @@ export default function BasicInfoClient({
 
         <AdminField label="Restro Phone">
           <AdminInput
-            value={local?.RestroPhone ?? ""}
-            onChange={(e) => update("RestroPhone", e.target.value)}
+            inputMode="numeric"
+            maxLength={10}
+            value={phoneDigits(local?.RestroPhone)}
+            onChange={(e) => update("RestroPhone", phoneDigits(e.target.value))}
           />
         </AdminField>
 
@@ -298,6 +306,16 @@ export default function BasicInfoClient({
             value={local?.RestroRating ?? ""}
             onChange={(e) => update("RestroRating", e.target.value)}
           />
+        </AdminField>
+
+        <AdminField label="Pure Veg">
+          <AdminSelect
+            value={toStatusNumber(local?.IsPureVeg)}
+            onChange={(e) => update("IsPureVeg", Number(e.target.value))}
+          >
+            <option value={1}>Yes</option>
+            <option value={0}>No</option>
+          </AdminSelect>
         </AdminField>
 
         <AdminField label="Display Photo">
