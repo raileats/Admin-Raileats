@@ -47,9 +47,26 @@ const ALLOWED_FIELDS = [
   "WhatsappMobileNumberStatus3",
 ];
 
+const BIGINT_CONTACT_FIELDS = new Set([
+  "WhatsappMobileNumberforOrderDetails1",
+  "WhatsappMobileNumberforOrderDetails2",
+  "WhatsappMobileNumberforOrderDetails3",
+]);
+
 function parseCode(value: string) {
   const code = Number(value);
   return code && !Number.isNaN(code) ? code : null;
+}
+
+function normalizeContactValue(field: string, value: any) {
+  if (BIGINT_CONTACT_FIELDS.has(field)) {
+    const digits = String(value ?? "").replace(/\D/g, "").slice(0, 10);
+    return digits ? Number(digits) : null;
+  }
+
+  if (typeof value === "string") return value.trim();
+
+  return value;
 }
 
 export async function GET(
@@ -89,7 +106,9 @@ export async function PATCH(
   const payload: Record<string, any> = {};
 
   for (const field of ALLOWED_FIELDS) {
-    if (body[field] !== undefined) payload[field] = body[field];
+    if (body[field] !== undefined) {
+      payload[field] = normalizeContactValue(field, body[field]);
+    }
   }
 
   payload.UpdatedAt = new Date().toISOString();
