@@ -1,251 +1,318 @@
 "use client";
-import { useState, useEffect } from "react";
 
-type ContactRow = {
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import AdminButton from "@/components/admin/AdminButton";
+import AdminCard from "@/components/admin/AdminCard";
+import { AdminField, AdminInput } from "@/components/admin/AdminField";
+
+type Item = {
   id: string;
-  name?: string;
-  value?: string;
-  active?: boolean;
+  name: string;
+  value: string;
+  active: boolean;
 };
 
-type ContactsClientProps = {
-  restroCode: string | number;
-  initialEmails?: ContactRow[];
-  initialWhatsapps?: ContactRow[];
+type Props = {
+  restroCode?: string | number;
+  initialData?: any;
 };
 
-export default function ContactsClient({
-  restroCode,
-  initialEmails = [],
-  initialWhatsapps = [],
-}: ContactsClientProps) {
-  useEffect(() => {
-    console.log("ContactsClient initial:", {
-      restroCode,
-      initialEmails,
-      initialWhatsapps,
-    });
-  }, [restroCode, initialEmails, initialWhatsapps]);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  const [emails, setEmails] = useState<ContactRow[]>(
-    initialEmails.length ? initialEmails : []
-  );
-  const [whatsapps, setWhatsapps] = useState<ContactRow[]>(
-    initialWhatsapps.length ? initialWhatsapps : []
-  );
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+function makeEmpty(prefix: string, count: number): Item[] {
+  return Array.from({ length: count }).map((_, i) => ({
+    id: `${prefix}-${i + 1}`,
+    name: "",
+    value: "",
+    active: false,
+  }));
+}
 
-  useEffect(() => {
-    if (!initialEmails.length && !initialWhatsapps.length) {
-      setEmails([
-        { id: "sample-email-1", name: "Akhil", value: "abc@gmail.com", active: true },
-        { id: "sample-email-2", name: "Ram", value: "abc@gmail.com", active: true },
-      ]);
-      setWhatsapps([
-        { id: "sample-wa-1", name: "Vinod Kumar", value: "9876543210", active: true },
-        { id: "sample-wa-2", name: "Rajesh", value: "9876543210", active: true },
-        { id: "sample-wa-3", name: "Suresh", value: "9876543210", active: true },
-      ]);
-    }
-  }, [initialEmails, initialWhatsapps]);
+function isActive(value: any) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return ["1", "true", "on", "active", "yes"].includes(normalized);
+}
 
-  const addEmail = () =>
-    setEmails((s) => [
-      ...s,
-      { id: crypto.randomUUID(), name: "", value: "", active: true },
-    ]);
-
-  const addWhatsapp = () =>
-    setWhatsapps((s) => [
-      ...s,
-      { id: crypto.randomUUID(), name: "", value: "", active: true },
-    ]);
-
-  const updateRow = (
-    list: ContactRow[],
-    setList: (v: ContactRow[]) => void,
-    id: string,
-    field: keyof ContactRow,
-    val: any
-  ) => {
-    setList(list.map((r) => (r.id === id ? { ...r, [field]: val } : r)));
+function normalizeRows(row: any) {
+  return {
+    emails: [
+      {
+        id: "email-1",
+        name: row?.EmailAddressName1 ?? "",
+        value: row?.EmailsforOrdersReceiving1 ?? "",
+        active: isActive(row?.EmailsforOrdersStatus1),
+      },
+      {
+        id: "email-2",
+        name: row?.EmailAddressName2 ?? "",
+        value: row?.EmailsforOrdersReceiving2 ?? "",
+        active: isActive(row?.EmailsforOrdersStatus2),
+      },
+    ],
+    whatsapps: [
+      {
+        id: "wa-1",
+        name: row?.WhatsappMobileNumberName1 ?? "",
+        value: row?.WhatsappMobileNumberforOrderDetails1 ?? "",
+        active: isActive(row?.WhatsappMobileNumberStatus1),
+      },
+      {
+        id: "wa-2",
+        name: row?.WhatsappMobileNumberName2 ?? "",
+        value: row?.WhatsappMobileNumberforOrderDetails2 ?? "",
+        active: isActive(row?.WhatsappMobileNumberStatus2),
+      },
+      {
+        id: "wa-3",
+        name: row?.WhatsappMobileNumberName3 ?? "",
+        value: row?.WhatsappMobileNumberforOrderDetails3 ?? "",
+        active: isActive(row?.WhatsappMobileNumberStatus3),
+      },
+    ],
   };
+}
 
-  const removeRow = (
-    list: ContactRow[],
-    setList: (v: ContactRow[]) => void,
-    id: string
-  ) => {
-    setList(list.filter((r) => r.id !== id));
-  };
+export default function ContactsClient({ restroCode, initialData = {} }: Props) {
+  const router = useRouter();
 
-  const handleSave = async () => {
-    setSaving(true);
-    setMsg(null);
+  const code = useMemo(() => {
+    if (restroCode) return String(restroCode);
+    if (initialData?.RestroCode) return String(initialData.RestroCode);
+    if (typeof window === "undefined") return "";
+
     try {
-      const realEmails = emails.filter(
-        (e) => !e.id?.toString().startsWith("sample-")
-      );
-      const realWhats = whatsapps.filter(
-        (w) => !w.id?.toString().startsWith("sample-")
-      );
+      return localStorage.getItem("new_restro_code") || "";
+    } catch {
+      return "";
+    }
+  }, [restroCode, initialData?.RestroCode]);
 
-      const payload = {
-        emails: realEmails.map((r) => ({
-          name: r.name ?? "",
-          value: r.value ?? "",
-          active: !!r.active,
-        })),
-        whatsapps: realWhats.map((r) => ({
-          name: r.name ?? "",
-          value: r.value ?? "",
-          active: !!r.active,
-        })),
-      };
+  const initialRows = normalizeRows(initialData);
+  const [emails, setEmails] = useState<Item[]>(initialRows.emails.length ? initialRows.emails : makeEmpty("email", 2));
+  const [whatsapps, setWhatsapps] = useState<Item[]>(initialRows.whatsapps.length ? initialRows.whatsapps : makeEmpty("wa", 3));
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
-      if (payload.emails.length === 0 && payload.whatsapps.length === 0) {
-        setMsg("No real contact entries to save (sample rows ignored).");
-        setSaving(false);
-        setTimeout(() => setMsg(null), 3500);
-        return;
+  useEffect(() => {
+    if (!code) return;
+
+    let cancelled = false;
+
+    async function loadContacts() {
+      try {
+        setLoading(true);
+        setMessage("");
+
+        const res = await fetch(`/api/restros/${encodeURIComponent(code)}/contacts`, {
+          cache: "no-store",
+        });
+        const json = await res.json().catch(() => ({}));
+
+        if (!res.ok || json?.ok === false) {
+          throw new Error(json?.error || "Failed to load contacts");
+        }
+
+        if (!cancelled) {
+          const rows = normalizeRows(json.row || {});
+          setEmails(rows.emails);
+          setWhatsapps(rows.whatsapps);
+        }
+      } catch (error: any) {
+        if (!cancelled) setMessage(error?.message || "Failed to load contacts");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
+    }
 
-      const res = await fetch(`/api/restros/${restroCode}/contacts`, {
-        method: "POST",
+    loadContacts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
+
+  function updateEmail(index: number, key: keyof Item, value: string | boolean) {
+    setEmails((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [key]: value } : row))
+    );
+  }
+
+  function updateWhatsapp(index: number, key: keyof Item, value: string | boolean) {
+    setWhatsapps((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [key]: value } : row))
+    );
+  }
+
+  function validate() {
+    const badEmail = emails.find((row) => row.value && !EMAIL_RE.test(row.value));
+    if (badEmail) return "Please enter a valid email address.";
+
+    const badMobile = whatsapps.find((row) => row.value && row.value.length !== 10);
+    if (badMobile) return "WhatsApp mobile number must be exactly 10 digits.";
+
+    return "";
+  }
+
+  async function save() {
+    const validationError = validate();
+    if (validationError) {
+      setMessage(validationError);
+      return;
+    }
+
+    if (!code) {
+      setMessage("Missing RestroCode. Please save Basic Information first.");
+      return;
+    }
+
+    const payload = {
+      EmailAddressName1: emails[0]?.name ?? "",
+      EmailsforOrdersReceiving1: emails[0]?.value ?? "",
+      EmailsforOrdersStatus1: emails[0]?.active ? "ON" : "OFF",
+      EmailAddressName2: emails[1]?.name ?? "",
+      EmailsforOrdersReceiving2: emails[1]?.value ?? "",
+      EmailsforOrdersStatus2: emails[1]?.active ? "ON" : "OFF",
+      WhatsappMobileNumberName1: whatsapps[0]?.name ?? "",
+      WhatsappMobileNumberforOrderDetails1: whatsapps[0]?.value ?? "",
+      WhatsappMobileNumberStatus1: whatsapps[0]?.active ? "ON" : "OFF",
+      WhatsappMobileNumberName2: whatsapps[1]?.name ?? "",
+      WhatsappMobileNumberforOrderDetails2: whatsapps[1]?.value ?? "",
+      WhatsappMobileNumberStatus2: whatsapps[1]?.active ? "ON" : "OFF",
+      WhatsappMobileNumberName3: whatsapps[2]?.name ?? "",
+      WhatsappMobileNumberforOrderDetails3: whatsapps[2]?.value ?? "",
+      WhatsappMobileNumberStatus3: whatsapps[2]?.active ? "ON" : "OFF",
+    };
+
+    try {
+      setSaving(true);
+      setMessage("");
+
+      const res = await fetch(`/api/restros/${encodeURIComponent(code)}/contacts`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      const json = await res.json().catch(() => ({}));
 
-      const json = await res.json();
-      if (!res.ok) {
-        console.error("Save contacts error:", json);
-        setMsg(json?.error ?? "Failed to save contacts");
-      } else {
-        setMsg("Contacts saved successfully");
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || "Save failed");
       }
-    } catch (err) {
-      console.error("Save contacts unexpected:", err);
-      setMsg("Unexpected error saving contacts");
+
+      const rows = normalizeRows(json.row || payload);
+      setEmails(rows.emails);
+      setWhatsapps(rows.whatsapps);
+      setMessage("Saved successfully");
+    } catch (error: any) {
+      setMessage(error?.message || "Save failed");
     } finally {
       setSaving(false);
-      setTimeout(() => setMsg(null), 3500);
     }
-  };
-
-  const SimpleRow = ({
-    row,
-    idx,
-    type,
-    list,
-    setList,
-  }: {
-    row: ContactRow;
-    idx: number;
-    type: "email" | "whatsapp";
-    list: ContactRow[];
-    setList: (v: ContactRow[]) => void;
-  }) => (
-    <div className="grid grid-cols-12 gap-3 items-center mb-3 border-b pb-3">
-      <div className="col-span-2">
-        <label className="block text-xs font-medium text-gray-600 mb-1">
-          {type === "email"
-            ? `Email Address Name ${idx + 1}`
-            : `Whatsapp Mobile Name ${idx + 1}`}
-        </label>
-        <input
-          className="w-full border rounded px-2 py-1 text-sm"
-          value={row.name ?? ""}
-          onChange={(e) => updateRow(list, setList, row.id!, "name", e.target.value)}
-        />
-      </div>
-
-      <div className="col-span-4">
-        <label className="block text-xs font-medium text-gray-600 mb-1">
-          {type === "email"
-            ? `Email Address ${idx + 1}`
-            : `Whatsapp Mobile Number ${idx + 1}`}
-        </label>
-        <input
-          className="w-full border rounded px-2 py-1 text-sm"
-          value={row.value ?? ""}
-          placeholder={type === "email" ? "abc@example.com" : "9876543210"}
-          onChange={(e) => updateRow(list, setList, row.id!, "value", e.target.value)}
-        />
-      </div>
-
-      <div className="col-span-3 text-sm text-gray-700">
-        {type === "email"
-          ? `Emails for Orders Receiving ${idx + 1}`
-          : `Whatsapp Mobile Number for Orders Receiving ${idx + 1}`}
-      </div>
-
-      <div className="col-span-2 flex items-center">
-        <label className="inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={!!row.active}
-            onChange={(e) => updateRow(list, setList, row.id!, "active", e.target.checked)}
-            className="form-checkbox h-4 w-4 text-blue-600"
-          />
-          <span className="ml-2 text-sm">{row.active ? "Status On" : "Status Off"}</span>
-        </label>
-      </div>
-
-      <div className="col-span-1 text-right">
-        <button
-          type="button"
-          onClick={() => removeRow(list, setList, row.id!)}
-          className="text-red-600 text-sm"
-        >
-          Remove
-        </button>
-      </div>
-    </div>
-  );
+  }
 
   return (
-    <div className="space-y-6 px-2">
-      <div className="border rounded-lg p-4 bg-white">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-semibold">Emails</h3>
-          <button className="bg-orange-600 text-white px-3 py-1 rounded text-sm" onClick={addEmail}>
-            Add New Email
-          </button>
-        </div>
-
-        {emails.length === 0 && <p className="text-sm text-gray-500 italic">No emails added yet.</p>}
-        {emails.map((r, i) => (
-          <SimpleRow key={r.id} row={r} idx={i} type="email" list={emails} setList={setEmails} />
-        ))}
-      </div>
-
-      <div className="border rounded-lg p-4 bg-white">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-semibold">WhatsApp Numbers</h3>
-          <button className="bg-orange-600 text-white px-3 py-1 rounded text-sm" onClick={addWhatsapp}>
-            Add New WhatsApp
-          </button>
-        </div>
-
-        {whatsapps.length === 0 && <p className="text-sm text-gray-500 italic">No WhatsApp numbers added yet.</p>}
-        {whatsapps.map((r, i) => (
-          <SimpleRow key={r.id} row={r} idx={i} type="whatsapp" list={whatsapps} setList={setWhatsapps} />
-        ))}
-      </div>
-
-      <div className="flex justify-between items-center">
-        <div>{msg && <div className="text-sm text-green-600">{msg}</div>}</div>
-        <div>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={`px-4 py-2 rounded text-white ${saving ? "bg-gray-400" : "bg-green-600"}`}
-          >
+    <AdminCard
+      title="Contacts"
+      subtitle="Order notification email and WhatsApp recipients"
+      actions={
+        <>
+          <AdminButton variant="secondary" onClick={() => router.back()}>
+            Cancel
+          </AdminButton>
+          <AdminButton onClick={save} disabled={saving || loading}>
             {saving ? "Saving..." : "Save"}
-          </button>
+          </AdminButton>
+        </>
+      }
+      bodyClassName="space-y-5"
+    >
+      {message ? (
+        <div
+          className={`rounded-md border px-4 py-3 text-sm font-semibold ${
+            message.toLowerCase().includes("success")
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {message}
         </div>
-      </div>
-    </div>
+      ) : null}
+
+      <AdminCard title="Emails" subtitle="Up to 2 email recipients for order notifications">
+        <div className="space-y-4">
+          {emails.map((row, index) => (
+            <div key={row.id} className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_2fr_140px] lg:items-end">
+              <AdminField label={`Name ${index + 1}`}>
+                <AdminInput
+                  placeholder={`Name ${index + 1}`}
+                  value={row.name}
+                  onChange={(event) => updateEmail(index, "name", event.target.value)}
+                />
+              </AdminField>
+
+              <AdminField label={`Email ${index + 1}`}>
+                <AdminInput
+                  placeholder={`Email ${index + 1}`}
+                  value={row.value}
+                  onChange={(event) => updateEmail(index, "value", event.target.value.trim())}
+                  className={row.value && EMAIL_RE.test(row.value) ? "border-emerald-400" : row.value ? "border-red-400" : ""}
+                />
+              </AdminField>
+
+              <label className="flex h-10 items-center gap-2 text-sm font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={row.active}
+                  onChange={(event) => updateEmail(index, "active", event.target.checked)}
+                />
+                {row.active ? "ON" : "OFF"}
+              </label>
+            </div>
+          ))}
+        </div>
+      </AdminCard>
+
+      <AdminCard title="WhatsApp Numbers" subtitle="Up to 3 mobile recipients for order notifications">
+        <div className="space-y-4">
+          {whatsapps.map((row, index) => (
+            <div key={row.id} className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_2fr_140px] lg:items-end">
+              <AdminField label={`Name ${index + 1}`}>
+                <AdminInput
+                  placeholder={`Name ${index + 1}`}
+                  value={row.name}
+                  onChange={(event) => updateWhatsapp(index, "name", event.target.value)}
+                />
+              </AdminField>
+
+              <AdminField label={`Mobile ${index + 1}`}>
+                <AdminInput
+                  placeholder={`Mobile ${index + 1}`}
+                  inputMode="numeric"
+                  value={row.value}
+                  onChange={(event) =>
+                    updateWhatsapp(
+                      index,
+                      "value",
+                      event.target.value.replace(/\D/g, "").slice(0, 10)
+                    )
+                  }
+                  className={row.value && row.value.length === 10 ? "border-emerald-400" : row.value ? "border-red-400" : ""}
+                />
+              </AdminField>
+
+              <label className="flex h-10 items-center gap-2 text-sm font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={row.active}
+                  onChange={(event) => updateWhatsapp(index, "active", event.target.checked)}
+                />
+                {row.active ? "ON" : "OFF"}
+              </label>
+            </div>
+          ))}
+        </div>
+      </AdminCard>
+    </AdminCard>
   );
 }
