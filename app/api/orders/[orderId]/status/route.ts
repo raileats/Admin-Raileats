@@ -1,124 +1,155 @@
-import { NextResponse } from "next/server";
-import { serviceClient } from "@/lib/supabaseServer";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "",
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+    { auth: { persistSession: false } }
+  );
+}
+
+function cleanText(value: any) {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+function pickStatusColumn(row: any) {
+  const candidates = [
+    "OrderStatus",
+    "Status",
+    "CurrentStatus",
+    "OrderCurrentStatus",
+    "orderStatus",
+    "status",
+  ];
+
+  return candidates.find((key) => row && row[key] !== undefined) || "OrderStatus";
+}
 
 export async function PATCH(
-  req: Request,
-  { params }: { params: { orderId: string } }
+  req: NextRequest,
+  { params }: { params: { id: string } }
 ) {
   try {
-    const orderId = params.orderId;
+    const orderId = decodeURIComponent(params.id || "").trim();
+
+    if (!orderId) {
+      return NextResponse.json(
+        { ok: false, error: "Order id is required" },
+        { status: 400 }
+      );
+    }
 
     const body = await req.json();
+    const newStatus = cleanText(body.newStatus ?? body.NewStatus);
 
-    const newStatus = String(body.newStatus || "").trim();
-    const remarks = body.remarks || "";
-    const changedBy = body.changedBy || "admin";
-
-    if (!orderId || !newStatus) {
+    if (!newStatus) {
       return NextResponse.json(
-        { ok: false, error: "missing_data" },
+        { ok: false, error: "newStatus is required" },
         { status: 400 }
       );
     }
 
-    const allowedStatuses = [
-  "Booked",
-  "In Verification",
-  "New Order",
-  "In Kitchen",
-  "Out for Delivery",
-  "Delivered",
-  "Cancelled",
-  "Not Delivered",
-  "Bad Delivery",
-];
+    const supabase = getSupabase();
 
-    if (!allowedStatuses.includes(newStatus)) {
-      return NextResponse.json(
-        { ok: false, error: "invalid_status" },
-        { status: 400 }
-      );
-    }
-
-    const supa = serviceClient;
-
-    // current order
-    const { data: oldOrder, error: fetchError } = await supa
+    const { data: existing, error: existingError } = await supabase
       .from("Orders")
       .select("*")
       .eq("OrderId", orderId)
-      .single();
+      .maybeSingle();
 
-    if (fetchError || !oldOrder) {
+    if (existingError) {
       return NextResponse.json(
-        { ok: false, error: "order_not_found" },
-        { status: 404 }
-      );
-    }
-
-    // update order
-    const { error: updateError } = await supa
-      .from("Orders")
-      .update({
-  Status: newStatus,
-
-  SubStatus:
-    body.subStatus || null,
-
-  UpdatedAt:
-    new Date().toISOString(),
-})
-      .eq("OrderId", orderId);
-
-    if (updateError) {
-      console.error(updateError);
-
-      return NextResponse.json(
-        { ok: false, error: "update_failed" },
+        { ok: false, error: existingError.message },
         { status: 500 }
       );
     }
 
-    // history insert
-    await supa
-  .from("OrderStatusHistory")
-  .insert({
+    if (!existing) {
+      return NextResponse.json(
+        { ok: false, error: "Order not found" },
+        { status: 404 }
+      );
+    }
 
-    OrderId: orderId,
+    const statusColumn = pickStatusColumn(existing);
+    const oldStatus = cleanText(existing[statusColumn]);
+    const subStatus = cleanText(body.subStatus ?? body.SubStatus);
+    const remarks = cleanText(body.remarks ?? body.Remarks);
+    const note = cleanText(body.note ?? body.Note ?? remarks);
+    const userType = cleanText(body.userType ?? body.UserType) || "Admin";
+    const userName =
+      cleanText(body.userName ?? body.UserName ?? body.changedBy ?? body.ChangedBy) ||
+      "Admin";
+    const actionSource =
+      cleanText(body.actionSource ?? body.ActionSource) || userType;
+    const changedAt = new Date().toISOString();
 
-    OldStatus:
-      oldOrder.Status,
+    const orderUpdate: Record<string, any> = {
+      [statusColumn]: newStatus,
+    };
 
-    NewStatus:
-      newStatus,
+    if (existing.SubStatus !== undefined) orderUpdate.SubStatus = subStatus;
+    if (existing.subStatus !== undefined) orderUpdate.subStatus = subStatus;
+    if (existing.UpdatedAt !== undefined) orderUpdate.UpdatedAt = changedAt;
+    if (existing.updated_at !== undefined) orderUpdate.updated_at = changedAt;
 
-    SubStatus:
-      body.subStatus || null,
+    const { data: updatedRows, error: updateError } = await supabase
+      .from("Orders")
+      .update(orderUpdate)
+      .eq("OrderId", orderId)
+      .select("*");
 
-    Note: remarks,
+    if (updateError) {
+      return NextResponse.json(
+        { ok: false, error: updateError.message },
+        { status: 500 }
+      );
+    }
 
-    Remarks: remarks,
+    const historyPayload = {
+      OrderId: orderId,
+      OldStatus: oldStatus,
+      NewStatus: newStatus,
+      SubStatus: subStatus,
+      Remarks: remarks,
+      Note: note,
+      ChangedBy: userName,
+      UserType: userType,
+      UserName: userName,
+      ActionSource: actionSource,
+      ChangedAt: changedAt,
+    };
 
-    ChangedBy:
-      changedBy,
+    const { data: historyRow, error: historyError } = await supabase
+      .from("OrderStatusHistory")
+      .insert(historyPayload)
+      .select("*")
+      .maybeSingle();
 
-    ActionSource:
-      body.actionSource ||
-      "admin",
-
-    ChangedAt:
-      new Date().toISOString(),
-
-  });
+    if (historyError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: historyError.message,
+          orderUpdated: true,
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
+      row: updatedRows?.[0] ?? null,
+      history: historyRow,
     });
-  } catch (error) {
-    console.error(error);
-
+  } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: "server_error" },
+      { ok: false, error: error?.message || "Internal server error" },
       { status: 500 }
     );
   }
