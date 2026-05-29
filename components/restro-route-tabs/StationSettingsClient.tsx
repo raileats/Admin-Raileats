@@ -1,8 +1,7 @@
 // components/restro-route-tabs/StationSettingsClient.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useMemo, useState } from "react";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput, AdminSelect } from "@/components/admin/AdminField";
@@ -13,7 +12,6 @@ type Props = {
   initialData?: Restro;
   restroCode?: string | number;
   mode?: "edit" | "new";
-  nextHref?: string;
 };
 
 const paymentOptions = ["Both", "Online", "COD", "Prepaid", "Postpaid", "None"];
@@ -25,6 +23,8 @@ function normalize(row: Restro) {
     ...row,
     OpenTime: row?.OpenTime ?? row?.open_time ?? "",
     ClosedTime: row?.ClosedTime ?? row?.closed_time ?? "",
+    DeliveryTime: row?.DeliveryTime ?? row?.delivery_time ?? row?.DeliveryTimeInMinutes ?? "",
+    DeliveryRadius: row?.DeliveryRadius ?? row?.delivery_radius ?? row?.DeliveryRadiusInKm ?? "",
   };
 }
 
@@ -36,22 +36,11 @@ function stationDisplay(restro: Restro) {
   return `${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}`;
 }
 
-export default function StationSettingsClient({ initialData = {}, restroCode, mode = "edit", nextHref }: Props) {
-  const router = useRouter();
+export default function StationSettingsClient({ initialData = {}, restroCode, mode = "edit" }: Props) {
   const [local, setLocal] = useState<Restro>(() => normalize({ ...initialData, RestroCode: restroCode ?? initialData?.RestroCode }));
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const code = useMemo(() => String(restroCode ?? local?.RestroCode ?? ""), [restroCode, local?.RestroCode]);
-
-  useEffect(() => {
-    setLocal((prev) =>
-      normalize({
-        ...prev,
-        ...initialData,
-        RestroCode: restroCode ?? initialData?.RestroCode ?? prev?.RestroCode,
-      })
-    );
-  }, [initialData, restroCode]);
 
   function updateField(key: string, value: any) {
     setLocal((prev) => ({ ...prev, [key]: value }));
@@ -72,9 +61,13 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
         State: local.State || null,
         WeeklyOff: local.WeeklyOff || null,
         open_time: local.OpenTime || null,
+        OpenTime: local.OpenTime || null,
         closed_time: local.ClosedTime || null,
+        ClosedTime: local.ClosedTime || null,
         MinimumOrderValue: local.MinimumOrderValue || null,
         CutOffTime: local.CutOffTime || null,
+        DeliveryTime: local.DeliveryTime || null,
+        DeliveryRadius: local.DeliveryRadius || null,
         RaileatsCustomerDeliveryCharge: local.RaileatsCustomerDeliveryCharge || null,
         RaileatsCustomerDeliveryChargeGSTRate: local.RaileatsCustomerDeliveryChargeGSTRate || null,
         RaileatsCustomerDeliveryChargeGST: local.RaileatsCustomerDeliveryChargeGST || null,
@@ -93,7 +86,6 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
       if (!res.ok || json?.ok === false) throw new Error(json?.error || "Save failed");
       if (json?.row) setLocal(normalize(json.row));
       setMsg("Saved successfully");
-      if (nextHref) router.push(nextHref);
     } catch (error: any) {
       setMsg(error?.message || "Save failed");
     } finally {
@@ -108,12 +100,6 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
       actions={<AdminButton onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</AdminButton>}
     >
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <AdminField label="Restro Code">
-          <AdminInput value={code} readOnly />
-        </AdminField>
-        <AdminField label="Restro Name">
-          <AdminInput value={local.RestroName ?? ""} readOnly />
-        </AdminField>
         <AdminField label="Station">
           <AdminInput value={stationDisplay(local)} readOnly />
         </AdminField>
@@ -154,6 +140,12 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
         </AdminField>
         <AdminField label="Cut Off Time (mins)">
           <AdminInput value={local.CutOffTime ?? ""} onChange={(e) => updateField("CutOffTime", e.target.value)} />
+        </AdminField>
+        <AdminField label="Delivery Time (mins)">
+          <AdminInput value={local.DeliveryTime ?? ""} onChange={(e) => updateField("DeliveryTime", e.target.value)} />
+        </AdminField>
+        <AdminField label="Delivery Radius (km)">
+          <AdminInput value={local.DeliveryRadius ?? ""} onChange={(e) => updateField("DeliveryRadius", e.target.value)} />
         </AdminField>
         <AdminField label="Raileats Orders Payment Option">
           <AdminSelect value={local.RaileatsOrdersPaymentOptionforCustomer ?? "Both"} onChange={(e) => updateField("RaileatsOrdersPaymentOptionforCustomer", e.target.value)}>
