@@ -44,8 +44,23 @@ const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
 
 const modalInputClass = "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
+const STATE_HINTS = [
+  { state: "Andhra Pradesh", terms: ["andhra", "vijayawada", "vizianagaram", "vzm", "visakhapatnam", "tirupati"] },
+  { state: "Madhya Pradesh", terms: ["madhya", "bhopal", "bpl", "ratlam", "itarsi", "jabalpur"] },
+  { state: "Uttar Pradesh", terms: ["uttar pradesh", "kanpur", "lucknow", "v lakshmibai", "vglj", "prayagraj"] },
+  { state: "Delhi", terms: ["delhi", "nizamuddin", "nzm", "new delhi"] },
+  { state: "Maharashtra", terms: ["maharashtra", "mumbai", "nagpur", "pune", "bhusaval"] },
+  { state: "Gujarat", terms: ["gujarat", "surat", "ahmedabad", "adi", "vadodara"] },
+  { state: "Rajasthan", terms: ["rajasthan", "abu road", "jaipur", "jodhpur", "udaipur"] },
+];
+
 function fmt(d?: string | null) {
   return d ? new Date(d).toLocaleDateString("en-GB") : "-";
+}
+
+function detectState(value: string) {
+  const normalized = value.toLowerCase();
+  return STATE_HINTS.find((entry) => entry.terms.some((term) => normalized.includes(term)))?.state || "";
 }
 
 export default function AddressDocsClient({
@@ -110,7 +125,16 @@ export default function AddressDocsClient({
   }, [code]);
 
   function update(key: string, value: any) {
-    setLocal((s: any) => ({ ...s, [key]: value }));
+    setLocal((s: any) => {
+      const next = { ...s, [key]: value };
+      if (["RestroAddress", "City", "District"].includes(key)) {
+        const detected = detectState(
+          `${next.RestroAddress || ""} ${next.City || ""} ${next.District || ""}`
+        );
+        if (detected) next.State = detected;
+      }
+      return next;
+    });
   }
 
   async function loadDocs() {
@@ -159,6 +183,19 @@ export default function AddressDocsClient({
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok === false) {
         throw new Error(json?.error || "Save failed");
+      }
+
+      if (json?.row) {
+        setLocal((prev: any) => ({
+          ...prev,
+          RestroAddress: json.row.RestroAddress ?? prev.RestroAddress,
+          City: json.row.City ?? prev.City,
+          State: json.row.State ?? prev.State,
+          District: json.row.District ?? prev.District,
+          PinCode: json.row.PinCode ?? prev.PinCode,
+          RestroLatitude: json.row.RestroLatitude ?? prev.RestroLatitude,
+          RestroLongitude: json.row.RestroLongitude ?? prev.RestroLongitude,
+        }));
       }
 
       setMessage("Address saved");
