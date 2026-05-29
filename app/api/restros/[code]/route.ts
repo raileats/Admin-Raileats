@@ -4,197 +4,142 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-/* ================= SUPABASE CLIENT ================= */
-
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      persistSession: false,
-    },
-  }
+  { auth: { persistSession: false } }
 );
 
-/* ================= PATCH ================= */
+function num(value: any) {
+  if (value === undefined) return undefined;
+  if (value === "" || value === null) return null;
+  const n = Number(value);
+  return Number.isNaN(n) ? null : n;
+}
+
+function text(value: any) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const cleaned = String(value).trim();
+  return cleaned === "" ? null : cleaned;
+}
+
+function setIfDefined(payload: Record<string, any>, key: string, value: any) {
+  if (value !== undefined) payload[key] = value;
+}
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { code: string } }
+) {
+  try {
+    const RestroCode = Number(params.code);
+
+    if (!RestroCode || Number.isNaN(RestroCode)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid RestroCode" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from("RestroMaster")
+      .select("*")
+      .eq("RestroCode", RestroCode)
+      .single();
+
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, row: data });
+  } catch (error: any) {
+    return NextResponse.json(
+      { ok: false, error: error?.message || "Server error" },
+      { status: 500 }
+    );
+  }
+}
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
   try {
-    console.log("===== PATCH CALLED =====");
-
     const RestroCode = Number(params.code);
 
-    if (!RestroCode || isNaN(RestroCode)) {
+    if (!RestroCode || Number.isNaN(RestroCode)) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Invalid RestroCode",
-        },
+        { ok: false, error: "Invalid RestroCode" },
         { status: 400 }
       );
     }
 
     const body = await req.json();
+    const payload: Record<string, any> = {};
 
-    console.log("Incoming body:", body);
+    setIfDefined(payload, "StationCode", text(body.StationCode));
+    setIfDefined(payload, "StationName", text(body.StationName));
+    setIfDefined(payload, "State", text(body.State));
 
-    /* ================= SAFE PAYLOAD ================= */
+    setIfDefined(payload, "RestroName", text(body.RestroName));
+    setIfDefined(payload, "OwnerName", text(body.OwnerName));
+    setIfDefined(payload, "OwnerEmail", text(body.OwnerEmail));
+    setIfDefined(payload, "OwnerPhone", text(body.OwnerPhone));
+    setIfDefined(payload, "RestroEmail", text(body.RestroEmail));
+    setIfDefined(payload, "RestroPhone", text(body.RestroPhone));
+    setIfDefined(payload, "BrandNameifAny", text(body.BrandNameifAny));
 
-    const payload: any = {};
+    setIfDefined(payload, "IRCTCStatus", num(body.IRCTCStatus));
+    setIfDefined(payload, "RaileatsStatus", num(body.RaileatsStatus));
+    setIfDefined(payload, "IsIrctcApproved", body.IsIrctcApproved);
+    setIfDefined(payload, "RestroRating", num(body.RestroRating));
+    setIfDefined(payload, "IsPureVeg", num(body.IsPureVeg));
 
-    const num = (v: any) =>
-      v === "" || v === null || v === undefined ? null : Number(v);
+    // Important: keep the exact path/URL typed by admin. Do not auto-clean it.
+    setIfDefined(payload, "RestroDisplayPhoto", text(body.RestroDisplayPhoto));
 
-    /* ================= STATION FIX ================= */
+    setIfDefined(payload, "open_time", text(body.open_time));
+    setIfDefined(payload, "closed_time", text(body.closed_time));
+    setIfDefined(payload, "MinimumOrderValue", num(body.MinimumOrderValue));
+    setIfDefined(payload, "CutOffTime", num(body.CutOffTime));
+    setIfDefined(payload, "WeeklyOff", text(body.WeeklyOff));
+    setIfDefined(payload, "RaileatsCustomerDeliveryCharge", num(body.RaileatsCustomerDeliveryCharge));
+    setIfDefined(payload, "RaileatsCustomerDeliveryChargeGSTRate", num(body.RaileatsCustomerDeliveryChargeGSTRate));
+    setIfDefined(payload, "RaileatsCustomerDeliveryChargeGST", num(body.RaileatsCustomerDeliveryChargeGST));
+    setIfDefined(payload, "RaileatsCustomerDeliveryChargeTotalInclGST", num(body.RaileatsCustomerDeliveryChargeTotalInclGST));
+    setIfDefined(payload, "RaileatsOrdersPaymentOptionforCustomer", text(body.RaileatsOrdersPaymentOptionforCustomer));
+    setIfDefined(payload, "IRCTCOrdersPaymentOptionforCustomer", text(body.IRCTCOrdersPaymentOptionforCustomer));
+    setIfDefined(payload, "RestroTypeofDeliveryRailEatsorVendor", text(body.RestroTypeofDeliveryRailEatsorVendor));
 
-    if (body.StationCode !== undefined) payload.StationCode = body.StationCode;
-    if (body.StationName !== undefined) payload.StationName = body.StationName;
-    if (body.State !== undefined) payload.State = body.State;
-
-    /* ================= TIME FIX ================= */
-
-    if (body.open_time !== undefined) payload.open_time = body.open_time;
-    if (body.closed_time !== undefined) payload.closed_time = body.closed_time;
-
-    /* ================= ORDER SETTINGS ================= */
-
-    if (body.MinimumOrderValue !== undefined)
-      payload.MinimumOrderValue = num(body.MinimumOrderValue);
-
-    if (body.CutOffTime !== undefined)
-      payload.CutOffTime = num(body.CutOffTime);
-
-    if (body.WeeklyOff !== undefined) payload.WeeklyOff = body.WeeklyOff;
-
-    if (body.RaileatsCustomerDeliveryCharge !== undefined)
-      payload.RaileatsCustomerDeliveryCharge = num(
-        body.RaileatsCustomerDeliveryCharge
-      );
-
-    if (body.RaileatsCustomerDeliveryChargeGSTRate !== undefined)
-      payload.RaileatsCustomerDeliveryChargeGSTRate = num(
-        body.RaileatsCustomerDeliveryChargeGSTRate
-      );
-
-    if (body.RaileatsCustomerDeliveryChargeGST !== undefined)
-      payload.RaileatsCustomerDeliveryChargeGST = num(
-        body.RaileatsCustomerDeliveryChargeGST
-      );
-
-    if (body.RaileatsCustomerDeliveryChargeTotalInclGST !== undefined)
-      payload.RaileatsCustomerDeliveryChargeTotalInclGST = num(
-        body.RaileatsCustomerDeliveryChargeTotalInclGST
-      );
-
-    if (body.RaileatsOrdersPaymentOptionforCustomer !== undefined)
-      payload.RaileatsOrdersPaymentOptionforCustomer =
-        body.RaileatsOrdersPaymentOptionforCustomer;
-
-    if (body.IRCTCOrdersPaymentOptionforCustomer !== undefined)
-      payload.IRCTCOrdersPaymentOptionforCustomer =
-        body.IRCTCOrdersPaymentOptionforCustomer;
-
-    if (body.RestroTypeofDeliveryRailEatsorVendor !== undefined)
-      payload.RestroTypeofDeliveryRailEatsorVendor =
-        body.RestroTypeofDeliveryRailEatsorVendor;
-
-    /* ================= BASIC INFO FIX ================= */
-
-    if (body.RestroName !== undefined) payload.RestroName = body.RestroName;
-    if (body.OwnerName !== undefined) payload.OwnerName = body.OwnerName;
-    if (body.OwnerEmail !== undefined) payload.OwnerEmail = body.OwnerEmail;
-    if (body.OwnerPhone !== undefined) payload.OwnerPhone = body.OwnerPhone;
-    if (body.RestroEmail !== undefined) payload.RestroEmail = body.RestroEmail;
-    if (body.RestroPhone !== undefined) payload.RestroPhone = body.RestroPhone;
-
-    if (body.BrandNameifAny !== undefined)
-      payload.BrandNameifAny = body.BrandNameifAny;
-
-    if (body.RestroRating !== undefined)
-      payload.RestroRating = num(body.RestroRating);
-
-    if (body.IsIrctcApproved !== undefined)
-      payload.IsIrctcApproved = body.IsIrctcApproved;
-
-    if (body.RaileatsStatus !== undefined)
-      payload.RaileatsStatus = body.RaileatsStatus;
-
-    // ✅ Display photo path / URL save fix
-    if (body.RestroDisplayPhoto !== undefined)
-      payload.RestroDisplayPhoto = body.RestroDisplayPhoto;
-
-    /* ================= RESTRO LOGIN ================= */
-
-    if (body.RestroLoginMobile !== undefined)
-      payload.RestroLoginMobile = body.RestroLoginMobile;
-
-    if (body.RestroPassword !== undefined)
-      payload.RestroPassword = body.RestroPassword;
-
-    /* ================= HOLIDAY ================= */
-
-    if (body.HolidayStatus !== undefined)
-      payload.HolidayStatus = num(body.HolidayStatus);
-
-    /* ================= MINIMUM ORDER ================= */
-
-    if (body.MinimumOrderAmount !== undefined)
-      payload.MinimumOrderAmount = num(body.MinimumOrderAmount);
-
-    /* ================= TIMESTAMP ================= */
+    setIfDefined(payload, "RestroLoginMobile", text(body.RestroLoginMobile));
+    setIfDefined(payload, "RestroPassword", text(body.RestroPassword));
+    setIfDefined(payload, "HolidayStatus", num(body.HolidayStatus));
+    setIfDefined(payload, "MinimumOrderAmount", num(body.MinimumOrderAmount));
 
     payload.UpdatedAt = new Date().toISOString();
-
-    console.log("Final payload:", payload);
-
-    /* ================= UPDATE ================= */
 
     const { data, error } = await supabase
       .from("RestroMaster")
       .update(payload)
       .eq("RestroCode", RestroCode)
-      .select();
-
-    console.log("Updated row:", data);
+      .select("*")
+      .single();
 
     if (error) {
-      console.error("Supabase error:", error);
-
       return NextResponse.json(
-        {
-          ok: false,
-          error: error.message,
-        },
+        { ok: false, error: error.message },
         { status: 500 }
       );
     }
 
-    if (!data || data.length === 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "No rows updated. Check RestroCode",
-        },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({
-      ok: true,
-      message: "Restro updated successfully",
-      row: data[0],
-    });
-  } catch (err: any) {
-    console.error("PATCH FAILED:", err);
-
+    return NextResponse.json({ ok: true, row: data });
+  } catch (error: any) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: err?.message || "Server error",
-      },
+      { ok: false, error: error?.message || "Server error" },
       { status: 500 }
     );
   }
