@@ -19,12 +19,40 @@ export default function AdminButton({
   className = "",
   children,
   type = "button",
+  onClick,
   ...props
 }: Props) {
+  function shouldValidateBeforeClick() {
+    const text = React.Children.toArray(children).join(" ").toLowerCase();
+    return /(save|submit|update|continue|next|add)/.test(text);
+  }
+
+  function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
+    if (shouldValidateBeforeClick()) {
+      const invalid = Array.from(
+        document.querySelectorAll<HTMLInputElement>("input[data-admin-validation]")
+      ).find((input) => {
+        if (input.disabled || input.readOnly || !input.value) return false;
+        return !input.checkValidity();
+      });
+
+      if (invalid) {
+        event.preventDefault();
+        event.stopPropagation();
+        invalid.reportValidity();
+        invalid.focus();
+        return;
+      }
+    }
+
+    onClick?.(event);
+  }
+
   return (
     <button
       type={type}
       className={`inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${variants[variant]} ${className}`}
+      onClick={handleClick}
       {...props}
     >
       {children}
