@@ -1,61 +1,109 @@
-// path: app/api/restros/[code]/contacts/route.ts
-import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer"; // use your server-side supabase helper
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: { code: string } }) {
-  const code = params?.code ?? "";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-  if (!code) {
-    return NextResponse.json({ error: "Missing restro code" }, { status: 400 });
+const supabase = createClient(
+  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);
+
+const CONTACT_COLUMNS = [
+  "RestroCode",
+  "EmailAddressName1",
+  "EmailsforOrdersReceiving1",
+  "EmailsforOrdersStatus1",
+  "EmailAddressName2",
+  "EmailsforOrdersReceiving2",
+  "EmailsforOrdersStatus2",
+  "WhatsappMobileNumberName1",
+  "WhatsappMobileNumberforOrderDetails1",
+  "WhatsappMobileNumberStatus1",
+  "WhatsappMobileNumberName2",
+  "WhatsappMobileNumberforOrderDetails2",
+  "WhatsappMobileNumberStatus2",
+  "WhatsappMobileNumberName3",
+  "WhatsappMobileNumberforOrderDetails3",
+  "WhatsappMobileNumberStatus3",
+].join(",");
+
+const ALLOWED_FIELDS = [
+  "EmailAddressName1",
+  "EmailsforOrdersReceiving1",
+  "EmailsforOrdersStatus1",
+  "EmailAddressName2",
+  "EmailsforOrdersReceiving2",
+  "EmailsforOrdersStatus2",
+  "WhatsappMobileNumberName1",
+  "WhatsappMobileNumberforOrderDetails1",
+  "WhatsappMobileNumberStatus1",
+  "WhatsappMobileNumberName2",
+  "WhatsappMobileNumberforOrderDetails2",
+  "WhatsappMobileNumberStatus2",
+  "WhatsappMobileNumberName3",
+  "WhatsappMobileNumberforOrderDetails3",
+  "WhatsappMobileNumberStatus3",
+];
+
+function parseCode(value: string) {
+  const code = Number(value);
+  return code && !Number.isNaN(code) ? code : null;
+}
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { code: string } }
+) {
+  const restroCode = parseCode(params.code);
+
+  if (!restroCode) {
+    return NextResponse.json({ ok: false, error: "Invalid RestroCode" }, { status: 400 });
   }
 
-  try {
-    // Query emails
-    const { data: emails, error: errEmails } = await supabaseServer
-      .from("restro_email")
-      .select("*")
-      .eq("RestroCode", code);
+  const { data, error } = await supabase
+    .from("RestroMaster")
+    .select(CONTACT_COLUMNS)
+    .eq("RestroCode", restroCode)
+    .single();
 
-    if (errEmails) {
-      console.error("Supabase emails error:", errEmails);
-      return NextResponse.json({ error: "Failed to query emails", details: errEmails }, { status: 500 });
-    }
-
-    // Query whatsapps
-    const { data: whats, error: errWhats } = await supabaseServer
-      .from("restro_whatsapp")
-      .select("*")
-      .eq("RestroCode", code);
-
-    if (errWhats) {
-      console.error("Supabase whatsapps error:", errWhats);
-      return NextResponse.json({ error: "Failed to query whatsapps", details: errWhats }, { status: 500 });
-    }
-
-    // Normalize shape for client
-    const mapEmail = (r: any) => ({
-      id: r.id ?? `${r.RestroCode}-email-${Math.random()}`,
-      name: r.Name ?? "",
-      value: r.Email ?? "",
-      active: !!r.Active,
-      raw: r,
-    });
-
-    const mapWhats = (r: any) => ({
-      id: r.id ?? `${r.RestroCode}-wa-${Math.random()}`,
-      name: r.Name ?? "",
-      value: r.Mobile ?? "",
-      active: !!r.Active,
-      raw: r,
-    });
-
-    return NextResponse.json({
-      ok: true,
-      emails: (emails || []).map(mapEmail),
-      whatsapps: (whats || []).map(mapWhats),
-    });
-  } catch (err: any) {
-    console.error("Contacts route unexpected error:", err);
-    return NextResponse.json({ error: "Unexpected error", details: String(err) }, { status: 500 });
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
+
+  return NextResponse.json({ ok: true, row: data });
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { code: string } }
+) {
+  const restroCode = parseCode(params.code);
+
+  if (!restroCode) {
+    return NextResponse.json({ ok: false, error: "Invalid RestroCode" }, { status: 400 });
+  }
+
+  const body = await req.json();
+  const payload: Record<string, any> = {};
+
+  for (const field of ALLOWED_FIELDS) {
+    if (body[field] !== undefined) payload[field] = body[field];
+  }
+
+  payload.UpdatedAt = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("RestroMaster")
+    .update(payload)
+    .eq("RestroCode", restroCode)
+    .select(CONTACT_COLUMNS)
+    .single();
+
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, row: data });
 }
