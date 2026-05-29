@@ -3,18 +3,7 @@ import React from "react";
 import Link from "next/link";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
-import Tabs from "@/components/ui/Tabs";
-
-const tabs = [
-  { label: "Basic Information", href: "./basic" },
-  { label: "Station Settings", href: "./station-settings" },
-  { label: "Address & Documents", href: "./address-docs" },
-  { label: "Contacts", href: "./contacts" },
-  { label: "Bank", href: "./bank" },
-  { label: "Future Closed", href: "./future-closed" },
-  { label: "Menu", href: "./menu" },
-  { label: "Restro User & Password", href: "./restro-user-password" },
-];
+import NewRestroTabs from "@/components/restro-route-tabs/NewRestroTabs";
 
 export default function NewRestroLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -30,8 +19,9 @@ export default function NewRestroLayout({ children }: { children: React.ReactNod
           </Link>
         </div>
       </AdminCard>
+
       <AdminCard>
-        <Tabs tabs={tabs} />
+        <NewRestroTabs />
         <div className="mt-5">{children}</div>
       </AdminCard>
     </div>
