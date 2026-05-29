@@ -1,9 +1,25 @@
-// app/admin/restros/new/bank/page.tsx
+// app/admin/restros/new/address-docs/page.tsx
 "use client";
 
 import NewRestroCodeGate from "@/components/restro-route-tabs/NewRestroCodeGate";
-import BankTab from "@/components/restro-edit/BankTab";
+import AddressDocsClient from "@/components/tabs/AddressDocsClient";
 
-export default function NewBankPage() {
-  return <NewRestroCodeGate>{(code) => <BankTab restroCode={code} />}</NewRestroCodeGate>;
+function readInitialData(code: string) {
+  try {
+    const raw = localStorage.getItem("new_restro_basic");
+    if (!raw) return { RestroCode: code };
+    const parsed = JSON.parse(raw);
+    if (String(parsed?.RestroCode ?? "") !== String(code)) return { RestroCode: code };
+    return { ...parsed, RestroCode: code };
+  } catch {
+    return { RestroCode: code };
+  }
+}
+
+export default function NewAddressDocsPage() {
+  return (
+    <NewRestroCodeGate>
+      {(code) => <AddressDocsClient restroCode={code} initialData={readInitialData(code)} />}
+    </NewRestroCodeGate>
+  );
 }
