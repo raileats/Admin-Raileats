@@ -117,7 +117,15 @@ export default function NewRestroBasicPage() {
       if (!res.ok || data?.ok === false || data?.error) throw new Error(data?.error || "Create failed");
       const code = data?.RestroCode ?? data?.row?.RestroCode ?? data?.restro_code ?? data?.id;
       if (!code) throw new Error("Restro created but RestroCode not returned");
-      localStorage.setItem("new_restro_code", String(code));
+            localStorage.setItem("new_restro_code", String(code));
+      localStorage.setItem("new_restro_basic", JSON.stringify({
+        ...payload,
+        ...data,
+        RestroCode: code,
+        StationCode: data?.StationCode ?? payload.StationCode,
+        StationName: data?.StationName ?? payload.StationName,
+        State: data?.State ?? payload.State,
+      }));
       window.dispatchEvent(new Event("new-restro-code-changed"));
       router.push("/admin/restros/new/station-settings");
     } catch (error: any) {
@@ -166,3 +174,4 @@ export default function NewRestroBasicPage() {
     </AdminCard>
   );
 }
+
