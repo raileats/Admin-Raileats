@@ -182,7 +182,7 @@ export default function NewRestroBasicPage() {
 
       const row = data.row ?? data;
       const code = row?.RestroCode ?? row?.restro_code ?? row?.id;
-      if (code) localStorage.setItem("new_restro_code", String(code));
+      if (code) { localStorage.setItem("new_restro_code", String(code)); window.dispatchEvent(new Event("new-restro-code-changed")); }
       router.push("/admin/restros/new/station-settings");
     } catch (error: any) {
       setMsg(error?.message || "Create failed");
@@ -306,3 +306,4 @@ export default function NewRestroBasicPage() {
     </AdminCard>
   );
 }
+
