@@ -11,8 +11,28 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const q = (url.searchParams.get("q") ?? "").trim();
+    const stationId = (url.searchParams.get("stationId") ?? "").trim();
+    const stationName = (url.searchParams.get("stationName") ?? "").trim();
+    const stationCode = (url.searchParams.get("stationCode") ?? "").trim();
 
-    const cols = ["StationCode", "StationName", "State"].join(",");
+    const cols = [
+      "StationId",
+      "StationName",
+      "StationCode",
+      "Category",
+      "EcatRank",
+      "Division",
+      "RailwayZone",
+      "EcatZone",
+      "District",
+      "State",
+      "Lat",
+      "Long",
+      "Address",
+      "ReGroup",
+      "is_active",
+      "StationImage",
+    ].join(",");
 
     let allRows: any[] = [];
     let from = 0;
@@ -22,12 +42,24 @@ export async function GET(req: Request) {
       let query = supabaseServer
         .from("Stations")
         .select(cols)
-        .order("StationName", { ascending: true })
+        .order("StationId", { ascending: true })
         .range(from, to);
 
-      if (q.length >= 1) {
+      if (stationId && /^\d+$/.test(stationId)) {
+        query = query.eq("StationId", Number(stationId));
+      }
+
+      if (stationName) {
+        query = query.ilike("StationName", `%${stationName}%`);
+      }
+
+      if (stationCode) {
+        query = query.ilike("StationCode", `%${stationCode}%`);
+      }
+
+      if (!stationId && !stationName && !stationCode && q.length >= 1) {
         query = query.or(
-          `StationName.ilike.%${q}%,StationCode.ilike.%${q}%`
+          `StationName.ilike.%${q}%,StationCode.ilike.%${q}%,State.ilike.%${q}%,District.ilike.%${q}%`
         );
       }
 
@@ -57,6 +89,7 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({
+      ok: true,
       rows: allRows,
       total: allRows.length,
     });
