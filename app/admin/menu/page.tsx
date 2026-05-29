@@ -1,5 +1,6 @@
 import AdminCard from "@/components/admin/AdminCard";
 import AdminPage from "@/components/admin/AdminPage";
+import MenuItemsTable from "@/components/admin/MenuItemsTable";
 
 export default function AdminMenu() {
   return (
@@ -7,10 +8,8 @@ export default function AdminMenu() {
       title="Menu"
       subtitle="Manage menu items and restaurant catalog records"
     >
-      <AdminCard>
-        <p className="text-sm font-medium text-slate-500">
-          Manage menu items here.
-        </p>
+      <AdminCard title="Menu Items">
+        <MenuItemsTable />
       </AdminCard>
     </AdminPage>
   );
