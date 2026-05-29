@@ -1,91 +1,120 @@
-import { NextResponse } from "next/server";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(
+  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+);
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing SUPABASE config: set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
+function cleanText(value: any) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const next = String(value).trim();
+  return next === "" ? null : next;
 }
 
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-  global: { headers: { "x-application-client": "admin-api" } },
-});
+function cleanNumber(value: any) {
+  if (value === undefined) return undefined;
+  if (value === "" || value === null) return null;
+  const next = Number(value);
+  return Number.isNaN(next) ? null : next;
+}
 
-type Params = { params: { code: string } };
+function setIfDefined(payload: Record<string, any>, key: string, value: any) {
+  if (value !== undefined) payload[key] = value;
+}
 
-export async function POST(request: Request, { params }: Params) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { code: string } }
+) {
   try {
-    const codeStr = params?.code;
-    if (!codeStr) {
-      return NextResponse.json({ error: "Missing restro code in URL" }, { status: 400 });
-    }
-    const restroCode = Number(codeStr);
-    if (Number.isNaN(restroCode)) {
-      return NextResponse.json({ error: "Invalid restro code" }, { status: 400 });
-    }
+    const restroCode = Number(params.code);
 
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Request body must be JSON" }, { status: 400 });
+    if (!restroCode || Number.isNaN(restroCode)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid RestroCode" },
+        { status: 400 }
+      );
     }
 
-    // allowed/whitelist keys (keep in sync with client)
-    const ALLOWED_KEYS = [
-      "RestroAddress",
-      "City",
-      "State",
-      "District",
-      "PinCode",
-      "RestroLatitude",
-      "RestroLongitude",
-      "FSSAINumber",
-      "FSSAIExpiryDate",
-      "FSSAICopyPath",
-      "FSSAIStatus",
-      "GSTNumber",
-      "GSTType",
-      "GSTCopyPath",
-      "GSTStatus",
-      "PANNumber",
-      "PANType",
-      "PANCopyPath",
-      "PANStatus",
-    ];
-
-    const updateObj: Record<string, any> = {};
-    for (const k of ALLOWED_KEYS) {
-      if (Object.prototype.hasOwnProperty.call(body, k)) {
-        const val = (body as any)[k];
-        updateObj[k] = val === "" ? null : val;
-      }
-    }
-
-    if (Object.keys(updateObj).length === 0) {
-      return NextResponse.json({ error: "No updatable fields provided" }, { status: 400 });
-    }
-
-    // Execute update
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("RestroMaster")
-      .update(updateObj)
+      .select(
+        "RestroCode,RestroAddress,City,State,District,PinCode,RestroLatitude,RestroLongitude,FSSAINumber,FSSAIExpiryDate,FSSAICopyUpload,FSSAIStatus,GSTNumber,GSTType,GSTCopyUpload,GSTStatus,PANNumber,PANType,PANCopyUpload,PANStatus"
+      )
       .eq("RestroCode", restroCode)
-      .select()
-      .maybeSingle();
+      .single();
 
     if (error) {
-      console.error("Supabase update error:", error);
-      return NextResponse.json({ error: error.message ?? error }, { status: 500 });
-    }
-
-    if (!data) {
-      return NextResponse.json({ error: "No row updated (maybe restro not found)" }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ ok: true, row: data });
-  } catch (err: any) {
-    console.error("API error:", err);
-    return NextResponse.json({ error: err?.message ?? String(err) }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json(
+      { ok: false, error: error?.message || "Server error" },
+      { status: 500 }
+    );
   }
 }
+
+async function saveAddress(
+  req: NextRequest,
+  { params }: { params: { code: string } }
+) {
+  try {
+    const restroCode = Number(params.code);
+
+    if (!restroCode || Number.isNaN(restroCode)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid RestroCode" },
+        { status: 400 }
+      );
+    }
+
+    const body = await req.json();
+    const payload: Record<string, any> = {};
+
+    setIfDefined(payload, "RestroAddress", cleanText(body.RestroAddress));
+    setIfDefined(payload, "City", cleanText(body.City));
+    setIfDefined(payload, "State", cleanText(body.State));
+    setIfDefined(payload, "District", cleanText(body.District));
+    setIfDefined(payload, "PinCode", cleanText(body.PinCode));
+    setIfDefined(payload, "RestroLatitude", cleanNumber(body.RestroLatitude));
+    setIfDefined(payload, "RestroLongitude", cleanNumber(body.RestroLongitude));
+
+    payload.UpdatedAt = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from("RestroMaster")
+      .update(payload)
+      .eq("RestroCode", restroCode)
+      .select("*")
+      .single();
+
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, row: data });
+  } catch (error: any) {
+    return NextResponse.json(
+      { ok: false, error: error?.message || "Server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export const POST = saveAddress;
+export const PATCH = saveAddress;
