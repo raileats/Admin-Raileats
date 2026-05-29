@@ -1,7 +1,7 @@
 // components/restro-route-tabs/StationSettingsClient.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
@@ -42,6 +42,16 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const code = useMemo(() => String(restroCode ?? local?.RestroCode ?? ""), [restroCode, local?.RestroCode]);
+
+  useEffect(() => {
+    setLocal((prev) =>
+      normalize({
+        ...prev,
+        ...initialData,
+        RestroCode: restroCode ?? initialData?.RestroCode ?? prev?.RestroCode,
+      })
+    );
+  }, [initialData, restroCode]);
 
   function updateField(key: string, value: any) {
     setLocal((prev) => ({ ...prev, [key]: value }));
@@ -98,6 +108,12 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
       actions={<AdminButton onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</AdminButton>}
     >
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <AdminField label="Restro Code">
+          <AdminInput value={code} readOnly />
+        </AdminField>
+        <AdminField label="Restro Name">
+          <AdminInput value={local.RestroName ?? ""} readOnly />
+        </AdminField>
         <AdminField label="Station">
           <AdminInput value={stationDisplay(local)} readOnly />
         </AdminField>
