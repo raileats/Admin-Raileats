@@ -78,6 +78,7 @@ export async function PATCH(req: Request) {
       "RestroEmail",
       "RestroPhone",
       "RestroRating",
+      "IsPureVeg",
       "RestroDisplayPhoto",
       "RaileatsStatus",
       "IsIrctcApproved",
