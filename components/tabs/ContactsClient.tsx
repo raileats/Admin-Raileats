@@ -19,6 +19,11 @@ type Props = {
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const INDIAN_MOBILE_RE = /^[6-9][0-9]{9}$/;
+
+function cleanMobile(value: any) {
+  return String(value ?? "").replace(/\D/g, "").slice(0, 10);
+}
 
 function makeEmpty(prefix: string, count: number): Item[] {
   return Array.from({ length: count }).map((_, i) => ({
@@ -54,19 +59,19 @@ function normalizeRows(row: any) {
       {
         id: "wa-1",
         name: row?.WhatsappMobileNumberName1 ?? "",
-        value: row?.WhatsappMobileNumberforOrderDetails1 ?? "",
+        value: cleanMobile(row?.WhatsappMobileNumberforOrderDetails1),
         active: isActive(row?.WhatsappMobileNumberStatus1),
       },
       {
         id: "wa-2",
         name: row?.WhatsappMobileNumberName2 ?? "",
-        value: row?.WhatsappMobileNumberforOrderDetails2 ?? "",
+        value: cleanMobile(row?.WhatsappMobileNumberforOrderDetails2),
         active: isActive(row?.WhatsappMobileNumberStatus2),
       },
       {
         id: "wa-3",
         name: row?.WhatsappMobileNumberName3 ?? "",
-        value: row?.WhatsappMobileNumberforOrderDetails3 ?? "",
+        value: cleanMobile(row?.WhatsappMobileNumberforOrderDetails3),
         active: isActive(row?.WhatsappMobileNumberStatus3),
       },
     ],
@@ -149,8 +154,11 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
     const badEmail = emails.find((row) => row.value && !EMAIL_RE.test(row.value));
     if (badEmail) return "Please enter a valid email address.";
 
-    const badMobile = whatsapps.find((row) => row.value && row.value.length !== 10);
-    if (badMobile) return "WhatsApp mobile number must be exactly 10 digits.";
+    const badMobile = whatsapps.find((row) => {
+      const mobile = cleanMobile(row.value);
+      return mobile && !INDIAN_MOBILE_RE.test(mobile);
+    });
+    if (badMobile) return "WhatsApp mobile number must be a valid 10 digit Indian mobile number.";
 
     return "";
   }
@@ -175,13 +183,13 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
       EmailsforOrdersReceiving2: emails[1]?.value ?? "",
       EmailsforOrdersStatus2: emails[1]?.active ? "ON" : "OFF",
       WhatsappMobileNumberName1: whatsapps[0]?.name ?? "",
-      WhatsappMobileNumberforOrderDetails1: whatsapps[0]?.value ?? "",
+      WhatsappMobileNumberforOrderDetails1: cleanMobile(whatsapps[0]?.value) || null,
       WhatsappMobileNumberStatus1: whatsapps[0]?.active ? "ON" : "OFF",
       WhatsappMobileNumberName2: whatsapps[1]?.name ?? "",
-      WhatsappMobileNumberforOrderDetails2: whatsapps[1]?.value ?? "",
+      WhatsappMobileNumberforOrderDetails2: cleanMobile(whatsapps[1]?.value) || null,
       WhatsappMobileNumberStatus2: whatsapps[1]?.active ? "ON" : "OFF",
       WhatsappMobileNumberName3: whatsapps[2]?.name ?? "",
-      WhatsappMobileNumberforOrderDetails3: whatsapps[2]?.value ?? "",
+      WhatsappMobileNumberforOrderDetails3: cleanMobile(whatsapps[2]?.value) || null,
       WhatsappMobileNumberStatus3: whatsapps[2]?.active ? "ON" : "OFF",
     };
 
@@ -294,10 +302,10 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
                     updateWhatsapp(
                       index,
                       "value",
-                      event.target.value.replace(/\D/g, "").slice(0, 10)
+                      cleanMobile(event.target.value)
                     )
                   }
-                  className={row.value && row.value.length === 10 ? "border-emerald-400" : row.value ? "border-red-400" : ""}
+                  className={row.value && INDIAN_MOBILE_RE.test(cleanMobile(row.value)) ? "border-emerald-400" : row.value ? "border-red-400" : ""}
                 />
               </AdminField>
 
