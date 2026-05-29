@@ -11,9 +11,20 @@ type Props = {
   restroCode?: string | number;
 };
 
+const INDIAN_MOBILE_RE = /^[6-9][0-9]{9}$/;
+
+function cleanMobile(value: any) {
+  return String(value ?? "").replace(/\D/g, "").slice(0, 10);
+}
+
 export default function RestroUserPasswordClient({ initialData = {}, restroCode }: Props) {
   const [form, setForm] = useState({
-    RestroLoginMobile: initialData?.RestroLoginMobile ?? "",
+    RestroUserName:
+      initialData?.RestroUserName ??
+      initialData?.RestroUsername ??
+      initialData?.UserName ??
+      "",
+    RestroLoginMobile: cleanMobile(initialData?.RestroLoginMobile),
     RestroPassword: initialData?.RestroPassword ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -25,6 +36,12 @@ export default function RestroUserPasswordClient({ initialData = {}, restroCode 
       setMsg("Missing RestroCode. Please save Basic Information first.");
       return;
     }
+
+    if (form.RestroLoginMobile && !INDIAN_MOBILE_RE.test(cleanMobile(form.RestroLoginMobile))) {
+      setMsg("Restro login mobile must be a valid 10 digit Indian mobile number.");
+      return;
+    }
+
     setSaving(true);
     setMsg(null);
     try {
@@ -37,7 +54,13 @@ export default function RestroUserPasswordClient({ initialData = {}, restroCode 
       if (!res.ok || json?.ok === false) throw new Error(json?.error || "Save failed");
       if (json?.row) {
         setForm({
-          RestroLoginMobile: json.row.RestroLoginMobile ?? "",
+          RestroUserName:
+            json.row.RestroUserName ??
+            json.row.RestroUsername ??
+            json.row.UserName ??
+            form.RestroUserName ??
+            "",
+          RestroLoginMobile: cleanMobile(json.row.RestroLoginMobile),
           RestroPassword: json.row.RestroPassword ?? "",
         });
       }
@@ -55,14 +78,28 @@ export default function RestroUserPasswordClient({ initialData = {}, restroCode 
       subtitle="Manage restaurant login credentials"
       actions={<AdminButton onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</AdminButton>}
     >
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <AdminField label="Restro Username">
+          <AdminInput
+            value={form.RestroUserName}
+            onChange={(e) => setForm((prev) => ({ ...prev, RestroUserName: e.target.value.trim() }))}
+            placeholder="Enter username"
+          />
+        </AdminField>
         <AdminField label="Restro Login Mobile">
           <AdminInput
             inputMode="numeric"
             maxLength={10}
             value={form.RestroLoginMobile}
-            onChange={(e) => setForm((prev) => ({ ...prev, RestroLoginMobile: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
+            onChange={(e) => setForm((prev) => ({ ...prev, RestroLoginMobile: cleanMobile(e.target.value) }))}
             placeholder="Enter 10 digit mobile"
+            className={
+              form.RestroLoginMobile && INDIAN_MOBILE_RE.test(cleanMobile(form.RestroLoginMobile))
+                ? "border-emerald-400"
+                : form.RestroLoginMobile
+                  ? "border-red-400"
+                  : ""
+            }
           />
         </AdminField>
         <AdminField label="Restro Password">
