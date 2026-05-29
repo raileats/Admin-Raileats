@@ -174,15 +174,35 @@ export default function AddressDocsClient({
     setSavingAddress(true);
     setMessage("");
     try {
-      const res = await fetch(`/api/restros/${encodeURIComponent(String(code))}/address-docs`, {
+      const payload = {
+        RestroAddress: local.RestroAddress ?? "",
+        City: local.City ?? "",
+        State: local.State ?? "",
+        District: local.District ?? "",
+        PinCode: local.PinCode ?? "",
+        RestroLatitude: local.RestroLatitude ?? "",
+        RestroLongitude: local.RestroLongitude ?? "",
+      };
+
+      let res = await fetch(`/api/restros/${encodeURIComponent(String(code))}/address-docs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(local),
+        body: JSON.stringify(payload),
       });
 
-      const json = await res.json().catch(() => ({}));
+      let json = await res.json().catch(() => ({}));
+
       if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || "Save failed");
+        res = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+          body: JSON.stringify(payload),
+        });
+        json = await res.json().catch(() => ({}));
+      }
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || `Save failed (${res.status})`);
       }
 
       if (json?.row) {
