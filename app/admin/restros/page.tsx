@@ -9,7 +9,6 @@ import { AdminInput, AdminSelect } from "@/components/admin/AdminField";
 import AdminPage from "@/components/admin/AdminPage";
 import AdminToolbar from "@/components/admin/AdminToolbar";
 import AdminTable, { Column } from "@/components/AdminTable";
-import RestroEditModal from "@/components/RestroEditModal";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,7 +37,6 @@ export default function RestroMasterPage() {
   const [results, setResults] = useState<Restro[]>([]);
   const [filteredResults, setFilteredResults] = useState<Restro[]>([]);
   const [loading, setLoading] = useState(false);
-  const [openAddRestro, setOpenAddRestro] = useState(false);
 
   const [restroCode, setRestroCode] = useState("");
   const [ownerName, setOwnerName] = useState("");
@@ -244,7 +242,7 @@ export default function RestroMasterPage() {
       title="Restro Master"
       subtitle="Search, manage, and update RailEats restaurant outlets"
       actions={
-        <AdminButton variant="success" onClick={() => setOpenAddRestro(true)}>
+        <AdminButton variant="success" onClick={() => router.push("/admin/restros/new/basic")}> 
           + Add New Restro
         </AdminButton>
       }
@@ -355,14 +353,7 @@ export default function RestroMasterPage() {
           )}
         />
       </AdminCard>
-
-      {openAddRestro && (
-        <RestroEditModal
-          restro={null}
-          initialTab="Basic Information"
-          onClose={() => setOpenAddRestro(false)}
-        />
-      )}
     </AdminPage>
   );
 }
+
