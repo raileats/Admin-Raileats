@@ -242,7 +242,7 @@ export default function RestroMasterPage() {
       title="Restro Master"
       subtitle="Search, manage, and update RailEats restaurant outlets"
       actions={
-        <AdminButton variant="success" onClick={() => router.push("/admin/restros/new/basic")}> 
+        <AdminButton variant="success" onClick={() => { try { localStorage.removeItem("new_restro_code"); } catch {} router.push("/admin/restros/new/basic"); }}> 
           + Add New Restro
         </AdminButton>
       }
@@ -356,4 +356,5 @@ export default function RestroMasterPage() {
     </AdminPage>
   );
 }
+
 
