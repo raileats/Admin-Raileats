@@ -17,6 +17,10 @@ function stationLabel(station: StationRow) {
   return `${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}`.trim();
 }
 
+function phoneDigits(value: any) {
+  return String(value ?? "").replace(/\D/g, "").slice(0, 10);
+}
+
 export default function NewRestroBasicPage() {
   const router = useRouter();
   const stationBoxRef = useRef<HTMLDivElement>(null);
@@ -104,12 +108,13 @@ export default function NewRestroBasicPage() {
         BrandNameifAny: form.BrandNameifAny || null,
         OwnerName: form.OwnerName || null,
         OwnerEmail: form.OwnerEmail || null,
-        OwnerPhone: form.OwnerPhone || null,
+        OwnerPhone: phoneDigits(form.OwnerPhone) || null,
         RestroEmail: form.RestroEmail || null,
-        RestroPhone: form.RestroPhone || null,
+        RestroPhone: phoneDigits(form.RestroPhone) || null,
         IsIrctcApproved: form.IsIrctcApproved || "No",
         RaileatsStatus: Number(form.RaileatsStatus || 0),
         RestroRating: form.RestroRating || null,
+        IsPureVeg: Number(form.IsPureVeg || 0),
         RestroDisplayPhoto: form.RestroDisplayPhoto || null,
       };
       const res = await fetch("/api/restrosmaster", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -163,15 +168,15 @@ export default function NewRestroBasicPage() {
         <AdminField label="Raileats Status"><AdminSelect value={String(form.RaileatsStatus ?? 0)} onChange={(e) => updateField("RaileatsStatus", Number(e.target.value))}><option value="1">On</option><option value="0">Off</option></AdminSelect></AdminField>
         <AdminField label="IRCTC Approved"><AdminSelect value={form.IsIrctcApproved ?? "No"} onChange={(e) => updateField("IsIrctcApproved", e.target.value)}><option>Yes</option><option>No</option></AdminSelect></AdminField>
         <AdminField label="Restro Rating"><AdminInput value={form.RestroRating ?? ""} onChange={(e) => updateField("RestroRating", e.target.value)} /></AdminField>
+        <AdminField label="Pure Veg"><AdminSelect value={String(form.IsPureVeg ?? 0)} onChange={(e) => updateField("IsPureVeg", Number(e.target.value))}><option value="1">Yes</option><option value="0">No</option></AdminSelect></AdminField>
         <AdminField label="Display Photo"><AdminInput value={form.RestroDisplayPhoto ?? ""} onChange={(e) => updateField("RestroDisplayPhoto", e.target.value)} /></AdminField>
         <AdminField label="Owner Name"><AdminInput value={form.OwnerName ?? ""} onChange={(e) => updateField("OwnerName", e.target.value)} /></AdminField>
         <AdminField label="Owner Email"><AdminInput value={form.OwnerEmail ?? ""} onChange={(e) => updateField("OwnerEmail", e.target.value)} /></AdminField>
-        <AdminField label="Owner Phone"><AdminInput value={form.OwnerPhone ?? ""} onChange={(e) => updateField("OwnerPhone", e.target.value)} /></AdminField>
+        <AdminField label="Owner Phone"><AdminInput inputMode="numeric" maxLength={10} value={phoneDigits(form.OwnerPhone)} onChange={(e) => updateField("OwnerPhone", phoneDigits(e.target.value))} /></AdminField>
         <AdminField label="Restro Email"><AdminInput value={form.RestroEmail ?? ""} onChange={(e) => updateField("RestroEmail", e.target.value)} /></AdminField>
-        <AdminField label="Restro Phone"><AdminInput value={form.RestroPhone ?? ""} onChange={(e) => updateField("RestroPhone", e.target.value)} /></AdminField>
+        <AdminField label="Restro Phone"><AdminInput inputMode="numeric" maxLength={10} value={phoneDigits(form.RestroPhone)} onChange={(e) => updateField("RestroPhone", phoneDigits(e.target.value))} /></AdminField>
       </div>
       {msg ? <div className="mt-4 text-sm font-semibold text-red-600">{msg}</div> : null}
     </AdminCard>
   );
 }
-
