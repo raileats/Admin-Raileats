@@ -13,7 +13,13 @@ type Props = {
 
 function toStatusNumber(value: any) {
   const normalized = String(value ?? "").toLowerCase().trim();
-  if (normalized === "1" || normalized === "true" || normalized === "on" || normalized === "active" || normalized === "yes") {
+  if (
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "on" ||
+    normalized === "active" ||
+    normalized === "yes"
+  ) {
     return 1;
   }
   return 0;
@@ -28,16 +34,32 @@ function phoneOrNull(value: any) {
   return digits ? digits : null;
 }
 
-function mergeSavedBasicRow(prev: any, payload: any, savedRow: any, raileatsStatus: number) {
+function mergeSavedBasicRow(
+  prev: any,
+  payload: any,
+  savedRow: any,
+  raileatsStatus: number
+) {
   return {
     ...prev,
     ...savedRow,
     RaileatsStatus: raileatsStatus,
-    IRCTCStatus: toStatusNumber(savedRow?.IRCTCStatus ?? payload.IRCTCStatus ?? prev?.IRCTCStatus),
-    OwnerPhone: phoneDigits(savedRow?.OwnerPhone ?? payload.OwnerPhone ?? prev?.OwnerPhone),
-    RestroPhone: phoneDigits(savedRow?.RestroPhone ?? payload.RestroPhone ?? prev?.RestroPhone),
+    IRCTCStatus: toStatusNumber(
+      savedRow?.IRCTCStatus ?? payload.IRCTCStatus ?? prev?.IRCTCStatus
+    ),
+    OwnerPhone: phoneDigits(
+      savedRow?.OwnerPhone ?? payload.OwnerPhone ?? prev?.OwnerPhone
+    ),
+
+    // Main fix: save ke baad API row blank aaye tab bhi typed value clean nahi hogi.
+    RestroPhone: phoneDigits(
+      savedRow?.RestroPhone ?? payload.RestroPhone ?? prev?.RestroPhone
+    ),
+
     RestroDisplayPhoto:
-      savedRow?.RestroDisplayPhoto ?? payload.RestroDisplayPhoto ?? prev?.RestroDisplayPhoto,
+      savedRow?.RestroDisplayPhoto ??
+      payload.RestroDisplayPhoto ??
+      prev?.RestroDisplayPhoto,
   };
 }
 
@@ -54,6 +76,7 @@ export default function BasicInfoClient({
 
   useEffect(() => {
     if (!initialData) return;
+
     setLocal({
       ...initialData,
       RaileatsStatus: toStatusNumber(initialData.RaileatsStatus),
@@ -71,9 +94,11 @@ export default function BasicInfoClient({
 
     async function loadFreshRestro() {
       try {
-        const res = await fetch(`/api/restros/${encodeURIComponent(String(restroCode))}`, {
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/restros/${encodeURIComponent(String(restroCode))}`,
+          { cache: "no-store" }
+        );
+
         const json = await res.json().catch(() => ({}));
 
         if (!res.ok || json?.ok === false || !json?.row || cancelled) return;
@@ -84,6 +109,8 @@ export default function BasicInfoClient({
           RaileatsStatus: toStatusNumber(json.row.RaileatsStatus),
           IRCTCStatus: toStatusNumber(json.row.IRCTCStatus),
           OwnerPhone: phoneDigits(json.row.OwnerPhone ?? prev.OwnerPhone),
+
+          // Main fix: fresh load me DB blank ho to current typed value blank nahi karega.
           RestroPhone: phoneDigits(json.row.RestroPhone ?? prev.RestroPhone),
         }));
       } catch (error) {
@@ -128,10 +155,13 @@ export default function BasicInfoClient({
 
       IRCTCStatus: toStatusNumber(local.IRCTCStatus),
       RaileatsStatus: raileatsStatus,
-      raileatsStatus,
       IsIrctcApproved: String(local.IsIrctcApproved || "0"),
 
-      RestroRating: local.RestroRating === "" ? null : Number(local.RestroRating),
+      RestroRating:
+        local.RestroRating === "" || local.RestroRating === null
+          ? null
+          : Number(local.RestroRating),
+
       IsPureVeg: toStatusNumber(local.IsPureVeg),
       RestroDisplayPhoto: local.RestroDisplayPhoto || null,
       State: local.State || null,
@@ -169,7 +199,7 @@ export default function BasicInfoClient({
         body: JSON.stringify(payload),
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || "Save failed");
@@ -177,8 +207,12 @@ export default function BasicInfoClient({
 
       const savedRow = json?.row || {};
 
-      setLocal((prev: any) => mergeSavedBasicRow(prev, payload, savedRow, raileatsStatus));
+      setLocal((prev: any) =>
+        mergeSavedBasicRow(prev, payload, savedRow, raileatsStatus)
+      );
+
       setMsg("Saved successfully");
+      router.refresh();
     } catch (e: any) {
       console.error("Save error:", e);
       setErr(e?.message || "Save failed");
@@ -339,8 +373,12 @@ export default function BasicInfoClient({
 
       {(msg || err) && (
         <div className="mt-4">
-          {msg && <div className="text-sm font-semibold text-green-700">{msg}</div>}
-          {err && <div className="text-sm font-semibold text-red-700">{err}</div>}
+          {msg && (
+            <div className="text-sm font-semibold text-green-700">{msg}</div>
+          )}
+          {err && (
+            <div className="text-sm font-semibold text-red-700">{err}</div>
+          )}
         </div>
       )}
     </AdminCard>
