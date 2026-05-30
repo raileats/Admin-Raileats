@@ -1,6 +1,5 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -25,25 +24,44 @@ function text(value: any) {
   return cleaned === "" ? null : cleaned;
 }
 
-function phoneText(value: any) {
+function phone(value: any) {
   if (value === undefined) return undefined;
-  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 10);
-  return digits === "" ? null : digits;
+  if (value === null) return null;
+  const digits = String(value).replace(/\D/g, "").slice(0, 10);
+  return digits || null;
+}
+
+function firstDefined(...values: any[]) {
+  return values.find((value) => value !== undefined);
 }
 
 function setIfDefined(payload: Record<string, any>, key: string, value: any) {
   if (value !== undefined) payload[key] = value;
 }
 
-function jsonNoCache(body: any, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate",
-      Pragma: "no-cache",
-      Expires: "0",
-    },
-  });
+function sameText(saved: any, expected: any) {
+  const savedText = saved === null || saved === undefined ? "" : String(saved).trim();
+  const expectedText = expected === null || expected === undefined ? "" : String(expected).trim();
+  return savedText === expectedText;
+}
+
+function sameNumber(saved: any, expected: any) {
+  if (saved === null || saved === undefined || saved === "") {
+    return expected === null || expected === undefined || expected === "";
+  }
+
+  if (expected === null || expected === undefined || expected === "") {
+    return saved === null || saved === undefined || saved === "";
+  }
+
+  const savedNumber = Number(saved);
+  const expectedNumber = Number(expected);
+
+  if (!Number.isFinite(savedNumber) || !Number.isFinite(expectedNumber)) {
+    return String(saved).trim() === String(expected).trim();
+  }
+
+  return Math.abs(savedNumber - expectedNumber) < 0.000001;
 }
 
 async function updateRestro(restroCode: number, payload: Record<string, any>) {
@@ -59,11 +77,17 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
   const missingColumn = /column .* does not exist/i.test(error.message || "");
   if (!missingColumn) return { data, error };
 
-  const safePayload = { ...payload };
+  // Some deployments do not yet have optional login alias columns.
+  // Retry with the core RestroMaster columns so normal saves never break.
+  const optionalKeys = [
+    "RestroUserName",
+    "RestroUsername",
+    "UserName",
+    "Password",
+  ];
 
-  ["RestroUserName", "RestroUsername", "UserName", "Password"].forEach(
-    (key) => delete safePayload[key]
-  );
+  const safePayload = { ...payload };
+  optionalKeys.forEach((key) => delete safePayload[key]);
 
   return supabase
     .from("RestroMaster")
@@ -81,7 +105,10 @@ export async function GET(
     const RestroCode = Number(params.code);
 
     if (!RestroCode || Number.isNaN(RestroCode)) {
-      return jsonNoCache({ ok: false, error: "Invalid RestroCode" }, 400);
+      return NextResponse.json(
+        { ok: false, error: "Invalid RestroCode" },
+        { status: 400 }
+      );
     }
 
     const { data, error } = await supabase
@@ -91,27 +118,17 @@ export async function GET(
       .single();
 
     if (error) {
-      return jsonNoCache({ ok: false, error: error.message }, 500);
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
     }
 
-    return jsonNoCache({
-      ok: true,
-      row: {
-        ...(data ?? {}),
-        RestroPhone:
-          data?.RestroPhone === null || data?.RestroPhone === undefined
-            ? ""
-            : String(data.RestroPhone),
-        OwnerPhone:
-          data?.OwnerPhone === null || data?.OwnerPhone === undefined
-            ? ""
-            : String(data.OwnerPhone),
-      },
-    });
+    return NextResponse.json({ ok: true, row: data });
   } catch (error: any) {
-    return jsonNoCache(
+    return NextResponse.json(
       { ok: false, error: error?.message || "Server error" },
-      500
+      { status: 500 }
     );
   }
 }
@@ -124,7 +141,10 @@ export async function PATCH(
     const RestroCode = Number(params.code);
 
     if (!RestroCode || Number.isNaN(RestroCode)) {
-      return jsonNoCache({ ok: false, error: "Invalid RestroCode" }, 400);
+      return NextResponse.json(
+        { ok: false, error: "Invalid RestroCode" },
+        { status: 400 }
+      );
     }
 
     const body = await req.json();
@@ -137,16 +157,27 @@ export async function PATCH(
     setIfDefined(payload, "City", text(body.City));
     setIfDefined(payload, "District", text(body.District));
     setIfDefined(payload, "PinCode", text(body.PinCode));
-
     setIfDefined(payload, "RestroLatitude", num(body.RestroLatitude ?? body.Latitude));
     setIfDefined(payload, "RestroLongitude", num(body.RestroLongitude ?? body.Longitude));
 
     setIfDefined(payload, "RestroName", text(body.RestroName));
     setIfDefined(payload, "OwnerName", text(body.OwnerName));
     setIfDefined(payload, "OwnerEmail", text(body.OwnerEmail));
-    setIfDefined(payload, "OwnerPhone", phoneText(body.OwnerPhone));
+    setIfDefined(payload, "OwnerPhone", phone(body.OwnerPhone));
     setIfDefined(payload, "RestroEmail", text(body.RestroEmail));
-    setIfDefined(payload, "RestroPhone", phoneText(body.RestroPhone));
+    setIfDefined(
+      payload,
+      "RestroPhone",
+      phone(
+        firstDefined(
+          body.RestroPhone,
+          body.restroPhone,
+          body.RestroMobile,
+          body.RestaurantPhone,
+          body.Phone
+        )
+      )
+    );
     setIfDefined(payload, "BrandNameifAny", text(body.BrandNameifAny));
 
     setIfDefined(payload, "IRCTCStatus", num(body.IRCTCStatus));
@@ -154,20 +185,19 @@ export async function PATCH(
     setIfDefined(payload, "IsIrctcApproved", body.IsIrctcApproved);
     setIfDefined(payload, "RestroRating", num(body.RestroRating));
     setIfDefined(payload, "IsPureVeg", num(body.IsPureVeg));
+
+    // Important: keep the exact path/URL typed by admin. Do not auto-clean it.
     setIfDefined(payload, "RestroDisplayPhoto", text(body.RestroDisplayPhoto));
 
     setIfDefined(payload, "open_time", text(body.open_time ?? body.OpenTime));
     setIfDefined(payload, "closed_time", text(body.closed_time ?? body.ClosedTime));
     setIfDefined(payload, "MinimumOrderValue", num(body.MinimumOrderValue));
-    setIfDefined(payload, "MinimumOrderAmount", num(body.MinimumOrderAmount));
     setIfDefined(payload, "CutOffTime", num(body.CutOffTime));
     setIfDefined(payload, "WeeklyOff", text(body.WeeklyOff));
-
     setIfDefined(payload, "RaileatsCustomerDeliveryCharge", num(body.RaileatsCustomerDeliveryCharge));
     setIfDefined(payload, "RaileatsCustomerDeliveryChargeGSTRate", num(body.RaileatsCustomerDeliveryChargeGSTRate));
     setIfDefined(payload, "RaileatsCustomerDeliveryChargeGST", num(body.RaileatsCustomerDeliveryChargeGST));
     setIfDefined(payload, "RaileatsCustomerDeliveryChargeTotalInclGST", num(body.RaileatsCustomerDeliveryChargeTotalInclGST));
-
     setIfDefined(payload, "RaileatsOrdersPaymentOptionforCustomer", text(body.RaileatsOrdersPaymentOptionforCustomer));
     setIfDefined(payload, "IRCTCOrdersPaymentOptionforCustomer", text(body.IRCTCOrdersPaymentOptionforCustomer));
     setIfDefined(payload, "RestroTypeofDeliveryRailEatsorVendor", text(body.RestroTypeofDeliveryRailEatsorVendor));
@@ -179,35 +209,89 @@ export async function PATCH(
     setIfDefined(payload, "RestroPassword", text(body.RestroPassword));
     setIfDefined(payload, "Password", text(body.Password));
     setIfDefined(payload, "HolidayStatus", num(body.HolidayStatus));
+    setIfDefined(payload, "MinimumOrderAmount", num(body.MinimumOrderAmount));
 
     payload.UpdatedAt = new Date().toISOString();
+
+    const expectedRestroPhone = phone(
+      firstDefined(
+        body.RestroPhone,
+        body.restroPhone,
+        body.RestroMobile,
+        body.RestaurantPhone,
+        body.Phone
+      )
+    );
+    const expectedDeliveryGst = num(body.RaileatsCustomerDeliveryChargeGST);
 
     const { data, error } = await updateRestro(RestroCode, payload);
 
     if (error) {
-      return jsonNoCache({ ok: false, error: error.message }, 500);
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
     }
 
-    return jsonNoCache({
-      ok: true,
-      row: {
-        ...(data ?? {}),
-        RestroPhone:
-          data?.RestroPhone ??
-          payload.RestroPhone ??
-          phoneText(body.RestroPhone) ??
-          "",
-        OwnerPhone:
-          data?.OwnerPhone ??
-          payload.OwnerPhone ??
-          phoneText(body.OwnerPhone) ??
-          "",
-      },
-    });
+    const { data: freshRow, error: freshError } = await supabase
+      .from("RestroMaster")
+      .select("*")
+      .eq("RestroCode", RestroCode)
+      .single();
+
+    if (freshError) {
+      return NextResponse.json(
+        { ok: false, error: freshError.message },
+        { status: 500 }
+      );
+    }
+
+    const verifyErrors: string[] = [];
+
+    if (
+      expectedRestroPhone !== undefined &&
+      !sameText(freshRow?.RestroPhone, expectedRestroPhone)
+    ) {
+      const { data: phoneRetryRow, error: phoneRetryError } = await supabase
+        .from("RestroMaster")
+        .update({ RestroPhone: expectedRestroPhone, UpdatedAt: new Date().toISOString() })
+        .eq("RestroCode", RestroCode)
+        .select("*")
+        .single();
+
+      if (
+        phoneRetryError ||
+        !sameText(phoneRetryRow?.RestroPhone, expectedRestroPhone)
+      ) {
+        verifyErrors.push(
+          `RestroPhone save verify failed. Expected ${expectedRestroPhone ?? "blank"}, got ${phoneRetryRow?.RestroPhone ?? freshRow?.RestroPhone ?? "blank"}`
+        );
+      } else {
+        Object.assign(freshRow, phoneRetryRow);
+      }
+    }
+
+    if (
+      body.RaileatsCustomerDeliveryChargeGST !== undefined &&
+      !sameNumber(freshRow?.RaileatsCustomerDeliveryChargeGST, expectedDeliveryGst)
+    ) {
+      verifyErrors.push(
+        `RaileatsCustomerDeliveryChargeGST save verify failed. Expected ${expectedDeliveryGst ?? "blank"}, got ${freshRow?.RaileatsCustomerDeliveryChargeGST ?? "blank"}`
+      );
+    }
+
+    if (verifyErrors.length > 0) {
+      return NextResponse.json(
+        { ok: false, error: verifyErrors.join(" | "), row: freshRow },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, row: freshRow ?? data });
   } catch (error: any) {
-    return jsonNoCache(
+    return NextResponse.json(
       { ok: false, error: error?.message || "Server error" },
-      500
+      { status: 500 }
     );
   }
 }
