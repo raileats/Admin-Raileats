@@ -147,8 +147,6 @@ export async function PATCH(
     setIfDefined(payload, "OwnerPhone", phoneText(body.OwnerPhone));
     setIfDefined(payload, "RestroEmail", text(body.RestroEmail));
     setIfDefined(payload, "RestroPhone", phoneText(body.RestroPhone));
- 
-
     setIfDefined(payload, "BrandNameifAny", text(body.BrandNameifAny));
 
     setIfDefined(payload, "IRCTCStatus", num(body.IRCTCStatus));
@@ -156,7 +154,6 @@ export async function PATCH(
     setIfDefined(payload, "IsIrctcApproved", body.IsIrctcApproved);
     setIfDefined(payload, "RestroRating", num(body.RestroRating));
     setIfDefined(payload, "IsPureVeg", num(body.IsPureVeg));
-
     setIfDefined(payload, "RestroDisplayPhoto", text(body.RestroDisplayPhoto));
 
     setIfDefined(payload, "open_time", text(body.open_time ?? body.OpenTime));
@@ -191,4 +188,26 @@ export async function PATCH(
       return jsonNoCache({ ok: false, error: error.message }, 500);
     }
 
-    
+    return jsonNoCache({
+      ok: true,
+      row: {
+        ...(data ?? {}),
+        RestroPhone:
+          data?.RestroPhone ??
+          payload.RestroPhone ??
+          phoneText(body.RestroPhone) ??
+          "",
+        OwnerPhone:
+          data?.OwnerPhone ??
+          payload.OwnerPhone ??
+          phoneText(body.OwnerPhone) ??
+          "",
+      },
+    });
+  } catch (error: any) {
+    return jsonNoCache(
+      { ok: false, error: error?.message || "Server error" },
+      500
+    );
+  }
+}
