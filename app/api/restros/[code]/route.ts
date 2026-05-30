@@ -24,6 +24,12 @@ function text(value: any) {
   return cleaned === "" ? null : cleaned;
 }
 
+function phoneText(value: any) {
+  if (value === undefined) return undefined;
+  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 10);
+  return digits === "" ? null : digits;
+}
+
 function setIfDefined(payload: Record<string, any>, key: string, value: any) {
   if (value !== undefined) payload[key] = value;
 }
@@ -152,9 +158,9 @@ export async function PATCH(
     setIfDefined(payload, "RestroName", text(body.RestroName));
     setIfDefined(payload, "OwnerName", text(body.OwnerName));
     setIfDefined(payload, "OwnerEmail", text(body.OwnerEmail));
-    setIfDefined(payload, "OwnerPhone", text(body.OwnerPhone));
+    setIfDefined(payload, "OwnerPhone", phoneText(body.OwnerPhone));
     setIfDefined(payload, "RestroEmail", text(body.RestroEmail));
-    setIfDefined(payload, "RestroPhone", text(body.RestroPhone));
+    setIfDefined(payload, "RestroPhone", phoneText(body.RestroPhone));
     setIfDefined(payload, "BrandNameifAny", text(body.BrandNameifAny));
 
     setIfDefined(payload, "IRCTCStatus", num(body.IRCTCStatus));
@@ -190,7 +196,7 @@ export async function PATCH(
 
     payload.UpdatedAt = new Date().toISOString();
 
-    const expectedRestroPhone = text(body.RestroPhone);
+    const expectedRestroPhone = phoneText(body.RestroPhone);
     const expectedDeliveryGst = num(body.RaileatsCustomerDeliveryChargeGST);
 
     const { data, error } = await updateRestro(RestroCode, payload);
@@ -242,7 +248,17 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ ok: true, row: freshRow ?? data });
+    return NextResponse.json({
+      ok: true,
+      row: {
+        ...(freshRow ?? data ?? {}),
+        RestroPhone:
+          freshRow?.RestroPhone ??
+          data?.RestroPhone ??
+          payload.RestroPhone ??
+          null,
+      },
+    });
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: error?.message || "Server error" },
