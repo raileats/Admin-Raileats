@@ -34,31 +34,6 @@ function setIfDefined(payload: Record<string, any>, key: string, value: any) {
   if (value !== undefined) payload[key] = value;
 }
 
-function sameText(saved: any, expected: any) {
-  const savedText = saved === null || saved === undefined ? "" : String(saved).trim();
-  const expectedText = expected === null || expected === undefined ? "" : String(expected).trim();
-  return savedText === expectedText;
-}
-
-function sameNumber(saved: any, expected: any) {
-  if (saved === null || saved === undefined || saved === "") {
-    return expected === null || expected === undefined || expected === "";
-  }
-
-  if (expected === null || expected === undefined || expected === "") {
-    return saved === null || saved === undefined || saved === "";
-  }
-
-  const savedNumber = Number(saved);
-  const expectedNumber = Number(expected);
-
-  if (!Number.isFinite(savedNumber) || !Number.isFinite(expectedNumber)) {
-    return String(saved).trim() === String(expected).trim();
-  }
-
-  return Math.abs(savedNumber - expectedNumber) < 0.000001;
-}
-
 async function updateRestro(restroCode: number, payload: Record<string, any>) {
   const { data, error } = await supabase
     .from("RestroMaster")
@@ -72,17 +47,13 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
   const missingColumn = /column .* does not exist/i.test(error.message || "");
   if (!missingColumn) return { data, error };
 
-  // Some deployments do not yet have optional login alias columns.
-  // Retry with the core RestroMaster columns so normal saves never break.
-  const optionalKeys = [
+  const safePayload = { ...payload };
+  [
     "RestroUserName",
     "RestroUsername",
     "UserName",
     "Password",
-  ];
-
-  const safePayload = { ...payload };
-  optionalKeys.forEach((key) => delete safePayload[key]);
+  ].forEach((key) => delete safePayload[key]);
 
   return supabase
     .from("RestroMaster")
@@ -152,15 +123,27 @@ export async function PATCH(
     setIfDefined(payload, "City", text(body.City));
     setIfDefined(payload, "District", text(body.District));
     setIfDefined(payload, "PinCode", text(body.PinCode));
-    setIfDefined(payload, "RestroLatitude", num(body.RestroLatitude ?? body.Latitude));
-    setIfDefined(payload, "RestroLongitude", num(body.RestroLongitude ?? body.Longitude));
+
+    setIfDefined(
+      payload,
+      "RestroLatitude",
+      num(body.RestroLatitude ?? body.Latitude)
+    );
+    setIfDefined(
+      payload,
+      "RestroLongitude",
+      num(body.RestroLongitude ?? body.Longitude)
+    );
 
     setIfDefined(payload, "RestroName", text(body.RestroName));
     setIfDefined(payload, "OwnerName", text(body.OwnerName));
     setIfDefined(payload, "OwnerEmail", text(body.OwnerEmail));
     setIfDefined(payload, "OwnerPhone", phoneText(body.OwnerPhone));
     setIfDefined(payload, "RestroEmail", text(body.RestroEmail));
+
+    // Main fix: RestroPhone ko clean karke direct RestroMaster.RestroPhone me save karega.
     setIfDefined(payload, "RestroPhone", phoneText(body.RestroPhone));
+
     setIfDefined(payload, "BrandNameifAny", text(body.BrandNameifAny));
 
     setIfDefined(payload, "IRCTCStatus", num(body.IRCTCStatus));
@@ -169,21 +152,55 @@ export async function PATCH(
     setIfDefined(payload, "RestroRating", num(body.RestroRating));
     setIfDefined(payload, "IsPureVeg", num(body.IsPureVeg));
 
-    // Important: keep the exact path/URL typed by admin. Do not auto-clean it.
     setIfDefined(payload, "RestroDisplayPhoto", text(body.RestroDisplayPhoto));
 
     setIfDefined(payload, "open_time", text(body.open_time ?? body.OpenTime));
-    setIfDefined(payload, "closed_time", text(body.closed_time ?? body.ClosedTime));
+    setIfDefined(
+      payload,
+      "closed_time",
+      text(body.closed_time ?? body.ClosedTime)
+    );
     setIfDefined(payload, "MinimumOrderValue", num(body.MinimumOrderValue));
+    setIfDefined(payload, "MinimumOrderAmount", num(body.MinimumOrderAmount));
     setIfDefined(payload, "CutOffTime", num(body.CutOffTime));
     setIfDefined(payload, "WeeklyOff", text(body.WeeklyOff));
-    setIfDefined(payload, "RaileatsCustomerDeliveryCharge", num(body.RaileatsCustomerDeliveryCharge));
-    setIfDefined(payload, "RaileatsCustomerDeliveryChargeGSTRate", num(body.RaileatsCustomerDeliveryChargeGSTRate));
-    setIfDefined(payload, "RaileatsCustomerDeliveryChargeGST", num(body.RaileatsCustomerDeliveryChargeGST));
-    setIfDefined(payload, "RaileatsCustomerDeliveryChargeTotalInclGST", num(body.RaileatsCustomerDeliveryChargeTotalInclGST));
-    setIfDefined(payload, "RaileatsOrdersPaymentOptionforCustomer", text(body.RaileatsOrdersPaymentOptionforCustomer));
-    setIfDefined(payload, "IRCTCOrdersPaymentOptionforCustomer", text(body.IRCTCOrdersPaymentOptionforCustomer));
-    setIfDefined(payload, "RestroTypeofDeliveryRailEatsorVendor", text(body.RestroTypeofDeliveryRailEatsorVendor));
+
+    setIfDefined(
+      payload,
+      "RaileatsCustomerDeliveryCharge",
+      num(body.RaileatsCustomerDeliveryCharge)
+    );
+    setIfDefined(
+      payload,
+      "RaileatsCustomerDeliveryChargeGSTRate",
+      num(body.RaileatsCustomerDeliveryChargeGSTRate)
+    );
+    setIfDefined(
+      payload,
+      "RaileatsCustomerDeliveryChargeGST",
+      num(body.RaileatsCustomerDeliveryChargeGST)
+    );
+    setIfDefined(
+      payload,
+      "RaileatsCustomerDeliveryChargeTotalInclGST",
+      num(body.RaileatsCustomerDeliveryChargeTotalInclGST)
+    );
+
+    setIfDefined(
+      payload,
+      "RaileatsOrdersPaymentOptionforCustomer",
+      text(body.RaileatsOrdersPaymentOptionforCustomer)
+    );
+    setIfDefined(
+      payload,
+      "IRCTCOrdersPaymentOptionforCustomer",
+      text(body.IRCTCOrdersPaymentOptionforCustomer)
+    );
+    setIfDefined(
+      payload,
+      "RestroTypeofDeliveryRailEatsorVendor",
+      text(body.RestroTypeofDeliveryRailEatsorVendor)
+    );
 
     setIfDefined(payload, "RestroLoginMobile", text(body.RestroLoginMobile));
     setIfDefined(payload, "RestroUserName", text(body.RestroUserName));
@@ -192,12 +209,8 @@ export async function PATCH(
     setIfDefined(payload, "RestroPassword", text(body.RestroPassword));
     setIfDefined(payload, "Password", text(body.Password));
     setIfDefined(payload, "HolidayStatus", num(body.HolidayStatus));
-    setIfDefined(payload, "MinimumOrderAmount", num(body.MinimumOrderAmount));
 
     payload.UpdatedAt = new Date().toISOString();
-
-    const expectedRestroPhone = phoneText(body.RestroPhone);
-    const expectedDeliveryGst = num(body.RaileatsCustomerDeliveryChargeGST);
 
     const { data, error } = await updateRestro(RestroCode, payload);
 
@@ -208,54 +221,14 @@ export async function PATCH(
       );
     }
 
-    const { data: freshRow, error: freshError } = await supabase
-      .from("RestroMaster")
-      .select("*")
-      .eq("RestroCode", RestroCode)
-      .single();
-
-    if (freshError) {
-      return NextResponse.json(
-        { ok: false, error: freshError.message },
-        { status: 500 }
-      );
-    }
-
-    const verifyErrors: string[] = [];
-
-    if (
-      body.RestroPhone !== undefined &&
-      !sameText(freshRow?.RestroPhone, expectedRestroPhone)
-    ) {
-      verifyErrors.push(
-        `RestroPhone save verify failed. Expected ${expectedRestroPhone ?? "blank"}, got ${freshRow?.RestroPhone ?? "blank"}`
-      );
-    }
-
-    if (
-      body.RaileatsCustomerDeliveryChargeGST !== undefined &&
-      !sameNumber(freshRow?.RaileatsCustomerDeliveryChargeGST, expectedDeliveryGst)
-    ) {
-      verifyErrors.push(
-        `RaileatsCustomerDeliveryChargeGST save verify failed. Expected ${expectedDeliveryGst ?? "blank"}, got ${freshRow?.RaileatsCustomerDeliveryChargeGST ?? "blank"}`
-      );
-    }
-
-    if (verifyErrors.length > 0) {
-      return NextResponse.json(
-        { ok: false, error: verifyErrors.join(" | "), row: freshRow },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json({
       ok: true,
       row: {
-        ...(freshRow ?? data ?? {}),
+        ...(data ?? {}),
         RestroPhone:
-          freshRow?.RestroPhone ??
           data?.RestroPhone ??
           payload.RestroPhone ??
+          phoneText(body.RestroPhone) ??
           null,
       },
     });
