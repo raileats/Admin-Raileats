@@ -222,24 +222,6 @@ const [remarks, setRemarks] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const hasLoadedTabRef = useRef<Partial<Record<TabKey, boolean>>>({});
 
-  const getAdminActor = () => {
-    if (typeof window === "undefined") {
-      return { userType: "Admin", userName: "Admin" };
-    }
-
-    const userName =
-      localStorage.getItem("raileats_admin_name") ||
-      localStorage.getItem("adminName") ||
-      localStorage.getItem("userName") ||
-      localStorage.getItem("name") ||
-      "Admin";
-
-    return {
-      userType: "Admin",
-      userName,
-    };
-  };
-
   /* ================= INIT SOUND ================= */
   useEffect(() => {
     audioRef.current = new Audio("/sounds/new-order.mp3");
@@ -557,19 +539,13 @@ useEffect(() => {
 
     (async () => {
       try {
-        const actor = getAdminActor();
-        const actionNote = mapping.actionLabel;
         const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             newStatus: targetDbValue,
-            subStatus: null,
-            remarks: actionNote,
-            note: actionNote,
-            changedBy: actor.userName,
-            userType: actor.userType,
-            userName: actor.userName,
+            remarks: mapping.actionLabel,
+            changedBy: "admin",
             actionSource: "Admin",
           }),
         });
@@ -587,8 +563,8 @@ useEffect(() => {
             ...order.history,
             {
               at: new Date().toISOString(),
-              by: actor.userName,
-              note: actionNote,
+              by: "admin",
+              note: mapping.actionLabel,
               status: nextStatus,
             },
           ],
@@ -630,24 +606,13 @@ useEffect(() => {
         computedMainStatus = "Cancelled";
       } else {
         if (subStatus === "Delivered" || subStatus === "Bad Delivery") {
-          computedMainStatus = subStatus;
-        } else if (
-          subStatus === "Not Delivered" ||
-          NOT_DELIVERED_REASONS.includes(subStatus)
-        ) {
+          computedMainStatus = "Delivered";
+        } else if (subStatus === "Not Delivered") {
           computedMainStatus = "Not Delivered";
         } else if (subStatus === "Cancelled") {
           computedMainStatus = "Cancelled";
         }
       }
-
-      if (!computedMainStatus) {
-        alert("Unable to map selected sub status to main order status");
-        return;
-      }
-
-      const actor = getAdminActor();
-      const cleanRemarks = remarks.trim();
 
       const res = await fetch(`/api/orders/${encodeURIComponent(selectedOrder.id)}/status`, {
         method: "PATCH",
@@ -655,11 +620,8 @@ useEffect(() => {
         body: JSON.stringify({
           newStatus: computedMainStatus,
           subStatus,
-          remarks: cleanRemarks,
-          note: cleanRemarks,
-          changedBy: actor.userName,
-          userType: actor.userType,
-          userName: actor.userName,
+          remarks,
+          changedBy: "admin",
           actionSource: "Admin",
         }),
       });
@@ -682,8 +644,8 @@ useEffect(() => {
           ...selectedOrder.history,
           {
             at: new Date().toISOString(),
-            by: actor.userName,
-            note: `${subStatus}${cleanRemarks ? ` • ${cleanRemarks}` : ""}`,
+            by: "admin",
+            note: `${subStatus}${remarks ? ` • ${remarks}` : ""}`,
             status: targetKey,
           },
         ],
@@ -732,18 +694,13 @@ useEffect(() => {
     const currentRemarks = selection.remarks || `Marked ${targetKey}`;
 
     try {
-      const actor = getAdminActor();
       const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           newStatus: targetDbValue,
-          subStatus: matchedOption?.label || targetDbValue,
           remarks: currentRemarks,
-          note: currentRemarks,
-          changedBy: actor.userName,
-          userType: actor.userType,
-          userName: actor.userName,
+          changedBy: "admin",
           actionSource: "Admin",
         }),
       });
@@ -761,7 +718,7 @@ useEffect(() => {
           ...order.history,
           {
             at: new Date().toISOString(),
-            by: actor.userName,
+            by: "admin",
             note: currentRemarks,
             status: targetKey,
           },
@@ -1664,46 +1621,31 @@ useEffect(() => {
                     </div>
                   ) : (
                     <div style={{ position: "relative", borderLeft: "2px dashed #e2e8f0", paddingLeft: "18px", marginLeft: "6px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                      {orderLogs.map((log: any, idx: number) => {
-                        const newStatus = log.NewStatus ?? log.newStatus ?? log.Status ?? "N/A";
-                        const oldStatus = log.OldStatus ?? log.oldStatus ?? "";
-                        const subStatusText = log.SubStatus ?? log.subStatus ?? "";
-                        const remarksText = log.Remarks ?? log.remarks ?? "";
-                        const noteText = log.Note ?? log.note ?? "";
-                        const userType = log.UserType ?? log.userType ?? log.ActionSource ?? log.actionSource ?? "System";
-                        const userName = log.UserName ?? log.userName ?? log.ChangedBy ?? log.changedBy ?? log.Actor ?? "System";
-                        const source = log.ActionSource ?? log.actionSource ?? userType;
-                        const changedAt = log.ChangedAt ?? log.changedAt ?? log.created_at ?? log.CreatedAt;
-
-                        return (
-                          <div key={log.Id || log.id || idx} style={{ position: "relative" }}>
-                            <span style={{ position: "absolute", left: "-24px", top: "4px", background: "#2563eb", width: "10px", height: "10px", borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
-
-                            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px", fontSize: "12px" }}>
-                                <span style={{ fontWeight: 800, color: "#0f172a" }}>Status: <span style={{ color: "#2563eb" }}>{newStatus}</span></span>
-                                <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700 }}>{changedAt ? new Date(changedAt).toLocaleString() : "N/A"}</span>
+                      {orderLogs.map((log: any, idx: number) => (
+                        <div key={log.Id || idx} style={{ position: "relative" }}>
+                          <span style={{ position: "absolute", left: "-24px", top: "4px", background: "#2563eb", width: "10px", height: "10px", borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
+                          
+                          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px", fontSize: "12px" }}>
+                              <span style={{ fontWeight: 800, color: "#0f172a" }}>Status: <span style={{ color: "#2563eb" }}>{log.NewStatus}</span></span>
+                              <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700 }}>{log.ChangedAt ? new Date(log.ChangedAt).toLocaleString() : "N/A"}</span>
+                            </div>
+                            
+                            {log.OldStatus && <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>Previous Status: <span style={{ textDecoration: "line-through" }}>{log.OldStatus}</span></div>}
+                            {(log.SubStatus || log.Remarks || log.Note) && (
+                              <div style={{ background: "#fff", border: "1px solid #f1f5f9", padding: "8px", borderRadius: "6px", fontSize: "11px", marginTop: "4px", color: "#475569" }}>
+                                {log.SubStatus && <div><strong style={{ color: "#e11d48" }}>Sub Status:</strong> {log.SubStatus}</div>}
+                                {(log.Remarks || log.Note) && <div style={{ marginTop: "2px" }}><strong style={{ color: "#64748b" }}>Remarks:</strong> {log.Remarks || log.Note}</div>}
                               </div>
+                            )}
 
-                              {oldStatus && <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>Previous Status: <span style={{ textDecoration: "line-through" }}>{oldStatus}</span></div>}
-
-                              {(subStatusText || remarksText || noteText) && (
-                                <div style={{ background: "#fff", border: "1px solid #e2e8f0", padding: "10px", borderRadius: "8px", fontSize: "11px", color: "#475569", display: "grid", gap: "5px" }}>
-                                  {subStatusText && <div><strong style={{ color: "#e11d48" }}>Sub Status:</strong> {subStatusText}</div>}
-                                  {remarksText && <div><strong style={{ color: "#475569" }}>Remarks:</strong> {remarksText}</div>}
-                                  {noteText && noteText !== remarksText && <div><strong style={{ color: "#64748b" }}>Note:</strong> {noteText}</div>}
-                                </div>
-                              )}
-
-                              <div style={{ marginTop: "2px", paddingTop: "8px", borderTop: "1px solid #e2e8f0", fontSize: "10px", color: "#64748b", fontWeight: 800, textTransform: "uppercase", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
-                                <span>User Type: <span style={{ color: "#0f172a" }}>{userType}</span></span>
-                                <span>User Name: <span style={{ color: "#0f172a" }}>{userName}</span></span>
-                                <span>Source: <span style={{ color: "#0f172a" }}>{source}</span></span>
-                              </div>
+                            <div style={{ marginTop: "4px", paddingTop: "4px", borderTop: "1px solid #f1f5f9", fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", display: "flex", justifyContent: "space-between" }}>
+                              <span>Changed By: <span style={{ color: "#475569", fontWeight: 800 }}>{log.ChangedBy || log.Actor || "System"}</span></span>
+                              <span>Source: {log.ActionSource || log.actionSource || "System"}</span>
                             </div>
                           </div>
-                        );
-                      })}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -1840,4 +1782,3 @@ useEffect(() => {
     </section>
   );
 }
-
