@@ -182,6 +182,8 @@ export async function PATCH(
     setIfDefined(payload, "HolidayStatus", num(body.HolidayStatus));
 
     payload.UpdatedAt = new Date().toISOString();
+    const restroPhoneToSave = phoneText(body.RestroPhone);
+delete payload.RestroPhone;
 
     const { data, error } = await updateRestro(RestroCode, payload);
 
@@ -209,6 +211,22 @@ export async function PATCH(
     return jsonNoCache(
       { ok: false, error: error?.message || "Server error" },
       500
+    );
+  }
+}
+if (!error && body.RestroPhone !== undefined) {
+  const { error: phoneError } = await supabase
+    .from("RestroMaster")
+    .update({
+      RestroPhone: restroPhoneToSave,
+      UpdatedAt: new Date().toISOString(),
+    })
+    .eq("RestroCode", RestroCode);
+
+  if (phoneError) {
+    return NextResponse.json(
+      { ok: false, error: `RestroPhone save failed: ${phoneError.message}` },
+      { status: 500 }
     );
   }
 }
