@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { Bell, Clock, MapPin, ShieldCheck, ShoppingBag, Smartphone, X } from "lucide-react";
 import Link from "next/link";
-import AdminPage from "@/components/admin/AdminPage";
 
 type TabKey =
   | "booked"
@@ -71,20 +70,6 @@ const DELIVERED_REASONS = [
   "Delivered",
   "Bad Delivery",
 ];
-
-type MainOutcomeStatus = "Delivered" | "Cancelled" | "Not Delivered";
-
-const MAIN_STATUS_OPTIONS: MainOutcomeStatus[] = [
-  "Delivered",
-  "Cancelled",
-  "Not Delivered",
-];
-
-const SUB_STATUS_OPTIONS: Record<MainOutcomeStatus, string[]> = {
-  Delivered: DELIVERED_REASONS,
-  Cancelled: CANCEL_REASONS,
-  "Not Delivered": NOT_DELIVERED_REASONS,
-};
 
 const NEXT_MAP: Record<
   TabKey,
@@ -198,8 +183,6 @@ const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
 const [actionType, setActionType] = useState("");
 
-const [mainStatus, setMainStatus] = useState<MainOutcomeStatus | "">("");
-
 const [subStatus, setSubStatus] = useState("");
 
 const [remarks, setRemarks] = useState("");
@@ -238,6 +221,24 @@ const [remarks, setRemarks] = useState("");
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const hasLoadedTabRef = useRef<Partial<Record<TabKey, boolean>>>({});
+
+  const getAdminActor = () => {
+    if (typeof window === "undefined") {
+      return { userType: "Admin", userName: "Admin" };
+    }
+
+    const userName =
+      localStorage.getItem("raileats_admin_name") ||
+      localStorage.getItem("adminName") ||
+      localStorage.getItem("userName") ||
+      localStorage.getItem("name") ||
+      "Admin";
+
+    return {
+      userType: "Admin",
+      userName,
+    };
+  };
 
   /* ================= INIT SOUND ================= */
   useEffect(() => {
@@ -556,13 +557,19 @@ useEffect(() => {
 
     (async () => {
       try {
+        const actor = getAdminActor();
+        const actionNote = mapping.actionLabel;
         const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             newStatus: targetDbValue,
-            remarks: mapping.actionLabel,
-            changedBy: "admin",
+            subStatus: null,
+            remarks: actionNote,
+            note: actionNote,
+            changedBy: actor.userName,
+            userType: actor.userType,
+            userName: actor.userName,
             actionSource: "Admin",
           }),
         });
@@ -580,8 +587,8 @@ useEffect(() => {
             ...order.history,
             {
               at: new Date().toISOString(),
-              by: "admin",
-              note: mapping.actionLabel,
+              by: actor.userName,
+              note: actionNote,
               status: nextStatus,
             },
           ],
@@ -612,17 +619,35 @@ useEffect(() => {
 
   async function submitStatusAction() {
     if (!selectedOrder) return;
-    if (actionType === "mark" && !mainStatus) {
-      alert("Please select main status");
-      return;
-    }
     if (!subStatus) {
-      alert("Please select sub status");
+      alert("Please select reason/status");
       return;
     }
 
     try {
-      const computedMainStatus = actionType === "cancel" ? "Cancelled" : mainStatus;
+      let computedMainStatus = "";
+      if (actionType === "cancel") {
+        computedMainStatus = "Cancelled";
+      } else {
+        if (subStatus === "Delivered" || subStatus === "Bad Delivery") {
+          computedMainStatus = subStatus;
+        } else if (
+          subStatus === "Not Delivered" ||
+          NOT_DELIVERED_REASONS.includes(subStatus)
+        ) {
+          computedMainStatus = "Not Delivered";
+        } else if (subStatus === "Cancelled") {
+          computedMainStatus = "Cancelled";
+        }
+      }
+
+      if (!computedMainStatus) {
+        alert("Unable to map selected sub status to main order status");
+        return;
+      }
+
+      const actor = getAdminActor();
+      const cleanRemarks = remarks.trim();
 
       const res = await fetch(`/api/orders/${encodeURIComponent(selectedOrder.id)}/status`, {
         method: "PATCH",
@@ -630,8 +655,11 @@ useEffect(() => {
         body: JSON.stringify({
           newStatus: computedMainStatus,
           subStatus,
-          remarks,
-          changedBy: "admin",
+          remarks: cleanRemarks,
+          note: cleanRemarks,
+          changedBy: actor.userName,
+          userType: actor.userType,
+          userName: actor.userName,
           actionSource: "Admin",
         }),
       });
@@ -654,8 +682,8 @@ useEffect(() => {
           ...selectedOrder.history,
           {
             at: new Date().toISOString(),
-            by: "admin",
-            note: `${subStatus}${remarks ? ` • ${remarks}` : ""}`,
+            by: actor.userName,
+            note: `${subStatus}${cleanRemarks ? ` • ${cleanRemarks}` : ""}`,
             status: targetKey,
           },
         ],
@@ -683,7 +711,6 @@ useEffect(() => {
 
       setStatusModalOpen(false);
       setSelectedOrder(null);
-      setMainStatus("");
       setSubStatus("");
       setRemarks("");
       setActiveTab(targetKey);
@@ -705,13 +732,18 @@ useEffect(() => {
     const currentRemarks = selection.remarks || `Marked ${targetKey}`;
 
     try {
+      const actor = getAdminActor();
       const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           newStatus: targetDbValue,
+          subStatus: matchedOption?.label || targetDbValue,
           remarks: currentRemarks,
-          changedBy: "admin",
+          note: currentRemarks,
+          changedBy: actor.userName,
+          userType: actor.userType,
+          userName: actor.userName,
           actionSource: "Admin",
         }),
       });
@@ -729,7 +761,7 @@ useEffect(() => {
           ...order.history,
           {
             at: new Date().toISOString(),
-            by: "admin",
+            by: actor.userName,
             note: currentRemarks,
             status: targetKey,
           },
@@ -843,10 +875,25 @@ useEffect(() => {
   const visibleOrders = useMemo(() => applyFiltersAndSorting(orders), [orders, searchText, searchDate, searchType, searchOutlet]);
 
   return (
-    <AdminPage
-      title="Orders Dashboard"
-      subtitle="Real-time dynamic monitoring console ordered by delivery schedule urgency"
-      actions={
+    <section style={{ padding: 12, minHeight: "100vh", background: "#f8fafc", fontFamily: "sans-serif" }}>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 12,
+          background: "#fff",
+          padding: 16,
+          borderRadius: 12,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
+        }}
+      >
+        <div>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#0f172a" }}>Orders Dashboard</h1>
+          <p style={{ margin: 0, color: "#6b7280", fontSize: 13, fontWeight: 500 }}>Real-time dynamic monitoring console ordered by delivery schedule urgency</p>
+        </div>
+
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <Link
             href="/admin/orders"
@@ -892,8 +939,7 @@ useEffect(() => {
             {loading ? " • Syncing..." : ""}
           </div>
         </div>
-      }
-    >
+      </header>
 
       {/* TABS VIEW */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, marginBottom: 12 }}>
@@ -1008,8 +1054,8 @@ useEffect(() => {
                 <th style={{ padding: 12 }}>Seat</th>
                 <th style={{ padding: 12 }}>Customer Name</th>
                 <th style={{ padding: 12 }}>Customer Mobile</th>
-                <th style={{ padding: 12 }}>Order History</th>
-                <th style={{ padding: 12, textAlign: "center" }}>Action Module Logs</th>
+                <th style={{ padding: 12 }}>Order Process Log</th>
+                <th style={{ padding: 12, textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
 
@@ -1021,7 +1067,7 @@ useEffect(() => {
                   <td style={{ padding: 12 }}>
                     <button
                       onClick={() => handleOpenDiagnosticsDrawer(o, "details")}
-                      title="Click to view detailed order profile"
+                      title="View order details"
                       style={{
                         background: "none",
                         border: "none",
@@ -1096,7 +1142,7 @@ useEffect(() => {
                   <td style={{ padding: 12, fontWeight: 600 }}>{o.customerName}</td>
                   <td style={{ padding: 12, fontFamily: "monospace" }}>{o.customerMobile}</td>
 
-                  {/* MODIFIED: Order History column now triggers directly the History Logs tab view */}
+                  {/* Order process log opens the centered log view */}
                   <td style={{ padding: 12 }}>
                     <button
                       onClick={() => handleOpenDiagnosticsDrawer(o, "logs")}
@@ -1114,7 +1160,7 @@ useEffect(() => {
                         gap: 4
                       }}
                     >
-                      📜 Log Stream ({o.history?.length || 0})
+                      View Log ({o.history?.length || 0})
                     </button>
                   </td>
 
@@ -1156,7 +1202,6 @@ useEffect(() => {
                                 setSelectedOrder(o);
                                 actionType === "cancel";
                                 setActionType("cancel");
-                                setMainStatus("");
                                 setSubStatus("");
                                 setRemarks("");
                                 setStatusModalOpen(true);
@@ -1181,7 +1226,6 @@ useEffect(() => {
                               onClick={() => {
                                 setSelectedOrder(o);
                                 setActionType("mark");
-                                setMainStatus("");
                                 setSubStatus("");
                                 setRemarks("");
                                 setStatusModalOpen(true);
@@ -1424,7 +1468,7 @@ useEffect(() => {
         </div>
       )}
       {/* ========================================================================= */}
-      {/* AUDIT DIAGNOSTICS SLIDING DRAWER FRAMEWORK */}
+      {/* ORDER DETAILS / LOGS CENTER MODAL */}
       {/* ========================================================================= */}
       {viewDrawerOpen && detailedOrder && (
         <div 
@@ -1435,7 +1479,9 @@ useEffect(() => {
             backdropFilter: "blur(4px)",
             zIndex: 999,
             display: "flex",
-            justifyContent: "flex-end",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
             animation: "fadeIn 0.2s ease"
           }}
           onClick={() => { setViewDrawerOpen(false); setDetailedOrder(null); }}
@@ -1443,13 +1489,14 @@ useEffect(() => {
           <div 
             style={{
               width: "100%",
-              maxWidth: "680px",
-              height: "100%",
+              maxWidth: "920px",
+              height: "88vh",
               background: "#ffffff",
-              boxShadow: "-10px 0 25px rgba(0,0,0,0.15)",
+              borderRadius: "18px",
+              boxShadow: "0 24px 60px rgba(15,23,42,0.28)",
               display: "flex",
               flexDirection: "column",
-              animation: "slideLeft 0.25s ease-out",
+              animation: "scaleIn 0.18s ease-out",
               overflow: "hidden"
             }}
             onClick={(e) => e.stopPropagation()}
@@ -1459,11 +1506,11 @@ useEffect(() => {
             <div style={{ background: "#f8fafc", padding: "18px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px" }}>Audit Diagnostics Sheet</h2>
+                  <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "#0f172a", letterSpacing: "0" }}>Order Details</h2>
                   <span style={{ background: "#2563eb", color: "#fff", fontWeight: 800, fontSize: "11px", padding: "2px 8px", borderRadius: "5px" }}>#{detailedOrder.id}</span>
                 </div>
                 <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#64748b", fontWeight: 600 }}>
-                  CURRENT PIPELINE STATE: <span style={{ color: "#2563eb", fontWeight: 800 }}>"{detailedOrder.dbStatus || detailedOrder.status}"</span>
+                  Current Status: <span style={{ color: "#2563eb", fontWeight: 800 }}>{detailedOrder.dbStatus || detailedOrder.status}</span>
                 </p>
               </div>
 
@@ -1493,7 +1540,7 @@ useEffect(() => {
                   transition: "all 0.15s"
                 }}
               >
-                📦 Order Profile Details
+                Order Details
               </button>
               <button
                 onClick={() => setActiveDrawerSection("logs")}
@@ -1509,7 +1556,7 @@ useEffect(() => {
                   transition: "all 0.15s"
                 }}
               >
-                📜 Lifecycle History Logs
+                Order Process Log
               </button>
             </div>
 
@@ -1521,42 +1568,42 @@ useEffect(() => {
                   {/* TRANSIT METRICS PANEL */}
                   <div style={{ background: "#f8fafc", borderRadius: "12px", padding: "16px", border: "1px solid #e2e8f0" }}>
                     <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <Smartphone size={14} /> Client Transit Profile &amp; Route Schedule
+                      <Smartphone size={14} /> Customer &amp; Delivery Details
                     </h3>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", fontSize: "13px", fontWeight: "600", color: "#334155" }}>
-                      <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Client Full Name:</span>{detailedOrder.customerName || "Guest User"}</div>
-                      <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Contact Phone:</span>{detailedOrder.customerMobile || "N/A"}</div>
-                      <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Transit Train Engine:</span>🚂 Train {detailedOrder.trainNo || "N/A"}</div>
-                      <div><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Coach &amp; Berth Location:</span>💺 Coach {detailedOrder.coach || "-"} / Seat {detailedOrder.seat || "-"}</div>
+                      <div><span style={{ color: "#64748b", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Customer Name</span>{detailedOrder.customerName || "Guest"}</div>
+                      <div><span style={{ color: "#64748b", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Customer Mobile</span>{detailedOrder.customerMobile || "N/A"}</div>
+                      <div><span style={{ color: "#64748b", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Train Number</span>Train {detailedOrder.trainNo || "N/A"}</div>
+                      <div><span style={{ color: "#64748b", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Coach / Seat</span>Coach {detailedOrder.coach || "-"} / Seat {detailedOrder.seat || "-"}</div>
                       <div style={{ background: "#eff6ff", padding: "6px 10px", borderRadius: "6px", border: "1px solid #bfdbfe" }}>
-                        <span style={{ color: "#2563eb", display: "block", fontSize: "10px", fontWeight: 800, textTransform: "uppercase", marginBottom: "2px" }}>Delivery Date Target:</span>
-                        📅 {detailedOrder.deliveryDate}
+                        <span style={{ color: "#2563eb", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Delivery Date</span>
+                        {detailedOrder.deliveryDate}
                       </div>
                       <div style={{ background: "#eff6ff", padding: "6px 10px", borderRadius: "6px", border: "1px solid #bfdbfe" }}>
-                        <span style={{ color: "#2563eb", display: "block", fontSize: "10px", fontWeight: 800, textTransform: "uppercase", marginBottom: "2px" }}>Delivery Window Time:</span>
-                        🕒 {detailedOrder.deliveryTime}
+                        <span style={{ color: "#2563eb", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Delivery Time</span>
+                        {detailedOrder.deliveryTime}
                       </div>
-                      <div style={{ gridColumn: "span 2" }}><span style={{ color: "#94a3b8", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", marginBottom: "2px" }}>Destination Station:</span>📍 {detailedOrder.stationName} ({detailedOrder.stationCode})</div>
+                      <div style={{ gridColumn: "span 2" }}><span style={{ color: "#64748b", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Station</span>{detailedOrder.stationName} ({detailedOrder.stationCode})</div>
                     </div>
                   </div>
 
                   {/* FOOD ITEMS SUM BLOCK */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                     <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <ShoppingBag size={14} /> Food Basket Summary Breakdown
+                      <ShoppingBag size={14} /> Order Items
                     </h3>
                     <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                         <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", textAlign: "left" }}>
                           <tr>
-                            <th style={{ padding: "10px 16px" }}>Item Name &amp; Specifications</th>
+                            <th style={{ padding: "10px 16px" }}>Item Name</th>
                             <th style={{ padding: "10px 16px", textAlign: "center" }}>Qty</th>
                             <th style={{ padding: "10px 16px", textAlign: "right" }}>Line Total</th>
                           </tr>
                         </thead>
                         <tbody style={{ color: "#334155", fontWeight: 600 }}>
                           {loadingItems ? (
-                            <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>Pulling basket records streams...</td></tr>
+                            <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>Loading order items...</td></tr>
                           ) : fetchedItems.length > 0 ? (
                             fetchedItems.map((item: any, idx: number) => (
                               <tr key={item.ItemId || idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
@@ -1566,16 +1613,16 @@ useEffect(() => {
                               </tr>
                             ))
                           ) : (
-                            <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>No custom mapping inside OrderItems found.</td></tr>
+                            <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>No order items found.</td></tr>
                           )}
                         </tbody>
                       </table>
                     </div>
 
                     <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", fontSize: "13px", fontWeight: 600, display: "flex", flexDirection: "column", gap: "6px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}><span>Total Base Value Collection:</span><span style={{ color: "#334155" }}>₹{detailedOrder.total || "0"}</span></div>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}><span>Order Total</span><span style={{ color: "#334155" }}>₹{detailedOrder.total || "0"}</span></div>
                       <div style={{ display: "flex", justifyContent: "space-between", color: "#0f172a", fontWeight: 800, fontSize: "14px", paddingTop: "6px", borderTop: "1px dashed #cbd5e1" }}>
-                        <span>Gross Account Payable:</span>
+                        <span>Payable Amount</span>
                         <span style={{ color: "#2563eb" }}>₹{detailedOrder.total || "0"}</span>
                       </div>
                     </div>
@@ -1584,21 +1631,21 @@ useEffect(() => {
                   {/* RESTRO COMPLIANCE CARD */}
                   <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "16px" }}>
                     <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <ShieldCheck size={14} style={{ color: "#16a34a" }} /> Restaurant Compliance &amp; Regulatory License Audit
+                      <ShieldCheck size={14} style={{ color: "#16a34a" }} /> Restaurant Details
                     </h3>
                     {loadingRestro ? (
-                      <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Scanning registry index blocks...</p>
+                      <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Loading restaurant details...</p>
                     ) : fetchedRestro ? (
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px", fontSize: "13px", fontWeight: "600", color: "#334155" }}>
-                        <div><span style={{ color: "#16a34a", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Restro Code Link:</span><span style={{ color: "#111827", fontWeight: 800 }}>{fetchedRestro.RestroCode || "N/A"}</span></div>
-                        <div><span style={{ color: "#16a34a", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Registered Brand Name:</span><span style={{ color: "#0f172a", fontWeight: 700 }}>{fetchedRestro.RestroName || "N/A"}</span></div>
-                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Active Operating Window:</span>🕒 {fetchedRestro.open_time || "N/A"} - {fetchedRestro.closed_time || "N/A"}</div>
-                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Registration Code:</span><span style={{ fontFamily: "monospace" }}>{fetchedRestro.FSSAINumber || "N/A"}</span></div>
-                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Ledger Expiry Timeline:</span><span style={{ color: "#b45309" }}>{fetchedRestro.FSSAIExpiryDate || "N/A"}</span></div>
-                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Corporate GSTIN Tag:</span><span style={{ fontFamily: "monospace" }}>{fetchedRestro.GSTNumber || "N/A"}</span></div>
+                        <div><span style={{ color: "#16a34a", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Restro Code</span><span style={{ color: "#111827", fontWeight: 800 }}>{fetchedRestro.RestroCode || "N/A"}</span></div>
+                        <div><span style={{ color: "#16a34a", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Restro Name</span><span style={{ color: "#0f172a", fontWeight: 700 }}>{fetchedRestro.RestroName || "N/A"}</span></div>
+                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Open Time</span>{fetchedRestro.open_time || "N/A"} - {fetchedRestro.closed_time || "N/A"}</div>
+                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Number</span><span style={{ fontFamily: "monospace" }}>{fetchedRestro.FSSAINumber || "N/A"}</span></div>
+                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Expiry</span><span style={{ color: "#b45309" }}>{fetchedRestro.FSSAIExpiryDate || "N/A"}</span></div>
+                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>GST Number</span><span style={{ fontFamily: "monospace" }}>{fetchedRestro.GSTNumber || "N/A"}</span></div>
                       </div>
                     ) : (
-                      <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>No linked vendor mapping located inside RestroMaster database index rows.</p>
+                      <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>No restaurant details found.</p>
                     )}
                   </div>
                 </>
@@ -1606,42 +1653,57 @@ useEffect(() => {
                 /* TIMELINE LOGGER NODES SECTION */
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <Clock size={14} /> Chronological Operational Lifecycle Milestones ({orderLogs.length})
+                    <Clock size={14} /> Order Process Timeline ({orderLogs.length})
                   </h3>
                   
                   {loadingLogs ? (
-                    <p style={{ fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Compiling sequential historic state indices...</p>
+                    <p style={{ fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Loading order process log...</p>
                   ) : orderLogs.length === 0 ? (
                     <div style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", padding: "12px", borderRadius: "8px", fontSize: "12px", fontWeight: 600 }}>
-                      ⚠️ No logged milestone state alterations tracked for this instance record.
+                      No order process log found for this order.
                     </div>
                   ) : (
                     <div style={{ position: "relative", borderLeft: "2px dashed #e2e8f0", paddingLeft: "18px", marginLeft: "6px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                      {orderLogs.map((log: any, idx: number) => (
-                        <div key={log.Id || idx} style={{ position: "relative" }}>
-                          <span style={{ position: "absolute", left: "-24px", top: "4px", background: "#2563eb", width: "10px", height: "10px", borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
-                          
-                          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px", fontSize: "12px" }}>
-                              <span style={{ fontWeight: 800, color: "#0f172a" }}>Transition Stage: <span style={{ color: "#2563eb" }}>"{log.NewStatus}"</span></span>
-                              <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700 }}>{log.ChangedAt ? new Date(log.ChangedAt).toLocaleString() : "N/A"}</span>
-                            </div>
-                            
-                            {log.OldStatus && <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>Previous Condition State: <span style={{ textDecoration: "line-through" }}>"{log.OldStatus}"</span></div>}
-                            {(log.SubStatus || log.Remarks || log.Note) && (
-                              <div style={{ background: "#fff", border: "1px solid #f1f5f9", padding: "8px", borderRadius: "6px", fontSize: "11px", marginTop: "4px", color: "#475569" }}>
-                                {log.SubStatus && <div><strong style={{ color: "#e11d48" }}>Reason Attribute:</strong> {log.SubStatus}</div>}
-                                {(log.Remarks || log.Note) && <div style={{ marginTop: "2px" }}><strong style={{ color: "#64748b" }}>Admin Annotation Note:</strong> {log.Remarks || log.Note}</div>}
-                              </div>
-                            )}
+                      {orderLogs.map((log: any, idx: number) => {
+                        const newStatus = log.NewStatus ?? log.newStatus ?? log.Status ?? "N/A";
+                        const oldStatus = log.OldStatus ?? log.oldStatus ?? "";
+                        const subStatusText = log.SubStatus ?? log.subStatus ?? "";
+                        const remarksText = log.Remarks ?? log.remarks ?? "";
+                        const noteText = log.Note ?? log.note ?? "";
+                        const userType = log.UserType ?? log.userType ?? log.ActionSource ?? log.actionSource ?? "System";
+                        const userName = log.UserName ?? log.userName ?? log.ChangedBy ?? log.changedBy ?? log.Actor ?? "System";
+                        const source = log.ActionSource ?? log.actionSource ?? userType;
+                        const changedAt = log.ChangedAt ?? log.changedAt ?? log.created_at ?? log.CreatedAt;
 
-                            <div style={{ marginTop: "4px", paddingTop: "4px", borderTop: "1px solid #f1f5f9", fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", display: "flex", justifyContent: "space-between" }}>
-                              <span>Actor Entity: <span style={{ color: "#475569", fontWeight: 800 }}>{log.ChangedBy || log.Actor || "Automated Infrastructure"}</span></span>
-                              <span>Source Entry channel: {log.ActionSource || log.actionSource || "System Core Link"}</span>
+                        return (
+                          <div key={log.Id || log.id || idx} style={{ position: "relative" }}>
+                            <span style={{ position: "absolute", left: "-24px", top: "4px", background: "#2563eb", width: "10px", height: "10px", borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
+
+                            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px", fontSize: "12px" }}>
+                                <span style={{ fontWeight: 800, color: "#0f172a" }}>Status: <span style={{ color: "#2563eb" }}>{newStatus}</span></span>
+                                <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700 }}>{changedAt ? new Date(changedAt).toLocaleString() : "N/A"}</span>
+                              </div>
+
+                              {oldStatus && <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>Previous Status: <span style={{ textDecoration: "line-through" }}>{oldStatus}</span></div>}
+
+                              {(subStatusText || remarksText || noteText) && (
+                                <div style={{ background: "#fff", border: "1px solid #e2e8f0", padding: "10px", borderRadius: "8px", fontSize: "11px", color: "#475569", display: "grid", gap: "5px" }}>
+                                  {subStatusText && <div><strong style={{ color: "#e11d48" }}>Sub Status:</strong> {subStatusText}</div>}
+                                  {remarksText && <div><strong style={{ color: "#475569" }}>Remarks:</strong> {remarksText}</div>}
+                                  {noteText && noteText !== remarksText && <div><strong style={{ color: "#64748b" }}>Note:</strong> {noteText}</div>}
+                                </div>
+                              )}
+
+                              <div style={{ marginTop: "2px", paddingTop: "8px", borderTop: "1px solid #e2e8f0", fontSize: "10px", color: "#64748b", fontWeight: 800, textTransform: "uppercase", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                                <span>User Type: <span style={{ color: "#0f172a" }}>{userType}</span></span>
+                                <span>User Name: <span style={{ color: "#0f172a" }}>{userName}</span></span>
+                                <span>Source: <span style={{ color: "#0f172a" }}>{source}</span></span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1678,80 +1740,39 @@ useEffect(() => {
             }}
           >
             <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: "18px", fontWeight: 800, color: "#1e293b" }}>
-              {actionType === "cancel" ? "Cancel Order Entity" : "Mark Order Status Engine"}
+              {actionType === "cancel" ? "Cancel Order" : "Mark Order Status"}
             </h2>
 
-            {actionType === "cancel" ? (
-              <select
-                value={subStatus}
-                onChange={(e) => setSubStatus(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #cbd5e1",
-                  marginBottom: 16,
-                  fontSize: "13px",
-                  fontWeight: 600
-                }}
-              >
-                <option value="">-- Select Cancel Reason --</option>
-                {CANCEL_REASONS.map((reason) => (
-                  <option key={reason} value={reason}>{reason}</option>
-                ))}
-              </select>
-            ) : (
-              <>
-                <select
-                  value={mainStatus}
-                  onChange={(e) => {
-                    setMainStatus(e.target.value as MainOutcomeStatus | "");
-                    setSubStatus("");
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: 10,
-                    borderRadius: 8,
-                    border: "1px solid #cbd5e1",
-                    marginBottom: 12,
-                    fontSize: "13px",
-                    fontWeight: 600
-                  }}
-                >
-                  <option value="">-- Select Main Status --</option>
-                  {MAIN_STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
+            <select
+              value={subStatus}
+              onChange={(e) => setSubStatus(e.target.value)}
+              style={{
+                width: "100%",
+                padding: 10,
+                borderRadius: 8,
+                border: "1px solid #cbd5e1",
+                marginBottom: 16,
+                fontSize: "13px",
+                fontWeight: 600
+              }}
+            >
+              <option value="">
+                {actionType === "cancel" ? "-- Select Cancel Reason --" : "-- Select Outcome Status --"}
+              </option>
 
-                <select
-                  value={subStatus}
-                  onChange={(e) => setSubStatus(e.target.value)}
-                  disabled={!mainStatus}
-                  style={{
-                    width: "100%",
-                    padding: 10,
-                    borderRadius: 8,
-                    border: "1px solid #cbd5e1",
-                    marginBottom: 16,
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    background: mainStatus ? "#fff" : "#f8fafc",
-                    color: mainStatus ? "#0f172a" : "#94a3b8"
-                  }}
-                >
-                  <option value="">
-                    {mainStatus ? `-- Select ${mainStatus} Sub Status --` : "-- Select Main Status First --"}
-                  </option>
-
-                  {mainStatus &&
-                    SUB_STATUS_OPTIONS[mainStatus].map((reason) => (
-                      <option key={reason} value={reason}>{reason}</option>
-                    ))
-                  }
-                </select>
-              </>
-            )}
+              {actionType === "cancel"
+                ? CANCEL_REASONS.map((reason) => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))
+                : selectedOrder?.status === "inkitchen"
+                ? NOT_DELIVERED_REASONS.map((reason) => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))
+                : DELIVERED_REASONS.map((reason) => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))
+              }
+            </select>
 
             <textarea
               placeholder="Internal administrative remarks annotation ledger (Optional)"
@@ -1774,7 +1795,6 @@ useEffect(() => {
                 onClick={() => {
                   setStatusModalOpen(false);
                   setSelectedOrder(null);
-                  setMainStatus("");
                   setSubStatus("");
                   setRemarks("");
                 }}
@@ -1814,8 +1834,9 @@ useEffect(() => {
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.96) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         .table-row-hover:hover { background-color: #f8fafc !important; transition: background-color 0.15s ease; }
       `}} />
-    </AdminPage>
+    </section>
   );
 }
