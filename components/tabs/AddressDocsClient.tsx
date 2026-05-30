@@ -123,7 +123,7 @@ export default function AddressDocsClient({
 
   const [showGst, setShowGst] = useState(false);
   const [gstNumber, setGstNumber] = useState("");
-  const [gstType, setGstType] = useState("Regular");
+  const [gstType, setGstType] = useState("");
   const [gstFile, setGstFile] = useState<File | null>(null);
   const [savingGst, setSavingGst] = useState(false);
 
@@ -132,6 +132,8 @@ export default function AddressDocsClient({
   const [panType, setPanType] = useState("");
   const [panFile, setPanFile] = useState<File | null>(null);
   const [savingPan, setSavingPan] = useState(false);
+
+  const stateLocked = String(initialData?.State ?? "").trim() !== "";
 
   useEffect(() => {
     if (!hasAddressValue(initialData)) return;
@@ -304,6 +306,11 @@ export default function AddressDocsClient({
     try {
       const fd = new FormData();
       fd.append("gst_number", gstNumber);
+      if (!gstType) {
+        alert("Please select GST Type");
+        return;
+      }
+
       fd.append("gst_type", gstType);
       if (gstFile) fd.append("file", gstFile);
 
@@ -330,7 +337,7 @@ export default function AddressDocsClient({
 
       setShowGst(false);
       setGstNumber("");
-      setGstType("Regular");
+      setGstType("");
       setGstFile(null);
       window.setTimeout(() => loadDocs(), 700);
     } catch (err: any) {
@@ -414,7 +421,7 @@ export default function AddressDocsClient({
 
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6">
             <Field label="City / Village" value={local.City} onChange={(v) => update("City", v)} />
-            <Field label="State" value={local.State} onChange={(v) => update("State", v)} />
+            <Field label="State" value={local.State} onChange={(v) => update("State", v)} readOnly={stateLocked} />
             <Field label="District" value={local.District} onChange={(v) => update("District", v)} />
             <Field label="Pin Code" value={local.PinCode} onChange={(v) => update("PinCode", v)} />
             <Field label="Latitude" value={local.RestroLatitude} onChange={(v) => update("RestroLatitude", v)} />
@@ -499,6 +506,7 @@ export default function AddressDocsClient({
         <Modal title="Add GST" onClose={() => setShowGst(false)}>
           <input value={gstNumber} onChange={(e) => setGstNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15))} placeholder="15 Digit GST Number" className={modalInputClass} />
           <select value={gstType} onChange={(e) => setGstType(e.target.value)} className={modalInputClass}>
+            <option value="">-- Select GST Type --</option>
             <option value="Regular">Regular</option>
             <option value="Composition">Composition</option>
           </select>
@@ -511,7 +519,7 @@ export default function AddressDocsClient({
         <Modal title="Add PAN" onClose={() => setShowPan(false)}>
           <input value={panNumber} onChange={(e) => setPanNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10))} placeholder="ABCDE1234F" className={modalInputClass} />
           <select value={panType} onChange={(e) => setPanType(e.target.value)} className={modalInputClass}>
-            <option value="">Select PAN Type</option>
+            <option value="">-- Select PAN Type --</option>
             <option value="Proprietor">Proprietor</option>
             <option value="Company">Company</option>
             <option value="Partnership">Partnership</option>
@@ -525,10 +533,10 @@ export default function AddressDocsClient({
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value: any; onChange: (v: string) => void }) {
+function Field({ label, value, onChange, readOnly = false }: { label: string; value: any; onChange: (v: string) => void; readOnly?: boolean }) {
   return (
     <AdminField label={label}>
-      <AdminInput value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+      <AdminInput value={value ?? ""} readOnly={readOnly} onChange={(e) => onChange(e.target.value)} />
     </AdminField>
   );
 }
