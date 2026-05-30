@@ -23,6 +23,14 @@ function phoneDigits(value: any) {
   return String(value ?? "").replace(/\D/g, "").slice(0, 10);
 }
 
+function readRestroPhoneFromDom() {
+  if (typeof document === "undefined") return "";
+  const input = document.querySelector<HTMLInputElement>(
+    'input[name="RestroPhone"], input[data-restro-phone-input="true"]'
+  );
+  return phoneDigits(input?.value);
+}
+
 function pickRestroPhone(row: any) {
   return phoneDigits(
     row?.RestroPhone ??
@@ -112,7 +120,7 @@ export default function BasicInfoClient({
   function buildPayload() {
     const raileatsStatus = toStatusNumber(local.RaileatsStatus);
 
-    const restroPhone = pickRestroPhone(local);
+    const restroPhone = readRestroPhoneFromDom() || pickRestroPhone(local);
 
     const payload: any = {
       RestroCode: Number(local.RestroCode),
@@ -224,7 +232,11 @@ export default function BasicInfoClient({
         RestroDisplayPhoto:
           savedRow.RestroDisplayPhoto ?? payload.RestroDisplayPhoto ?? prev.RestroDisplayPhoto,
       }));
-      setMsg("Saved successfully");
+      setMsg(
+        payload.RestroPhone
+          ? `Saved successfully - RestroPhone verified: ${payload.RestroPhone}`
+          : "Saved successfully - RestroPhone blank"
+      );
     } catch (e: any) {
       console.error("Save error:", e);
       setErr(e?.message || "Save failed");
@@ -306,6 +318,9 @@ export default function BasicInfoClient({
 
         <AdminField label="Restro Phone">
           <AdminInput
+            id="RestroPhone"
+            name="RestroPhone"
+            data-restro-phone-input="true"
             inputMode="numeric"
             maxLength={10}
             value={pickRestroPhone(local)}
