@@ -4,6 +4,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import BankFormModal from "./BankFormModal";
+import AdminButton from "@/components/admin/AdminButton";
+import AdminCard from "@/components/admin/AdminCard";
 
 export type BankRow = {
   id?: number;
@@ -143,26 +145,25 @@ export default function BankTab({
   }, [codeStr, supabase]);
 
   return (
-    <div className="px-4">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">Bank</h3>
-          <p className="text-sm text-gray-500">Current bank details for this restaurant.</p>
-        </div>
-        <button
+    <AdminCard
+      title="Bank"
+      subtitle="Current bank details for this restaurant"
+      bodyClassName="p-0"
+      actions={
+        <AdminButton
           type="button"
           onClick={(e) => {
             e.preventDefault();
             setOpen(true);
           }}
-          className="rounded-md bg-orange-600 px-4 py-2 text-white"
         >
           Add New Bank Details
-        </button>
-      </div>
+        </AdminButton>
+      }
+    >
 
-      <div className="overflow-hidden rounded-xl border">
-        <div className="grid grid-cols-7 bg-gray-50 px-4 py-3 text-sm font-medium">
+      <div className="overflow-auto">
+        <div className="grid min-w-[980px] grid-cols-7 border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
           <div>Account Holder Name</div>
           <div>Account Number</div>
           <div>IFSC Code</div>
@@ -173,14 +174,14 @@ export default function BankTab({
         </div>
 
         {loading ? (
-          <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
+          <div className="px-4 py-6 text-sm text-slate-600">Loading...</div>
         ) : rows.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-gray-600">No bank details added yet.</div>
+          <div className="px-4 py-6 text-sm text-slate-600">No bank details added yet.</div>
         ) : (
           rows.map((r, idx) => (
             <div
               key={r.id ?? `${idx}-${r.account_number}-${r.ifsc_code}`}
-              className={`grid grid-cols-7 border-t px-4 py-3 text-sm ${
+              className={`grid min-w-[980px] grid-cols-7 border-b border-slate-100 px-4 py-3 text-sm ${
                 r.status === "active" ? "bg-green-50" : "bg-rose-50"
               }`}
             >
@@ -196,7 +197,7 @@ export default function BankTab({
         )}
       </div>
 
-      {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
+      {err && <p className="px-4 py-3 text-sm font-semibold text-red-600">Error: {err}</p>}
 
       <BankFormModal
         open={open}
@@ -209,6 +210,6 @@ export default function BankTab({
         historyTable={historyTable}
         masterTable={masterTable}
       />
-    </div>
+    </AdminCard>
   );
 }
