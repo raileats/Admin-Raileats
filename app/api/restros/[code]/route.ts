@@ -55,15 +55,7 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
     "Password",
   ].forEach((key) => delete safePayload[key]);
 
-  return supabase
-    .from("RestroMaster")
-    .update(safePayload)
-    .eq("RestroCode", restroCode)
-    .select("*")
-    .single();
-}
-
-export async function GET(
+  export async function GET(
   _req: NextRequest,
   { params }: { params: { code: string } }
 ) {
@@ -81,37 +73,40 @@ export async function GET(
       .from("RestroMaster")
       .select("*")
       .eq("RestroCode", RestroCode)
-      .single();
+      .maybeSingle();
 
     if (error) {
       return NextResponse.json(
         { ok: false, error: error.message },
-        { status: 500 }
+        {
+          status: 500,
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        }
       );
     }
 
-    return NextResponse.json({ ok: true, row: data });
+    return NextResponse.json(
+      { ok: true, row: data },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: error?.message || "Server error" },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
     );
   }
 }
-
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { code: string } }
-) {
-  try {
-    const RestroCode = Number(params.code);
-
-    if (!RestroCode || Number.isNaN(RestroCode)) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid RestroCode" },
-        { status: 400 }
-      );
-    }
 
     const body = await req.json();
     const payload: Record<string, any> = {};
