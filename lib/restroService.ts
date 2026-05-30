@@ -1,10 +1,5 @@
 // lib/restroService.ts
-import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
-
-/* ======================================================
-   SUPABASE CLIENT
-====================================================== */
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,10 +7,6 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   { auth: { persistSession: false } }
 );
-
-/* ======================================================
-   TYPES
-====================================================== */
 
 export type Restro = {
   RestroCode: number;
@@ -34,10 +25,6 @@ export type Restro = {
   [key: string]: any;
 };
 
-/* ======================================================
-   HELPERS
-====================================================== */
-
 function normalizeRestro(row: any): Restro {
   return {
     ...row,
@@ -52,15 +39,9 @@ function normalizeRestro(row: any): Restro {
   };
 }
 
-/* ======================================================
-   GET BY RESTROCODE
-====================================================== */
-
 export async function getRestroById(
   restroCode: number
 ): Promise<Restro | null> {
-  noStore();
-
   try {
     const { data, error } = await supabase
       .from("RestroMaster")
@@ -82,10 +63,6 @@ export async function getRestroById(
   }
 }
 
-/* ======================================================
-   SAFE GET
-====================================================== */
-
 export async function safeGetRestro(restroCode: number) {
   try {
     const restro = await getRestroById(restroCode);
@@ -102,10 +79,6 @@ export async function safeGetRestro(restroCode: number) {
     };
   }
 }
-
-/* ======================================================
-   UPDATE BASIC INFORMATION
-====================================================== */
 
 export async function updateRestroBasic(
   restroCode: number,
