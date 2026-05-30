@@ -146,9 +146,8 @@ export async function PATCH(
     setIfDefined(payload, "OwnerEmail", text(body.OwnerEmail));
     setIfDefined(payload, "OwnerPhone", phoneText(body.OwnerPhone));
     setIfDefined(payload, "RestroEmail", text(body.RestroEmail));
-
-    const restroPhoneToSave = phoneText(body.RestroPhone);
-    delete payload.RestroPhone;
+    setIfDefined(payload, "RestroPhone", phoneText(body.RestroPhone));
+ 
 
     setIfDefined(payload, "BrandNameifAny", text(body.BrandNameifAny));
 
