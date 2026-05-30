@@ -8,6 +8,26 @@ function sanitizeSearch(q: string) {
   return q.replace(/[%_']/g, "").trim();
 }
 
+function phoneText(value: any) {
+  if (value === undefined) return undefined;
+  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 10);
+  return digits === "" ? null : digits;
+}
+
+function cleanRestroPayload(payload: any) {
+  const cleaned = { ...payload };
+
+  if (cleaned.OwnerPhone !== undefined) {
+    cleaned.OwnerPhone = phoneText(cleaned.OwnerPhone);
+  }
+
+  if (cleaned.RestroPhone !== undefined) {
+    cleaned.RestroPhone = phoneText(cleaned.RestroPhone);
+  }
+
+  return cleaned;
+}
+
 /* ============================
    GET : LIST / SEARCH RESTROS
    Order: RestroCode DESC (BIGGEST ON TOP)
@@ -93,9 +113,11 @@ export async function PATCH(req: Request) {
       }
     }
 
+    const safeUpdates = cleanRestroPayload(updates);
+
     const { data, error } = await supabaseServer
       .from(TABLE)
-      .update(updates)
+      .update(safeUpdates)
       .eq("RestroCode", restroCode)
       .select()
       .limit(1);
@@ -139,11 +161,11 @@ export async function POST(req: Request) {
     const lastCode = Number(lastRows?.[0]?.RestroCode ?? 1010);
     const newRestroCode = lastCode + 1;
 
-    const insertPayload = {
+    const insertPayload = cleanRestroPayload({
       ...body,
       RestroCode: newRestroCode,
       RaileatsStatus: body.RaileatsStatus ?? 0,
-    };
+    });
 
     const { data, error } = await supabaseServer
       .from(TABLE)
