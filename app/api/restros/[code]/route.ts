@@ -1,5 +1,6 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -34,13 +35,25 @@ function setIfDefined(payload: Record<string, any>, key: string, value: any) {
   if (value !== undefined) payload[key] = value;
 }
 
+function noCacheJson(body: any, init?: ResponseInit) {
+  return NextResponse.json(body, {
+    ...(init || {}),
+    headers: {
+      ...(init?.headers || {}),
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+}
+
 async function updateRestro(restroCode: number, payload: Record<string, any>) {
   const { data, error } = await supabase
     .from("RestroMaster")
     .update(payload)
     .eq("RestroCode", restroCode)
     .select("*")
-    .single();
+    .maybeSingle();
 
   if (!error) return { data, error };
 
@@ -48,14 +61,20 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
   if (!missingColumn) return { data, error };
 
   const safePayload = { ...payload };
-  [
-    "RestroUserName",
-    "RestroUsername",
-    "UserName",
-    "Password",
-  ].forEach((key) => delete safePayload[key]);
 
-  export async function GET(
+  ["RestroUserName", "RestroUsername", "UserName", "Password"].forEach((key) => {
+    delete safePayload[key];
+  });
+
+  return supabase
+    .from("RestroMaster")
+    .update(safePayload)
+    .eq("RestroCode", restroCode)
+    .select("*")
+    .maybeSingle();
+}
+
+export async function GET(
   _req: NextRequest,
   { params }: { params: { code: string } }
 ) {
@@ -63,7 +82,7 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
     const RestroCode = Number(params.code);
 
     if (!RestroCode || Number.isNaN(RestroCode)) {
-      return NextResponse.json(
+      return noCacheJson(
         { ok: false, error: "Invalid RestroCode" },
         { status: 400 }
       );
@@ -76,37 +95,47 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
       .maybeSingle();
 
     if (error) {
-      return NextResponse.json(
+      return noCacheJson(
         { ok: false, error: error.message },
-        {
-          status: 500,
-          headers: {
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-          },
-        }
+        { status: 500 }
       );
     }
 
-    return NextResponse.json(
-      { ok: true, row: data },
-      {
-        headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      }
-    );
+    return noCacheJson({
+      ok: true,
+      row: {
+        ...(data ?? {}),
+        RestroPhone:
+          data?.RestroPhone === null || data?.RestroPhone === undefined
+            ? ""
+            : String(data.RestroPhone),
+        OwnerPhone:
+          data?.OwnerPhone === null || data?.OwnerPhone === undefined
+            ? ""
+            : String(data.OwnerPhone),
+      },
+    });
   } catch (error: any) {
-    return NextResponse.json(
+    return noCacheJson(
       { ok: false, error: error?.message || "Server error" },
-      {
-        status: 500,
-        headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      }
+      { status: 500 }
     );
   }
 }
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { code: string } }
+) {
+  try {
+    const RestroCode = Number(params.code);
+
+    if (!RestroCode || Number.isNaN(RestroCode)) {
+      return noCacheJson(
+        { ok: false, error: "Invalid RestroCode" },
+        { status: 400 }
+      );
+    }
 
     const body = await req.json();
     const payload: Record<string, any> = {};
@@ -119,26 +148,15 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
     setIfDefined(payload, "District", text(body.District));
     setIfDefined(payload, "PinCode", text(body.PinCode));
 
-    setIfDefined(
-      payload,
-      "RestroLatitude",
-      num(body.RestroLatitude ?? body.Latitude)
-    );
-    setIfDefined(
-      payload,
-      "RestroLongitude",
-      num(body.RestroLongitude ?? body.Longitude)
-    );
+    setIfDefined(payload, "RestroLatitude", num(body.RestroLatitude ?? body.Latitude));
+    setIfDefined(payload, "RestroLongitude", num(body.RestroLongitude ?? body.Longitude));
 
     setIfDefined(payload, "RestroName", text(body.RestroName));
     setIfDefined(payload, "OwnerName", text(body.OwnerName));
     setIfDefined(payload, "OwnerEmail", text(body.OwnerEmail));
     setIfDefined(payload, "OwnerPhone", phoneText(body.OwnerPhone));
     setIfDefined(payload, "RestroEmail", text(body.RestroEmail));
-
-    // Main fix: RestroPhone ko clean karke direct RestroMaster.RestroPhone me save karega.
     setIfDefined(payload, "RestroPhone", phoneText(body.RestroPhone));
-
     setIfDefined(payload, "BrandNameifAny", text(body.BrandNameifAny));
 
     setIfDefined(payload, "IRCTCStatus", num(body.IRCTCStatus));
@@ -146,56 +164,23 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
     setIfDefined(payload, "IsIrctcApproved", body.IsIrctcApproved);
     setIfDefined(payload, "RestroRating", num(body.RestroRating));
     setIfDefined(payload, "IsPureVeg", num(body.IsPureVeg));
-
     setIfDefined(payload, "RestroDisplayPhoto", text(body.RestroDisplayPhoto));
 
     setIfDefined(payload, "open_time", text(body.open_time ?? body.OpenTime));
-    setIfDefined(
-      payload,
-      "closed_time",
-      text(body.closed_time ?? body.ClosedTime)
-    );
+    setIfDefined(payload, "closed_time", text(body.closed_time ?? body.ClosedTime));
     setIfDefined(payload, "MinimumOrderValue", num(body.MinimumOrderValue));
     setIfDefined(payload, "MinimumOrderAmount", num(body.MinimumOrderAmount));
     setIfDefined(payload, "CutOffTime", num(body.CutOffTime));
     setIfDefined(payload, "WeeklyOff", text(body.WeeklyOff));
 
-    setIfDefined(
-      payload,
-      "RaileatsCustomerDeliveryCharge",
-      num(body.RaileatsCustomerDeliveryCharge)
-    );
-    setIfDefined(
-      payload,
-      "RaileatsCustomerDeliveryChargeGSTRate",
-      num(body.RaileatsCustomerDeliveryChargeGSTRate)
-    );
-    setIfDefined(
-      payload,
-      "RaileatsCustomerDeliveryChargeGST",
-      num(body.RaileatsCustomerDeliveryChargeGST)
-    );
-    setIfDefined(
-      payload,
-      "RaileatsCustomerDeliveryChargeTotalInclGST",
-      num(body.RaileatsCustomerDeliveryChargeTotalInclGST)
-    );
+    setIfDefined(payload, "RaileatsCustomerDeliveryCharge", num(body.RaileatsCustomerDeliveryCharge));
+    setIfDefined(payload, "RaileatsCustomerDeliveryChargeGSTRate", num(body.RaileatsCustomerDeliveryChargeGSTRate));
+    setIfDefined(payload, "RaileatsCustomerDeliveryChargeGST", num(body.RaileatsCustomerDeliveryChargeGST));
+    setIfDefined(payload, "RaileatsCustomerDeliveryChargeTotalInclGST", num(body.RaileatsCustomerDeliveryChargeTotalInclGST));
 
-    setIfDefined(
-      payload,
-      "RaileatsOrdersPaymentOptionforCustomer",
-      text(body.RaileatsOrdersPaymentOptionforCustomer)
-    );
-    setIfDefined(
-      payload,
-      "IRCTCOrdersPaymentOptionforCustomer",
-      text(body.IRCTCOrdersPaymentOptionforCustomer)
-    );
-    setIfDefined(
-      payload,
-      "RestroTypeofDeliveryRailEatsorVendor",
-      text(body.RestroTypeofDeliveryRailEatsorVendor)
-    );
+    setIfDefined(payload, "RaileatsOrdersPaymentOptionforCustomer", text(body.RaileatsOrdersPaymentOptionforCustomer));
+    setIfDefined(payload, "IRCTCOrdersPaymentOptionforCustomer", text(body.IRCTCOrdersPaymentOptionforCustomer));
+    setIfDefined(payload, "RestroTypeofDeliveryRailEatsorVendor", text(body.RestroTypeofDeliveryRailEatsorVendor));
 
     setIfDefined(payload, "RestroLoginMobile", text(body.RestroLoginMobile));
     setIfDefined(payload, "RestroUserName", text(body.RestroUserName));
@@ -210,13 +195,13 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
     const { data, error } = await updateRestro(RestroCode, payload);
 
     if (error) {
-      return NextResponse.json(
+      return noCacheJson(
         { ok: false, error: error.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
+    return noCacheJson({
       ok: true,
       row: {
         ...(data ?? {}),
@@ -224,11 +209,16 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
           data?.RestroPhone ??
           payload.RestroPhone ??
           phoneText(body.RestroPhone) ??
-          null,
+          "",
+        OwnerPhone:
+          data?.OwnerPhone ??
+          payload.OwnerPhone ??
+          phoneText(body.OwnerPhone) ??
+          "",
       },
     });
   } catch (error: any) {
-    return NextResponse.json(
+    return noCacheJson(
       { ok: false, error: error?.message || "Server error" },
       { status: 500 }
     );
