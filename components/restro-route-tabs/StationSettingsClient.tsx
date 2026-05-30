@@ -36,6 +36,12 @@ function stationDisplay(restro: Restro) {
   return `${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}`;
 }
 
+function valueOrNull(value: any) {
+  if (value === undefined || value === null) return null;
+  const cleaned = String(value).trim();
+  return cleaned === "" ? null : cleaned;
+}
+
 export default function StationSettingsClient({ initialData = {}, restroCode, mode = "edit", nextHref }: Props) {
   const router = useRouter();
   const [local, setLocal] = useState<Restro>(() => normalize({ ...initialData, RestroCode: restroCode ?? initialData?.RestroCode }));
@@ -57,23 +63,21 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
     setMsg(null);
     try {
       const payload = {
-        StationCode: local.StationCode || null,
-        StationName: local.StationName || null,
-        State: local.State || null,
-        WeeklyOff: local.WeeklyOff || null,
-        open_time: local.OpenTime || null,
-        OpenTime: local.OpenTime || null,
-        closed_time: local.ClosedTime || null,
-        ClosedTime: local.ClosedTime || null,
-        MinimumOrderValue: local.MinimumOrderValue || null,
-        CutOffTime: local.CutOffTime || null,
-        RaileatsCustomerDeliveryCharge: local.RaileatsCustomerDeliveryCharge || null,
-        RaileatsCustomerDeliveryChargeGSTRate: local.RaileatsCustomerDeliveryChargeGSTRate || null,
-        RaileatsCustomerDeliveryChargeGST: local.RaileatsCustomerDeliveryChargeGST || null,
-        RaileatsCustomerDeliveryChargeTotalInclGST: local.RaileatsCustomerDeliveryChargeTotalInclGST || null,
-        RaileatsOrdersPaymentOptionforCustomer: local.RaileatsOrdersPaymentOptionforCustomer || null,
-        IRCTCOrdersPaymentOptionforCustomer: local.IRCTCOrdersPaymentOptionforCustomer || null,
-        RestroTypeofDeliveryRailEatsorVendor: local.RestroTypeofDeliveryRailEatsorVendor || null,
+        StationCode: valueOrNull(local.StationCode),
+        StationName: valueOrNull(local.StationName),
+        State: valueOrNull(local.State),
+        WeeklyOff: valueOrNull(local.WeeklyOff),
+        open_time: valueOrNull(local.OpenTime),
+        closed_time: valueOrNull(local.ClosedTime),
+        MinimumOrderValue: valueOrNull(local.MinimumOrderValue),
+        CutOffTime: valueOrNull(local.CutOffTime),
+        RaileatsCustomerDeliveryCharge: valueOrNull(local.RaileatsCustomerDeliveryCharge),
+        RaileatsCustomerDeliveryChargeGSTRate: valueOrNull(local.RaileatsCustomerDeliveryChargeGSTRate),
+        RaileatsCustomerDeliveryChargeGST: valueOrNull(local.RaileatsCustomerDeliveryChargeGST),
+        RaileatsCustomerDeliveryChargeTotalInclGST: valueOrNull(local.RaileatsCustomerDeliveryChargeTotalInclGST),
+        RaileatsOrdersPaymentOptionforCustomer: valueOrNull(local.RaileatsOrdersPaymentOptionforCustomer),
+        IRCTCOrdersPaymentOptionforCustomer: valueOrNull(local.IRCTCOrdersPaymentOptionforCustomer),
+        RestroTypeofDeliveryRailEatsorVendor: valueOrNull(local.RestroTypeofDeliveryRailEatsorVendor),
       };
 
       const res = await fetch(`/api/restros/${encodeURIComponent(code)}`, {
@@ -83,7 +87,9 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok === false) throw new Error(json?.error || "Save failed");
-      if (json?.row) setLocal(normalize(json.row));
+      if (json?.row) {
+        setLocal((prev) => normalize({ ...prev, ...json.row }));
+      }
       setMsg("Saved successfully");
       if (nextHref) {
         router.push(nextHref);
