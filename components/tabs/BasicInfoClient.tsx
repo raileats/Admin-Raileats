@@ -23,6 +23,24 @@ function phoneDigits(value: any) {
   return String(value ?? "").replace(/\D/g, "").slice(0, 10);
 }
 
+function phoneOrNull(value: any) {
+  const digits = phoneDigits(value);
+  return digits ? digits : null;
+}
+
+function mergeSavedBasicRow(prev: any, payload: any, savedRow: any, raileatsStatus: number) {
+  return {
+    ...prev,
+    ...savedRow,
+    RaileatsStatus: raileatsStatus,
+    IRCTCStatus: toStatusNumber(savedRow?.IRCTCStatus ?? payload.IRCTCStatus ?? prev?.IRCTCStatus),
+    OwnerPhone: phoneDigits(savedRow?.OwnerPhone ?? payload.OwnerPhone ?? prev?.OwnerPhone),
+    RestroPhone: phoneDigits(savedRow?.RestroPhone ?? payload.RestroPhone ?? prev?.RestroPhone),
+    RestroDisplayPhoto:
+      savedRow?.RestroDisplayPhoto ?? payload.RestroDisplayPhoto ?? prev?.RestroDisplayPhoto,
+  };
+}
+
 export default function BasicInfoClient({
   initialData,
   imagePrefix = "",
@@ -40,6 +58,8 @@ export default function BasicInfoClient({
       ...initialData,
       RaileatsStatus: toStatusNumber(initialData.RaileatsStatus),
       IRCTCStatus: toStatusNumber(initialData.IRCTCStatus),
+      OwnerPhone: phoneDigits(initialData.OwnerPhone),
+      RestroPhone: phoneDigits(initialData.RestroPhone),
     });
   }, [initialData]);
 
@@ -63,6 +83,8 @@ export default function BasicInfoClient({
           ...json.row,
           RaileatsStatus: toStatusNumber(json.row.RaileatsStatus),
           IRCTCStatus: toStatusNumber(json.row.IRCTCStatus),
+          OwnerPhone: phoneDigits(json.row.OwnerPhone ?? prev.OwnerPhone),
+          RestroPhone: phoneDigits(json.row.RestroPhone ?? prev.RestroPhone),
         }));
       } catch (error) {
         console.error("Fresh restro load failed:", error);
@@ -96,10 +118,10 @@ export default function BasicInfoClient({
 
       OwnerName: local.OwnerName || null,
       OwnerEmail: local.OwnerEmail || null,
-      OwnerPhone: phoneDigits(local.OwnerPhone) || null,
+      OwnerPhone: phoneOrNull(local.OwnerPhone),
 
       RestroEmail: local.RestroEmail || null,
-      RestroPhone: phoneDigits(local.RestroPhone) || null,
+      RestroPhone: phoneOrNull(local.RestroPhone),
 
       StationCode: local.StationCode || null,
       StationName: local.StationName || null,
@@ -135,6 +157,11 @@ export default function BasicInfoClient({
       const id = Number(local.RestroCode);
       const payload = buildPayload();
       const raileatsStatus = toStatusNumber(local.RaileatsStatus);
+      const restroPhone = phoneDigits(local.RestroPhone);
+
+      if (restroPhone && restroPhone.length !== 10) {
+        throw new Error("Restro Phone must be exactly 10 digits");
+      }
 
       const res = await fetch(`/api/restros/${id}`, {
         method: "PATCH",
@@ -150,13 +177,7 @@ export default function BasicInfoClient({
 
       const savedRow = json?.row || {};
 
-      setLocal((prev: any) => ({
-        ...prev,
-        ...savedRow,
-        RaileatsStatus: raileatsStatus,
-        RestroDisplayPhoto:
-          savedRow.RestroDisplayPhoto ?? payload.RestroDisplayPhoto ?? prev.RestroDisplayPhoto,
-      }));
+      setLocal((prev: any) => mergeSavedBasicRow(prev, payload, savedRow, raileatsStatus));
       setMsg("Saved successfully");
     } catch (e: any) {
       console.error("Save error:", e);
