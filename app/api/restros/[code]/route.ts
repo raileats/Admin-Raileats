@@ -28,6 +28,31 @@ function setIfDefined(payload: Record<string, any>, key: string, value: any) {
   if (value !== undefined) payload[key] = value;
 }
 
+function sameText(saved: any, expected: any) {
+  const savedText = saved === null || saved === undefined ? "" : String(saved).trim();
+  const expectedText = expected === null || expected === undefined ? "" : String(expected).trim();
+  return savedText === expectedText;
+}
+
+function sameNumber(saved: any, expected: any) {
+  if (saved === null || saved === undefined || saved === "") {
+    return expected === null || expected === undefined || expected === "";
+  }
+
+  if (expected === null || expected === undefined || expected === "") {
+    return saved === null || saved === undefined || saved === "";
+  }
+
+  const savedNumber = Number(saved);
+  const expectedNumber = Number(expected);
+
+  if (!Number.isFinite(savedNumber) || !Number.isFinite(expectedNumber)) {
+    return String(saved).trim() === String(expected).trim();
+  }
+
+  return Math.abs(savedNumber - expectedNumber) < 0.000001;
+}
+
 async function updateRestro(restroCode: number, payload: Record<string, any>) {
   const { data, error } = await supabase
     .from("RestroMaster")
@@ -165,6 +190,9 @@ export async function PATCH(
 
     payload.UpdatedAt = new Date().toISOString();
 
+    const expectedRestroPhone = text(body.RestroPhone);
+    const expectedDeliveryGst = num(body.RaileatsCustomerDeliveryChargeGST);
+
     const { data, error } = await updateRestro(RestroCode, payload);
 
     if (error) {
@@ -174,7 +202,47 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({ ok: true, row: data });
+    const { data: freshRow, error: freshError } = await supabase
+      .from("RestroMaster")
+      .select("*")
+      .eq("RestroCode", RestroCode)
+      .single();
+
+    if (freshError) {
+      return NextResponse.json(
+        { ok: false, error: freshError.message },
+        { status: 500 }
+      );
+    }
+
+    const verifyErrors: string[] = [];
+
+    if (
+      body.RestroPhone !== undefined &&
+      !sameText(freshRow?.RestroPhone, expectedRestroPhone)
+    ) {
+      verifyErrors.push(
+        `RestroPhone save verify failed. Expected ${expectedRestroPhone ?? "blank"}, got ${freshRow?.RestroPhone ?? "blank"}`
+      );
+    }
+
+    if (
+      body.RaileatsCustomerDeliveryChargeGST !== undefined &&
+      !sameNumber(freshRow?.RaileatsCustomerDeliveryChargeGST, expectedDeliveryGst)
+    ) {
+      verifyErrors.push(
+        `RaileatsCustomerDeliveryChargeGST save verify failed. Expected ${expectedDeliveryGst ?? "blank"}, got ${freshRow?.RaileatsCustomerDeliveryChargeGST ?? "blank"}`
+      );
+    }
+
+    if (verifyErrors.length > 0) {
+      return NextResponse.json(
+        { ok: false, error: verifyErrors.join(" | "), row: freshRow },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, row: freshRow ?? data });
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: error?.message || "Server error" },
