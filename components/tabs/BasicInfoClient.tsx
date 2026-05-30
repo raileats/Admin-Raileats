@@ -13,13 +13,7 @@ type Props = {
 
 function toStatusNumber(value: any) {
   const normalized = String(value ?? "").toLowerCase().trim();
-  if (
-    normalized === "1" ||
-    normalized === "true" ||
-    normalized === "on" ||
-    normalized === "active" ||
-    normalized === "yes"
-  ) {
+  if (normalized === "1" || normalized === "true" || normalized === "on" || normalized === "active" || normalized === "yes") {
     return 1;
   }
   return 0;
@@ -29,38 +23,15 @@ function phoneDigits(value: any) {
   return String(value ?? "").replace(/\D/g, "").slice(0, 10);
 }
 
-function phoneOrNull(value: any) {
-  const digits = phoneDigits(value);
-  return digits ? digits : null;
-}
-
-function mergeSavedBasicRow(
-  prev: any,
-  payload: any,
-  savedRow: any,
-  raileatsStatus: number
-) {
-  return {
-    ...prev,
-    ...savedRow,
-    RaileatsStatus: raileatsStatus,
-    IRCTCStatus: toStatusNumber(
-      savedRow?.IRCTCStatus ?? payload.IRCTCStatus ?? prev?.IRCTCStatus
-    ),
-    OwnerPhone: phoneDigits(
-      savedRow?.OwnerPhone ?? payload.OwnerPhone ?? prev?.OwnerPhone
-    ),
-
-    // Main fix: save ke baad API row blank aaye tab bhi typed value clean nahi hogi.
-    RestroPhone: phoneDigits(
-      savedRow?.RestroPhone ?? payload.RestroPhone ?? prev?.RestroPhone
-    ),
-
-    RestroDisplayPhoto:
-      savedRow?.RestroDisplayPhoto ??
-      payload.RestroDisplayPhoto ??
-      prev?.RestroDisplayPhoto,
-  };
+function pickRestroPhone(row: any) {
+  return phoneDigits(
+    row?.RestroPhone ??
+      row?.restroPhone ??
+      row?.RestroMobile ??
+      row?.RestaurantPhone ??
+      row?.Phone ??
+      ""
+  );
 }
 
 export default function BasicInfoClient({
@@ -76,13 +47,10 @@ export default function BasicInfoClient({
 
   useEffect(() => {
     if (!initialData) return;
-
     setLocal({
       ...initialData,
       RaileatsStatus: toStatusNumber(initialData.RaileatsStatus),
       IRCTCStatus: toStatusNumber(initialData.IRCTCStatus),
-      OwnerPhone: phoneDigits(initialData.OwnerPhone),
-      RestroPhone: phoneDigits(initialData.RestroPhone),
     });
   }, [initialData]);
 
@@ -94,11 +62,9 @@ export default function BasicInfoClient({
 
     async function loadFreshRestro() {
       try {
-        const res = await fetch(
-          `/api/restros/${encodeURIComponent(String(restroCode))}`,
-          { cache: "no-store" }
-        );
-
+        const res = await fetch(`/api/restros/${encodeURIComponent(String(restroCode))}`, {
+          cache: "no-store",
+        });
         const json = await res.json().catch(() => ({}));
 
         if (!res.ok || json?.ok === false || !json?.row || cancelled) return;
@@ -108,10 +74,6 @@ export default function BasicInfoClient({
           ...json.row,
           RaileatsStatus: toStatusNumber(json.row.RaileatsStatus),
           IRCTCStatus: toStatusNumber(json.row.IRCTCStatus),
-          OwnerPhone: phoneDigits(json.row.OwnerPhone ?? prev.OwnerPhone),
-
-          // Main fix: fresh load me DB blank ho to current typed value blank nahi karega.
-          RestroPhone: phoneDigits(json.row.RestroPhone ?? prev.RestroPhone),
         }));
       } catch (error) {
         console.error("Fresh restro load failed:", error);
@@ -137,6 +99,8 @@ export default function BasicInfoClient({
   function buildPayload() {
     const raileatsStatus = toStatusNumber(local.RaileatsStatus);
 
+    const restroPhone = pickRestroPhone(local);
+
     const payload: any = {
       RestroCode: Number(local.RestroCode),
 
@@ -145,23 +109,20 @@ export default function BasicInfoClient({
 
       OwnerName: local.OwnerName || null,
       OwnerEmail: local.OwnerEmail || null,
-      OwnerPhone: phoneOrNull(local.OwnerPhone),
+      OwnerPhone: phoneDigits(local.OwnerPhone) || null,
 
       RestroEmail: local.RestroEmail || null,
-      RestroPhone: phoneOrNull(local.RestroPhone),
+      RestroPhone: restroPhone || null,
 
       StationCode: local.StationCode || null,
       StationName: local.StationName || null,
 
       IRCTCStatus: toStatusNumber(local.IRCTCStatus),
       RaileatsStatus: raileatsStatus,
+      raileatsStatus,
       IsIrctcApproved: String(local.IsIrctcApproved || "0"),
 
-      RestroRating:
-        local.RestroRating === "" || local.RestroRating === null
-          ? null
-          : Number(local.RestroRating),
-
+      RestroRating: local.RestroRating === "" ? null : Number(local.RestroRating),
       IsPureVeg: toStatusNumber(local.IsPureVeg),
       RestroDisplayPhoto: local.RestroDisplayPhoto || null,
       State: local.State || null,
@@ -187,11 +148,6 @@ export default function BasicInfoClient({
       const id = Number(local.RestroCode);
       const payload = buildPayload();
       const raileatsStatus = toStatusNumber(local.RaileatsStatus);
-      const restroPhone = phoneDigits(local.RestroPhone);
-
-      if (restroPhone && restroPhone.length !== 10) {
-        throw new Error("Restro Phone must be exactly 10 digits");
-      }
 
       const res = await fetch(`/api/restros/${id}`, {
         method: "PATCH",
@@ -199,7 +155,7 @@ export default function BasicInfoClient({
         body: JSON.stringify(payload),
       });
 
-      const json = await res.json().catch(() => ({}));
+      const json = await res.json();
 
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || "Save failed");
@@ -207,12 +163,18 @@ export default function BasicInfoClient({
 
       const savedRow = json?.row || {};
 
-      setLocal((prev: any) =>
-        mergeSavedBasicRow(prev, payload, savedRow, raileatsStatus)
-      );
-
+      setLocal((prev: any) => ({
+        ...prev,
+        ...savedRow,
+        RestroPhone:
+          pickRestroPhone(savedRow) ||
+          payload.RestroPhone ||
+          pickRestroPhone(prev),
+        RaileatsStatus: raileatsStatus,
+        RestroDisplayPhoto:
+          savedRow.RestroDisplayPhoto ?? payload.RestroDisplayPhoto ?? prev.RestroDisplayPhoto,
+      }));
       setMsg("Saved successfully");
-      router.refresh();
     } catch (e: any) {
       console.error("Save error:", e);
       setErr(e?.message || "Save failed");
@@ -296,7 +258,7 @@ export default function BasicInfoClient({
           <AdminInput
             inputMode="numeric"
             maxLength={10}
-            value={phoneDigits(local?.RestroPhone)}
+            value={pickRestroPhone(local)}
             onChange={(e) => update("RestroPhone", phoneDigits(e.target.value))}
           />
         </AdminField>
@@ -373,12 +335,8 @@ export default function BasicInfoClient({
 
       {(msg || err) && (
         <div className="mt-4">
-          {msg && (
-            <div className="text-sm font-semibold text-green-700">{msg}</div>
-          )}
-          {err && (
-            <div className="text-sm font-semibold text-red-700">{err}</div>
-          )}
+          {msg && <div className="text-sm font-semibold text-green-700">{msg}</div>}
+          {err && <div className="text-sm font-semibold text-red-700">{err}</div>}
         </div>
       )}
     </AdminCard>
