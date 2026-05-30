@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import FutureClosedFormModal from "./FutureClosedFormModal";
-import Page from "@/components/ui/Page";
-import Card from "@/components/ui/Card";
+import AdminButton from "@/components/admin/AdminButton";
+import AdminCard from "@/components/admin/AdminCard";
 
 type Row = {
   id: number;
@@ -87,22 +87,22 @@ export default function FutureClosedTab({ restroCode }: Props) {
 
   /* ================= UI ================= */
   return (
-    <Page
+    <AdminCard
       title="Future Closed"
       subtitle="Schedule restaurant holiday / closure windows"
+      bodyClassName="p-0"
       actions={
-        <button
+        <AdminButton
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-md bg-orange-600 px-4 py-2 text-white"
         >
           Add New Holiday
-        </button>
+        </AdminButton>
       }
     >
-      <Card>
+      <div className="overflow-auto">
         {/* HEADER */}
-        <div className="grid grid-cols-7 bg-gray-50 px-4 py-3 text-sm font-medium rounded-t-lg">
+        <div className="grid min-w-[1050px] grid-cols-7 border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
           <div>Holiday Start</div>
           <div>Holiday End</div>
           <div>Comment</div>
@@ -113,9 +113,9 @@ export default function FutureClosedTab({ restroCode }: Props) {
         </div>
 
         {loading ? (
-          <div className="px-4 py-6 text-sm text-gray-600">Loading…</div>
+          <div className="px-4 py-6 text-sm text-slate-600">Loading...</div>
         ) : rows.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-gray-600">
+          <div className="px-4 py-6 text-sm text-slate-600">
             No holidays yet.
           </div>
         ) : (
@@ -124,7 +124,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
             return (
               <div
                 key={r.id}
-                className="grid grid-cols-7 border-t px-4 py-3 text-sm"
+                className="grid min-w-[1050px] grid-cols-7 border-b border-slate-100 px-4 py-3 text-sm"
               >
                 <div>{fmt(r.start_at)}</div>
                 <div>{fmt(r.end_at)}</div>
@@ -167,7 +167,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
             );
           })
         )}
-      </Card>
+      </div>
 
       <FutureClosedFormModal
         open={open}
@@ -178,6 +178,6 @@ export default function FutureClosedTab({ restroCode }: Props) {
           load();
         }}
       />
-    </Page>
+    </AdminCard>
   );
 }
