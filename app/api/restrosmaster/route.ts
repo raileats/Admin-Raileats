@@ -43,6 +43,11 @@ function normalizeRestroMasterPayload(body: any) {
   return normalized;
 }
 
+function samePhone(saved: any, expected: any) {
+  const clean = (value: any) => String(value ?? "").replace(/\D/g, "").slice(0, 10);
+  return clean(saved) === clean(expected);
+}
+
 /* ============================
    GET : LIST / SEARCH RESTROS
    Order: RestroCode DESC (BIGGEST ON TOP)
@@ -132,12 +137,41 @@ export async function PATCH(req: Request) {
       .from(TABLE)
       .update(updates)
       .eq("RestroCode", restroCode)
-      .select()
+      .select("*")
       .limit(1);
 
     if (error) throw error;
 
-    return NextResponse.json(data?.[0] ?? null);
+    let row = data?.[0] ?? null;
+
+    if (body.RestroPhone !== undefined && !samePhone(row?.RestroPhone, body.RestroPhone)) {
+      const { data: retryData, error: retryError } = await supabaseServer
+        .from(TABLE)
+        .update({
+          RestroPhone: body.RestroPhone,
+          UpdatedAt: new Date().toISOString(),
+        })
+        .eq("RestroCode", restroCode)
+        .select("*")
+        .limit(1);
+
+      if (retryError) throw retryError;
+
+      row = retryData?.[0] ?? row;
+
+      if (!samePhone(row?.RestroPhone, body.RestroPhone)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `RestroPhone save verify failed. Expected ${body.RestroPhone}, got ${row?.RestroPhone ?? "blank"}`,
+            row,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    return NextResponse.json({ ok: true, row });
   } catch (err: any) {
     console.error("PATCH RestroMaster error:", err);
     return NextResponse.json(
