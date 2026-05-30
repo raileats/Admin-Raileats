@@ -2,15 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput, AdminSelect } from "@/components/admin/AdminField";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 type Props = {
   initialData: any;
@@ -154,23 +148,6 @@ export default function BasicInfoClient({
         throw new Error(json?.error || "Save failed");
       }
 
-      const { error: statusError } = await supabase
-        .from("RestroMaster")
-        .update({ RaileatsStatus: raileatsStatus })
-        .eq("RestroCode", id);
-
-      if (statusError) {
-        const statusRes = await fetch(`/api/admin/restros/${encodeURIComponent(id)}/status`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ raileatsStatus }),
-        });
-
-        if (!statusRes.ok) {
-          throw new Error(`Basic info saved, but RailEats status update failed: ${statusError.message}`);
-        }
-      }
-
       const savedRow = json?.row || {};
 
       setLocal((prev: any) => ({
@@ -181,7 +158,6 @@ export default function BasicInfoClient({
           savedRow.RestroDisplayPhoto ?? payload.RestroDisplayPhoto ?? prev.RestroDisplayPhoto,
       }));
       setMsg("Saved successfully");
-      window.location.replace(`${window.location.pathname}?refresh=${Date.now()}`);
     } catch (e: any) {
       console.error("Save error:", e);
       setErr(e?.message || "Save failed");
