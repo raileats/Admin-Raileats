@@ -16,15 +16,27 @@ type Props = {
   nextHref?: string;
 };
 
-const paymentOptions = ["Both", "Online", "COD", "Prepaid", "Postpaid", "None"];
-const weekDays = ["", "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const paymentOptions = ["Both", "Online", "COD", "Postpaid", "None"];
+const weekDays = [
+  { value: "noOff", label: "No weekly off" },
+  { value: "SUN", label: "SUN" },
+  { value: "MON", label: "MON" },
+  { value: "TUE", label: "TUE" },
+  { value: "WED", label: "WED" },
+  { value: "THU", label: "THU" },
+  { value: "FRI", label: "FRI" },
+  { value: "SAT", label: "SAT" },
+];
 const deliveryTypes = ["Raileats", "Vendor", "Both"];
 
 function normalize(row: Restro) {
+  const openTime = row?.OpenTime ?? row?.open_time;
+  const closedTime = row?.ClosedTime ?? row?.closed_time;
+
   return {
     ...row,
-    OpenTime: row?.OpenTime ?? row?.open_time ?? "",
-    ClosedTime: row?.ClosedTime ?? row?.closed_time ?? "",
+    OpenTime: openTime === undefined || openTime === null || openTime === "" ? "10:00" : openTime,
+    ClosedTime: closedTime === undefined || closedTime === null || closedTime === "" ? "22:00" : closedTime,
   };
 }
 
@@ -52,6 +64,8 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
   function updateField(key: string, value: any) {
     setLocal((prev) => ({ ...prev, [key]: value }));
   }
+
+  const stationLocked = mode === "new" && !!local.StationCode;
 
   async function save() {
     if (!code) {
@@ -112,20 +126,21 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
           <AdminInput value={stationDisplay(local)} readOnly />
         </AdminField>
         <AdminField label="Station Code">
-          <AdminInput value={local.StationCode ?? ""} onChange={(e) => updateField("StationCode", e.target.value.toUpperCase())} />
+          <AdminInput value={local.StationCode ?? ""} readOnly={stationLocked} onChange={(e) => updateField("StationCode", e.target.value.toUpperCase())} />
         </AdminField>
         <AdminField label="Station Name">
-          <AdminInput value={local.StationName ?? ""} onChange={(e) => updateField("StationName", e.target.value)} />
+          <AdminInput value={local.StationName ?? ""} readOnly={stationLocked} onChange={(e) => updateField("StationName", e.target.value)} />
         </AdminField>
         <AdminField label="State">
-          <AdminInput value={local.State ?? ""} onChange={(e) => updateField("State", e.target.value)} />
+          <AdminInput value={local.State ?? ""} readOnly={stationLocked} onChange={(e) => updateField("State", e.target.value)} />
         </AdminField>
         <AdminField label="Raileats Customer Delivery Charge">
           <AdminInput value={local.RaileatsCustomerDeliveryCharge ?? ""} onChange={(e) => updateField("RaileatsCustomerDeliveryCharge", e.target.value)} />
         </AdminField>
         <AdminField label="Weekly Off">
           <AdminSelect value={local.WeeklyOff ?? ""} onChange={(e) => updateField("WeeklyOff", e.target.value)}>
-            {weekDays.map((d) => <option key={d || "none"} value={d}>{d || "No weekly off"}</option>)}
+            <option value="">-- Select --</option>
+            {weekDays.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
           </AdminSelect>
         </AdminField>
         <AdminField label="Delivery Charge GST Rate (%)">
@@ -150,17 +165,20 @@ export default function StationSettingsClient({ initialData = {}, restroCode, mo
           <AdminInput value={local.CutOffTime ?? ""} onChange={(e) => updateField("CutOffTime", e.target.value)} />
         </AdminField>
         <AdminField label="Raileats Orders Payment Option">
-          <AdminSelect value={local.RaileatsOrdersPaymentOptionforCustomer ?? "Both"} onChange={(e) => updateField("RaileatsOrdersPaymentOptionforCustomer", e.target.value)}>
+          <AdminSelect value={local.RaileatsOrdersPaymentOptionforCustomer ?? ""} onChange={(e) => updateField("RaileatsOrdersPaymentOptionforCustomer", e.target.value)}>
+            <option value="">-- Select --</option>
             {paymentOptions.map((x) => <option key={x} value={x}>{x}</option>)}
           </AdminSelect>
         </AdminField>
         <AdminField label="IRCTC Orders Payment Option">
-          <AdminSelect value={local.IRCTCOrdersPaymentOptionforCustomer ?? "Both"} onChange={(e) => updateField("IRCTCOrdersPaymentOptionforCustomer", e.target.value)}>
+          <AdminSelect value={local.IRCTCOrdersPaymentOptionforCustomer ?? ""} onChange={(e) => updateField("IRCTCOrdersPaymentOptionforCustomer", e.target.value)}>
+            <option value="">-- Select --</option>
             {paymentOptions.map((x) => <option key={x} value={x}>{x}</option>)}
           </AdminSelect>
         </AdminField>
         <AdminField label="Restro Type of Delivery">
-          <AdminSelect value={local.RestroTypeofDeliveryRailEatsorVendor ?? "Raileats"} onChange={(e) => updateField("RestroTypeofDeliveryRailEatsorVendor", e.target.value)}>
+          <AdminSelect value={local.RestroTypeofDeliveryRailEatsorVendor ?? ""} onChange={(e) => updateField("RestroTypeofDeliveryRailEatsorVendor", e.target.value)}>
+            <option value="">-- Select --</option>
             {deliveryTypes.map((x) => <option key={x} value={x}>{x}</option>)}
           </AdminSelect>
         </AdminField>
