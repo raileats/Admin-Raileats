@@ -111,8 +111,8 @@ export default function AdminShell({
   const shell = (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white lg:flex lg:flex-col">
-          <div className="flex h-20 items-center gap-3 border-b border-slate-200 px-6">
+        <aside className="hidden w-52 shrink-0 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+          <div className="flex h-20 items-center gap-3 border-b border-slate-200 px-4">
             <img src="/logo.png" alt="RailEats" className="h-10 w-10 rounded-md object-contain" />
             <div>
               <div className="text-base font-bold leading-tight">RailEats Admin</div>
@@ -120,7 +120,7 @@ export default function AdminShell({
             </div>
           </div>
 
-          <nav className="flex-1 space-y-1 px-4 py-5">
+          <nav className="flex-1 space-y-1 px-3 py-5">
             {adminNavItems.map((item) => {
               const Icon = item.icon;
               const active = isActivePath(pathname, item.href);
@@ -130,7 +130,7 @@ export default function AdminShell({
                   key={item.href}
                   href={item.href}
                   className={[
-                    "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
+                    "flex h-11 items-center gap-2 rounded-md px-3 text-sm font-semibold transition",
                     active
                       ? "bg-blue-50 text-blue-700"
                       : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
@@ -143,7 +143,7 @@ export default function AdminShell({
             })}
           </nav>
 
-          <div className="border-t border-slate-200 p-4">
+          <div className="border-t border-slate-200 p-3">
             <button
               type="button"
               onClick={handleLogout}
