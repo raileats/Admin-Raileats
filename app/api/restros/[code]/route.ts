@@ -35,12 +35,11 @@ function setIfDefined(payload: Record<string, any>, key: string, value: any) {
   if (value !== undefined) payload[key] = value;
 }
 
-function noCacheJson(body: any, init?: ResponseInit) {
+function jsonNoCache(body: any, status = 200) {
   return NextResponse.json(body, {
-    ...(init || {}),
+    status,
     headers: {
-      ...(init?.headers || {}),
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
       Pragma: "no-cache",
       Expires: "0",
     },
@@ -53,7 +52,7 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
     .update(payload)
     .eq("RestroCode", restroCode)
     .select("*")
-    .maybeSingle();
+    .single();
 
   if (!error) return { data, error };
 
@@ -62,16 +61,16 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
 
   const safePayload = { ...payload };
 
-  ["RestroUserName", "RestroUsername", "UserName", "Password"].forEach((key) => {
-    delete safePayload[key];
-  });
+  ["RestroUserName", "RestroUsername", "UserName", "Password"].forEach(
+    (key) => delete safePayload[key]
+  );
 
   return supabase
     .from("RestroMaster")
     .update(safePayload)
     .eq("RestroCode", restroCode)
     .select("*")
-    .maybeSingle();
+    .single();
 }
 
 export async function GET(
@@ -82,26 +81,20 @@ export async function GET(
     const RestroCode = Number(params.code);
 
     if (!RestroCode || Number.isNaN(RestroCode)) {
-      return noCacheJson(
-        { ok: false, error: "Invalid RestroCode" },
-        { status: 400 }
-      );
+      return jsonNoCache({ ok: false, error: "Invalid RestroCode" }, 400);
     }
 
     const { data, error } = await supabase
       .from("RestroMaster")
       .select("*")
       .eq("RestroCode", RestroCode)
-      .maybeSingle();
+      .single();
 
     if (error) {
-      return noCacheJson(
-        { ok: false, error: error.message },
-        { status: 500 }
-      );
+      return jsonNoCache({ ok: false, error: error.message }, 500);
     }
 
-    return noCacheJson({
+    return jsonNoCache({
       ok: true,
       row: {
         ...(data ?? {}),
@@ -116,9 +109,9 @@ export async function GET(
       },
     });
   } catch (error: any) {
-    return noCacheJson(
+    return jsonNoCache(
       { ok: false, error: error?.message || "Server error" },
-      { status: 500 }
+      500
     );
   }
 }
@@ -131,10 +124,7 @@ export async function PATCH(
     const RestroCode = Number(params.code);
 
     if (!RestroCode || Number.isNaN(RestroCode)) {
-      return noCacheJson(
-        { ok: false, error: "Invalid RestroCode" },
-        { status: 400 }
-      );
+      return jsonNoCache({ ok: false, error: "Invalid RestroCode" }, 400);
     }
 
     const body = await req.json();
@@ -164,6 +154,7 @@ export async function PATCH(
     setIfDefined(payload, "IsIrctcApproved", body.IsIrctcApproved);
     setIfDefined(payload, "RestroRating", num(body.RestroRating));
     setIfDefined(payload, "IsPureVeg", num(body.IsPureVeg));
+
     setIfDefined(payload, "RestroDisplayPhoto", text(body.RestroDisplayPhoto));
 
     setIfDefined(payload, "open_time", text(body.open_time ?? body.OpenTime));
@@ -195,13 +186,10 @@ export async function PATCH(
     const { data, error } = await updateRestro(RestroCode, payload);
 
     if (error) {
-      return noCacheJson(
-        { ok: false, error: error.message },
-        { status: 500 }
-      );
+      return jsonNoCache({ ok: false, error: error.message }, 500);
     }
 
-    return noCacheJson({
+    return jsonNoCache({
       ok: true,
       row: {
         ...(data ?? {}),
@@ -218,9 +206,9 @@ export async function PATCH(
       },
     });
   } catch (error: any) {
-    return noCacheJson(
+    return jsonNoCache(
       { ok: false, error: error?.message || "Server error" },
-      { status: 500 }
+      500
     );
   }
 }
