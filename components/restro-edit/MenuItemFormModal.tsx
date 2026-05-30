@@ -53,6 +53,7 @@ const MENU_TYPE_OPTIONS = [
   "Combos",
   "Breakfast",
   "Rice And Biryani",
+  "Dal and Subzi",
   "Roti Paratha",
   "Pizza and Sandwiches",
   "Fast Food",
