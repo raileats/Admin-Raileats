@@ -34,6 +34,19 @@ function pickRestroPhone(row: any) {
   );
 }
 
+function samePhone(a: any, b: any) {
+  return phoneDigits(a) === phoneDigits(b);
+}
+
+async function readJson(res: Response) {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return { ok: false, error: text || "Invalid server response" };
+  }
+}
+
 export default function BasicInfoClient({
   initialData,
   imagePrefix = "",
@@ -148,6 +161,7 @@ export default function BasicInfoClient({
       const id = Number(local.RestroCode);
       const payload = buildPayload();
       const raileatsStatus = toStatusNumber(local.RaileatsStatus);
+      const expectedRestroPhone = payload.RestroPhone || "";
 
       const res = await fetch(`/api/restros/${id}`, {
         method: "PATCH",
@@ -155,13 +169,49 @@ export default function BasicInfoClient({
         body: JSON.stringify(payload),
       });
 
-      const json = await res.json();
+      let json = await readJson(res);
 
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || "Save failed");
       }
 
-      const savedRow = json?.row || {};
+      let savedRow = json?.row || {};
+
+      if (expectedRestroPhone && !samePhone(savedRow?.RestroPhone, expectedRestroPhone)) {
+        const fallbackRes = await fetch("/api/restrosmaster", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            RestroCode: id,
+            RestroPhone: expectedRestroPhone,
+          }),
+        });
+
+        const fallbackJson = await readJson(fallbackRes);
+
+        if (!fallbackRes.ok || fallbackJson?.ok === false || fallbackJson?.error) {
+          throw new Error(fallbackJson?.error || "Restro Phone direct save failed");
+        }
+
+        savedRow = fallbackJson?.row || fallbackJson || savedRow;
+      }
+
+      const freshRes = await fetch(`/api/restros/${id}?t=${Date.now()}`, {
+        cache: "no-store",
+      });
+      const freshJson = await readJson(freshRes);
+
+      if (freshRes.ok && freshJson?.ok !== false && freshJson?.row) {
+        savedRow = freshJson.row;
+      }
+
+      if (expectedRestroPhone && !samePhone(savedRow?.RestroPhone, expectedRestroPhone)) {
+        throw new Error(
+          `Restro Phone save verify failed. Expected ${expectedRestroPhone}, got ${
+            savedRow?.RestroPhone || "blank"
+          }`
+        );
+      }
 
       setLocal((prev: any) => ({
         ...prev,
