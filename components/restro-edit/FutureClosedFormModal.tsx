@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAdminUser } from "@/components/admin/AdminUserContext";
 
 type Props = {
@@ -9,6 +9,28 @@ type Props = {
   onClose: () => void;
   onSaved: () => void;
 };
+
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function toDateTimeLocal(d: Date) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
+function defaultStartEnd() {
+  const now = new Date();
+
+  const end = new Date(now);
+  end.setHours(23, 59, 0, 0);
+
+  return {
+    start: toDateTimeLocal(now),
+    end: toDateTimeLocal(end),
+  };
+}
 
 export default function FutureClosedFormModal({
   open,
@@ -24,6 +46,16 @@ export default function FutureClosedFormModal({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!open) return;
+
+    const defaults = defaultStartEnd();
+    setStart(defaults.start);
+    setEnd(defaults.end);
+    setComment("");
+    setErr(null);
+  }, [open]);
+
   if (!open) return null;
 
   const save = async () => {
@@ -35,7 +67,6 @@ export default function FutureClosedFormModal({
         throw new Error("Please select start & end date/time");
       }
 
-      // ✅ SAFE FALLBACK (IMPORTANT FIX)
       const adminId = admin?.id || "system";
       const adminName = admin?.name || "System";
 
@@ -43,25 +74,21 @@ export default function FutureClosedFormModal({
         start_at: new Date(start).toISOString(),
         end_at: new Date(end).toISOString(),
         comment: comment?.trim() || null,
-
         created_by_id: String(adminId),
         created_by_name: adminName,
       };
-
-      console.log("📦 Holiday Payload:", payload);
 
       const res = await fetch(
         `/api/restros/${encodeURIComponent(String(restroCode))}/holidays`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include", // ⭐ SESSION FIX
+          credentials: "include",
           body: JSON.stringify(payload),
         }
       );
 
       const json = await res.json();
-      console.log("📥 Response:", json);
 
       if (!res.ok || !json?.ok) {
         throw new Error(json?.error || "Save failed");
@@ -70,7 +97,6 @@ export default function FutureClosedFormModal({
       onSaved();
       onClose();
     } catch (e: any) {
-      console.error("❌ Holiday save error:", e);
       setErr(e?.message || "Failed to save");
     } finally {
       setSaving(false);
