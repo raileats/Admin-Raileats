@@ -146,7 +146,10 @@ export async function PATCH(
     setIfDefined(payload, "OwnerEmail", text(body.OwnerEmail));
     setIfDefined(payload, "OwnerPhone", phoneText(body.OwnerPhone));
     setIfDefined(payload, "RestroEmail", text(body.RestroEmail));
-    setIfDefined(payload, "RestroPhone", phoneText(body.RestroPhone));
+
+    const restroPhoneToSave = phoneText(body.RestroPhone);
+    delete payload.RestroPhone;
+
     setIfDefined(payload, "BrandNameifAny", text(body.BrandNameifAny));
 
     setIfDefined(payload, "IRCTCStatus", num(body.IRCTCStatus));
@@ -182,8 +185,6 @@ export async function PATCH(
     setIfDefined(payload, "HolidayStatus", num(body.HolidayStatus));
 
     payload.UpdatedAt = new Date().toISOString();
-    const restroPhoneToSave = phoneText(body.RestroPhone);
-delete payload.RestroPhone;
 
     const { data, error } = await updateRestro(RestroCode, payload);
 
@@ -191,15 +192,28 @@ delete payload.RestroPhone;
       return jsonNoCache({ ok: false, error: error.message }, 500);
     }
 
+    if (body.RestroPhone !== undefined) {
+      const { error: phoneError } = await supabase
+        .from("RestroMaster")
+        .update({
+          RestroPhone: restroPhoneToSave,
+          UpdatedAt: new Date().toISOString(),
+        })
+        .eq("RestroCode", RestroCode);
+
+      if (phoneError) {
+        return jsonNoCache(
+          { ok: false, error: `RestroPhone save failed: ${phoneError.message}` },
+          500
+        );
+      }
+    }
+
     return jsonNoCache({
       ok: true,
       row: {
         ...(data ?? {}),
-        RestroPhone:
-          data?.RestroPhone ??
-          payload.RestroPhone ??
-          phoneText(body.RestroPhone) ??
-          "",
+        RestroPhone: restroPhoneToSave ?? "",
         OwnerPhone:
           data?.OwnerPhone ??
           payload.OwnerPhone ??
@@ -211,22 +225,6 @@ delete payload.RestroPhone;
     return jsonNoCache(
       { ok: false, error: error?.message || "Server error" },
       500
-    );
-  }
-}
-if (!error && body.RestroPhone !== undefined) {
-  const { error: phoneError } = await supabase
-    .from("RestroMaster")
-    .update({
-      RestroPhone: restroPhoneToSave,
-      UpdatedAt: new Date().toISOString(),
-    })
-    .eq("RestroCode", RestroCode);
-
-  if (phoneError) {
-    return NextResponse.json(
-      { ok: false, error: `RestroPhone save failed: ${phoneError.message}` },
-      { status: 500 }
     );
   }
 }
