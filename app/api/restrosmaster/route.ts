@@ -8,24 +8,39 @@ function sanitizeSearch(q: string) {
   return q.replace(/[%_']/g, "").trim();
 }
 
-function phoneText(value: any) {
+function phone(value: any) {
   if (value === undefined) return undefined;
-  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 10);
-  return digits === "" ? null : digits;
+  if (value === null) return null;
+  const digits = String(value).replace(/\D/g, "").slice(0, 10);
+  return digits || null;
 }
 
-function cleanRestroPayload(payload: any) {
-  const cleaned = { ...payload };
+function normalizeRestroMasterPayload(body: any) {
+  const normalized = { ...body };
 
-  if (cleaned.OwnerPhone !== undefined) {
-    cleaned.OwnerPhone = phoneText(cleaned.OwnerPhone);
+  if (
+    normalized.RestroPhone === undefined &&
+    (normalized.restroPhone !== undefined ||
+      normalized.RestroMobile !== undefined ||
+      normalized.RestaurantPhone !== undefined ||
+      normalized.Phone !== undefined)
+  ) {
+    normalized.RestroPhone =
+      normalized.restroPhone ??
+      normalized.RestroMobile ??
+      normalized.RestaurantPhone ??
+      normalized.Phone;
   }
 
-  if (cleaned.RestroPhone !== undefined) {
-    cleaned.RestroPhone = phoneText(cleaned.RestroPhone);
+  if (normalized.OwnerPhone !== undefined) {
+    normalized.OwnerPhone = phone(normalized.OwnerPhone);
   }
 
-  return cleaned;
+  if (normalized.RestroPhone !== undefined) {
+    normalized.RestroPhone = phone(normalized.RestroPhone);
+  }
+
+  return normalized;
 }
 
 /* ============================
@@ -76,7 +91,7 @@ export async function GET(req: Request) {
    ============================ */
 export async function PATCH(req: Request) {
   try {
-    const body = await req.json();
+    const body = normalizeRestroMasterPayload(await req.json());
     const restroCode = body?.RestroCode;
 
     if (!restroCode) {
@@ -113,11 +128,9 @@ export async function PATCH(req: Request) {
       }
     }
 
-    const safeUpdates = cleanRestroPayload(updates);
-
     const { data, error } = await supabaseServer
       .from(TABLE)
-      .update(safeUpdates)
+      .update(updates)
       .eq("RestroCode", restroCode)
       .select()
       .limit(1);
@@ -140,7 +153,7 @@ export async function PATCH(req: Request) {
    ============================ */
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = normalizeRestroMasterPayload(await req.json());
 
     if (!body.RestroName || !body.StationCode || !body.StationName) {
       return NextResponse.json(
@@ -161,11 +174,11 @@ export async function POST(req: Request) {
     const lastCode = Number(lastRows?.[0]?.RestroCode ?? 1010);
     const newRestroCode = lastCode + 1;
 
-    const insertPayload = cleanRestroPayload({
+    const insertPayload = {
       ...body,
       RestroCode: newRestroCode,
       RaileatsStatus: body.RaileatsStatus ?? 0,
-    });
+    };
 
     const { data, error } = await supabaseServer
       .from(TABLE)
