@@ -10,6 +10,12 @@ import { AdminField, AdminInput, AdminSelect } from "@/components/admin/AdminFie
 type StationRow = { StationCode?: string; StationName?: string; State?: string; District?: string };
 type StationOption = { label: string; value: string; name: string; state: string };
 
+const DEFAULT_FORM = {
+  IsIrctcApproved: "",
+  IsPureVeg: "",
+  RaileatsStatus: "",
+};
+
 function stationLabel(station: StationRow) {
   const name = String(station?.StationName ?? "").trim();
   const code = String(station?.StationCode ?? "").trim();
@@ -24,13 +30,38 @@ function phoneDigits(value: any) {
 export default function NewRestroBasicPage() {
   const router = useRouter();
   const stationBoxRef = useRef<HTMLDivElement>(null);
-  const [form, setForm] = useState<any>({ IsIrctcApproved: "No", RaileatsStatus: 0 });
+  const [form, setForm] = useState<any>(DEFAULT_FORM);
   const [stations, setStations] = useState<StationOption[]>([]);
   const [stationQuery, setStationQuery] = useState("");
   const [stationOpen, setStationOpen] = useState(false);
   const [loadingStations, setLoadingStations] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("new_restro_basic");
+      if (!saved) return;
+
+      const parsed = JSON.parse(saved);
+      setForm((prev: any) => ({
+        ...prev,
+        ...parsed,
+        IsIrctcApproved: parsed.IsIrctcApproved ?? "",
+        IsPureVeg: parsed.IsPureVeg ?? "",
+        RaileatsStatus: parsed.RaileatsStatus ?? "",
+      }));
+
+      const code = String(parsed?.StationCode ?? "").trim();
+      const name = String(parsed?.StationName ?? "").trim();
+      const state = String(parsed?.State ?? "").trim();
+      if (code || name || state) {
+        setStationQuery(`${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}`.trim());
+      }
+    } catch (error) {
+      console.error("Failed to load new restro basic draft", error);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -111,25 +142,50 @@ export default function NewRestroBasicPage() {
         OwnerPhone: phoneDigits(form.OwnerPhone) || null,
         RestroEmail: form.RestroEmail || null,
         RestroPhone: phoneDigits(form.RestroPhone) || null,
-        IsIrctcApproved: form.IsIrctcApproved || "No",
-        RaileatsStatus: Number(form.RaileatsStatus || 0),
+        IsIrctcApproved: form.IsIrctcApproved || null,
+        RaileatsStatus: form.RaileatsStatus === "" ? null : Number(form.RaileatsStatus),
         RestroRating: form.RestroRating || null,
-        IsPureVeg: Number(form.IsPureVeg || 0),
+        IsPureVeg: form.IsPureVeg === "" ? null : Number(form.IsPureVeg),
         RestroDisplayPhoto: form.RestroDisplayPhoto || null,
       };
-      const res = await fetch("/api/restrosmaster", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+
+      const existingCode =
+        form.RestroCode ||
+        (() => {
+          try {
+            return localStorage.getItem("new_restro_code") || "";
+          } catch {
+            return "";
+          }
+        })();
+
+      const res = existingCode
+        ? await fetch(`/api/restros/${encodeURIComponent(String(existingCode))}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        : await fetch("/api/restrosmaster", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.ok === false || data?.error) throw new Error(data?.error || "Create failed");
-      const code = data?.RestroCode ?? data?.row?.RestroCode ?? data?.restro_code ?? data?.id;
+      const code = existingCode || data?.RestroCode || data?.row?.RestroCode || data?.restro_code || data?.id;
       if (!code) throw new Error("Restro created but RestroCode not returned");
             localStorage.setItem("new_restro_code", String(code));
       localStorage.setItem("new_restro_basic", JSON.stringify({
         ...payload,
-        ...data,
+        ...(data?.row ?? data),
         RestroCode: code,
-        StationCode: data?.StationCode ?? payload.StationCode,
-        StationName: data?.StationName ?? payload.StationName,
-        State: data?.State ?? payload.State,
+        StationCode: data?.row?.StationCode ?? data?.StationCode ?? payload.StationCode,
+        StationName: data?.row?.StationName ?? data?.StationName ?? payload.StationName,
+        State: data?.row?.State ?? data?.State ?? payload.State,
+        IsIrctcApproved: data?.row?.IsIrctcApproved ?? data?.IsIrctcApproved ?? payload.IsIrctcApproved,
+        RaileatsStatus: data?.row?.RaileatsStatus ?? data?.RaileatsStatus ?? payload.RaileatsStatus,
+        IsPureVeg: data?.row?.IsPureVeg ?? data?.IsPureVeg ?? payload.IsPureVeg,
       }));
       window.dispatchEvent(new Event("new-restro-code-changed"));
       router.push("/admin/restros/new/station-settings");
@@ -165,10 +221,10 @@ export default function NewRestroBasicPage() {
         <AdminField label="State"><AdminInput value={form.State ?? ""} readOnly /></AdminField>
         <AdminField label="Restro Name"><AdminInput value={form.RestroName ?? ""} onChange={(e) => updateField("RestroName", e.target.value)} /></AdminField>
         <AdminField label="Brand Name"><AdminInput value={form.BrandNameifAny ?? ""} onChange={(e) => updateField("BrandNameifAny", e.target.value)} /></AdminField>
-        <AdminField label="Raileats Status"><AdminSelect value={String(form.RaileatsStatus ?? 0)} onChange={(e) => updateField("RaileatsStatus", Number(e.target.value))}><option value="1">On</option><option value="0">Off</option></AdminSelect></AdminField>
-        <AdminField label="IRCTC Approved"><AdminSelect value={form.IsIrctcApproved ?? "No"} onChange={(e) => updateField("IsIrctcApproved", e.target.value)}><option>Yes</option><option>No</option></AdminSelect></AdminField>
+        <AdminField label="Raileats Status"><AdminSelect value={String(form.RaileatsStatus ?? "")} onChange={(e) => updateField("RaileatsStatus", e.target.value === "" ? "" : Number(e.target.value))}><option value="">-- Select --</option><option value="1">On</option><option value="0">Off</option></AdminSelect></AdminField>
+        <AdminField label="IRCTC Approved"><AdminSelect value={form.IsIrctcApproved ?? ""} onChange={(e) => updateField("IsIrctcApproved", e.target.value)}><option value="">-- Select --</option><option value="Yes">Yes</option><option value="No">No</option></AdminSelect></AdminField>
         <AdminField label="Restro Rating"><AdminInput value={form.RestroRating ?? ""} onChange={(e) => updateField("RestroRating", e.target.value)} /></AdminField>
-        <AdminField label="Pure Veg"><AdminSelect value={String(form.IsPureVeg ?? 0)} onChange={(e) => updateField("IsPureVeg", Number(e.target.value))}><option value="1">Yes</option><option value="0">No</option></AdminSelect></AdminField>
+        <AdminField label="Pure Veg"><AdminSelect value={String(form.IsPureVeg ?? "")} onChange={(e) => updateField("IsPureVeg", e.target.value === "" ? "" : Number(e.target.value))}><option value="">-- Select --</option><option value="1">Yes</option><option value="0">No</option></AdminSelect></AdminField>
         <AdminField label="Display Photo"><AdminInput value={form.RestroDisplayPhoto ?? ""} onChange={(e) => updateField("RestroDisplayPhoto", e.target.value)} /></AdminField>
         <AdminField label="Owner Name"><AdminInput value={form.OwnerName ?? ""} onChange={(e) => updateField("OwnerName", e.target.value)} /></AdminField>
         <AdminField label="Owner Email"><AdminInput value={form.OwnerEmail ?? ""} onChange={(e) => updateField("OwnerEmail", e.target.value)} /></AdminField>
