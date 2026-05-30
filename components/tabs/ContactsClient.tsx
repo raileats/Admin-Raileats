@@ -19,19 +19,19 @@ type Props = {
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const INDIAN_MOBILE_RE = /^[6-9][0-9]{9}$/;
-
-function cleanMobile(value: any) {
-  return String(value ?? "").replace(/\D/g, "").slice(0, 10);
-}
+const PHONE_RE = /^[6-9][0-9]{9}$/;
 
 function makeEmpty(prefix: string, count: number): Item[] {
-  return Array.from({ length: count }).map((_, i) => ({
-    id: `${prefix}-${i + 1}`,
+  return Array.from({ length: count }).map((_, index) => ({
+    id: `${prefix}-${index + 1}`,
     name: "",
     value: "",
     active: false,
   }));
+}
+
+function digits(value: any) {
+  return String(value ?? "").replace(/\D/g, "").slice(0, 10);
 }
 
 function isActive(value: any) {
@@ -40,42 +40,75 @@ function isActive(value: any) {
 }
 
 function normalizeRows(row: any) {
-  return {
-    emails: [
-      {
-        id: "email-1",
-        name: row?.EmailAddressName1 ?? "",
-        value: row?.EmailsforOrdersReceiving1 ?? "",
-        active: isActive(row?.EmailsforOrdersStatus1),
-      },
-      {
-        id: "email-2",
-        name: row?.EmailAddressName2 ?? "",
-        value: row?.EmailsforOrdersReceiving2 ?? "",
-        active: isActive(row?.EmailsforOrdersStatus2),
-      },
-    ],
-    whatsapps: [
-      {
-        id: "wa-1",
-        name: row?.WhatsappMobileNumberName1 ?? "",
-        value: cleanMobile(row?.WhatsappMobileNumberforOrderDetails1),
-        active: isActive(row?.WhatsappMobileNumberStatus1),
-      },
-      {
-        id: "wa-2",
-        name: row?.WhatsappMobileNumberName2 ?? "",
-        value: cleanMobile(row?.WhatsappMobileNumberforOrderDetails2),
-        active: isActive(row?.WhatsappMobileNumberStatus2),
-      },
-      {
-        id: "wa-3",
-        name: row?.WhatsappMobileNumberName3 ?? "",
-        value: cleanMobile(row?.WhatsappMobileNumberforOrderDetails3),
-        active: isActive(row?.WhatsappMobileNumberStatus3),
-      },
-    ],
+  const emails = makeEmpty("email", 2);
+  const whatsapps = makeEmpty("wa", 3);
+
+  emails[0] = {
+    id: "email-1",
+    name: row?.EmailAddressName1 ?? "",
+    value: row?.EmailsforOrdersReceiving1 ?? "",
+    active: isActive(row?.EmailsforOrdersStatus1),
   };
+
+  emails[1] = {
+    id: "email-2",
+    name: row?.EmailAddressName2 ?? "",
+    value: row?.EmailsforOrdersReceiving2 ?? "",
+    active: isActive(row?.EmailsforOrdersStatus2),
+  };
+
+  whatsapps[0] = {
+    id: "wa-1",
+    name: row?.WhatsappMobileNumberName1 ?? "",
+    value: digits(row?.WhatsappMobileNumberforOrderDetails1),
+    active: isActive(row?.WhatsappMobileNumberStatus1),
+  };
+
+  whatsapps[1] = {
+    id: "wa-2",
+    name: row?.WhatsappMobileNumberName2 ?? "",
+    value: digits(row?.WhatsappMobileNumberforOrderDetails2),
+    active: isActive(row?.WhatsappMobileNumberStatus2),
+  };
+
+  whatsapps[2] = {
+    id: "wa-3",
+    name: row?.WhatsappMobileNumberName3 ?? "",
+    value: digits(row?.WhatsappMobileNumberforOrderDetails3),
+    active: isActive(row?.WhatsappMobileNumberStatus3),
+  };
+
+  return { emails, whatsapps };
+}
+
+function ToggleSwitch({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`inline-flex h-8 w-[82px] shrink-0 items-center rounded-full px-1 text-xs font-bold transition ${
+        checked ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-600"
+      }`}
+      aria-pressed={checked}
+    >
+      <span
+        className={`grid h-6 w-6 place-items-center rounded-full bg-white text-[10px] shadow-sm transition ${
+          checked ? "translate-x-[50px] text-blue-600" : "translate-x-0 text-slate-400"
+        }`}
+      >
+        {checked ? "ON" : "OFF"}
+      </span>
+      <span className={`flex-1 text-center ${checked ? "-translate-x-5" : "translate-x-1"}`}>
+        {checked ? "ON" : "OFF"}
+      </span>
+    </button>
+  );
 }
 
 export default function ContactsClient({ restroCode, initialData = {} }: Props) {
@@ -94,8 +127,8 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
   }, [restroCode, initialData?.RestroCode]);
 
   const initialRows = normalizeRows(initialData);
-  const [emails, setEmails] = useState<Item[]>(initialRows.emails.length ? initialRows.emails : makeEmpty("email", 2));
-  const [whatsapps, setWhatsapps] = useState<Item[]>(initialRows.whatsapps.length ? initialRows.whatsapps : makeEmpty("wa", 3));
+  const [emails, setEmails] = useState<Item[]>(initialRows.emails);
+  const [whatsapps, setWhatsapps] = useState<Item[]>(initialRows.whatsapps);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -140,25 +173,22 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
 
   function updateEmail(index: number, key: keyof Item, value: string | boolean) {
     setEmails((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [key]: value } : row))
+      prev.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row))
     );
   }
 
   function updateWhatsapp(index: number, key: keyof Item, value: string | boolean) {
     setWhatsapps((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [key]: value } : row))
+      prev.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row))
     );
   }
 
   function validate() {
-    const badEmail = emails.find((row) => row.value && !EMAIL_RE.test(row.value));
+    const badEmail = emails.find((row) => row.value.trim() && !EMAIL_RE.test(row.value.trim()));
     if (badEmail) return "Please enter a valid email address.";
 
-    const badMobile = whatsapps.find((row) => {
-      const mobile = cleanMobile(row.value);
-      return mobile && !INDIAN_MOBILE_RE.test(mobile);
-    });
-    if (badMobile) return "WhatsApp mobile number must be a valid 10 digit Indian mobile number.";
+    const badMobile = whatsapps.find((row) => row.value.trim() && !PHONE_RE.test(digits(row.value)));
+    if (badMobile) return "WhatsApp mobile number must be exactly 10 digits and start with 6-9.";
 
     return "";
   }
@@ -176,20 +206,20 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
     }
 
     const payload = {
-      EmailAddressName1: emails[0]?.name ?? "",
-      EmailsforOrdersReceiving1: emails[0]?.value ?? "",
+      EmailAddressName1: emails[0]?.name?.trim() ?? "",
+      EmailsforOrdersReceiving1: emails[0]?.value?.trim() ?? "",
       EmailsforOrdersStatus1: emails[0]?.active ? "ON" : "OFF",
-      EmailAddressName2: emails[1]?.name ?? "",
-      EmailsforOrdersReceiving2: emails[1]?.value ?? "",
+      EmailAddressName2: emails[1]?.name?.trim() ?? "",
+      EmailsforOrdersReceiving2: emails[1]?.value?.trim() ?? "",
       EmailsforOrdersStatus2: emails[1]?.active ? "ON" : "OFF",
-      WhatsappMobileNumberName1: whatsapps[0]?.name ?? "",
-      WhatsappMobileNumberforOrderDetails1: cleanMobile(whatsapps[0]?.value) || null,
+      WhatsappMobileNumberName1: whatsapps[0]?.name?.trim() ?? "",
+      WhatsappMobileNumberforOrderDetails1: digits(whatsapps[0]?.value) || null,
       WhatsappMobileNumberStatus1: whatsapps[0]?.active ? "ON" : "OFF",
-      WhatsappMobileNumberName2: whatsapps[1]?.name ?? "",
-      WhatsappMobileNumberforOrderDetails2: cleanMobile(whatsapps[1]?.value) || null,
+      WhatsappMobileNumberName2: whatsapps[1]?.name?.trim() ?? "",
+      WhatsappMobileNumberforOrderDetails2: digits(whatsapps[1]?.value) || null,
       WhatsappMobileNumberStatus2: whatsapps[1]?.active ? "ON" : "OFF",
-      WhatsappMobileNumberName3: whatsapps[2]?.name ?? "",
-      WhatsappMobileNumberforOrderDetails3: cleanMobile(whatsapps[2]?.value) || null,
+      WhatsappMobileNumberName3: whatsapps[2]?.name?.trim() ?? "",
+      WhatsappMobileNumberforOrderDetails3: digits(whatsapps[2]?.value) || null,
       WhatsappMobileNumberStatus3: whatsapps[2]?.active ? "ON" : "OFF",
     };
 
@@ -247,80 +277,91 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
         </div>
       ) : null}
 
-      <AdminCard title="Emails" subtitle="Up to 2 email recipients for order notifications">
-        <div className="space-y-4">
-          {emails.map((row, index) => (
-            <div key={row.id} className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_2fr_140px] lg:items-end">
-              <AdminField label={`Name ${index + 1}`}>
-                <AdminInput
-                  placeholder={`Name ${index + 1}`}
-                  value={row.name}
-                  onChange={(event) => updateEmail(index, "name", event.target.value)}
-                />
-              </AdminField>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <AdminCard title="Emails" subtitle="Up to 2 email recipients">
+          <div className="space-y-4">
+            {emails.map((row, index) => (
+              <div key={row.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-sm font-bold text-slate-900">Email {index + 1}</div>
+                  <ToggleSwitch
+                    checked={row.active}
+                    onChange={(value) => updateEmail(index, "active", value)}
+                  />
+                </div>
 
-              <AdminField label={`Email ${index + 1}`}>
-                <AdminInput
-                  placeholder={`Email ${index + 1}`}
-                  value={row.value}
-                  onChange={(event) => updateEmail(index, "value", event.target.value.trim())}
-                  className={row.value && EMAIL_RE.test(row.value) ? "border-emerald-400" : row.value ? "border-red-400" : ""}
-                />
-              </AdminField>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-[0.8fr_1.2fr]">
+                  <AdminField label="Name">
+                    <AdminInput
+                      placeholder={`Name ${index + 1}`}
+                      value={row.name}
+                      onChange={(event) => updateEmail(index, "name", event.target.value)}
+                    />
+                  </AdminField>
 
-              <label className="flex h-10 items-center gap-2 text-sm font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={row.active}
-                  onChange={(event) => updateEmail(index, "active", event.target.checked)}
-                />
-                {row.active ? "ON" : "OFF"}
-              </label>
-            </div>
-          ))}
-        </div>
-      </AdminCard>
+                  <AdminField label="Email">
+                    <AdminInput
+                      placeholder={`Email ${index + 1}`}
+                      value={row.value}
+                      onChange={(event) => updateEmail(index, "value", event.target.value.trim())}
+                      className={
+                        row.value && EMAIL_RE.test(row.value)
+                          ? "border-emerald-400"
+                          : row.value
+                            ? "border-red-400"
+                            : ""
+                      }
+                    />
+                  </AdminField>
+                </div>
+              </div>
+            ))}
+          </div>
+        </AdminCard>
 
-      <AdminCard title="WhatsApp Numbers" subtitle="Up to 3 mobile recipients for order notifications">
-        <div className="space-y-4">
-          {whatsapps.map((row, index) => (
-            <div key={row.id} className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_2fr_140px] lg:items-end">
-              <AdminField label={`Name ${index + 1}`}>
-                <AdminInput
-                  placeholder={`Name ${index + 1}`}
-                  value={row.name}
-                  onChange={(event) => updateWhatsapp(index, "name", event.target.value)}
-                />
-              </AdminField>
+        <AdminCard title="WhatsApp Numbers" subtitle="Up to 3 mobile recipients">
+          <div className="space-y-4">
+            {whatsapps.map((row, index) => (
+              <div key={row.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-sm font-bold text-slate-900">WhatsApp Mobile {index + 1}</div>
+                  <ToggleSwitch
+                    checked={row.active}
+                    onChange={(value) => updateWhatsapp(index, "active", value)}
+                  />
+                </div>
 
-              <AdminField label={`Mobile ${index + 1}`}>
-                <AdminInput
-                  placeholder={`Mobile ${index + 1}`}
-                  inputMode="numeric"
-                  value={row.value}
-                  onChange={(event) =>
-                    updateWhatsapp(
-                      index,
-                      "value",
-                      cleanMobile(event.target.value)
-                    )
-                  }
-                  className={row.value && INDIAN_MOBILE_RE.test(cleanMobile(row.value)) ? "border-emerald-400" : row.value ? "border-red-400" : ""}
-                />
-              </AdminField>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-[0.8fr_1.2fr]">
+                  <AdminField label="Name">
+                    <AdminInput
+                      placeholder={`Name ${index + 1}`}
+                      value={row.name}
+                      onChange={(event) => updateWhatsapp(index, "name", event.target.value)}
+                    />
+                  </AdminField>
 
-              <label className="flex h-10 items-center gap-2 text-sm font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={row.active}
-                  onChange={(event) => updateWhatsapp(index, "active", event.target.checked)}
-                />
-                {row.active ? "ON" : "OFF"}
-              </label>
-            </div>
-          ))}
-        </div>
-      </AdminCard>
+                  <AdminField label="Mobile">
+                    <AdminInput
+                      placeholder={`Mobile ${index + 1}`}
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={row.value}
+                      onChange={(event) => updateWhatsapp(index, "value", digits(event.target.value))}
+                      className={
+                        row.value && PHONE_RE.test(row.value)
+                          ? "border-emerald-400"
+                          : row.value
+                            ? "border-red-400"
+                            : ""
+                      }
+                    />
+                  </AdminField>
+                </div>
+              </div>
+            ))}
+          </div>
+        </AdminCard>
+      </div>
     </AdminCard>
   );
 }
