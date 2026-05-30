@@ -1,64 +1,76 @@
 // lib/restroService.ts
+import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 
-/* ======================================================
-   SUPABASE CLIENT
-====================================================== */
+const supabaseUrl =
+  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-/* ======================================================
-   TYPES
-====================================================== */
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false },
+});
 
 export type Restro = {
   RestroCode: number;
-  OwnerName?: string;
-  RestroName?: string;
-  OwnerPhone?: number;
-  RestroAddress?: string;
-  City?: string;
-  State?: string;
-  District?: string;
-  PinCode?: number;
-  FSSAINumber?: number;
-  GSTNumber?: string;
-  GSTType?: string;
+  OwnerName?: string | null;
+  RestroName?: string | null;
+  OwnerPhone?: string | number | null;
+  RestroPhone?: string | number | null;
+  RestroAddress?: string | null;
+  City?: string | null;
+  State?: string | null;
+  District?: string | null;
+  PinCode?: string | number | null;
+  FSSAINumber?: string | number | null;
+  GSTNumber?: string | null;
+  GSTType?: string | null;
   [key: string]: any;
 };
 
-/* ======================================================
-   GET BY RESTROCODE
-====================================================== */
+function normalizeRestro(row: any): Restro {
+  return {
+    ...row,
+    OwnerPhone:
+      row?.OwnerPhone === null || row?.OwnerPhone === undefined
+        ? ""
+        : String(row.OwnerPhone),
+    RestroPhone:
+      row?.RestroPhone === null || row?.RestroPhone === undefined
+        ? ""
+        : String(row.RestroPhone),
+  };
+}
 
 export async function getRestroById(
   restroCode: number
 ): Promise<Restro | null> {
+  noStore();
+
+  if (!restroCode || Number.isNaN(restroCode)) return null;
+
   try {
     const { data, error } = await supabase
-      .from("RestroMaster") // EXACT CASE
+      .from("RestroMaster")
       .select("*")
-      .eq("RestroCode", restroCode) // EXACT CASE
-      .single();
+      .eq("RestroCode", restroCode)
+      .maybeSingle();
 
     if (error) {
       console.error("getRestroById error:", error);
       return null;
     }
 
-    return data as Restro;
+    if (!data) return null;
+
+    return normalizeRestro(data);
   } catch (err: any) {
     console.error("getRestroById unexpected:", err);
     return null;
   }
 }
-
-/* ======================================================
-   SAFE GET (Used in layout.tsx)
-====================================================== */
 
 export async function safeGetRestro(restroCode: number) {
   try {
@@ -77,10 +89,6 @@ export async function safeGetRestro(restroCode: number) {
   }
 }
 
-/* ======================================================
-   UPDATE BASIC INFORMATION
-====================================================== */
-
 export async function updateRestroBasic(
   restroCode: number,
   payload: Partial<Restro>
@@ -91,23 +99,13 @@ export async function updateRestroBasic(
 
   try {
     const { data, error } = await supabase
-      .from("RestroMaster") // EXACT TABLE NAME
+      .from("RestroMaster")
       .update({
-        OwnerName: payload.OwnerName ?? null,
-        RestroName: payload.RestroName ?? null,
-        OwnerPhone: payload.OwnerPhone ?? null,
-        RestroAddress: payload.RestroAddress ?? null,
-        City: payload.City ?? null,
-        State: payload.State ?? null,
-        District: payload.District ?? null,
-        PinCode: payload.PinCode ?? null,
-        FSSAINumber: payload.FSSAINumber ?? null,
-        GSTNumber: payload.GSTNumber ?? null,
-        GSTType: payload.GSTType ?? null,
+        ...payload,
         UpdatedAt: new Date().toISOString(),
       })
-      .eq("RestroCode", restroCode) // PRIMARY KEY MATCH
-      .select()
+      .eq("RestroCode", restroCode)
+      .select("*")
       .maybeSingle();
 
     if (error) {
@@ -118,11 +116,11 @@ export async function updateRestroBasic(
     if (!data) {
       return {
         success: false,
-        error: "No rows updated (check RestroCode match)",
+        error: "No rows updated",
       };
     }
 
-    return { success: true, data };
+    return { success: true, data: normalizeRestro(data) };
   } catch (err: any) {
     console.error("updateRestroBasic unexpected:", err);
     return {
