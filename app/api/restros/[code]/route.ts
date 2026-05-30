@@ -191,39 +191,4 @@ export async function PATCH(
       return jsonNoCache({ ok: false, error: error.message }, 500);
     }
 
-    if (body.RestroPhone !== undefined) {
-      const { error: phoneError } = await supabase
-        .from("RestroMaster")
-        .update({
-          RestroPhone: restroPhoneToSave,
-          UpdatedAt: new Date().toISOString(),
-        })
-        .eq("RestroCode", RestroCode);
-
-      if (phoneError) {
-        return jsonNoCache(
-          { ok: false, error: `RestroPhone save failed: ${phoneError.message}` },
-          500
-        );
-      }
-    }
-
-    return jsonNoCache({
-      ok: true,
-      row: {
-        ...(data ?? {}),
-        RestroPhone: restroPhoneToSave ?? "",
-        OwnerPhone:
-          data?.OwnerPhone ??
-          payload.OwnerPhone ??
-          phoneText(body.OwnerPhone) ??
-          "",
-      },
-    });
-  } catch (error: any) {
-    return jsonNoCache(
-      { ok: false, error: error?.message || "Server error" },
-      500
-    );
-  }
-}
+    
