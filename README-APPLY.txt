@@ -7,9 +7,9 @@ Replace these files in Admin project:
 5. app/admin/restros/new/basic/page.tsx
 
 Fixes:
-- RestroPhone saves as exact RestroPhone column, as 10 digit text.
-- OwnerPhone also saves as 10 digit text.
-- IsPureVeg added to Basic Information in edit and new restro, saves to IsPureVeg column.
-- Delivery Charge GST (absolute) continues to save to RaileatsCustomerDeliveryChargeGST.
-- Removed Delivery Time (mins) and Delivery Radius (km) from Station Settings UI and API payload because columns are not in RestroMaster CSV.
-- Removed non-existing DeliveryTime/DeliveryRadius update attempts from app/api/restros/[code]/route.ts.
+- Basic RestroPhone is sent as exact RestroPhone column and UI no longer force-refreshes/clears after save.
+- Station Settings Delivery Charge GST (absolute) is sent as exact RaileatsCustomerDeliveryChargeGST column.
+- API now fetches fresh Supabase row after PATCH and verifies RestroPhone and RaileatsCustomerDeliveryChargeGST actually persisted.
+- If either field does not save in Supabase, API returns error instead of fake success.
+- IsPureVeg remains in Basic Information and saves to exact IsPureVeg column.
+- Delivery Time and Delivery Radius are not included because they are not in RestroMaster CSV/schema.
