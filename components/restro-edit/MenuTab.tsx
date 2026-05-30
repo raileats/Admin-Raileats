@@ -2,6 +2,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import MenuItemFormModal from "./MenuItemFormModal";
+import AdminButton from "@/components/admin/AdminButton";
+import AdminCard from "@/components/admin/AdminCard";
 
 type Row = {
   id: number;
@@ -105,19 +107,35 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
   }
 
   return (
-    <div className="space-y-3">
-      {/* Top bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <AdminCard
+      title="Menu"
+      subtitle="Manage restaurant menu items"
+      bodyClassName="space-y-4"
+      actions={
+        <AdminButton
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setEditRow(null);
+            setOpenModal(true);
+          }}
+        >
+          Add New Item
+        </AdminButton>
+      }
+    >
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-2">
           <input
             placeholder="Search (code, name, category, cuisine, type)…"
-            className="w-[360px] max-w-[70vw] rounded-md border px-3 py-2"
+            className="h-10 w-[360px] max-w-[70vw] rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && load()}
           />
           <select
-            className="rounded-md border px-3 py-2"
+            className="h-10 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             value={status}
             onChange={(e) => setStatus(e.target.value as any)}
           >
@@ -126,29 +144,20 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
             <option value="OFF">Off</option>
             <option value="DELETED">Deleted</option>
           </select>
-          <button type="button" className="rounded-md border px-3 py-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); load(); }}>
+          <button type="button" className="h-10 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={(e) => { e.preventDefault(); e.stopPropagation(); load(); }}>
             Search
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-500">
-            Item Count {counts.total} • Active {counts.on} • Deactive {counts.off} • Deleted {counts.deleted}
-          </div>
-          <button
-            type="button"
-            className="rounded-md bg-orange-600 text-white px-4 py-2"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditRow(null); setOpenModal(true); }}
-          >
-            Add New Item
-          </button>
+        <div className="text-sm font-semibold text-slate-500">
+          Item Count {counts.total} • Active {counts.on} • Deactive {counts.off} • Deleted {counts.deleted}
         </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-auto rounded border">
+      <div className="overflow-auto rounded-md border border-slate-200">
         <table className="min-w-[1200px] w-full text-sm">
-          <thead className="bg-gray-50">
+          <thead className="bg-slate-50">
             <tr className="text-left">
               <th className="p-2">Item Code</th>
               <th className="p-2">Item Name</th>
@@ -173,11 +182,11 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={17} className="p-3 text-center text-gray-500">Loading…</td>
+                <td colSpan={17} className="p-3 text-center text-slate-500">Loading...</td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={17} className="p-3 text-center text-gray-500">No items.</td>
+                <td colSpan={17} className="p-3 text-center text-slate-500">No items.</td>
               </tr>
             ) : (
               filtered.map((r) => (
@@ -250,6 +259,6 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
         onClose={() => { setOpenModal(false); setEditRow(null); }}
         onSaved={load}
       />
-    </div>
+    </AdminCard>
   );
 }
