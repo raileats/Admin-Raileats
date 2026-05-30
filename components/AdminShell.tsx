@@ -33,41 +33,13 @@ type Props = {
 };
 
 const adminNavItems = [
-  {
-    href: "/admin/home",
-    label: "Dashboard",
-    icon: Home,
-  },
-  {
-    href: "/admin/orders",
-    label: "Orders",
-    icon: ListOrdered,
-  },
-  {
-    href: "/admin/restros",
-    label: "Restro Master",
-    icon: Utensils,
-  },
-  {
-    href: "/admin/menu",
-    label: "Menu",
-    icon: WalletCards,
-  },
-  {
-    href: "/admin/trains",
-    label: "Trains",
-    icon: Train,
-  },
-  {
-    href: "/admin/stations",
-    label: "Stations",
-    icon: MapPin,
-  },
-  {
-    href: "/admin/users",
-    label: "Users",
-    icon: Users,
-  },
+  { href: "/admin/home", label: "Dashboard", icon: Home },
+  { href: "/admin/orders", label: "Orders", icon: ListOrdered },
+  { href: "/admin/restros", label: "Restro Master", icon: Utensils },
+  { href: "/admin/menu", label: "Menu", icon: WalletCards },
+  { href: "/admin/trains", label: "Trains", icon: Train },
+  { href: "/admin/stations", label: "Stations", icon: MapPin },
+  { href: "/admin/users", label: "Users", icon: Users },
 ] as const;
 
 function userLabel(user?: User) {
@@ -79,7 +51,6 @@ function isActivePath(pathname: string, href: string) {
   if (href === "/admin/home") {
     return pathname === "/admin" || pathname === "/admin/home";
   }
-
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -89,7 +60,8 @@ export default function AdminShell({
   requireAuth = true,
 }: Props) {
   const pathname = usePathname() || "";
-  const hideChrome = pathname === "/admin/login" || pathname.startsWith("/admin/login/");
+  const hideChrome =
+    pathname === "/admin/login" || pathname.startsWith("/admin/login/");
 
   const handleLogout = async (e?: React.MouseEvent) => {
     e?.preventDefault();
@@ -111,12 +83,20 @@ export default function AdminShell({
   const shell = (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <div className="flex min-h-screen">
-        <aside className="hidden w-52 shrink-0 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+        <aside className="group/sidebar hidden w-20 shrink-0 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 hover:w-56 lg:flex lg:flex-col">
           <div className="flex h-20 items-center gap-3 border-b border-slate-200 px-4">
-            <img src="/logo.png" alt="RailEats" className="h-10 w-10 rounded-md object-contain" />
-            <div>
-              <div className="text-base font-bold leading-tight">RailEats Admin</div>
-              <div className="text-xs font-medium text-slate-500">Operations</div>
+            <img
+              src="/logo.png"
+              alt="RailEats"
+              className="h-10 w-10 shrink-0 rounded-md object-contain"
+            />
+            <div className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+              <div className="text-base font-bold leading-tight">
+                RailEats Admin
+              </div>
+              <div className="text-xs font-medium text-slate-500">
+                Operations
+              </div>
             </div>
           </div>
 
@@ -129,15 +109,18 @@ export default function AdminShell({
                 <Link
                   key={item.href}
                   href={item.href}
+                  title={item.label}
                   className={[
-                    "flex h-11 items-center gap-2 rounded-md px-3 text-sm font-semibold transition",
+                    "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
                     active
                       ? "bg-blue-50 text-blue-700"
                       : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
                   ].join(" ")}
                 >
-                  <Icon size={18} />
-                  <span>{item.label}</span>
+                  <Icon size={20} className="shrink-0" />
+                  <span className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}
@@ -147,10 +130,13 @@ export default function AdminShell({
             <button
               type="button"
               onClick={handleLogout}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              title="Logout"
+              className="flex h-11 w-full items-center gap-3 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
-              <LogOut size={17} />
-              Logout
+              <LogOut size={20} className="shrink-0" />
+              <span className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+                Logout
+              </span>
             </button>
           </div>
         </aside>
@@ -165,8 +151,11 @@ export default function AdminShell({
               >
                 <Menu size={20} />
               </button>
+
               <div>
-                <div className="text-lg font-bold leading-tight">Admin Panel</div>
+                <div className="text-lg font-bold leading-tight">
+                  Admin Panel
+                </div>
                 <div className="hidden text-xs font-medium text-slate-500 sm:block">
                   RailEats operations console
                 </div>
@@ -175,7 +164,9 @@ export default function AdminShell({
 
             <div className="flex items-center gap-3">
               <div className="hidden text-right sm:block">
-                <div className="text-sm font-semibold">{userLabel(currentUser)}</div>
+                <div className="text-sm font-semibold">
+                  {userLabel(currentUser)}
+                </div>
                 <button
                   type="button"
                   onClick={handleLogout}
