@@ -2,6 +2,9 @@ import React from "react";
 import BasicInfoClient from "@/components/tabs/BasicInfoClient";
 import { getRestroById } from "@/lib/restroService";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type Props = { params: { code: string } };
 
 export default async function BasicPage({ params }: Props) {
