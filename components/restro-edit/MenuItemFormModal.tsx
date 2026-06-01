@@ -21,6 +21,7 @@ type BaseRow = {
   status: "ON" | "OFF" | "DELETED";
   created_at?: string | null;
   updated_at?: string | null;
+  menu_item_image?: string | null;
 };
 
 type Props = {
@@ -97,6 +98,10 @@ export default function MenuItemFormModal({
   const [base_price, setBasePrice] = useState<number | "">("");
   const [gst_percent, setGstPercent] = useState<number | "">(5);
   const [status, setStatus] = useState<"ON" | "OFF">("ON");
+
+  const [menuImage, setMenuImage] = useState<File | null>(null);
+  const [menuImageName, setMenuImageName] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -122,6 +127,9 @@ export default function MenuItemFormModal({
           initial.gst_percent == null ? 5 : Number(initial.gst_percent)
         );
         setStatus((initial.status as any) === "OFF" ? "OFF" : "ON");
+
+        setMenuImageName(initial.menu_item_image ?? "");
+
         return;
       }
 
@@ -136,6 +144,8 @@ export default function MenuItemFormModal({
       setBasePrice("");
       setGstPercent(5);
       setStatus("ON");
+      setMenuImage(null);
+      setMenuImageName("");
       setErr(null);
 
       const { data } = await supabase
@@ -173,12 +183,62 @@ export default function MenuItemFormModal({
     return Number.isFinite(n) ? n : "";
   }
 
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".webp")) {
+      alert("Only .webp image allowed");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > 50 * 1024) {
+      alert("Image size must be maximum 50KB");
+      e.target.value = "";
+      return;
+    }
+
+    setMenuImage(file);
+    setMenuImageName(file.name);
+  }
+
+  async function uploadMenuImage(
+    file: File,
+    itemId: number,
+    itemName: string
+  ) {
+    const cleanName = itemName
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9-_]/g, "");
+
+    const finalFileName = `${restroCode}_${cleanName}_${itemId}.webp`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("menu_item_image")
+      .upload(finalFileName, file, {
+        cacheControl: "3600",
+        upsert: true,
+        contentType: "image/webp",
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    return finalFileName;
+  }
+
   async function handleSave() {
     try {
       setSaving(true);
       setErr(null);
 
-      if (!item_name.trim()) throw new Error("Item Name required");
+      if (!item_name.trim()) {
+        throw new Error("Item Name required");
+      }
 
       const basePayload = {
         item_name: item_name.trim(),
@@ -202,6 +262,25 @@ export default function MenuItemFormModal({
           .eq("id", initial.id);
 
         if (error) throw error;
+
+        if (menuImage) {
+          const uploadedFileName = await uploadMenuImage(
+            menuImage,
+            Number(initial.id),
+            item_name
+          );
+
+          const { error: imageUpdateError } = await supabase
+            .from("RestroMenuItems")
+            .update({
+              menu_item_image: uploadedFileName,
+            })
+            .eq("id", initial.id);
+
+          if (imageUpdateError) {
+            throw imageUpdateError;
+          }
+        }
       } else {
         const payloadCreate = { ...basePayload, item_code: null };
 
@@ -218,6 +297,30 @@ export default function MenuItemFormModal({
 
         if (!res.ok || !j?.ok) {
           throw new Error(j?.error || `Save failed (${res.status})`);
+        }
+
+        const createdId =
+          j?.data?.id ||
+          j?.item?.id ||
+          j?.id;
+
+        if (menuImage && createdId) {
+          const uploadedFileName = await uploadMenuImage(
+            menuImage,
+            Number(createdId),
+            item_name
+          );
+
+          const { error: imageUpdateError } = await supabase
+            .from("RestroMenuItems")
+            .update({
+              menu_item_image: uploadedFileName,
+            })
+            .eq("id", createdId);
+
+          if (imageUpdateError) {
+            throw imageUpdateError;
+          }
         }
       }
 
@@ -250,6 +353,7 @@ export default function MenuItemFormModal({
           <h2 className="text-xl font-semibold">
             {mode === "edit" ? "Edit Item" : "Add New Item"}
           </h2>
+
           <button
             type="button"
             className="rounded-md border px-3 py-1 text-sm"
@@ -263,6 +367,7 @@ export default function MenuItemFormModal({
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <div className="md:col-span-3">
             <label className="text-sm">Item Name</label>
+
             <input
               className="w-full rounded border px-3 py-2"
               value={item_name}
@@ -273,6 +378,7 @@ export default function MenuItemFormModal({
 
           <div className="md:col-span-3">
             <label className="text-sm">Item Description</label>
+
             <input
               className="w-full rounded border px-3 py-2"
               value={item_description}
@@ -283,12 +389,14 @@ export default function MenuItemFormModal({
 
           <div>
             <label className="text-sm">Item Category</label>
+
             <select
               className="w-full rounded border px-3 py-2"
               value={item_category}
               onChange={(e) => setItemCategory(e.target.value)}
             >
               <option value="">Select category</option>
+
               {CATEGORY_OPTIONS.map((o) => (
                 <option key={o} value={o}>
                   {o}
@@ -299,12 +407,14 @@ export default function MenuItemFormModal({
 
           <div>
             <label className="text-sm">Cuisine</label>
+
             <select
               className="w-full rounded border px-3 py-2"
               value={item_cuisine}
               onChange={(e) => setItemCuisine(e.target.value)}
             >
               <option value="">Select cuisine</option>
+
               {CUISINE_OPTIONS.map((o) => (
                 <option key={o} value={o}>
                   {o}
@@ -315,12 +425,14 @@ export default function MenuItemFormModal({
 
           <div>
             <label className="text-sm">Menu Type</label>
+
             <select
               className="w-full rounded border px-3 py-2"
               value={menu_type}
               onChange={(e) => setMenuType(e.target.value)}
             >
               <option value="">Select menu type</option>
+
               {MENU_TYPE_OPTIONS.map((o) => (
                 <option key={o} value={o}>
                   {o}
@@ -330,7 +442,25 @@ export default function MenuItemFormModal({
           </div>
 
           <div>
+            <label className="text-sm">Menu Item Image (.webp max 50KB)</label>
+
+            <input
+              type="file"
+              accept=".webp"
+              className="w-full rounded border px-3 py-2"
+              onChange={handleImageChange}
+            />
+
+            {menuImageName && (
+              <div className="mt-1 text-xs text-green-600 break-all">
+                Selected: {menuImageName}
+              </div>
+            )}
+          </div>
+
+          <div>
             <label className="text-sm">Item Start Time</label>
+
             <input
               type="time"
               className="w-full rounded border px-3 py-2"
@@ -341,6 +471,7 @@ export default function MenuItemFormModal({
 
           <div>
             <label className="text-sm">Item Closed Time</label>
+
             <input
               type="time"
               className="w-full rounded border px-3 py-2"
@@ -352,39 +483,50 @@ export default function MenuItemFormModal({
           <div className="md:col-span-3">
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="text-sm">Restro Price (internal)</label>
+                <label className="text-sm">
+                  Restro Price (internal)
+                </label>
+
                 <input
                   type="text"
                   inputMode="decimal"
                   pattern="[0-9]*"
                   className={smallInput}
                   value={restro_price === "" ? "" : String(restro_price)}
-                  onChange={(e) => setRestroPrice(toNumOrEmpty(e.target.value))}
+                  onChange={(e) =>
+                    setRestroPrice(toNumOrEmpty(e.target.value))
+                  }
                   autoComplete="off"
                 />
               </div>
 
               <div>
                 <label className="text-sm">Base Price</label>
+
                 <input
                   type="text"
                   inputMode="decimal"
                   pattern="[0-9]*"
                   className={smallInput}
                   value={base_price === "" ? "" : String(base_price)}
-                  onChange={(e) => setBasePrice(toNumOrEmpty(e.target.value))}
+                  onChange={(e) =>
+                    setBasePrice(toNumOrEmpty(e.target.value))
+                  }
                   autoComplete="off"
                 />
               </div>
 
               <div>
                 <label className="text-sm">GST %</label>
+
                 <select
                   className={smallInput}
                   value={String(gst_percent === "" ? "" : gst_percent)}
                   onChange={(e) =>
                     setGstPercent(
-                      e.target.value === "" ? "" : Number(e.target.value)
+                      e.target.value === ""
+                        ? ""
+                        : Number(e.target.value)
                     )
                   }
                 >
@@ -395,16 +537,26 @@ export default function MenuItemFormModal({
               </div>
 
               <div>
-                <label className="text-sm">Selling Price (auto)</label>
-                <input className={smallInput + " bg-gray-50"} value={selling_price} readOnly />
+                <label className="text-sm">
+                  Selling Price (auto)
+                </label>
+
+                <input
+                  className={smallInput + " bg-gray-50"}
+                  value={selling_price}
+                  readOnly
+                />
               </div>
 
               <div>
                 <label className="text-sm">Status</label>
+
                 <select
                   className={smallInput}
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as "ON" | "OFF")}
+                  onChange={(e) =>
+                    setStatus(e.target.value as "ON" | "OFF")
+                  }
                 >
                   <option value="ON">On</option>
                   <option value="OFF">Off</option>
@@ -414,7 +566,11 @@ export default function MenuItemFormModal({
           </div>
         </div>
 
-        {err && <p className="mt-3 text-sm text-red-600">Error: {err}</p>}
+        {err && (
+          <p className="mt-3 text-sm text-red-600">
+            Error: {err}
+          </p>
+        )}
 
         <div className="mt-6 flex justify-end gap-3">
           <button
@@ -432,7 +588,11 @@ export default function MenuItemFormModal({
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? "Saving…" : mode === "edit" ? "Update" : "Save"}
+            {saving
+              ? "Saving…"
+              : mode === "edit"
+              ? "Update"
+              : "Save"}
           </button>
         </div>
       </div>
