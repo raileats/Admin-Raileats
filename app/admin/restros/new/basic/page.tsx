@@ -163,7 +163,7 @@ export default function NewRestroBasicPage() {
     setLoadingStations(true);
 
     try {
-      const res = await fetch(`/api/search-stations?q=${encodeURIComponent(q)}`, {
+      const res = await fetch(`/api/stations?q=${encodeURIComponent(q)}`, {
         cache: "no-store",
       });
 
