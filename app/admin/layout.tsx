@@ -90,9 +90,10 @@ export default async function AdminLayout({ children }: Props) {
    * - DO NOT render <html> or <body> here
    * - app/layout.tsx already handles that
    */
-  return (
-  <AdminShell currentUser={currentUser} requireAuth>
-    <GlobalOrderNotifier />
-    {children}
-  </AdminShell>
-);
+    return (
+    <AdminShell currentUser={currentUser} requireAuth>
+      <GlobalOrderNotifier />
+      {children}
+    </AdminShell>
+  );
+}
