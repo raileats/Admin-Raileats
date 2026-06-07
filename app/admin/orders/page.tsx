@@ -240,72 +240,99 @@ const [remarks, setRemarks] = useState("");
     };
   };
 
-  /* ================= INIT SOUND ================= */
-  useEffect(() => {
-    audioRef.current = new Audio("/sounds/new-order.mp3");
-    audioRef.current.preload = "auto";
-
-    const unlockAudio = async () => {
-      try {
-        if (audioRef.current) {
-          audioRef.current.muted = true;
-          await audioRef.current.play();
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-          audioRef.current.muted = false;
-          console.log("Audio unlocked");
-        }
-      } catch (e) {
-        console.log("Unlock failed");
-      }
-    };
-
-    document.body.addEventListener("click", unlockAudio, { once: true });
-    if (Notification.permission !== "granted") {
-      Notification.requestPermission();
+  /* ================= SOUND HELPERS ================= */
+const playNewOrderSound = async () => {
+  try {
+    if (!audioRef.current) {
+      audioRef.current = new Audio("/sounds/new-order.mp3");
+      audioRef.current.preload = "auto";
+      audioRef.current.volume = 1;
     }
-  }, []);
 
-  /* ================= REALTIME ORDERS ================= */
-  useEffect(() => {
-    const channel = supabase
-      .channel("admin-orders-live")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "Orders" },
-        async (payload) => {
-          console.log("NEW ORDER:", payload);
-          setNewOrderCount((prev) => {
-            const updated = prev + 1;
-            localStorage.setItem("raileats_new_orders", String(updated));
-            return updated;
-          });
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    await audioRef.current.play();
+  } catch (err) {
+    console.log("New order sound blocked:", err);
+  }
+};
 
-          try {
-            if (audioRef.current) {
-              audioRef.current.currentTime = 0;
-              await audioRef.current.play();
-            }
-          } catch (e) {
-            console.log("sound blocked");
+/* ================= INIT SOUND ================= */
+useEffect(() => {
+  audioRef.current = new Audio("/sounds/new-order.mp3");
+  audioRef.current.preload = "auto";
+  audioRef.current.volume = 1;
+
+  const unlockAudio = async () => {
+    try {
+      if (!audioRef.current) return;
+
+      audioRef.current.muted = true;
+      await audioRef.current.play();
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current.muted = false;
+
+      console.log("Audio unlocked successfully");
+    } catch (e) {
+      console.log("Audio unlock failed", e);
+    }
+  };
+
+  window.addEventListener("click", unlockAudio, { once: true });
+  window.addEventListener("touchstart", unlockAudio, { once: true });
+  window.addEventListener("keydown", unlockAudio, { once: true });
+
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission().catch(() => {});
+  }
+
+  return () => {
+    window.removeEventListener("click", unlockAudio);
+    window.removeEventListener("touchstart", unlockAudio);
+    window.removeEventListener("keydown", unlockAudio);
+  };
+}, []);
+
+/* ================= REALTIME ORDERS ================= */
+useEffect(() => {
+  const channel = supabase
+    .channel("admin-orders-live-v2")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "Orders" },
+      async (payload) => {
+        console.log("NEW ORDER:", payload);
+
+        setNewOrderCount((prev) => {
+          const updated = prev + 1;
+          localStorage.setItem("raileats_new_orders", String(updated));
+          return updated;
+        });
+
+        await playNewOrderSound();
+
+        try {
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("🚆 New RailEats Order", {
+              body: `${payload.new?.customerName || "Customer"} • ${
+                payload.new?.stationName || ""
+              }`,
+            });
           }
+        } catch (e) {}
 
-          try {
-            if (Notification.permission === "granted") {
-              new Notification("🚆 New RailEats Order", {
-                body: `${payload.new.customerName || "Customer"} • ${payload.new.stationName || ""}`,
-              });
-            }
-          } catch (e) {}
-        }
-      )
-      .subscribe();
+        setRefreshTick((prev) => prev + 1);
+      }
+    )
+    .subscribe((status) => {
+      console.log("Orders realtime status:", status);
+    });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
   /* ================= SMART AUTO REFRESH ================= */
 
 useEffect(() => {
