@@ -13,37 +13,51 @@ export default function GlobalOrderNotifier() {
   const lastOrderIdRef = useRef<string>("");
 
   const playSound = async () => {
-    try {
-      const audio = audioRef.current || new Audio("/sounds/new-order.mp3");
-      audioRef.current = audio;
-      audio.volume = 1;
-      audio.muted = false;
-      audio.currentTime = 0;
-      await audio.play();
-    } catch (e) {
-      console.log("MP3 failed", e);
-    }
+  // ✅ Loud browser beep first
+  try {
+    const AudioContextClass =
+      window.AudioContext || (window as any).webkitAudioContext;
 
-    try {
-      const AudioContextClass =
-        window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioContextClass();
-      await ctx.resume();
+    const ctx = new AudioContextClass();
+    await ctx.resume();
 
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
 
-      oscillator.frequency.value = 880;
-      gain.gain.setValueAtTime(1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1);
+    oscillator.type = "square";
+    oscillator.frequency.value = 1000;
 
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 1);
-    } catch {}
-  };
+    gain.gain.setValueAtTime(1, ctx.currentTime);
+    gain.gain.setValueAtTime(1, ctx.currentTime + 0.4);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.2);
 
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 1.2);
+
+    console.log("BEEP PLAYED");
+  } catch (e) {
+    console.log("Fallback beep failed", e);
+  }
+
+  // ✅ MP3 also try
+  try {
+    const audio = audioRef.current || new Audio("/sounds/new-order.mp3");
+    audioRef.current = audio;
+
+    audio.volume = 1;
+    audio.muted = false;
+    audio.currentTime = 0;
+
+    await audio.play();
+
+    console.log("MP3 PLAYED");
+  } catch (e) {
+    console.log("MP3 failed", e);
+  }
+};
   const notifyOrder = async (order: any) => {
     await playSound();
 
