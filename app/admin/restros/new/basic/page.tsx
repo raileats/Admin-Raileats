@@ -78,7 +78,7 @@ export default function NewRestroBasicPage() {
 
     try {
       const { data, error } = await supabase
-        .from("stations")
+        .from("Stations")
         .select("StationCode, StationName, State, District")
         .order("StationName", { ascending: true })
         .limit(5000);
