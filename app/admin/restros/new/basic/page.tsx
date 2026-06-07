@@ -8,6 +8,11 @@ import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput, AdminSelect } from "@/components/admin/AdminField";
 import { createClient } from "@supabase/supabase-js";
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 type StationRow = { StationCode?: string; StationName?: string; State?: string; District?: string };
 type StationOption = { label: string; value: string; name: string; state: string };
 
@@ -120,7 +125,7 @@ export default function NewRestroBasicPage() {
   const filteredStations = useMemo(() => {
     const q = stationQuery.trim().toLowerCase();
     const list = q ? stations.filter((s) => s.label.toLowerCase().includes(q) || s.value.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.state.toLowerCase().includes(q)) : stations;
-    return list.slice(0, 50);
+    return list.slice(0, 8500);
   }, [stationQuery, stations]);
 
   function updateField(key: string, value: any) { setForm((prev: any) => ({ ...prev, [key]: value })); }
