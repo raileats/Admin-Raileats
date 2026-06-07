@@ -6,12 +6,6 @@ import { useRouter } from "next/navigation";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput, AdminSelect } from "@/components/admin/AdminField";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 type StationRow = {
   StationCode?: string | null;
@@ -35,7 +29,7 @@ const DEFAULT_FORM = {
 
 function stationLabel(station: StationRow) {
   const name = String(station?.StationName ?? "").trim();
-  const code = String(station?.StationCode ?? "").trim();
+  const code = String(station?.StationCode ?? "").trim().toUpperCase();
   const state = String(station?.State ?? "").trim();
 
   return `${name}${code ? ` (${code})` : ""}${state ? ` - ${state}` : ""}`.trim();
@@ -72,7 +66,7 @@ export default function NewRestroBasicPage() {
         RaileatsStatus: parsed.RaileatsStatus ?? "",
       }));
 
-      const code = String(parsed?.StationCode ?? "").trim();
+      const code = String(parsed?.StationCode ?? "").trim().toUpperCase();
       const name = String(parsed?.StationName ?? "").trim();
       const state = String(parsed?.State ?? "").trim();
 
@@ -84,63 +78,6 @@ export default function NewRestroBasicPage() {
     } catch (error) {
       console.error("Failed to load new restro basic draft", error);
     }
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadStations() {
-      setLoadingStations(true);
-
-      try {
-        const { data, error } = await supabase
-          .from("Stations")
-          .select("StationCode, StationName, State, District")
-          .eq("is_active", true)
-          .order("StationName", { ascending: true })
-          .limit(10000);
-
-        if (error) throw error;
-
-        const seen = new Set<string>();
-
-        const mapped = (data || [])
-          .map((row: StationRow) => {
-            const code = String(row?.StationCode ?? "").trim().toUpperCase();
-            const name = String(row?.StationName ?? "").trim();
-            const state = String(row?.State ?? "").trim();
-
-            if (!code || !name || seen.has(code)) return null;
-
-            seen.add(code);
-
-            return {
-              value: code,
-              name,
-              state,
-              label: stationLabel({
-                StationCode: code,
-                StationName: name,
-                State: state,
-              }),
-            };
-          })
-          .filter(Boolean) as StationOption[];
-
-        if (mounted) setStations(mapped);
-      } catch (error) {
-        console.error("Stations fetch error", error);
-        if (mounted) setStations([]);
-      } finally {
-        if (mounted) setLoadingStations(false);
-      }
-    }
-
-    loadStations();
-
-    return () => {
-      mounted = false;
-    };
   }, []);
 
   useEffect(() => {
@@ -158,29 +95,38 @@ export default function NewRestroBasicPage() {
   }, []);
 
   const filteredStations = useMemo(() => {
-    const q = stationQuery.trim().toUpperCase();
-
-    if (!q) return stations.slice(0, 200);
-
-    return stations
-      .filter((s) => {
-        const code = String(s.value || "").trim().toUpperCase();
-        const name = String(s.name || "").trim().toUpperCase();
-        const state = String(s.state || "").trim().toUpperCase();
-        const label = String(s.label || "").trim().toUpperCase();
-
-        return (
-          code.includes(q) ||
-          name.includes(q) ||
-          state.includes(q) ||
-          label.includes(q)
-        );
-      })
-      .slice(0, 200);
-  }, [stationQuery, stations]);
+    return stations.slice(0, 50);
+  }, [stations]);
 
   function updateField(key: string, value: any) {
     setForm((prev: any) => ({ ...prev, [key]: value }));
+  }
+
+  function mapStations(rows: StationRow[]) {
+    const seen = new Set<string>();
+
+    return (rows || [])
+      .map((row: StationRow) => {
+        const code = String(row?.StationCode ?? "").trim().toUpperCase();
+        const name = String(row?.StationName ?? "").trim();
+        const state = String(row?.State ?? "").trim();
+
+        if (!code || !name || seen.has(code)) return null;
+
+        seen.add(code);
+
+        return {
+          value: code,
+          name,
+          state,
+          label: stationLabel({
+            StationCode: code,
+            StationName: name,
+            State: state,
+          }),
+        };
+      })
+      .filter(Boolean) as StationOption[];
   }
 
   function selectStation(station: StationOption) {
@@ -195,35 +141,58 @@ export default function NewRestroBasicPage() {
     }));
   }
 
-  function updateStationQuery(value: string) {
+  async function updateStationQuery(value: string) {
     const upperValue = value.toUpperCase();
+    const q = upperValue.trim();
+
     setStationQuery(upperValue);
     setStationOpen(true);
 
-    const cleanValue = upperValue.trim();
-
-    const exact = stations.find((s) => {
-      const code = String(s.value || "").trim().toUpperCase();
-      const name = String(s.name || "").trim().toUpperCase();
-      return code === cleanValue || name === cleanValue;
-    });
-
-    if (exact) {
-      setForm((prev: any) => ({
-        ...prev,
-        StationCode: exact.value,
-        StationName: exact.name,
-        State: exact.state,
-      }));
-      return;
-    }
-
     setForm((prev: any) => ({
       ...prev,
-      StationCode: cleanValue,
+      StationCode: q,
       StationName: "",
       State: "",
     }));
+
+    if (!q) {
+      setStations([]);
+      return;
+    }
+
+    setLoadingStations(true);
+
+    try {
+      const res = await fetch(`/api/search-stations?q=${encodeURIComponent(q)}`, {
+        cache: "no-store",
+      });
+
+      const json = await res.json().catch(() => ({}));
+      const rows = Array.isArray(json?.data) ? json.data : [];
+
+      const mapped = mapStations(rows);
+      setStations(mapped);
+
+      const exact = mapped.find((s) => {
+        const code = String(s.value || "").trim().toUpperCase();
+        const name = String(s.name || "").trim().toUpperCase();
+        return code === q || name === q;
+      });
+
+      if (exact) {
+        setForm((prev: any) => ({
+          ...prev,
+          StationCode: exact.value,
+          StationName: exact.name,
+          State: exact.state,
+        }));
+      }
+    } catch (error) {
+      console.error("Station search error", error);
+      setStations([]);
+    } finally {
+      setLoadingStations(false);
+    }
   }
 
   async function saveAndNext() {
@@ -341,7 +310,10 @@ export default function NewRestroBasicPage() {
             <AdminInput
               value={stationQuery || form.StationCode || ""}
               onChange={(e) => updateStationQuery(e.target.value)}
-              onFocus={() => setStationOpen(true)}
+              onFocus={() => {
+                setStationOpen(true);
+                if (stationQuery.trim()) updateStationQuery(stationQuery);
+              }}
               placeholder="Type station code or name"
             />
 
@@ -370,9 +342,7 @@ export default function NewRestroBasicPage() {
                       <span className="font-semibold text-slate-900">
                         {station.value}
                       </span>
-                      <span className="ml-2 text-slate-700">
-                        {station.name}
-                      </span>
+                      <span className="ml-2 text-slate-700">{station.name}</span>
                       {station.state ? (
                         <span className="ml-2 text-slate-500">
                           - {station.state}
