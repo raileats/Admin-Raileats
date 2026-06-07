@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import {
   Home,
   ListOrdered,
@@ -16,6 +17,11 @@ import {
   X,
 } from "lucide-react";
 import AuthGuard from "@/components/admin/AuthGuard";
+
+const supabaseNotify = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 type User = {
   id?: string;
@@ -62,9 +68,123 @@ export default function AdminShell({
 }: Props) {
   const pathname = usePathname() || "";
   const [mobileOpen, setMobileOpen] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const hideChrome =
     pathname === "/admin/login" || pathname.startsWith("/admin/login/");
+
+  const playGlobalNewOrderSound = async () => {
+    try {
+      if (!audioRef.current) {
+        audioRef.current = new Audio("/sounds/new-order.mp3");
+        audioRef.current.preload = "auto";
+        audioRef.current.volume = 1;
+      }
+
+      audioRef.current.muted = false;
+      audioRef.current.volume = 1;
+      audioRef.current.currentTime = 0;
+      await audioRef.current.play();
+    } catch (e) {
+      console.log("Global MP3 failed", e);
+    }
+
+    try {
+      const AudioContextClass =
+        window.AudioContext || (window as any).webkitAudioContext;
+
+      const ctx = new AudioContextClass();
+      await ctx.resume();
+
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.value = 880;
+
+      gain.gain.setValueAtTime(0.8, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
+
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.8);
+    } catch (e) {
+      console.log("Global fallback beep failed", e);
+    }
+  };
+
+  useEffect(() => {
+    if (hideChrome) return;
+
+    audioRef.current = new Audio("/sounds/new-order.mp3");
+    audioRef.current.preload = "auto";
+    audioRef.current.volume = 1;
+
+    const unlockAudio = async () => {
+      try {
+        if (!audioRef.current) return;
+
+        audioRef.current.muted = true;
+        await audioRef.current.play();
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.muted = false;
+
+        console.log("Admin audio unlocked");
+      } catch (e) {
+        console.log("Audio unlock failed", e);
+      }
+    };
+
+    window.addEventListener("click", unlockAudio, { once: true });
+    window.addEventListener("touchstart", unlockAudio, { once: true });
+    window.addEventListener("keydown", unlockAudio, { once: true });
+
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+
+    return () => {
+      window.removeEventListener("click", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+  }, [hideChrome]);
+
+  useEffect(() => {
+    if (hideChrome) return;
+
+    const channel = supabaseNotify
+      .channel("admin-global-new-order-notification")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "Orders" },
+        async (payload) => {
+          console.log("GLOBAL NEW ORDER:", payload);
+
+          await playGlobalNewOrderSound();
+
+          try {
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("🚆 New RailEats Order", {
+                body: `${payload.new?.customerName || "Customer"} • ${
+                  payload.new?.stationName || ""
+                }`,
+              });
+            }
+          } catch (e) {}
+        }
+      )
+      .subscribe((status) => {
+        console.log("Global order notification status:", status);
+      });
+
+    return () => {
+      supabaseNotify.removeChannel(channel);
+    };
+  }, [hideChrome]);
 
   const handleLogout = async (e?: React.MouseEvent) => {
     e?.preventDefault();
@@ -99,9 +219,7 @@ export default function AdminShell({
               : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
           }
         >
-          <div className="text-base font-bold leading-tight">
-            RailEats Admin
-          </div>
+          <div className="text-base font-bold leading-tight">RailEats Admin</div>
           <div className="text-xs font-medium text-slate-500">Operations</div>
         </div>
 
@@ -208,9 +326,7 @@ export default function AdminShell({
               </button>
 
               <div>
-                <div className="text-lg font-bold leading-tight">
-                  Admin Panel
-                </div>
+                <div className="text-lg font-bold leading-tight">Admin Panel</div>
                 <div className="hidden text-xs font-medium text-slate-500 sm:block">
                   RailEats operations console
                 </div>
