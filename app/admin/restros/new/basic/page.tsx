@@ -81,7 +81,7 @@ export default function NewRestroBasicPage() {
         .from("Stations")
         .select("StationCode, StationName, State, District")
         .order("StationName", { ascending: true })
-        .limit(5000);
+        .limit(8500);
 
       if (error) throw error;
 
