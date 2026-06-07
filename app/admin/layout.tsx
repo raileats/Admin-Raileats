@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { serviceClient, getServerClient } from "@/lib/supabaseServer";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
+import GlobalOrderNotifier from "@/components/admin/GlobalOrderNotifier";
 
 type Props = { children: React.ReactNode };
 
@@ -90,8 +91,8 @@ export default async function AdminLayout({ children }: Props) {
    * - app/layout.tsx already handles that
    */
   return (
-    <AdminShell currentUser={currentUser} requireAuth>
-      {children}
-    </AdminShell>
-  );
-}
+  <AdminShell currentUser={currentUser} requireAuth>
+    <GlobalOrderNotifier />
+    {children}
+  </AdminShell>
+);
