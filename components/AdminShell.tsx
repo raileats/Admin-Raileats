@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -13,6 +13,7 @@ import {
   Users,
   Utensils,
   WalletCards,
+  X,
 } from "lucide-react";
 import AuthGuard from "@/components/admin/AuthGuard";
 
@@ -60,6 +61,8 @@ export default function AdminShell({
   requireAuth = true,
 }: Props) {
   const pathname = usePathname() || "";
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   const hideChrome =
     pathname === "/admin/login" || pathname.startsWith("/admin/login/");
 
@@ -80,65 +83,116 @@ export default function AdminShell({
 
   if (hideChrome) return <>{children}</>;
 
+  const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
+    <>
+      <div className="flex h-20 items-center gap-3 border-b border-slate-200 px-4">
+        <img
+          src="/logo.png"
+          alt="RailEats"
+          className="h-10 w-10 shrink-0 rounded-md object-contain"
+        />
+
+        <div
+          className={
+            mobile
+              ? "whitespace-nowrap"
+              : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
+          }
+        >
+          <div className="text-base font-bold leading-tight">
+            RailEats Admin
+          </div>
+          <div className="text-xs font-medium text-slate-500">Operations</div>
+        </div>
+
+        {mobile && (
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"
+            aria-label="Close navigation"
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      <nav className="flex-1 space-y-1 px-3 py-5">
+        {adminNavItems.map((item) => {
+          const Icon = item.icon;
+          const active = isActivePath(pathname, item.href);
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={item.label}
+              onClick={() => mobile && setMobileOpen(false)}
+              className={[
+                "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
+                active
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+              ].join(" ")}
+            >
+              <Icon size={20} className="shrink-0" />
+              <span
+                className={
+                  mobile
+                    ? "whitespace-nowrap"
+                    : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
+                }
+              >
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="border-t border-slate-200 p-3">
+        <button
+          type="button"
+          onClick={handleLogout}
+          title="Logout"
+          className="flex h-11 w-full items-center gap-3 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <LogOut size={20} className="shrink-0" />
+          <span
+            className={
+              mobile
+                ? "whitespace-nowrap"
+                : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
+            }
+          >
+            Logout
+          </span>
+        </button>
+      </div>
+    </>
+  );
+
   const shell = (
     <div className="min-h-screen bg-slate-100 text-slate-900">
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={[
+          "fixed left-0 top-0 z-50 flex h-screen w-72 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 lg:hidden",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}
+      >
+        <SidebarContent mobile />
+      </aside>
+
       <div className="flex min-h-screen">
         <aside className="group/sidebar hidden w-20 shrink-0 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 hover:w-56 lg:flex lg:flex-col">
-          <div className="flex h-20 items-center gap-3 border-b border-slate-200 px-4">
-            <img
-              src="/logo.png"
-              alt="RailEats"
-              className="h-10 w-10 shrink-0 rounded-md object-contain"
-            />
-            <div className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
-              <div className="text-base font-bold leading-tight">
-                RailEats Admin
-              </div>
-              <div className="text-xs font-medium text-slate-500">
-                Operations
-              </div>
-            </div>
-          </div>
-
-          <nav className="flex-1 space-y-1 px-3 py-5">
-            {adminNavItems.map((item) => {
-              const Icon = item.icon;
-              const active = isActivePath(pathname, item.href);
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  title={item.label}
-                  className={[
-                    "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
-                    active
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
-                  ].join(" ")}
-                >
-                  <Icon size={20} className="shrink-0" />
-                  <span className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
-                    {item.label}
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="border-t border-slate-200 p-3">
-            <button
-              type="button"
-              onClick={handleLogout}
-              title="Logout"
-              className="flex h-11 w-full items-center gap-3 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <LogOut size={20} className="shrink-0" />
-              <span className="whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
-                Logout
-              </span>
-            </button>
-          </div>
+          <SidebarContent />
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -146,6 +200,7 @@ export default function AdminShell({
             <div className="flex items-center gap-3">
               <button
                 type="button"
+                onClick={() => setMobileOpen(true)}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 lg:hidden"
                 aria-label="Open navigation"
               >
