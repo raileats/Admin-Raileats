@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseNotify = createClient(
@@ -10,54 +10,98 @@ const supabaseNotify = createClient(
 
 export default function GlobalOrderNotifier() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const lastOrderIdRef = useRef<string>("");
+  const [soundEnabled, setSoundEnabled] = useState(false);
+
+  const enableSoundAndNotification = async () => {
+    try {
+      if ("Notification" in window && Notification.permission === "default") {
+        await Notification.requestPermission();
+      }
+
+      const AudioContextClass =
+        window.AudioContext || (window as any).webkitAudioContext;
+
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioContextClass();
+      }
+
+      await audioCtxRef.current.resume();
+
+      const audio = audioRef.current || new Audio("/sounds/new-order.mp3");
+      audioRef.current = audio;
+      audio.preload = "auto";
+      audio.volume = 1;
+      audio.muted = true;
+
+      await audio.play();
+      audio.pause();
+      audio.currentTime = 0;
+      audio.muted = false;
+
+      setSoundEnabled(true);
+      localStorage.setItem("raileats_admin_sound_enabled", "1");
+
+      console.log("SOUND AND NOTIFICATION ENABLED");
+      alert("Notification sound enabled");
+    } catch (e) {
+      console.log("Enable sound failed", e);
+      alert("Sound enable failed. Please click again.");
+    }
+  };
 
   const playSound = async () => {
-  // ✅ Loud browser beep first
-  try {
-    const AudioContextClass =
-      window.AudioContext || (window as any).webkitAudioContext;
+    try {
+      const AudioContextClass =
+        window.AudioContext || (window as any).webkitAudioContext;
 
-    const ctx = new AudioContextClass();
-    await ctx.resume();
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioContextClass();
+      }
 
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
+      await audioCtxRef.current.resume();
 
-    oscillator.type = "square";
-    oscillator.frequency.value = 1000;
+      const oscillator = audioCtxRef.current.createOscillator();
+      const gain = audioCtxRef.current.createGain();
 
-    gain.gain.setValueAtTime(1, ctx.currentTime);
-    gain.gain.setValueAtTime(1, ctx.currentTime + 0.4);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.2);
+      oscillator.type = "square";
+      oscillator.frequency.value = 1000;
 
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(1, audioCtxRef.current.currentTime);
+      gain.gain.setValueAtTime(1, audioCtxRef.current.currentTime + 0.4);
+      gain.gain.exponentialRampToValueAtTime(
+        0.01,
+        audioCtxRef.current.currentTime + 1.2
+      );
 
-    oscillator.start();
-    oscillator.stop(ctx.currentTime + 1.2);
+      oscillator.connect(gain);
+      gain.connect(audioCtxRef.current.destination);
 
-    console.log("BEEP PLAYED");
-  } catch (e) {
-    console.log("Fallback beep failed", e);
-  }
+      oscillator.start();
+      oscillator.stop(audioCtxRef.current.currentTime + 1.2);
 
-  // ✅ MP3 also try
-  try {
-    const audio = audioRef.current || new Audio("/sounds/new-order.mp3");
-    audioRef.current = audio;
+      console.log("BEEP PLAYED");
+    } catch (e) {
+      console.log("BEEP FAILED", e);
+    }
 
-    audio.volume = 1;
-    audio.muted = false;
-    audio.currentTime = 0;
+    try {
+      const audio = audioRef.current || new Audio("/sounds/new-order.mp3");
+      audioRef.current = audio;
 
-    await audio.play();
+      audio.volume = 1;
+      audio.muted = false;
+      audio.currentTime = 0;
 
-    console.log("MP3 PLAYED");
-  } catch (e) {
-    console.log("MP3 failed", e);
-  }
-};
+      await audio.play();
+
+      console.log("MP3 PLAYED");
+    } catch (e) {
+      console.log("MP3 FAILED", e);
+    }
+  };
+
   const notifyOrder = async (order: any) => {
     await playSound();
 
@@ -75,32 +119,19 @@ export default function GlobalOrderNotifier() {
 
     audioRef.current = new Audio("/sounds/new-order.mp3");
     audioRef.current.preload = "auto";
+    audioRef.current.volume = 1;
 
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission().catch(() => {});
+    if (localStorage.getItem("raileats_admin_sound_enabled") === "1") {
+      setSoundEnabled(true);
     }
-
-    const unlock = async () => {
-      try {
-        if (!audioRef.current) return;
-        audioRef.current.muted = true;
-        await audioRef.current.play();
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current.muted = false;
-        console.log("GLOBAL AUDIO UNLOCKED");
-      } catch {}
-    };
-
-    window.addEventListener("click", unlock, { once: true });
-    window.addEventListener("touchstart", unlock, { once: true });
-    window.addEventListener("keydown", unlock, { once: true });
 
     const checkLatestOrder = async (playIfNew: boolean) => {
       const { data, error } = await supabaseNotify
         .from("Orders")
-        .select("OrderId, orderId, customerName, CustomerName, stationName, StationName, CreatedAt, createdAt")
-.order("CreatedAt", { ascending: false })
+        .select(
+          "OrderId, customerName, CustomerName, stationName, StationName, CreatedAt, createdAt"
+        )
+        .order("CreatedAt", { ascending: false })
         .limit(1);
 
       if (error) {
@@ -109,17 +140,19 @@ export default function GlobalOrderNotifier() {
       }
 
       const latest = data?.[0];
+      const latestId = String(latest?.OrderId || "");
+      if (!latestId) return;
 
-const latestId = String(latest?.OrderId || latest?.orderId || "");
-if (!latestId) return;
+      const savedId = localStorage.getItem("raileats_last_seen_order_id") || "";
 
-const savedId = localStorage.getItem("raileats_last_seen_order_id") || "";
-
-if (!lastOrderIdRef.current) {
-  lastOrderIdRef.current = savedId || latestId;
-  localStorage.setItem("raileats_last_seen_order_id", lastOrderIdRef.current);
-  return;
-}
+      if (!lastOrderIdRef.current) {
+        lastOrderIdRef.current = savedId || latestId;
+        localStorage.setItem(
+          "raileats_last_seen_order_id",
+          lastOrderIdRef.current
+        );
+        return;
+      }
 
       if (playIfNew && latestId !== lastOrderIdRef.current) {
         lastOrderIdRef.current = latestId;
@@ -135,14 +168,14 @@ if (!lastOrderIdRef.current) {
     }, 10000);
 
     const channel = supabaseNotify
-      .channel("global-admin-orders-insert-final")
+      .channel("global-admin-orders-insert-final-v2")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "Orders" },
         async (payload) => {
           console.log("GLOBAL REALTIME ORDER:", payload);
 
-          const latestId = String(payload.new?.id || "");
+          const latestId = String(payload.new?.OrderId || "");
           if (latestId && latestId !== lastOrderIdRef.current) {
             lastOrderIdRef.current = latestId;
             localStorage.setItem("raileats_last_seen_order_id", latestId);
@@ -157,11 +190,31 @@ if (!lastOrderIdRef.current) {
     return () => {
       window.clearInterval(interval);
       supabaseNotify.removeChannel(channel);
-      window.removeEventListener("click", unlock);
-      window.removeEventListener("touchstart", unlock);
-      window.removeEventListener("keydown", unlock);
     };
   }, []);
 
-  return null;
+  if (soundEnabled) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={enableSoundAndNotification}
+      style={{
+        position: "fixed",
+        right: 16,
+        bottom: 16,
+        zIndex: 99999,
+        background: "#16a34a",
+        color: "#fff",
+        border: "none",
+        borderRadius: 8,
+        padding: "10px 14px",
+        fontWeight: 800,
+        cursor: "pointer",
+        boxShadow: "0 8px 20px rgba(0,0,0,0.18)",
+      }}
+    >
+      🔊 Enable Sound
+    </button>
+  );
 }
