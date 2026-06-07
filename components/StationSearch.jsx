@@ -40,14 +40,15 @@ export default function StationSearch({ value = null, onChange = () => {}, place
     timer.current = setTimeout(async () => {
       try {
         // prefix search on StationName, and code prefix on StationCode
-        const nameFilter = `${q}%`;
-        const codeFilter = `${q}%`;
-        const { data, error } = await supabase
-          .from("Stations")
-          .select("StationId,StationName,StationCode,State,District,Lat,Long")
-          .or(`StationName.ilike.${nameFilter},StationCode.ilike.${codeFilter}`)
-          .order("StationName", { ascending: true })
-          .limit(10);
+        const safeQ = String(q || "").trim().replace(/[%(),]/g, "");
+const pattern = `%${safeQ}%`;
+
+const { data, error } = await supabase
+  .from("Stations")
+  .select("StationId,StationName,StationCode,State,District,Lat,Long")
+  .or(`StationName.ilike.${pattern},StationCode.ilike.${pattern}`)
+  .order("StationName", { ascending: true })
+  .limit(50);
 
         if (error) {
           console.error("StationSearch supabase error:", error);
