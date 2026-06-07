@@ -168,7 +168,13 @@ export default function NewRestroBasicPage() {
       });
 
       const json = await res.json().catch(() => ({}));
-      const rows = Array.isArray(json?.data) ? json.data : [];
+      const rows = Array.isArray(json?.data)
+  ? json.data
+  : Array.isArray(json?.rows)
+  ? json.rows
+  : Array.isArray(json)
+  ? json
+  : [];
 
       const mapped = mapStations(rows);
       setStations(mapped);
