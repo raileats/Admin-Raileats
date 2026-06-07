@@ -10,19 +10,16 @@ const supabaseNotify = createClient(
 
 export default function GlobalOrderNotifier() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastOrderIdRef = useRef<string>("");
 
   const playSound = async () => {
     try {
-      if (!audioRef.current) {
-        audioRef.current = new Audio("/sounds/new-order.mp3");
-        audioRef.current.preload = "auto";
-        audioRef.current.volume = 1;
-      }
-
-      audioRef.current.muted = false;
-      audioRef.current.volume = 1;
-      audioRef.current.currentTime = 0;
-      await audioRef.current.play();
+      const audio = audioRef.current || new Audio("/sounds/new-order.mp3");
+      audioRef.current = audio;
+      audio.volume = 1;
+      audio.muted = false;
+      audio.currentTime = 0;
+      await audio.play();
     } catch (e) {
       console.log("MP3 failed", e);
     }
@@ -30,73 +27,111 @@ export default function GlobalOrderNotifier() {
     try {
       const AudioContextClass =
         window.AudioContext || (window as any).webkitAudioContext;
-
       const ctx = new AudioContextClass();
       await ctx.resume();
 
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      oscillator.type = "sine";
       oscillator.frequency.value = 880;
-      gain.gain.setValueAtTime(0.9, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.9);
+      gain.gain.setValueAtTime(1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1);
 
       oscillator.connect(gain);
       gain.connect(ctx.destination);
-
       oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.9);
-    } catch (e) {
-      console.log("Fallback beep failed", e);
+      oscillator.stop(ctx.currentTime + 1);
+    } catch {}
+  };
+
+  const notifyOrder = async (order: any) => {
+    await playSound();
+
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("🚆 New RailEats Order", {
+        body: `${order?.customerName || order?.CustomerName || "Customer"} • ${
+          order?.stationName || order?.StationName || ""
+        }`,
+      });
     }
   };
 
   useEffect(() => {
+    console.log("GLOBAL NOTIFIER MOUNTED");
+
     audioRef.current = new Audio("/sounds/new-order.mp3");
     audioRef.current.preload = "auto";
-    audioRef.current.volume = 1;
-
-    const unlockAudio = async () => {
-      try {
-        if (!audioRef.current) return;
-
-        audioRef.current.muted = true;
-        await audioRef.current.play();
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current.muted = false;
-
-        console.log("GLOBAL AUDIO UNLOCKED");
-      } catch (e) {
-        console.log("Audio unlock failed", e);
-      }
-    };
-
-    window.addEventListener("click", unlockAudio, { once: true });
-    window.addEventListener("touchstart", unlockAudio, { once: true });
-    window.addEventListener("keydown", unlockAudio, { once: true });
 
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
 
+    const unlock = async () => {
+      try {
+        if (!audioRef.current) return;
+        audioRef.current.muted = true;
+        await audioRef.current.play();
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.muted = false;
+        console.log("GLOBAL AUDIO UNLOCKED");
+      } catch {}
+    };
+
+    window.addEventListener("click", unlock, { once: true });
+    window.addEventListener("touchstart", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+
+    const checkLatestOrder = async (playIfNew: boolean) => {
+      const { data, error } = await supabaseNotify
+        .from("Orders")
+        .select("id, customerName, CustomerName, stationName, StationName, CreatedAt, createdAt")
+        .order("CreatedAt", { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.log("GLOBAL ORDER POLL ERROR:", error.message);
+        return;
+      }
+
+      const latest = data?.[0];
+      if (!latest?.id) return;
+
+      const latestId = String(latest.id);
+      const savedId = localStorage.getItem("raileats_last_seen_order_id") || "";
+
+      if (!lastOrderIdRef.current) {
+        lastOrderIdRef.current = savedId || latestId;
+        localStorage.setItem("raileats_last_seen_order_id", lastOrderIdRef.current);
+        return;
+      }
+
+      if (playIfNew && latestId !== lastOrderIdRef.current) {
+        lastOrderIdRef.current = latestId;
+        localStorage.setItem("raileats_last_seen_order_id", latestId);
+        await notifyOrder(latest);
+      }
+    };
+
+    checkLatestOrder(false);
+
+    const interval = window.setInterval(() => {
+      checkLatestOrder(true);
+    }, 10000);
+
     const channel = supabaseNotify
-      .channel("global-admin-orders-insert-v1")
+      .channel("global-admin-orders-insert-final")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "Orders" },
         async (payload) => {
-          console.log("GLOBAL ORDER INSERT:", payload);
+          console.log("GLOBAL REALTIME ORDER:", payload);
 
-          await playSound();
-
-          if ("Notification" in window && Notification.permission === "granted") {
-            new Notification("🚆 New RailEats Order", {
-              body: `${payload.new?.customerName || "Customer"} • ${
-                payload.new?.stationName || ""
-              }`,
-            });
+          const latestId = String(payload.new?.id || "");
+          if (latestId && latestId !== lastOrderIdRef.current) {
+            lastOrderIdRef.current = latestId;
+            localStorage.setItem("raileats_last_seen_order_id", latestId);
+            await notifyOrder(payload.new);
           }
         }
       )
@@ -105,10 +140,11 @@ export default function GlobalOrderNotifier() {
       });
 
     return () => {
+      window.clearInterval(interval);
       supabaseNotify.removeChannel(channel);
-      window.removeEventListener("click", unlockAudio);
-      window.removeEventListener("touchstart", unlockAudio);
-      window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("keydown", unlock);
     };
   }, []);
 
