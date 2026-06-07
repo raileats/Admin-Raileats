@@ -294,45 +294,7 @@ useEffect(() => {
   };
 }, []);
 
-/* ================= REALTIME ORDERS ================= */
-useEffect(() => {
-  const channel = supabase
-    .channel("admin-orders-live-v2")
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "Orders" },
-      async (payload) => {
-        console.log("NEW ORDER:", payload);
 
-        setNewOrderCount((prev) => {
-          const updated = prev + 1;
-          localStorage.setItem("raileats_new_orders", String(updated));
-          return updated;
-        });
-
-        await playNewOrderSound();
-
-        try {
-          if ("Notification" in window && Notification.permission === "granted") {
-            new Notification("🚆 New RailEats Order", {
-              body: `${payload.new?.customerName || "Customer"} • ${
-                payload.new?.stationName || ""
-              }`,
-            });
-          }
-        } catch (e) {}
-
-        setRefreshTick((prev) => prev + 1);
-      }
-    )
-    .subscribe((status) => {
-      console.log("Orders realtime status:", status);
-    });
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []);
   /* ================= SMART AUTO REFRESH ================= */
 
 useEffect(() => {
