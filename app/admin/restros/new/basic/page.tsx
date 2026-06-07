@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput, AdminSelect } from "@/components/admin/AdminField";
+import { createClient } from "@supabase/supabase-js";
 
 type StationRow = { StationCode?: string; StationName?: string; State?: string; District?: string };
 type StationOption = { label: string; value: string; name: string; state: string };
@@ -17,6 +18,7 @@ const DEFAULT_FORM = {
 };
 
 function stationLabel(station: StationRow) {
+  
   const name = String(station?.StationName ?? "").trim();
   const code = String(station?.StationCode ?? "").trim();
   const state = String(station?.State ?? "").trim();
@@ -64,34 +66,49 @@ export default function NewRestroBasicPage() {
   }, []);
 
   useEffect(() => {
-    let mounted = true;
-    async function loadStations() {
-      setLoadingStations(true);
-      try {
-        const res = await fetch("/api/stations", { cache: "no-store" });
-        const json = await res.json().catch(() => ({}));
-        const rows = Array.isArray(json) ? json : json?.rows ?? json?.data ?? [];
-        const seen = new Set<string>();
-        const mapped = rows.map((row: StationRow) => {
+  let mounted = true;
+
+  async function loadStations() {
+    setLoadingStations(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("stations")
+        .select("StationCode, StationName, State, District")
+        .order("StationName", { ascending: true })
+        .limit(5000);
+
+      if (error) throw error;
+
+      const seen = new Set<string>();
+      const mapped = (data || [])
+        .map((row: StationRow) => {
           const code = String(row?.StationCode ?? "").trim();
           const name = String(row?.StationName ?? "").trim();
           const state = String(row?.State ?? "").trim();
+
           if (!code || !name || seen.has(code)) return null;
+
           seen.add(code);
           return { value: code, name, state, label: stationLabel(row) };
-        }).filter(Boolean) as StationOption[];
-        if (mounted) setStations(mapped);
-      } catch (error) {
-        console.error("Stations fetch error", error);
-        if (mounted) setStations([]);
-      } finally {
-        if (mounted) setLoadingStations(false);
-      }
-    }
-    loadStations();
-    return () => { mounted = false; };
-  }, []);
+        })
+        .filter(Boolean) as StationOption[];
 
+      if (mounted) setStations(mapped);
+    } catch (error) {
+      console.error("Stations fetch error", error);
+      if (mounted) setStations([]);
+    } finally {
+      if (mounted) setLoadingStations(false);
+    }
+  }
+
+  loadStations();
+
+  return () => {
+    mounted = false;
+  };
+}, []);
   useEffect(() => {
     function close(event: MouseEvent) {
       if (stationBoxRef.current && !stationBoxRef.current.contains(event.target as Node)) setStationOpen(false);
