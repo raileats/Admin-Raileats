@@ -85,8 +85,8 @@ export default function GlobalOrderNotifier() {
     const checkLatestOrder = async (playIfNew: boolean) => {
       const { data, error } = await supabaseNotify
         .from("Orders")
-        .select("id, customerName, CustomerName, stationName, StationName, CreatedAt, createdAt")
-        .order("CreatedAt", { ascending: false })
+        .select("OrderId, orderId, customerName, CustomerName, stationName, StationName, CreatedAt, createdAt")
+.order("CreatedAt", { ascending: false })
         .limit(1);
 
       if (error) {
@@ -95,16 +95,17 @@ export default function GlobalOrderNotifier() {
       }
 
       const latest = data?.[0];
-      if (!latest?.id) return;
 
-      const latestId = String(latest.id);
-      const savedId = localStorage.getItem("raileats_last_seen_order_id") || "";
+const latestId = String(latest?.OrderId || latest?.orderId || "");
+if (!latestId) return;
 
-      if (!lastOrderIdRef.current) {
-        lastOrderIdRef.current = savedId || latestId;
-        localStorage.setItem("raileats_last_seen_order_id", lastOrderIdRef.current);
-        return;
-      }
+const savedId = localStorage.getItem("raileats_last_seen_order_id") || "";
+
+if (!lastOrderIdRef.current) {
+  lastOrderIdRef.current = savedId || latestId;
+  localStorage.setItem("raileats_last_seen_order_id", lastOrderIdRef.current);
+  return;
+}
 
       if (playIfNew && latestId !== lastOrderIdRef.current) {
         lastOrderIdRef.current = latestId;
