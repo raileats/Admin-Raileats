@@ -126,30 +126,23 @@ export default function BasicInfoClient({
 
   function buildPayload() {
     const raileatsStatus = toStatusNumber(local.RaileatsStatus);
-
     const restroPhone = readRestroPhoneFromDom() || pickRestroPhone(local);
 
     const payload: any = {
       RestroCode: Number(local.RestroCode),
-
       RestroName: local.RestroName || null,
       BrandNameifAny: local.BrandNameifAny || null,
-
       OwnerName: local.OwnerName || null,
       OwnerEmail: local.OwnerEmail || null,
       OwnerPhone: phoneDigits(local.OwnerPhone) || null,
-
       RestroEmail: local.RestroEmail || null,
       RestroPhone: restroPhone || null,
-
       StationCode: local.StationCode || null,
       StationName: local.StationName || null,
-
       IRCTCStatus: toStatusNumber(local.IRCTCStatus),
       RaileatsStatus: raileatsStatus,
       raileatsStatus,
       IsIrctcApproved: String(local.IsIrctcApproved || "0"),
-
       RestroRating: local.RestroRating === "" ? null : Number(local.RestroRating),
       IsPureVeg: toStatusNumber(local.IsPureVeg),
       RestroDisplayPhoto: local.RestroDisplayPhoto || null,
@@ -169,9 +162,7 @@ export default function BasicInfoClient({
       setMsg(null);
       setErr(null);
 
-      if (!local?.RestroCode) {
-        throw new Error("Invalid RestroCode");
-      }
+      if (!local?.RestroCode) throw new Error("Invalid RestroCode");
 
       const id = Number(local.RestroCode);
       const payload = buildPayload();
@@ -239,6 +230,7 @@ export default function BasicInfoClient({
         RestroDisplayPhoto:
           savedRow.RestroDisplayPhoto ?? payload.RestroDisplayPhoto ?? prev.RestroDisplayPhoto,
       }));
+
       setMsg(
         payload.RestroPhone
           ? `Saved successfully - RestroPhone verified: ${payload.RestroPhone}`
@@ -258,9 +250,7 @@ export default function BasicInfoClient({
       setMsg(null);
       setErr(null);
 
-      if (!local?.RestroCode) {
-        throw new Error("Restro Code missing");
-      }
+      if (!local?.RestroCode) throw new Error("Restro Code missing");
 
       const ext = file.name.split(".").pop()?.toLowerCase() || "webp";
 
@@ -281,9 +271,7 @@ export default function BasicInfoClient({
           upsert: true,
         });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       update("RestroDisplayPhoto", fileName);
       setMsg("Image uploaded successfully. Save button dabao.");
@@ -299,7 +287,9 @@ export default function BasicInfoClient({
     if (!p) return "";
     if (p.startsWith("http")) return p;
 
-    if (imagePrefix) return imagePrefix + p;
+    if (p.startsWith("RestroDisplayPhoto/")) {
+      return imagePrefix + p;
+    }
 
     const { data } = supabase.storage
       .from("basic_information")
@@ -330,47 +320,27 @@ export default function BasicInfoClient({
         </AdminField>
 
         <AdminField label="Restro Name">
-          <AdminInput
-            value={local?.RestroName ?? ""}
-            onChange={(e) => update("RestroName", e.target.value)}
-          />
+          <AdminInput value={local?.RestroName ?? ""} onChange={(e) => update("RestroName", e.target.value)} />
         </AdminField>
 
         <AdminField label="Brand Name">
-          <AdminInput
-            value={local?.BrandNameifAny ?? ""}
-            onChange={(e) => update("BrandNameifAny", e.target.value)}
-          />
+          <AdminInput value={local?.BrandNameifAny ?? ""} onChange={(e) => update("BrandNameifAny", e.target.value)} />
         </AdminField>
 
         <AdminField label="Owner Name">
-          <AdminInput
-            value={local?.OwnerName ?? ""}
-            onChange={(e) => update("OwnerName", e.target.value)}
-          />
+          <AdminInput value={local?.OwnerName ?? ""} onChange={(e) => update("OwnerName", e.target.value)} />
         </AdminField>
 
         <AdminField label="Owner Email">
-          <AdminInput
-            value={local?.OwnerEmail ?? ""}
-            onChange={(e) => update("OwnerEmail", e.target.value)}
-          />
+          <AdminInput value={local?.OwnerEmail ?? ""} onChange={(e) => update("OwnerEmail", e.target.value)} />
         </AdminField>
 
         <AdminField label="Owner Phone">
-          <AdminInput
-            inputMode="numeric"
-            maxLength={10}
-            value={phoneDigits(local?.OwnerPhone)}
-            onChange={(e) => update("OwnerPhone", phoneDigits(e.target.value))}
-          />
+          <AdminInput inputMode="numeric" maxLength={10} value={phoneDigits(local?.OwnerPhone)} onChange={(e) => update("OwnerPhone", phoneDigits(e.target.value))} />
         </AdminField>
 
         <AdminField label="Restro Email">
-          <AdminInput
-            value={local?.RestroEmail ?? ""}
-            onChange={(e) => update("RestroEmail", e.target.value)}
-          />
+          <AdminInput value={local?.RestroEmail ?? ""} onChange={(e) => update("RestroEmail", e.target.value)} />
         </AdminField>
 
         <AdminField label="Restro Phone">
@@ -386,48 +356,32 @@ export default function BasicInfoClient({
         </AdminField>
 
         <AdminField label="Raileats Status">
-          <AdminSelect
-            value={toStatusNumber(local?.RaileatsStatus)}
-            onChange={(e) => update("RaileatsStatus", Number(e.target.value))}
-          >
+          <AdminSelect value={toStatusNumber(local?.RaileatsStatus)} onChange={(e) => update("RaileatsStatus", Number(e.target.value))}>
             <option value={1}>On</option>
             <option value={0}>Off</option>
           </AdminSelect>
         </AdminField>
 
         <AdminField label="IRCTC Status">
-          <AdminSelect
-            value={toStatusNumber(local?.IRCTCStatus)}
-            onChange={(e) => update("IRCTCStatus", Number(e.target.value))}
-          >
+          <AdminSelect value={toStatusNumber(local?.IRCTCStatus)} onChange={(e) => update("IRCTCStatus", Number(e.target.value))}>
             <option value={1}>On</option>
             <option value={0}>Off</option>
           </AdminSelect>
         </AdminField>
 
         <AdminField label="IRCTC Approved">
-          <AdminSelect
-            value={local?.IsIrctcApproved ?? "0"}
-            onChange={(e) => update("IsIrctcApproved", e.target.value)}
-          >
+          <AdminSelect value={local?.IsIrctcApproved ?? "0"} onChange={(e) => update("IsIrctcApproved", e.target.value)}>
             <option value="1">Yes</option>
             <option value="0">No</option>
           </AdminSelect>
         </AdminField>
 
         <AdminField label="Restro Rating">
-          <AdminInput
-            type="number"
-            value={local?.RestroRating ?? ""}
-            onChange={(e) => update("RestroRating", e.target.value)}
-          />
+          <AdminInput type="number" value={local?.RestroRating ?? ""} onChange={(e) => update("RestroRating", e.target.value)} />
         </AdminField>
 
         <AdminField label="Pure Veg">
-          <AdminSelect
-            value={toStatusNumber(local?.IsPureVeg)}
-            onChange={(e) => update("IsPureVeg", Number(e.target.value))}
-          >
+          <AdminSelect value={toStatusNumber(local?.IsPureVeg)} onChange={(e) => update("IsPureVeg", Number(e.target.value))}>
             <option value={1}>Yes</option>
             <option value={0}>No</option>
           </AdminSelect>
