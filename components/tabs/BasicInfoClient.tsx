@@ -2,9 +2,15 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput, AdminSelect } from "@/components/admin/AdminField";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 type Props = {
   initialData: any;
@@ -65,6 +71,7 @@ export default function BasicInfoClient({
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     if (!initialData) return;
@@ -245,10 +252,60 @@ export default function BasicInfoClient({
     }
   }
 
+  async function uploadDisplayPhoto(file: File) {
+    try {
+      setUploadingPhoto(true);
+      setMsg(null);
+      setErr(null);
+
+      if (!local?.RestroCode) {
+        throw new Error("Restro Code missing");
+      }
+
+      const ext = file.name.split(".").pop()?.toLowerCase() || "webp";
+
+      if (!["jpg", "jpeg", "png", "webp"].includes(ext)) {
+        throw new Error("Only JPG, JPEG, PNG, WEBP image allowed");
+      }
+
+      const cleanName = file.name
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[^a-zA-Z0-9-_]/g, "-");
+
+      const fileName = `${local.RestroCode}_${cleanName}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from("basic_information")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      update("RestroDisplayPhoto", fileName);
+      setMsg("Image uploaded successfully. Save button dabao.");
+    } catch (e: any) {
+      console.error("Image upload error:", e);
+      setErr(e?.message || "Image upload failed");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
   const imgSrc = (p: string) => {
     if (!p) return "";
     if (p.startsWith("http")) return p;
-    return imagePrefix + p;
+
+    if (imagePrefix) return imagePrefix + p;
+
+    const { data } = supabase.storage
+      .from("basic_information")
+      .getPublicUrl(p);
+
+    return data.publicUrl;
   };
 
   return (
@@ -377,10 +434,28 @@ export default function BasicInfoClient({
         </AdminField>
 
         <AdminField label="Display Photo">
-          <AdminInput
-            value={local?.RestroDisplayPhoto ?? ""}
-            onChange={(e) => update("RestroDisplayPhoto", e.target.value)}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/webp"
+            disabled={uploadingPhoto}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) uploadDisplayPhoto(file);
+            }}
+            className="block h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
           />
+
+          {local?.RestroDisplayPhoto && (
+            <div className="mt-1 break-all text-xs text-slate-500">
+              {local.RestroDisplayPhoto}
+            </div>
+          )}
+
+          {uploadingPhoto && (
+            <div className="mt-1 text-xs font-semibold text-blue-600">
+              Uploading...
+            </div>
+          )}
         </AdminField>
 
         <AdminField label="Preview">
