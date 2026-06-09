@@ -130,6 +130,46 @@ export default function RestroMasterPage() {
     setFilteredResults(results);
   }
 
+  function csvEscape(value: any) {
+    const text = String(value ?? "");
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
+  function downloadOutletReport() {
+    const downloadRows = filteredResults.length ? filteredResults : results;
+
+    if (!downloadRows.length) {
+      alert("No data found to download");
+      return;
+    }
+
+    const headers = Object.keys(downloadRows[0]).filter((h) => h !== "id");
+
+    const csv = [
+      headers.join(","),
+      ...downloadRows.map((row) =>
+        headers.map((h) => csvEscape(row[h])).join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob(["\ufeff" + csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = `Outlet_Master_Report_${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   async function toggleRaileats(row: Restro) {
     const currentOn = isRaileatsActive(row.RaileatsStatus);
     const next = currentOn ? 0 : 1;
@@ -242,9 +282,15 @@ export default function RestroMasterPage() {
       title="Restro Master"
       subtitle="Search, manage, and update RailEats restaurant outlets"
       actions={
-        <AdminButton variant="success" onClick={() => { try { localStorage.removeItem("new_restro_code"); } catch {} router.push("/admin/restros/new/basic"); }}> 
-          + Add New Restro
-        </AdminButton>
+        <div className="flex flex-wrap gap-2">
+          <AdminButton variant="secondary" onClick={downloadOutletReport}>
+            Download Outlet Master Report
+          </AdminButton>
+
+          <AdminButton variant="success" onClick={() => { try { localStorage.removeItem("new_restro_code"); } catch {} router.push("/admin/restros/new/basic"); }}> 
+            + Add New Restro
+          </AdminButton>
+        </div>
       }
     >
       <AdminToolbar
@@ -356,5 +402,3 @@ export default function RestroMasterPage() {
     </AdminPage>
   );
 }
-
-
