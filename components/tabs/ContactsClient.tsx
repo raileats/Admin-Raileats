@@ -34,28 +34,6 @@ function digits(value: any) {
   return String(value ?? "").replace(/\D/g, "").slice(0, 10);
 }
 
-function readWaMobileFromDom(index: number) {
-  if (typeof document === "undefined") return "";
-
-  const byData = document.querySelector<HTMLInputElement>(
-    `input[data-wa-mobile="${index}"]`
-  );
-
-  if (byData) return digits(byData.value);
-
-  const byName = document.querySelector<HTMLInputElement>(
-    `input[name="WhatsappMobileNumberforOrderDetails${index}"]`
-  );
-
-  if (byName) return digits(byName.value);
-
-  const allMobileInputs = Array.from(
-    document.querySelectorAll<HTMLInputElement>('input[data-wa-mobile]')
-  );
-
-  return digits(allMobileInputs[index - 1]?.value);
-}
-
 function isActive(value: any) {
   const normalized = String(value ?? "").trim().toLowerCase();
   return ["1", "true", "on", "active", "yes"].includes(normalized);
@@ -121,19 +99,13 @@ function ToggleSwitch({
     >
       <span
         className={`grid h-6 w-6 place-items-center rounded-full bg-white text-[10px] shadow-sm transition ${
-          checked
-            ? "translate-x-[50px] text-blue-600"
-            : "translate-x-0 text-slate-400"
+          checked ? "translate-x-[50px] text-blue-600" : "translate-x-0 text-slate-400"
         }`}
       >
         {checked ? "ON" : "OFF"}
       </span>
 
-      <span
-        className={`flex-1 text-center ${
-          checked ? "-translate-x-5" : "translate-x-1"
-        }`}
-      >
+      <span className={`flex-1 text-center ${checked ? "-translate-x-5" : "translate-x-1"}`}>
         {checked ? "ON" : "OFF"}
       </span>
     </button>
@@ -176,10 +148,9 @@ export default function ContactsClient({
         setLoading(true);
         setMessage("");
 
-        const res = await fetch(
-          `/api/restros/${encodeURIComponent(code)}/contacts`,
-          { cache: "no-store" }
-        );
+        const res = await fetch(`/api/restros/${encodeURIComponent(code)}/contacts`, {
+          cache: "no-store",
+        });
 
         const json = await res.json().catch(() => ({}));
 
@@ -214,11 +185,7 @@ export default function ContactsClient({
     );
   }
 
-  function updateWhatsapp(
-    index: number,
-    key: keyof Item,
-    value: string | boolean
-  ) {
+  function updateWhatsapp(index: number, key: keyof Item, value: string | boolean) {
     setWhatsapps((prev) =>
       prev.map((row, rowIndex) =>
         rowIndex === index ? { ...row, [key]: value } : row
@@ -233,13 +200,9 @@ export default function ContactsClient({
 
     if (badEmail) return "Please enter a valid email address.";
 
-    const wa1 = digits(whatsapps[0]?.value) || readWaMobileFromDom(1);
-    const wa2 = digits(whatsapps[1]?.value) || readWaMobileFromDom(2);
-    const wa3 = digits(whatsapps[2]?.value) || readWaMobileFromDom(3);
-
-    const badMobile = [wa1, wa2, wa3]
-      .filter(Boolean)
-      .find((mobile) => !PHONE_RE.test(mobile));
+    const badMobile = whatsapps.find(
+      (row) => row.value.trim() && !PHONE_RE.test(digits(row.value))
+    );
 
     if (badMobile) {
       return "WhatsApp mobile number must be exactly 10 digits and start with 6-9.";
@@ -261,10 +224,6 @@ export default function ContactsClient({
       return;
     }
 
-    const waMobile1 = digits(whatsapps[0]?.value) || readWaMobileFromDom(1);
-    const waMobile2 = digits(whatsapps[1]?.value) || readWaMobileFromDom(2);
-    const waMobile3 = digits(whatsapps[2]?.value) || readWaMobileFromDom(3);
-
     const payload = {
       EmailAddressName1: emails[0]?.name?.trim() ?? "",
       EmailsforOrdersReceiving1: emails[0]?.value?.trim() ?? "",
@@ -275,15 +234,15 @@ export default function ContactsClient({
       EmailsforOrdersStatus2: emails[1]?.active ? "ON" : "OFF",
 
       WhatsappMobileNumberName1: whatsapps[0]?.name?.trim() ?? "",
-      WhatsappMobileNumberforOrderDetails1: waMobile1 || null,
+      WhatsappMobileNumberforOrderDetails1: digits(whatsapps[0]?.value) || null,
       WhatsappMobileNumberStatus1: whatsapps[0]?.active ? "ON" : "OFF",
 
       WhatsappMobileNumberName2: whatsapps[1]?.name?.trim() ?? "",
-      WhatsappMobileNumberforOrderDetails2: waMobile2 || null,
+      WhatsappMobileNumberforOrderDetails2: digits(whatsapps[1]?.value) || null,
       WhatsappMobileNumberStatus2: whatsapps[1]?.active ? "ON" : "OFF",
 
       WhatsappMobileNumberName3: whatsapps[2]?.name?.trim() ?? "",
-      WhatsappMobileNumberforOrderDetails3: waMobile3 || null,
+      WhatsappMobileNumberforOrderDetails3: digits(whatsapps[2]?.value) || null,
       WhatsappMobileNumberStatus3: whatsapps[2]?.active ? "ON" : "OFF",
     };
 
@@ -291,14 +250,11 @@ export default function ContactsClient({
       setSaving(true);
       setMessage("");
 
-      const res = await fetch(
-        `/api/restros/${encodeURIComponent(code)}/contacts`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(`/api/restros/${encodeURIComponent(code)}/contacts`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       const json = await res.json().catch(() => ({}));
 
@@ -307,8 +263,8 @@ export default function ContactsClient({
       }
 
       const rows = normalizeRows({
-        ...payload,
         ...(json.row || {}),
+        ...payload,
       });
 
       setEmails(rows.emails);
@@ -435,16 +391,14 @@ export default function ContactsClient({
 
                   <AdminField label="Mobile">
                     <AdminInput
-                      data-wa-mobile={index + 1}
                       name={`WhatsappMobileNumberforOrderDetails${index + 1}`}
                       placeholder={`Mobile ${index + 1}`}
                       inputMode="numeric"
                       maxLength={10}
                       value={row.value}
-                      onChange={(event) => {
-                        const value = digits(event.currentTarget.value);
-                        updateWhatsapp(index, "value", value);
-                      }}
+                      onChange={(event) =>
+                        updateWhatsapp(index, "value", digits(event.target.value))
+                      }
                       className={
                         row.value && PHONE_RE.test(row.value)
                           ? "border-emerald-400"
