@@ -222,12 +222,25 @@ export async function POST(req: Request) {
 
     if (error) throw error;
 
-    return NextResponse.json(data?.[0], { status: 201 });
-  } catch (err: any) {
-    console.error("POST RestroMaster error:", err);
-    return NextResponse.json(
-      { error: err?.message || String(err) },
-      { status: 500 }
-    );
-  }
+    const row = data?.[0] ?? null;
+
+return NextResponse.json(
+  {
+    ok: true,
+    row,
+    RestroCode: row?.RestroCode ?? newRestroCode,
+  },
+  { status: 201 }
+);
+} catch (err: any) {
+  console.error("POST RestroMaster error:", err);
+
+  return NextResponse.json(
+    {
+      ok: false,
+      error: err?.message || String(err),
+    },
+    { status: 500 }
+  );
+}
 }
