@@ -82,7 +82,7 @@ export default function BasicInformationTab({
         setPhotoPreview(img);
       } else {
         const { data } = supabase.storage
-          .from("basic_information")
+          .from("RestroDisplayPhoto")
           .getPublicUrl(img);
 
         setPhotoPreview(data.publicUrl);
@@ -160,19 +160,13 @@ export default function BasicInformationTab({
 
       const ext = file.name.split(".").pop()?.toLowerCase() || "webp";
 
-      if (!["jpg", "jpeg", "png", "webp"].includes(ext)) {
-        alert("Only JPG, JPEG, PNG, WEBP image allowed");
-        return;
-      }
-
-      const originalName = file.name
-        .replace(/\.[^/.]+$/, "")
-        .replace(/[^a-zA-Z0-9-_]/g, "-");
-
-      const fileName = `${local.RestroCode}_${originalName}.${ext}`;
-
+      if (ext !== "webp") {
+  alert("Only WEBP image allowed");
+  return;
+}
+      const fileName = `${local.RestroCode}.webp`;
       const { error } = await supabase.storage
-        .from("basic_information")
+        .from("RestroDisplayPhoto")
         .upload(fileName, file, {
           cacheControl: "3600",
           upsert: true,
@@ -184,7 +178,7 @@ export default function BasicInformationTab({
       }
 
       const { data } = supabase.storage
-        .from("basic_information")
+        .from("RestroDisplayPhoto")
         .getPublicUrl(fileName);
 
       updateField("RestroDisplayPhoto", fileName);
