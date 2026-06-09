@@ -863,6 +863,77 @@ useEffect(() => {
 
   const visibleOrders = useMemo(() => applyFiltersAndSorting(orders), [orders, searchText, searchDate, searchType, searchOutlet]);
 
+  function csvEscape(value: any) {
+    const text = String(value ?? "");
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
+  function downloadOrdersReport() {
+    if (!visibleOrders.length) {
+      alert("No data found to download");
+      return;
+    }
+
+    const activeLabel = TABS.find((t) => t.key === activeTab)?.label ?? activeTab;
+
+    const headers = [
+      "Order ID",
+      "Outlet ID",
+      "Outlet Name",
+      "Station Code",
+      "Station Name",
+      "Delivery Date",
+      "Delivery Time",
+      "Train No.",
+      "Coach",
+      "Seat",
+      "Customer Name",
+      "Customer Mobile",
+      "Order Status",
+      "Total Amount",
+      "Booked At",
+    ];
+
+    const csvRows = visibleOrders.map((o) => [
+      o.id,
+      o.outletId,
+      o.outletName,
+      o.stationCode,
+      o.stationName,
+      o.deliveryDate,
+      o.deliveryTime,
+      o.trainNo || "",
+      o.coach || "",
+      o.seat || "",
+      o.customerName,
+      o.customerMobile,
+      o.dbStatus || o.status,
+      o.total || "",
+      o.rawCreatedAt || "",
+    ]);
+
+    const csv = [
+      headers.map(csvEscape).join(","),
+      ...csvRows.map((row) => row.map(csvEscape).join(",")),
+    ].join("\n");
+
+    const blob = new Blob(["\ufeff" + csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const today = new Date().toISOString().slice(0, 10);
+
+    a.href = url;
+    a.download = `Orders_Report_${activeLabel.replace(/\s+/g, "_")}_${today}.csv`;
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <section style={{ padding: 12, minHeight: "100vh", background: "#f8fafc", fontFamily: "sans-serif" }}>
       <header
@@ -1022,6 +1093,22 @@ useEffect(() => {
           style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f1f5f9", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
         >
           Reset Filters
+        </button>
+
+        <button
+          onClick={downloadOrdersReport}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 6,
+            border: "none",
+            background: "#16a34a",
+            color: "#fff",
+            cursor: "pointer",
+            fontWeight: 700,
+            fontSize: 13,
+          }}
+        >
+          Download Report
         </button>
       </div>
 
