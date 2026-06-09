@@ -185,10 +185,16 @@ export default function BasicInformationTab({
 
     alert("Image uploaded. Ab Save button dabao.");
   } catch (err: any) {
-    alert(err?.message || "Image upload failed");
-  } finally {
-    setUploadingPhoto(false);
-  }
+  console.error("DISPLAY PHOTO CLIENT ERROR:", err);
+
+  alert(
+    err?.message ||
+      err?.error ||
+      JSON.stringify(err) ||
+      "Image upload failed"
+  );
+} finally {
+  setUploadingPhoto(false);
 }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
