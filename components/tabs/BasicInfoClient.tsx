@@ -341,12 +341,16 @@ export default function BasicInfoClient({
         </AdminField>
 
         <AdminField label="Owner Phone">
-          <AdminInput inputMode="numeric" maxLength={10} value={phoneDigits(local?.OwnerPhone)} onChange={(e) => update("OwnerPhone", phoneDigits(e.target.value))} />
-        </AdminField>
-
-        <AdminField label="Restro Email">
-          <AdminInput value={local?.RestroEmail ?? ""} onChange={(e) => update("RestroEmail", e.target.value)} />
-        </AdminField>
+  <input
+    id="OwnerPhone"
+    name="OwnerPhone"
+    inputMode="numeric"
+    maxLength={10}
+    value={phoneDigits(local?.OwnerPhone)}
+    onChange={(e) => update("OwnerPhone", phoneDigits(e.target.value))}
+    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500"
+  />
+</AdminField>
 
         <AdminField label="Restro Phone">
           <input
