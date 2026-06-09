@@ -37,11 +37,23 @@ function digits(value: any) {
 function readWaMobileFromDom(index: number) {
   if (typeof document === "undefined") return "";
 
-  const input = document.querySelector<HTMLInputElement>(
+  const byData = document.querySelector<HTMLInputElement>(
     `input[data-wa-mobile="${index}"]`
   );
 
-  return digits(input?.value);
+  if (byData) return digits(byData.value);
+
+  const byName = document.querySelector<HTMLInputElement>(
+    `input[name="WhatsappMobileNumberforOrderDetails${index}"]`
+  );
+
+  if (byName) return digits(byName.value);
+
+  const allMobileInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[data-wa-mobile]')
+  );
+
+  return digits(allMobileInputs[index - 1]?.value);
 }
 
 function isActive(value: any) {
@@ -166,9 +178,7 @@ export default function ContactsClient({
 
         const res = await fetch(
           `/api/restros/${encodeURIComponent(code)}/contacts`,
-          {
-            cache: "no-store",
-          }
+          { cache: "no-store" }
         );
 
         const json = await res.json().catch(() => ({}));
@@ -183,9 +193,7 @@ export default function ContactsClient({
           setWhatsapps(rows.whatsapps);
         }
       } catch (error: any) {
-        if (!cancelled) {
-          setMessage(error?.message || "Failed to load contacts");
-        }
+        if (!cancelled) setMessage(error?.message || "Failed to load contacts");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -229,9 +237,9 @@ export default function ContactsClient({
     const wa2 = digits(whatsapps[1]?.value) || readWaMobileFromDom(2);
     const wa3 = digits(whatsapps[2]?.value) || readWaMobileFromDom(3);
 
-    const mobileValues = [wa1, wa2, wa3].filter(Boolean);
-
-    const badMobile = mobileValues.find((mobile) => !PHONE_RE.test(mobile));
+    const badMobile = [wa1, wa2, wa3]
+      .filter(Boolean)
+      .find((mobile) => !PHONE_RE.test(mobile));
 
     if (badMobile) {
       return "WhatsApp mobile number must be exactly 10 digits and start with 6-9.";
@@ -428,6 +436,7 @@ export default function ContactsClient({
                   <AdminField label="Mobile">
                     <AdminInput
                       data-wa-mobile={index + 1}
+                      name={`WhatsappMobileNumberforOrderDetails${index + 1}`}
                       placeholder={`Mobile ${index + 1}`}
                       inputMode="numeric"
                       maxLength={10}
