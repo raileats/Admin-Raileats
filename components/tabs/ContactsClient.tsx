@@ -34,6 +34,16 @@ function digits(value: any) {
   return String(value ?? "").replace(/\D/g, "").slice(0, 10);
 }
 
+function readWaMobileFromDom(index: number) {
+  if (typeof document === "undefined") return "";
+
+  const input = document.querySelector<HTMLInputElement>(
+    `input[data-wa-mobile="${index}"]`
+  );
+
+  return digits(input?.value);
+}
+
 function isActive(value: any) {
   const normalized = String(value ?? "").trim().toLowerCase();
   return ["1", "true", "on", "active", "yes"].includes(normalized);
@@ -99,13 +109,19 @@ function ToggleSwitch({
     >
       <span
         className={`grid h-6 w-6 place-items-center rounded-full bg-white text-[10px] shadow-sm transition ${
-          checked ? "translate-x-[50px] text-blue-600" : "translate-x-0 text-slate-400"
+          checked
+            ? "translate-x-[50px] text-blue-600"
+            : "translate-x-0 text-slate-400"
         }`}
       >
         {checked ? "ON" : "OFF"}
       </span>
 
-      <span className={`flex-1 text-center ${checked ? "-translate-x-5" : "translate-x-1"}`}>
+      <span
+        className={`flex-1 text-center ${
+          checked ? "-translate-x-5" : "translate-x-1"
+        }`}
+      >
         {checked ? "ON" : "OFF"}
       </span>
     </button>
@@ -148,9 +164,12 @@ export default function ContactsClient({
         setLoading(true);
         setMessage("");
 
-        const res = await fetch(`/api/restros/${encodeURIComponent(code)}/contacts`, {
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/restros/${encodeURIComponent(code)}/contacts`,
+          {
+            cache: "no-store",
+          }
+        );
 
         const json = await res.json().catch(() => ({}));
 
@@ -164,7 +183,9 @@ export default function ContactsClient({
           setWhatsapps(rows.whatsapps);
         }
       } catch (error: any) {
-        if (!cancelled) setMessage(error?.message || "Failed to load contacts");
+        if (!cancelled) {
+          setMessage(error?.message || "Failed to load contacts");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -185,7 +206,11 @@ export default function ContactsClient({
     );
   }
 
-  function updateWhatsapp(index: number, key: keyof Item, value: string | boolean) {
+  function updateWhatsapp(
+    index: number,
+    key: keyof Item,
+    value: string | boolean
+  ) {
     setWhatsapps((prev) =>
       prev.map((row, rowIndex) =>
         rowIndex === index ? { ...row, [key]: value } : row
@@ -200,9 +225,13 @@ export default function ContactsClient({
 
     if (badEmail) return "Please enter a valid email address.";
 
-    const badMobile = whatsapps.find(
-      (row) => row.value.trim() && !PHONE_RE.test(digits(row.value))
-    );
+    const wa1 = digits(whatsapps[0]?.value) || readWaMobileFromDom(1);
+    const wa2 = digits(whatsapps[1]?.value) || readWaMobileFromDom(2);
+    const wa3 = digits(whatsapps[2]?.value) || readWaMobileFromDom(3);
+
+    const mobileValues = [wa1, wa2, wa3].filter(Boolean);
+
+    const badMobile = mobileValues.find((mobile) => !PHONE_RE.test(mobile));
 
     if (badMobile) {
       return "WhatsApp mobile number must be exactly 10 digits and start with 6-9.";
@@ -224,6 +253,10 @@ export default function ContactsClient({
       return;
     }
 
+    const waMobile1 = digits(whatsapps[0]?.value) || readWaMobileFromDom(1);
+    const waMobile2 = digits(whatsapps[1]?.value) || readWaMobileFromDom(2);
+    const waMobile3 = digits(whatsapps[2]?.value) || readWaMobileFromDom(3);
+
     const payload = {
       EmailAddressName1: emails[0]?.name?.trim() ?? "",
       EmailsforOrdersReceiving1: emails[0]?.value?.trim() ?? "",
@@ -234,28 +267,30 @@ export default function ContactsClient({
       EmailsforOrdersStatus2: emails[1]?.active ? "ON" : "OFF",
 
       WhatsappMobileNumberName1: whatsapps[0]?.name?.trim() ?? "",
-      WhatsappMobileNumberforOrderDetails1: digits(whatsapps[0]?.value) || null,
+      WhatsappMobileNumberforOrderDetails1: waMobile1 || null,
       WhatsappMobileNumberStatus1: whatsapps[0]?.active ? "ON" : "OFF",
 
       WhatsappMobileNumberName2: whatsapps[1]?.name?.trim() ?? "",
-      WhatsappMobileNumberforOrderDetails2: digits(whatsapps[1]?.value) || null,
+      WhatsappMobileNumberforOrderDetails2: waMobile2 || null,
       WhatsappMobileNumberStatus2: whatsapps[1]?.active ? "ON" : "OFF",
 
       WhatsappMobileNumberName3: whatsapps[2]?.name?.trim() ?? "",
-      WhatsappMobileNumberforOrderDetails3: digits(whatsapps[2]?.value) || null,
+      WhatsappMobileNumberforOrderDetails3: waMobile3 || null,
       WhatsappMobileNumberStatus3: whatsapps[2]?.active ? "ON" : "OFF",
     };
-    alert(JSON.stringify(payload, null, 2));
 
     try {
       setSaving(true);
       setMessage("");
 
-      const res = await fetch(`/api/restros/${encodeURIComponent(code)}/contacts`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await fetch(
+        `/api/restros/${encodeURIComponent(code)}/contacts`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
       const json = await res.json().catch(() => ({}));
 
@@ -263,18 +298,14 @@ export default function ContactsClient({
         throw new Error(json?.error || "Save failed");
       }
 
-      const freshRes = await fetch(
-  `/api/restros/${encodeURIComponent(code)}/contacts?t=${Date.now()}`,
-  { cache: "no-store" }
-);
+      const rows = normalizeRows({
+        ...payload,
+        ...(json.row || {}),
+      });
 
-const freshJson = await freshRes.json().catch(() => ({}));
-
-const rows = normalizeRows(freshJson?.row || json.row || payload);
-
-setEmails(rows.emails);
-setWhatsapps(rows.whatsapps);
-setMessage("Saved successfully");
+      setEmails(rows.emails);
+      setWhatsapps(rows.whatsapps);
+      setMessage("Saved successfully");
     } catch (error: any) {
       setMessage(error?.message || "Save failed");
     } finally {
@@ -396,14 +427,15 @@ setMessage("Saved successfully");
 
                   <AdminField label="Mobile">
                     <AdminInput
-                      name={`WhatsappMobileNumberforOrderDetails${index + 1}`}
+                      data-wa-mobile={index + 1}
                       placeholder={`Mobile ${index + 1}`}
                       inputMode="numeric"
                       maxLength={10}
                       value={row.value}
-                      onChange={(event) =>
-                        updateWhatsapp(index, "value", digits(event.target.value))
-                      }
+                      onChange={(event) => {
+                        const value = digits(event.currentTarget.value);
+                        updateWhatsapp(index, "value", value);
+                      }}
                       className={
                         row.value && PHONE_RE.test(row.value)
                           ? "border-emerald-400"
