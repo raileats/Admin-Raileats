@@ -222,6 +222,7 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
       WhatsappMobileNumberforOrderDetails3: digits(whatsapps[2]?.value) || null,
       WhatsappMobileNumberStatus3: whatsapps[2]?.active ? "ON" : "OFF",
     };
+    alert(JSON.stringify(payload, null, 2));
 
     try {
       setSaving(true);
