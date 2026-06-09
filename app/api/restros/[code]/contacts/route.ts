@@ -154,12 +154,10 @@ export async function PATCH(
 
     payload.UpdatedAt = new Date().toISOString();
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("RestroMaster")
       .update(payload)
-      .eq("RestroCode", restroCode)
-      .select(CONTACT_COLUMNS)
-      .single();
+      .eq("RestroCode", restroCode);
 
     if (error) {
       return NextResponse.json(
@@ -168,8 +166,24 @@ export async function PATCH(
       );
     }
 
+    const { data, error: readError } = await supabase
+      .from("RestroMaster")
+      .select(CONTACT_COLUMNS)
+      .eq("RestroCode", restroCode)
+      .single();
+
+    if (readError) {
+      return NextResponse.json(
+        { ok: false, error: readError.message },
+        { status: 500 }
+      );
+    }
+
     for (const field of MOBILE_FIELDS) {
-      if (payload[field] !== undefined && !sameMobile(data?.[field], payload[field])) {
+      if (
+        payload[field] !== undefined &&
+        !sameMobile(data?.[field], payload[field])
+      ) {
         return NextResponse.json(
           {
             ok: false,
