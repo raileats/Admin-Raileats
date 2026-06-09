@@ -349,15 +349,16 @@ export default function BasicInfoClient({
         </AdminField>
 
         <AdminField label="Restro Phone">
-          <AdminInput
-            id="RestroPhone"
-            name="RestroPhone"
-            data-restro-phone-input="true"
-            inputMode="numeric"
-            maxLength={10}
-            value={pickRestroPhone(local)}
-            onChange={(e) => update("RestroPhone", phoneDigits(e.target.value))}
-          />
+          <input
+  id="RestroPhone"
+  name="RestroPhone"
+  data-restro-phone-input="true"
+  inputMode="numeric"
+  maxLength={10}
+  value={pickRestroPhone(local)}
+  onChange={(e) => update("RestroPhone", phoneDigits(e.target.value))}
+  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500"
+/>
         </AdminField>
 
         <AdminField label="Raileats Status">
