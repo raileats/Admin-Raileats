@@ -150,47 +150,46 @@ export default function BasicInformationTab({
   }
 
   async function uploadDisplayPhoto(file: File) {
-    if (!local?.RestroCode) {
-      alert("Restro Code missing");
+  if (!local?.RestroCode) {
+    alert("Restro Code missing");
+    return;
+  }
+
+  try {
+    setUploadingPhoto(true);
+
+    if (!file.name.toLowerCase().endsWith(".webp")) {
+      alert("Only WEBP image allowed");
       return;
     }
 
-    try {
-      setUploadingPhoto(true);
+    const formData = new FormData();
+    formData.append("file", file);
 
-      const ext = file.name.split(".").pop()?.toLowerCase() || "webp";
-
-      if (ext !== "webp") {
-  alert("Only WEBP image allowed");
-  return;
-}
-      const fileName = `${local.RestroCode}.webp`;
-      const { error } = await supabase.storage
-        .from("RestroDisplayPhoto")
-        .upload(fileName, file, {
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      if (error) {
-        alert(error.message);
-        return;
+    const res = await fetch(
+      `/api/admin/restros/${encodeURIComponent(local.RestroCode)}/display-photo`,
+      {
+        method: "POST",
+        body: formData,
       }
+    );
 
-      const { data } = supabase.storage
-        .from("RestroDisplayPhoto")
-        .getPublicUrl(fileName);
+    const data = await res.json().catch(() => ({}));
 
-      updateField("RestroDisplayPhoto", fileName);
-      setPhotoPreview(data.publicUrl);
-
-      alert("Image uploaded. Ab Save button dabao.");
-    } catch (err: any) {
-      alert(err?.message || "Image upload failed");
-    } finally {
-      setUploadingPhoto(false);
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || "Image upload failed");
     }
+
+    updateField("RestroDisplayPhoto", data.fileName);
+    setPhotoPreview(data.publicUrl);
+
+    alert("Image uploaded. Ab Save button dabao.");
+  } catch (err: any) {
+    alert(err?.message || "Image upload failed");
+  } finally {
+    setUploadingPhoto(false);
   }
+}
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const onlyDigits10 = (v: string) => v.replace(/\D/g, "").slice(0, 10);
