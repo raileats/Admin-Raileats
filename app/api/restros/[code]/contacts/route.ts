@@ -64,7 +64,7 @@ function text(value: any) {
 
 function mobile(value: any) {
   const digits = String(value ?? "").replace(/\D/g, "").slice(0, 10);
-  return digits ? Number(digits) : null;
+  return digits || null;
 }
 
 function normalizeStatus(value: any) {
@@ -81,6 +81,13 @@ function sameStatus(actual: any, expected: any) {
   return normalizeStatus(actual) === normalizeStatus(expected);
 }
 
+function sameMobile(actual: any, expected: any) {
+  const clean = (value: any) =>
+    String(value ?? "").replace(/\D/g, "").slice(0, 10);
+
+  return clean(actual) === clean(expected);
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { code: string } }
@@ -88,7 +95,10 @@ export async function GET(
   const restroCode = parseCode(params.code);
 
   if (!restroCode) {
-    return NextResponse.json({ ok: false, error: "Invalid RestroCode" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Invalid RestroCode" },
+      { status: 400 }
+    );
   }
 
   const { data, error } = await supabase
@@ -98,7 +108,10 @@ export async function GET(
     .single();
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: error.message },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ ok: true, row: data });
@@ -112,7 +125,10 @@ export async function PATCH(
     const restroCode = parseCode(params.code);
 
     if (!restroCode) {
-      return NextResponse.json({ ok: false, error: "Invalid RestroCode" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Invalid RestroCode" },
+        { status: 400 }
+      );
     }
 
     const body = await req.json();
@@ -146,15 +162,37 @@ export async function PATCH(
       .single();
 
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 }
+      );
     }
 
-    for (const field of STATUS_FIELDS) {
-      if (payload[field] !== undefined && !sameStatus(data?.[field], payload[field])) {
+    for (const field of MOBILE_FIELDS) {
+      if (payload[field] !== undefined && !sameMobile(data?.[field], payload[field])) {
         return NextResponse.json(
           {
             ok: false,
-            error: `${field} save verify failed. Expected ${payload[field]}, got ${data?.[field] ?? "blank"}`,
+            error: `${field} save verify failed. Expected ${
+              payload[field] || "blank"
+            }, got ${data?.[field] ?? "blank"}`,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    for (const field of STATUS_FIELDS) {
+      if (
+        payload[field] !== undefined &&
+        !sameStatus(data?.[field], payload[field])
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `${field} save verify failed. Expected ${
+              payload[field]
+            }, got ${data?.[field] ?? "blank"}`,
           },
           { status: 500 }
         );
