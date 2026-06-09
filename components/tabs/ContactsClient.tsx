@@ -34,6 +34,16 @@ function digits(value: any) {
   return String(value ?? "").replace(/\D/g, "").slice(0, 10);
 }
 
+function readWaMobileFromDom(index: number) {
+  if (typeof document === "undefined") return "";
+
+  const input = document.querySelector<HTMLInputElement>(
+    `input[data-wa-mobile="${index}"]`
+  );
+
+  return digits(input?.value);
+}
+
 function isActive(value: any) {
   const normalized = String(value ?? "").trim().toLowerCase();
   return ["1", "true", "on", "active", "yes"].includes(normalized);
@@ -99,19 +109,29 @@ function ToggleSwitch({
     >
       <span
         className={`grid h-6 w-6 place-items-center rounded-full bg-white text-[10px] shadow-sm transition ${
-          checked ? "translate-x-[50px] text-blue-600" : "translate-x-0 text-slate-400"
+          checked
+            ? "translate-x-[50px] text-blue-600"
+            : "translate-x-0 text-slate-400"
         }`}
       >
         {checked ? "ON" : "OFF"}
       </span>
-      <span className={`flex-1 text-center ${checked ? "-translate-x-5" : "translate-x-1"}`}>
+
+      <span
+        className={`flex-1 text-center ${
+          checked ? "-translate-x-5" : "translate-x-1"
+        }`}
+      >
         {checked ? "ON" : "OFF"}
       </span>
     </button>
   );
 }
 
-export default function ContactsClient({ restroCode, initialData = {} }: Props) {
+export default function ContactsClient({
+  restroCode,
+  initialData = {},
+}: Props) {
   const router = useRouter();
 
   const code = useMemo(() => {
@@ -127,6 +147,7 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
   }, [restroCode, initialData?.RestroCode]);
 
   const initialRows = normalizeRows(initialData);
+
   const [emails, setEmails] = useState<Item[]>(initialRows.emails);
   const [whatsapps, setWhatsapps] = useState<Item[]>(initialRows.whatsapps);
   const [saving, setSaving] = useState(false);
@@ -143,9 +164,13 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
         setLoading(true);
         setMessage("");
 
-        const res = await fetch(`/api/restros/${encodeURIComponent(code)}/contacts`, {
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/restros/${encodeURIComponent(code)}/contacts`,
+          {
+            cache: "no-store",
+          }
+        );
+
         const json = await res.json().catch(() => ({}));
 
         if (!res.ok || json?.ok === false) {
@@ -158,7 +183,9 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
           setWhatsapps(rows.whatsapps);
         }
       } catch (error: any) {
-        if (!cancelled) setMessage(error?.message || "Failed to load contacts");
+        if (!cancelled) {
+          setMessage(error?.message || "Failed to load contacts");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -173,28 +200,49 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
 
   function updateEmail(index: number, key: keyof Item, value: string | boolean) {
     setEmails((prev) =>
-      prev.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row))
+      prev.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [key]: value } : row
+      )
     );
   }
 
-  function updateWhatsapp(index: number, key: keyof Item, value: string | boolean) {
+  function updateWhatsapp(
+    index: number,
+    key: keyof Item,
+    value: string | boolean
+  ) {
     setWhatsapps((prev) =>
-      prev.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row))
+      prev.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [key]: value } : row
+      )
     );
   }
 
   function validate() {
-    const badEmail = emails.find((row) => row.value.trim() && !EMAIL_RE.test(row.value.trim()));
+    const badEmail = emails.find(
+      (row) => row.value.trim() && !EMAIL_RE.test(row.value.trim())
+    );
+
     if (badEmail) return "Please enter a valid email address.";
 
-    const badMobile = whatsapps.find((row) => row.value.trim() && !PHONE_RE.test(digits(row.value)));
-    if (badMobile) return "WhatsApp mobile number must be exactly 10 digits and start with 6-9.";
+    const wa1 = digits(whatsapps[0]?.value) || readWaMobileFromDom(1);
+    const wa2 = digits(whatsapps[1]?.value) || readWaMobileFromDom(2);
+    const wa3 = digits(whatsapps[2]?.value) || readWaMobileFromDom(3);
+
+    const mobileValues = [wa1, wa2, wa3].filter(Boolean);
+
+    const badMobile = mobileValues.find((mobile) => !PHONE_RE.test(mobile));
+
+    if (badMobile) {
+      return "WhatsApp mobile number must be exactly 10 digits and start with 6-9.";
+    }
 
     return "";
   }
 
   async function save() {
     const validationError = validate();
+
     if (validationError) {
       setMessage(validationError);
       return;
@@ -205,34 +253,45 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
       return;
     }
 
+    const waMobile1 = digits(whatsapps[0]?.value) || readWaMobileFromDom(1);
+    const waMobile2 = digits(whatsapps[1]?.value) || readWaMobileFromDom(2);
+    const waMobile3 = digits(whatsapps[2]?.value) || readWaMobileFromDom(3);
+
     const payload = {
       EmailAddressName1: emails[0]?.name?.trim() ?? "",
       EmailsforOrdersReceiving1: emails[0]?.value?.trim() ?? "",
       EmailsforOrdersStatus1: emails[0]?.active ? "ON" : "OFF",
+
       EmailAddressName2: emails[1]?.name?.trim() ?? "",
       EmailsforOrdersReceiving2: emails[1]?.value?.trim() ?? "",
       EmailsforOrdersStatus2: emails[1]?.active ? "ON" : "OFF",
+
       WhatsappMobileNumberName1: whatsapps[0]?.name?.trim() ?? "",
-      WhatsappMobileNumberforOrderDetails1: digits(whatsapps[0]?.value) || null,
+      WhatsappMobileNumberforOrderDetails1: waMobile1 || null,
       WhatsappMobileNumberStatus1: whatsapps[0]?.active ? "ON" : "OFF",
+
       WhatsappMobileNumberName2: whatsapps[1]?.name?.trim() ?? "",
-      WhatsappMobileNumberforOrderDetails2: digits(whatsapps[1]?.value) || null,
+      WhatsappMobileNumberforOrderDetails2: waMobile2 || null,
       WhatsappMobileNumberStatus2: whatsapps[1]?.active ? "ON" : "OFF",
+
       WhatsappMobileNumberName3: whatsapps[2]?.name?.trim() ?? "",
-      WhatsappMobileNumberforOrderDetails3: digits(whatsapps[2]?.value) || null,
+      WhatsappMobileNumberforOrderDetails3: waMobile3 || null,
       WhatsappMobileNumberStatus3: whatsapps[2]?.active ? "ON" : "OFF",
     };
-    alert(JSON.stringify(payload, null, 2));
 
     try {
       setSaving(true);
       setMessage("");
 
-      const res = await fetch(`/api/restros/${encodeURIComponent(code)}/contacts`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await fetch(
+        `/api/restros/${encodeURIComponent(code)}/contacts`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || json?.ok === false) {
@@ -240,9 +299,10 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
       }
 
       const rows = normalizeRows({
-  ...payload,
-  ...(json.row || {}),
-});
+        ...payload,
+        ...(json.row || {}),
+      });
+
       setEmails(rows.emails);
       setWhatsapps(rows.whatsapps);
       setMessage("Saved successfully");
@@ -262,6 +322,7 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
           <AdminButton variant="secondary" onClick={() => router.back()}>
             Cancel
           </AdminButton>
+
           <AdminButton onClick={save} disabled={saving || loading}>
             {saving ? "Saving..." : "Save"}
           </AdminButton>
@@ -285,9 +346,15 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
         <AdminCard title="Emails" subtitle="Up to 2 email recipients">
           <div className="space-y-4">
             {emails.map((row, index) => (
-              <div key={row.id} className="rounded-lg border border-slate-200 bg-white p-4">
+              <div
+                key={row.id}
+                className="rounded-lg border border-slate-200 bg-white p-4"
+              >
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="text-sm font-bold text-slate-900">Email {index + 1}</div>
+                  <div className="text-sm font-bold text-slate-900">
+                    Email {index + 1}
+                  </div>
+
                   <ToggleSwitch
                     checked={row.active}
                     onChange={(value) => updateEmail(index, "active", value)}
@@ -299,7 +366,9 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
                     <AdminInput
                       placeholder={`Name ${index + 1}`}
                       value={row.name}
-                      onChange={(event) => updateEmail(index, "name", event.target.value)}
+                      onChange={(event) =>
+                        updateEmail(index, "name", event.target.value)
+                      }
                     />
                   </AdminField>
 
@@ -307,13 +376,15 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
                     <AdminInput
                       placeholder={`Email ${index + 1}`}
                       value={row.value}
-                      onChange={(event) => updateEmail(index, "value", event.target.value.trim())}
+                      onChange={(event) =>
+                        updateEmail(index, "value", event.target.value.trim())
+                      }
                       className={
                         row.value && EMAIL_RE.test(row.value)
                           ? "border-emerald-400"
                           : row.value
-                            ? "border-red-400"
-                            : ""
+                          ? "border-red-400"
+                          : ""
                       }
                     />
                   </AdminField>
@@ -326,12 +397,20 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
         <AdminCard title="WhatsApp Numbers" subtitle="Up to 3 mobile recipients">
           <div className="space-y-4">
             {whatsapps.map((row, index) => (
-              <div key={row.id} className="rounded-lg border border-slate-200 bg-white p-4">
+              <div
+                key={row.id}
+                className="rounded-lg border border-slate-200 bg-white p-4"
+              >
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="text-sm font-bold text-slate-900">WhatsApp Mobile {index + 1}</div>
+                  <div className="text-sm font-bold text-slate-900">
+                    WhatsApp Mobile {index + 1}
+                  </div>
+
                   <ToggleSwitch
                     checked={row.active}
-                    onChange={(value) => updateWhatsapp(index, "active", value)}
+                    onChange={(value) =>
+                      updateWhatsapp(index, "active", value)
+                    }
                   />
                 </div>
 
@@ -340,26 +419,29 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
                     <AdminInput
                       placeholder={`Name ${index + 1}`}
                       value={row.name}
-                      onChange={(event) => updateWhatsapp(index, "name", event.target.value)}
+                      onChange={(event) =>
+                        updateWhatsapp(index, "name", event.target.value)
+                      }
                     />
                   </AdminField>
 
                   <AdminField label="Mobile">
                     <AdminInput
+                      data-wa-mobile={index + 1}
                       placeholder={`Mobile ${index + 1}`}
                       inputMode="numeric"
                       maxLength={10}
                       value={row.value}
                       onChange={(event) => {
-  const value = digits(event.currentTarget.value);
-  updateWhatsapp(index, "value", value);
-}}
+                        const value = digits(event.currentTarget.value);
+                        updateWhatsapp(index, "value", value);
+                      }}
                       className={
                         row.value && PHONE_RE.test(row.value)
                           ? "border-emerald-400"
                           : row.value
-                            ? "border-red-400"
-                            : ""
+                          ? "border-red-400"
+                          : ""
                       }
                     />
                   </AdminField>
