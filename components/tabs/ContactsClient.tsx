@@ -262,14 +262,18 @@ export default function ContactsClient({
         throw new Error(json?.error || "Save failed");
       }
 
-      const rows = normalizeRows({
-        ...(json.row || {}),
-        ...payload,
-      });
+      const freshRes = await fetch(
+  `/api/restros/${encodeURIComponent(code)}/contacts?t=${Date.now()}`,
+  { cache: "no-store" }
+);
 
-      setEmails(rows.emails);
-      setWhatsapps(rows.whatsapps);
-      setMessage("Saved successfully");
+const freshJson = await freshRes.json().catch(() => ({}));
+
+const rows = normalizeRows(freshJson?.row || json.row || payload);
+
+setEmails(rows.emails);
+setWhatsapps(rows.whatsapps);
+setMessage("Saved successfully");
     } catch (error: any) {
       setMessage(error?.message || "Save failed");
     } finally {
