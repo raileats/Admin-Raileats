@@ -11,12 +11,16 @@ const menu: Item[] = [
   { href: '/admin', label: 'Dashboard', icon: 'fa-solid fa-chart-line' },
   { href: '/admin/orders', label: 'Orders', icon: 'fa-solid fa-receipt' },
   { href: '/admin/restros', label: 'Restro Master', icon: 'fa-solid fa-utensils' },
+
+  // ✅ NEW OUTLET MASTER TAB
+  { href: '/admin/outlet-master', label: 'Outlet Master', icon: 'fa-solid fa-store' },
+
   { href: '/admin/menu', label: 'Menu', icon: 'fa-solid fa-book-open' },
   { href: '/admin/trains', label: 'Trains', icon: 'fa-solid fa-train' },
   { href: '/admin/stations', label: 'Stations', icon: 'fa-solid fa-location-dot' },
   { href: '/admin/users', label: 'Users', icon: 'fa-solid fa-users' },
 
-  // ✅ NEW MENU ADDED
+  // ✅ EXISTING MENUS
   { href: '/admin/bulk', label: 'Bulk Orders', icon: 'fa-solid fa-layer-group' },
   { href: '/admin/customers', label: 'Customers', icon: 'fa-solid fa-user-group' },
   { href: '/admin/feedback', label: 'Feedback', icon: 'fa-solid fa-comments' },
