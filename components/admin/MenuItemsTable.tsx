@@ -25,6 +25,11 @@ function getField(row: any, key: string) {
   return found ? row[found] : "";
 }
 
+function csvEscape(value: any) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
 export default function MenuItemsTable() {
   const [rows, setRows] = useState<any[]>([]);
   const [restroCode, setRestroCode] = useState("");
@@ -33,6 +38,7 @@ export default function MenuItemsTable() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pageSize = 50;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -67,6 +73,61 @@ export default function MenuItemsTable() {
     }
   }
 
+  async function downloadMenuReport() {
+    setDownloading(true);
+    setError(null);
+
+    try {
+      const url = new URL("/api/menu-items", location.origin);
+      url.searchParams.set("page", "1");
+      url.searchParams.set("pageSize", String(Math.max(total || pageSize, pageSize)));
+
+      if (restroCode.trim()) url.searchParams.set("restroCode", restroCode.trim());
+      if (itemName.trim()) url.searchParams.set("itemName", itemName.trim());
+      if (status.trim()) url.searchParams.set("status", status.trim());
+
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || "Failed to download menu report");
+      }
+
+      const downloadRows = Array.isArray(json) ? json : json?.rows ?? [];
+
+      if (!downloadRows.length) {
+        alert("No data found to download");
+        return;
+      }
+
+      const csv = [
+        HEADERS.map((h) => csvEscape(h.title)).join(","),
+        ...downloadRows.map((row: any) =>
+          HEADERS.map((h) => csvEscape(getField(row, h.key))).join(",")
+        ),
+      ].join("\n");
+
+      const blob = new Blob(["\ufeff" + csv], {
+        type: "text/csv;charset=utf-8;",
+      });
+
+      const today = new Date().toISOString().slice(0, 10);
+      const a = document.createElement("a");
+      const objectUrl = URL.createObjectURL(blob);
+
+      a.href = objectUrl;
+      a.download = `Menu_Report_${today}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (e: any) {
+      setError(e?.message || "Failed to download menu report");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   useEffect(() => {
     load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,7 +147,7 @@ export default function MenuItemsTable() {
           event.preventDefault();
           load(1);
         }}
-        className="grid grid-cols-1 gap-3 lg:grid-cols-[180px_1fr_180px_auto_auto] lg:items-end"
+        className="grid grid-cols-1 gap-3 lg:grid-cols-[180px_1fr_180px_auto_auto_auto] lg:items-end"
       >
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-slate-600">Restro Code</span>
@@ -124,6 +185,14 @@ export default function MenuItemsTable() {
         </button>
         <button type="submit" className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white">
           Search
+        </button>
+        <button
+          type="button"
+          onClick={downloadMenuReport}
+          disabled={downloading || loading}
+          className="h-10 rounded-md bg-green-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {downloading ? "Downloading..." : "Download Report"}
         </button>
       </form>
 
