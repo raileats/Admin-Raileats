@@ -267,6 +267,26 @@ const [displayPhotoFileName, setDisplayPhotoFileName] = useState("");
         data?.id;
 
       if (!code) throw new Error("Restro created but RestroCode not returned");
+      const finalOwnerPhone = phoneDigits(form.OwnerPhone);
+const finalRestroPhone = phoneDigits(form.RestroPhone);
+
+if (finalOwnerPhone || finalRestroPhone) {
+  const phoneRes = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      RestroCode: Number(code),
+      OwnerPhone: finalOwnerPhone || null,
+      RestroPhone: finalRestroPhone || null,
+    }),
+  });
+
+  const phoneJson = await phoneRes.json().catch(() => ({}));
+
+  if (!phoneRes.ok || phoneJson?.ok === false) {
+    throw new Error(phoneJson?.error || "Owner/Restro phone save failed");
+  }
+}
       let finalDisplayPhoto = payload.RestroDisplayPhoto;
 
 if (displayPhotoFile) {
@@ -298,6 +318,8 @@ if (displayPhotoFile) {
           ...payload,
           ...(data?.row ?? data),
           RestroCode: code,
+          OwnerPhone: finalOwnerPhone || payload.OwnerPhone,
+RestroPhone: finalRestroPhone || payload.RestroPhone,
           RestroDisplayPhoto: finalDisplayPhoto,
           StationCode:
             data?.row?.StationCode ?? data?.StationCode ?? payload.StationCode,
@@ -514,12 +536,13 @@ if (displayPhotoFile) {
         </AdminField>
 
         <AdminField label="Owner Phone">
-          <AdminInput
-            inputMode="numeric"
-            maxLength={10}
-            value={phoneDigits(form.OwnerPhone)}
-            onChange={(e) => updateField("OwnerPhone", phoneDigits(e.target.value))}
-          />
+          <input
+  inputMode="numeric"
+  maxLength={10}
+  value={phoneDigits(form.OwnerPhone)}
+  onChange={(e) => updateField("OwnerPhone", phoneDigits(e.target.value))}
+  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500"
+/>
         </AdminField>
 
         <AdminField label="Restro Email">
