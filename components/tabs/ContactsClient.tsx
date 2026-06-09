@@ -350,7 +350,10 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
                       inputMode="numeric"
                       maxLength={10}
                       value={row.value}
-                      onChange={(event) => updateWhatsapp(index, "value", digits(event.target.value))}
+                      onChange={(event) => {
+  const value = digits(event.currentTarget.value);
+  updateWhatsapp(index, "value", value);
+}}
                       className={
                         row.value && PHONE_RE.test(row.value)
                           ? "border-emerald-400"
