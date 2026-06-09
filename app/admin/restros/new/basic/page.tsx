@@ -50,6 +50,8 @@ export default function NewRestroBasicPage() {
   const [loadingStations, setLoadingStations] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [displayPhotoFile, setDisplayPhotoFile] = useState<File | null>(null);
+const [displayPhotoFileName, setDisplayPhotoFileName] = useState("");
 
   useEffect(() => {
     try {
@@ -265,6 +267,28 @@ export default function NewRestroBasicPage() {
         data?.id;
 
       if (!code) throw new Error("Restro created but RestroCode not returned");
+      let finalDisplayPhoto = payload.RestroDisplayPhoto;
+
+if (displayPhotoFile) {
+  const formData = new FormData();
+  formData.append("file", displayPhotoFile);
+
+  const uploadRes = await fetch(
+    `/api/admin/restros/${encodeURIComponent(String(code))}/display-photo`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  const uploadJson = await uploadRes.json().catch(() => ({}));
+
+  if (!uploadRes.ok || uploadJson?.ok === false) {
+    throw new Error(uploadJson?.error || "Display photo upload failed");
+  }
+
+  finalDisplayPhoto = uploadJson.fileName || `${code}.webp`;
+}
 
       localStorage.setItem("new_restro_code", String(code));
 
@@ -274,6 +298,7 @@ export default function NewRestroBasicPage() {
           ...payload,
           ...(data?.row ?? data),
           RestroCode: code,
+          RestroDisplayPhoto: finalDisplayPhoto,
           StationCode:
             data?.row?.StationCode ?? data?.StationCode ?? payload.StationCode,
           StationName:
@@ -434,11 +459,45 @@ export default function NewRestroBasicPage() {
         </AdminField>
 
         <AdminField label="Display Photo">
-          <AdminInput
-            value={form.RestroDisplayPhoto ?? ""}
-            onChange={(e) => updateField("RestroDisplayPhoto", e.target.value)}
-          />
-        </AdminField>
+  <input
+    type="file"
+    accept=".webp,image/webp"
+    className="block h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
+    onChange={(e) => {
+      const file = e.target.files?.[0] || null;
+
+      if (!file) {
+        setDisplayPhotoFile(null);
+        setDisplayPhotoFileName("");
+        updateField("RestroDisplayPhoto", "");
+        return;
+      }
+
+      if (!file.name.toLowerCase().endsWith(".webp")) {
+        alert("Only WEBP image allowed");
+        e.target.value = "";
+        setDisplayPhotoFile(null);
+        setDisplayPhotoFileName("");
+        updateField("RestroDisplayPhoto", "");
+        return;
+      }
+
+      setDisplayPhotoFile(file);
+      setDisplayPhotoFileName(file.name);
+      updateField("RestroDisplayPhoto", file.name);
+    }}
+  />
+
+  {displayPhotoFileName ? (
+    <div className="mt-1 text-xs font-semibold text-green-700">
+      Selected: {displayPhotoFileName}
+    </div>
+  ) : null}
+
+  <div className="mt-1 text-xs text-slate-500">
+    Save ke baad file name auto RestroCode.webp ho jayega.
+  </div>
+</AdminField>
 
         <AdminField label="Owner Name">
           <AdminInput
