@@ -45,9 +45,12 @@ function cleanMobile(value: any) {
 
 function normalizeStatus(value: any) {
   const normalized = String(value ?? "").trim().toLowerCase();
-  return ["1", "true", "on", "active", "yes"].includes(normalized)
-    ? "ON"
-    : "OFF";
+
+  if (["1", "true", "on", "active", "yes"].includes(normalized)) {
+    return "ON";
+  }
+
+  return "OFF";
 }
 
 export async function GET(
@@ -95,7 +98,7 @@ export async function PATCH(
 
     const body = await req.json();
 
-    const payload = {
+    const payload: Record<string, any> = {
       EmailAddressName1: cleanText(body.EmailAddressName1),
       EmailsforOrdersReceiving1: cleanText(body.EmailsforOrdersReceiving1),
       EmailsforOrdersStatus1: normalizeStatus(body.EmailsforOrdersStatus1),
@@ -158,11 +161,8 @@ export async function PATCH(
 
     return NextResponse.json({
       ok: true,
-      row: {
-        ...(data || {}),
-        ...payload,
-        RestroCode: restroCode,
-      },
+      row: data,
+      sent: payload,
     });
   } catch (error: any) {
     return NextResponse.json(
