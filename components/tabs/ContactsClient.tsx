@@ -239,7 +239,10 @@ export default function ContactsClient({ restroCode, initialData = {} }: Props) 
         throw new Error(json?.error || "Save failed");
       }
 
-      const rows = normalizeRows(json.row || payload);
+      const rows = normalizeRows({
+  ...payload,
+  ...(json.row || {}),
+});
       setEmails(rows.emails);
       setWhatsapps(rows.whatsapps);
       setMessage("Saved successfully");
