@@ -199,6 +199,7 @@ export default function BasicInformationTab({
 }
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const onlyDigits10 = (v: string) => v.replace(/\D/g, "").slice(0, 10);
 
   return (
     <div className="px-4 py-2">
