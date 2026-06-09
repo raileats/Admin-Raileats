@@ -245,43 +245,48 @@ export default function BasicInfoClient({
   }
 
   async function uploadDisplayPhoto(file: File) {
-    try {
-      setUploadingPhoto(true);
-      setMsg(null);
-      setErr(null);
+  try {
+    setUploadingPhoto(true);
+    setMsg(null);
+    setErr(null);
 
-      if (!local?.RestroCode) throw new Error("Restro Code missing");
-
-      const ext = file.name.split(".").pop()?.toLowerCase() || "webp";
-
-      if (!["jpg", "jpeg", "png", "webp"].includes(ext)) {
-        throw new Error("Only JPG, JPEG, PNG, WEBP image allowed");
-      }
-
-      const cleanName = file.name
-        .replace(/\.[^/.]+$/, "")
-        .replace(/[^a-zA-Z0-9-_]/g, "-");
-
-      const fileName = `${local.RestroCode}_${cleanName}.${ext}`;
-
-      const { error } = await supabase.storage
-        .from("basic_information")
-        .upload(fileName, file, {
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      if (error) throw error;
-
-      update("RestroDisplayPhoto", fileName);
-      setMsg("Image uploaded successfully. Save button dabao.");
-    } catch (e: any) {
-      console.error("Image upload error:", e);
-      setErr(e?.message || "Image upload failed");
-    } finally {
-      setUploadingPhoto(false);
+    if (!local?.RestroCode) {
+      throw new Error("Restro Code missing");
     }
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+
+    if (ext !== "webp") {
+      throw new Error("Only WEBP image allowed");
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(
+      `/api/admin/restros/${local.RestroCode}/display-photo`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    const json = await res.json();
+
+    if (!res.ok || json?.ok === false) {
+      throw new Error(json?.error || "Upload failed");
+    }
+
+    update("RestroDisplayPhoto", json.fileName);
+
+    setMsg("Display photo uploaded successfully");
+  } catch (e: any) {
+    console.error("Image upload error:", e);
+    setErr(e?.message || "Image upload failed");
+  } finally {
+    setUploadingPhoto(false);
   }
+}
 
   const imgSrc = (p: string) => {
     if (!p) return "";
