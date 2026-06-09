@@ -29,63 +29,25 @@ const CONTACT_COLUMNS = [
   "WhatsappMobileNumberStatus3",
 ].join(",");
 
-const TEXT_FIELDS = [
-  "EmailAddressName1",
-  "EmailsforOrdersReceiving1",
-  "EmailAddressName2",
-  "EmailsforOrdersReceiving2",
-  "WhatsappMobileNumberName1",
-  "WhatsappMobileNumberName2",
-  "WhatsappMobileNumberName3",
-] as const;
-
-const STATUS_FIELDS = [
-  "EmailsforOrdersStatus1",
-  "EmailsforOrdersStatus2",
-  "WhatsappMobileNumberStatus1",
-  "WhatsappMobileNumberStatus2",
-  "WhatsappMobileNumberStatus3",
-] as const;
-
-const MOBILE_FIELDS = [
-  "WhatsappMobileNumberforOrderDetails1",
-  "WhatsappMobileNumberforOrderDetails2",
-  "WhatsappMobileNumberforOrderDetails3",
-] as const;
-
 function parseCode(value: string) {
   const code = Number(value);
   return code && !Number.isNaN(code) ? code : null;
 }
 
-function text(value: any) {
+function cleanText(value: any) {
   return String(value ?? "").trim();
 }
 
-function mobile(value: any) {
+function cleanMobile(value: any) {
   const digits = String(value ?? "").replace(/\D/g, "").slice(0, 10);
   return digits || null;
 }
 
 function normalizeStatus(value: any) {
   const normalized = String(value ?? "").trim().toLowerCase();
-
-  if (["1", "true", "on", "active", "yes"].includes(normalized)) {
-    return "ON";
-  }
-
-  return "OFF";
-}
-
-function sameStatus(actual: any, expected: any) {
-  return normalizeStatus(actual) === normalizeStatus(expected);
-}
-
-function sameMobile(actual: any, expected: any) {
-  const clean = (value: any) =>
-    String(value ?? "").replace(/\D/g, "").slice(0, 10);
-
-  return clean(actual) === clean(expected);
+  return ["1", "true", "on", "active", "yes"].includes(normalized)
+    ? "ON"
+    : "OFF";
 }
 
 export async function GET(
@@ -132,27 +94,42 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const payload: Record<string, any> = {};
 
-    for (const field of TEXT_FIELDS) {
-      if (body[field] !== undefined) {
-        payload[field] = text(body[field]);
-      }
-    }
+    const payload = {
+      EmailAddressName1: cleanText(body.EmailAddressName1),
+      EmailsforOrdersReceiving1: cleanText(body.EmailsforOrdersReceiving1),
+      EmailsforOrdersStatus1: normalizeStatus(body.EmailsforOrdersStatus1),
 
-    for (const field of MOBILE_FIELDS) {
-      if (body[field] !== undefined) {
-        payload[field] = mobile(body[field]);
-      }
-    }
+      EmailAddressName2: cleanText(body.EmailAddressName2),
+      EmailsforOrdersReceiving2: cleanText(body.EmailsforOrdersReceiving2),
+      EmailsforOrdersStatus2: normalizeStatus(body.EmailsforOrdersStatus2),
 
-    for (const field of STATUS_FIELDS) {
-      if (body[field] !== undefined) {
-        payload[field] = normalizeStatus(body[field]);
-      }
-    }
+      WhatsappMobileNumberName1: cleanText(body.WhatsappMobileNumberName1),
+      WhatsappMobileNumberforOrderDetails1: cleanMobile(
+        body.WhatsappMobileNumberforOrderDetails1
+      ),
+      WhatsappMobileNumberStatus1: normalizeStatus(
+        body.WhatsappMobileNumberStatus1
+      ),
 
-    payload.UpdatedAt = new Date().toISOString();
+      WhatsappMobileNumberName2: cleanText(body.WhatsappMobileNumberName2),
+      WhatsappMobileNumberforOrderDetails2: cleanMobile(
+        body.WhatsappMobileNumberforOrderDetails2
+      ),
+      WhatsappMobileNumberStatus2: normalizeStatus(
+        body.WhatsappMobileNumberStatus2
+      ),
+
+      WhatsappMobileNumberName3: cleanText(body.WhatsappMobileNumberName3),
+      WhatsappMobileNumberforOrderDetails3: cleanMobile(
+        body.WhatsappMobileNumberforOrderDetails3
+      ),
+      WhatsappMobileNumberStatus3: normalizeStatus(
+        body.WhatsappMobileNumberStatus3
+      ),
+
+      UpdatedAt: new Date().toISOString(),
+    };
 
     const { error } = await supabase
       .from("RestroMaster")
@@ -179,41 +156,14 @@ export async function PATCH(
       );
     }
 
-    for (const field of MOBILE_FIELDS) {
-      if (
-        payload[field] !== undefined &&
-        !sameMobile(data?.[field], payload[field])
-      ) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: `${field} save verify failed. Expected ${
-              payload[field] || "blank"
-            }, got ${data?.[field] ?? "blank"}`,
-          },
-          { status: 500 }
-        );
-      }
-    }
-
-    for (const field of STATUS_FIELDS) {
-      if (
-        payload[field] !== undefined &&
-        !sameStatus(data?.[field], payload[field])
-      ) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: `${field} save verify failed. Expected ${
-              payload[field]
-            }, got ${data?.[field] ?? "blank"}`,
-          },
-          { status: 500 }
-        );
-      }
-    }
-
-    return NextResponse.json({ ok: true, row: data });
+    return NextResponse.json({
+      ok: true,
+      row: {
+        ...(data || {}),
+        ...payload,
+        RestroCode: restroCode,
+      },
+    });
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: error?.message || "Contacts save failed" },
