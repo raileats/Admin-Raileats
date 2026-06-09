@@ -287,9 +287,19 @@ export default function RestroMasterPage() {
             Download Outlet Master Report
           </AdminButton>
 
-          <AdminButton variant="success" onClick={() => { try { localStorage.removeItem("new_restro_code"); } catch {} router.push("/admin/restros/new/basic"); }}> 
-            + Add New Restro
-          </AdminButton>
+          <AdminButton
+  variant="success"
+  onClick={() => {
+    try {
+      localStorage.removeItem("new_restro_code");
+      localStorage.removeItem("new_restro_basic");
+    } catch {}
+
+    router.push("/admin/restros/new/basic");
+  }}
+>
+  + Add New Restro
+</AdminButton>
         </div>
       }
     >
