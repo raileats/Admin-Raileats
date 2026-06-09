@@ -195,10 +195,12 @@ export default function BasicInformationTab({
   );
 } finally {
   setUploadingPhoto(false);
+} finally {
+  setUploadingPhoto(false);
+}
 }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const onlyDigits10 = (v: string) => v.replace(/\D/g, "").slice(0, 10);
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   return (
     <div className="px-4 py-2">
