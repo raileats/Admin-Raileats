@@ -90,14 +90,15 @@ export async function POST(
       publicUrl: `${data.publicUrl}?v=${Date.now()}`,
     });
   } catch (err: any) {
-  console.error("DISPLAY PHOTO API ERROR:", err);
+    console.error("DISPLAY PHOTO API ERROR:", err);
 
-  return NextResponse.json(
-    {
-      ok: false,
-      error: err?.message || "Upload failed",
-      details: err,
-    },
-    { status: 500 }
-  );
+    return NextResponse.json(
+      {
+        ok: false,
+        error: err?.message || "Upload failed",
+        details: err,
+      },
+      { status: 500 }
+    );
+  }
 }
