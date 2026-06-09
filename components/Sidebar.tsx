@@ -4,10 +4,12 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 type Item = { href: string; label: string; icon: string };
+
 const menu: Item[] = [
   { href: '/admin', label: 'Dashboard', icon: 'fa-solid fa-chart-line' },
   { href: '/admin/orders', label: 'Orders', icon: 'fa-solid fa-receipt' },
   { href: '/admin/restros', label: 'Restro Master', icon: 'fa-solid fa-utensils' },
+  { href: '/admin/outlet-master', label: 'Outlet Master', icon: 'fa-solid fa-store' },
   { href: '/admin/menu', label: 'Menu', icon: 'fa-solid fa-book-open' },
   { href: '/admin/trains', label: 'Trains', icon: 'fa-solid fa-train' },
   { href: '/admin/stations', label: 'Stations', icon: 'fa-solid fa-location-dot' },
