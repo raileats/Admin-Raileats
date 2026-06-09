@@ -530,12 +530,13 @@ if (displayPhotoFile) {
         </AdminField>
 
         <AdminField label="Restro Phone">
-          <AdminInput
-            inputMode="numeric"
-            maxLength={10}
-            value={phoneDigits(form.RestroPhone)}
-            onChange={(e) => updateField("RestroPhone", phoneDigits(e.target.value))}
-          />
+          <input
+  inputMode="numeric"
+  maxLength={10}
+  value={phoneDigits(form.RestroPhone)}
+  onChange={(e) => updateField("RestroPhone", phoneDigits(e.target.value))}
+  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500"
+/>
         </AdminField>
       </div>
 
