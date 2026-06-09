@@ -297,8 +297,8 @@ export default function BasicInfoClient({
     }
 
     const { data } = supabase.storage
-      .from("basic_information")
-      .getPublicUrl(p);
+  .from("RestroDisplayPhoto")
+  .getPublicUrl(p);
 
     return data.publicUrl;
   };
