@@ -426,25 +426,24 @@ export default function ContactsClient({
                   </AdminField>
 
                   <AdminField label="Mobile">
-                    <AdminInput
-                      data-wa-mobile={index + 1}
-                      placeholder={`Mobile ${index + 1}`}
-                      inputMode="numeric"
-                      maxLength={10}
-                      value={row.value}
-                      onChange={(event) => {
-                        const value = digits(event.currentTarget.value);
-                        updateWhatsapp(index, "value", value);
-                      }}
-                      className={
-                        row.value && PHONE_RE.test(row.value)
-                          ? "border-emerald-400"
-                          : row.value
-                          ? "border-red-400"
-                          : ""
-                      }
-                    />
-                  </AdminField>
+  <input
+    name={`WhatsappMobileNumberforOrderDetails${index + 1}`}
+    placeholder={`Mobile ${index + 1}`}
+    inputMode="numeric"
+    maxLength={10}
+    value={row.value}
+    onChange={(event) =>
+      updateWhatsapp(index, "value", digits(event.target.value))
+    }
+    className={`h-10 w-full rounded-md border bg-white px-3 text-sm outline-none ${
+      row.value && PHONE_RE.test(row.value)
+        ? "border-emerald-400"
+        : row.value
+        ? "border-red-400"
+        : "border-slate-300"
+    }`}
+  />
+</AdminField>
                 </div>
               </div>
             ))}
