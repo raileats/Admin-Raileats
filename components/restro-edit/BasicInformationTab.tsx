@@ -195,8 +195,6 @@ export default function BasicInformationTab({
   );
 } finally {
   setUploadingPhoto(false);
-} finally {
-  setUploadingPhoto(false);
 }
 }
 
