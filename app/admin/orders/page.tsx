@@ -864,7 +864,7 @@ const res = await fetch(
   if (searchDate) {
     filtered = filtered.filter((o) => o.deliveryDate === searchDate);
   }
-        if (searchBookingFrom || searchBookingTo) {
+        if (bookingDateFilterOn && (searchBookingFrom || searchBookingTo)) {
   const fromTime = searchBookingFrom
     ? new Date(searchBookingFrom).getTime()
     : 0;
@@ -942,7 +942,8 @@ const tabCounts = useMemo(() => {
   searchDate,
   searchTrainNo,
   searchBookingFrom,
-  searchBookingTo,
+searchBookingTo,
+bookingDateFilterOn,
 ]
 );
 
@@ -1178,6 +1179,7 @@ const tabCounts = useMemo(() => {
       setSearchTrainNo(draftTrainNo);
         setSearchBookingFrom(draftBookingFrom);
 setSearchBookingTo(draftBookingTo);
+setBookingDateFilterOn(true);
     }}
     style={{
       padding: "8px 14px",
@@ -1213,6 +1215,7 @@ setDraftBookingTo(`${todayDate}T23:59`);
 
 setSearchBookingFrom(`${todayDate}T00:00`);
 setSearchBookingTo(`${todayDate}T23:59`);
+        setBookingDateFilterOn(false);
     }}
     style={{
       padding: "8px 14px",
