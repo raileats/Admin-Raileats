@@ -327,11 +327,20 @@ useEffect(() => {
       try {
         if (shouldShowLoader) setLoading(true);
         const params = new URLSearchParams();
-        params.set("status", activeTab);
+
+if (activeTab !== "all") {
+  params.set("status", activeTab);
+}
+
+const res = await fetch(
+  activeTab === "all"
+    ? `/api/orders`
+    : `/api/orders?${params.toString()}`,
+  {
+    cache: "no-store",
+  }
+);
         
-        const res = await fetch(`/api/orders?${params.toString()}`, {
-          cache: "no-store",
-        });
         const json = await res.json().catch(() => ({} as any));
 
         if (!res.ok || !json?.ok) {
