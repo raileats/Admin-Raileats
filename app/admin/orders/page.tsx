@@ -206,6 +206,8 @@ const [draftOutlet, setDraftOutlet] = useState("");
 const [draftStation, setDraftStation] = useState("");
 const [draftDate, setDraftDate] = useState("");
 const [draftTrainNo, setDraftTrainNo] = useState("");
+    const [dateSearchType, setDateSearchType] = useState<"delivery" | "booking">("delivery");
+const [draftDateSearchType, setDraftDateSearchType] = useState<"delivery" | "booking">("delivery");
     const todayDate = new Date().toISOString().slice(0, 10);
 
 const [searchBookingFrom, setSearchBookingFrom] = useState("");
@@ -863,16 +865,17 @@ const res = await fetch(
   }
 
   if (searchDate) {
-    filtered = filtered.filter((o) => o.deliveryDate === searchDate);
-  }
-        if (bookingDateFilterOn && (searchBookingFrom || searchBookingTo)) {
-  const fromTime = searchBookingFrom
-    ? new Date(searchBookingFrom).getTime()
-    : 0;
+    if (dateSearchType === "delivery" && searchDate) {
+  filtered = filtered.filter((o) => o.deliveryDate === searchDate);
+}
 
-  const toTime = searchBookingTo
-    ? new Date(searchBookingTo).getTime()
-    : Number.MAX_SAFE_INTEGER;
+if (
+  dateSearchType === "booking" &&
+  bookingDateFilterOn &&
+  (searchBookingFrom || searchBookingTo)
+) {
+  const fromTime = searchBookingFrom ? new Date(searchBookingFrom).getTime() : 0;
+  const toTime = searchBookingTo ? new Date(searchBookingTo).getTime() : Number.MAX_SAFE_INTEGER;
 
   filtered = filtered.filter((o) => {
     if (!o.rawCreatedAt) return false;
@@ -935,17 +938,18 @@ const tabCounts = useMemo(() => {
   const visibleOrders = useMemo(
   () => applyFiltersAndSorting(orders),
   [
-  orders,
-  searchOrderId,
-  searchCustomerMobile,
-  searchOutlet,
-  searchStation,
-  searchDate,
-  searchTrainNo,
-  searchBookingFrom,
-searchBookingTo,
-bookingDateFilterOn,
-]
+    orders,
+    searchOrderId,
+    searchCustomerMobile,
+    searchOutlet,
+    searchStation,
+    searchDate,
+    searchTrainNo,
+    searchBookingFrom,
+    searchBookingTo,
+    bookingDateFilterOn,
+    dateSearchType,
+  ]
 );
 
   function csvEscape(value: any) {
@@ -1112,63 +1116,40 @@ bookingDateFilterOn,
     border: "1px solid #e2e8f0",
   }}
 >
-  <input
-    placeholder="Order ID"
-    value={draftOrderId}
-    onChange={(e) => setDraftOrderId(e.target.value)}
-    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }}
-  />
+  <input placeholder="Order ID" value={draftOrderId} onChange={(e) => setDraftOrderId(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }} />
 
-  <input
-    placeholder="Customer Mobile"
-    value={draftCustomerMobile}
-    onChange={(e) => setDraftCustomerMobile(e.target.value)}
-    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }}
-  />
+  <input placeholder="Customer Mobile" value={draftCustomerMobile} onChange={(e) => setDraftCustomerMobile(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }} />
 
-  <input
-    placeholder="Outlet ID / Name"
-    value={draftOutlet}
-    onChange={(e) => setDraftOutlet(e.target.value)}
+  <input placeholder="Outlet ID / Name" value={draftOutlet} onChange={(e) => setDraftOutlet(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 160, fontSize: 13 }} />
+
+  <input placeholder="Station Code / Name" value={draftStation} onChange={(e) => setDraftStation(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 170, fontSize: 13 }} />
+
+  <select
+    value={draftDateSearchType}
+    onChange={(e) => setDraftDateSearchType(e.target.value as "delivery" | "booking")}
     style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 160, fontSize: 13 }}
-  />
+  >
+    <option value="delivery">By Delivery Date</option>
+    <option value="booking">By Booking Date</option>
+  </select>
 
-  <input
-    placeholder="Station Code / Name"
-    value={draftStation}
-    onChange={(e) => setDraftStation(e.target.value)}
-    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 170, fontSize: 13 }}
-  />
-
-  <input
-    type="date"
-    value={draftDate}
-    onChange={(e) => setDraftDate(e.target.value)}
-    style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 145, fontSize: 13 }}
-  />
-
-  <input
-    placeholder="Train No."
-    value={draftTrainNo}
-    onChange={(e) => setDraftTrainNo(e.target.value)}
-    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 120, fontSize: 13 }}
-  />
-
+  {draftDateSearchType === "delivery" && (
     <input
-  type="datetime-local"
-  value={draftBookingFrom}
-  onChange={(e) => setDraftBookingFrom(e.target.value)}
-  title="Booking From"
-  style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }}
-/>
+      type="date"
+      value={draftDate}
+      onChange={(e) => setDraftDate(e.target.value)}
+      style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 145, fontSize: 13 }}
+    />
+  )}
 
-<input
-  type="datetime-local"
-  value={draftBookingTo}
-  onChange={(e) => setDraftBookingTo(e.target.value)}
-  title="Booking To"
-  style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }}
-/>
+  {draftDateSearchType === "booking" && (
+    <>
+      <input type="datetime-local" value={draftBookingFrom} onChange={(e) => setDraftBookingFrom(e.target.value)} title="Booking From" style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }} />
+      <input type="datetime-local" value={draftBookingTo} onChange={(e) => setDraftBookingTo(e.target.value)} title="Booking To" style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }} />
+    </>
+  )}
+
+  <input placeholder="Train No." value={draftTrainNo} onChange={(e) => setDraftTrainNo(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 120, fontSize: 13 }} />
 
   <button
     onClick={() => {
@@ -1176,22 +1157,22 @@ bookingDateFilterOn,
       setSearchCustomerMobile(draftCustomerMobile);
       setSearchOutlet(draftOutlet);
       setSearchStation(draftStation);
-      setSearchDate(draftDate);
       setSearchTrainNo(draftTrainNo);
+      setDateSearchType(draftDateSearchType);
+
+      if (draftDateSearchType === "delivery") {
+        setSearchDate(draftDate);
+        setSearchBookingFrom("");
+        setSearchBookingTo("");
+        setBookingDateFilterOn(false);
+      } else {
+        setSearchDate("");
         setSearchBookingFrom(draftBookingFrom);
-setSearchBookingTo(draftBookingTo);
-setBookingDateFilterOn(true);
+        setSearchBookingTo(draftBookingTo);
+        setBookingDateFilterOn(true);
+      }
     }}
-    style={{
-      padding: "8px 14px",
-      borderRadius: 6,
-      border: "none",
-      background: "#2563eb",
-      color: "#fff",
-      cursor: "pointer",
-      fontWeight: 700,
-      fontSize: 13,
-    }}
+    style={{ padding: "8px 14px", borderRadius: 6, border: "none", background: "#2563eb", color: "#fff", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
   >
     Search
   </button>
@@ -1204,6 +1185,9 @@ setBookingDateFilterOn(true);
       setDraftStation("");
       setDraftDate("");
       setDraftTrainNo("");
+      setDraftDateSearchType("delivery");
+      setDraftBookingFrom(`${todayDate}T00:00`);
+      setDraftBookingTo(`${todayDate}T23:59`);
 
       setSearchOrderId("");
       setSearchCustomerMobile("");
@@ -1211,39 +1195,17 @@ setBookingDateFilterOn(true);
       setSearchStation("");
       setSearchDate("");
       setSearchTrainNo("");
-        setDraftBookingFrom(`${todayDate}T00:00`);
-setDraftBookingTo(`${todayDate}T23:59`);
-
-setSearchBookingFrom("");
-setSearchBookingTo("");
-setBookingDateFilterOn(false);
+      setDateSearchType("delivery");
+      setSearchBookingFrom("");
+      setSearchBookingTo("");
+      setBookingDateFilterOn(false);
     }}
-    style={{
-      padding: "8px 14px",
-      borderRadius: 6,
-      border: "1px solid #cbd5e1",
-      background: "#f1f5f9",
-      cursor: "pointer",
-      fontWeight: 600,
-      fontSize: 13,
-    }}
+    style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f1f5f9", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
   >
     Reset Filters
   </button>
 
-  <button
-    onClick={downloadOrdersReport}
-    style={{
-      padding: "8px 14px",
-      borderRadius: 6,
-      border: "none",
-      background: "#16a34a",
-      color: "#fff",
-      cursor: "pointer",
-      fontWeight: 700,
-      fontSize: 13,
-    }}
-  >
+  <button onClick={downloadOrdersReport} style={{ padding: "8px 14px", borderRadius: 6, border: "none", background: "#16a34a", color: "#fff", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
     Download Report
   </button>
 </div>
