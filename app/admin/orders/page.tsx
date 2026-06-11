@@ -192,10 +192,13 @@ const [subStatus, setSubStatus] = useState("");
 const [remarks, setRemarks] = useState("");
 
   const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
-  const [searchType, setSearchType] = useState<SearchType>("orderId");
-  const [searchText, setSearchText] = useState("");
-  const [searchDate, setSearchDate] = useState<string>(""); 
-  const [searchOutlet, setSearchOutlet] = useState("");
+
+const [searchOrderId, setSearchOrderId] = useState("");
+const [searchCustomerMobile, setSearchCustomerMobile] = useState("");
+const [searchOutlet, setSearchOutlet] = useState("");
+const [searchStation, setSearchStation] = useState("");
+const [searchDate, setSearchDate] = useState("");
+const [searchTrainNo, setSearchTrainNo] = useState("");
   
   const [newOrderCount, setNewOrderCount] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -806,49 +809,80 @@ const res = await fetch(
     let filtered = list.slice();
 
     // 1. Appling Search Filters
-    if (searchText.trim()) {
-      const q = searchText.trim().toLowerCase();
-      if (searchType === "customerMobile") {
-        filtered = filtered.filter((o) => o.customerMobile.toLowerCase().includes(q));
-      } else if (searchType === "orderId") {
-        filtered = filtered.filter((o) => o.id.toLowerCase().includes(q));
-      } else if (searchType === "outletId") {
-        filtered = filtered.filter((o) => o.outletId.toLowerCase().includes(q) || o.outletName.toLowerCase().includes(q));
-      } else if (searchType === "stationCode") {
-        filtered = filtered.filter((o) => o.stationCode.toLowerCase().includes(q) || o.stationName.toLowerCase().includes(q));
-      } else if (searchType === "trainNo") {
-        filtered = filtered.filter((o) => (o.trainNo || "").toLowerCase().includes(q));
-      }
+    const applyFiltersAndSorting = (list: Order[]) => {
+  let filtered = list.slice();
+
+  if (searchOrderId.trim()) {
+    const q = searchOrderId.trim().toLowerCase();
+    filtered = filtered.filter((o) =>
+      o.id.toLowerCase().includes(q)
+    );
+  }
+
+  if (searchCustomerMobile.trim()) {
+    const q = searchCustomerMobile.trim().toLowerCase();
+    filtered = filtered.filter((o) =>
+      o.customerMobile.toLowerCase().includes(q)
+    );
+  }
+
+  if (searchOutlet.trim()) {
+    const q = searchOutlet.trim().toLowerCase();
+    filtered = filtered.filter(
+      (o) =>
+        o.outletId.toLowerCase().includes(q) ||
+        o.outletName.toLowerCase().includes(q)
+    );
+  }
+
+  if (searchStation.trim()) {
+    const q = searchStation.trim().toLowerCase();
+    filtered = filtered.filter(
+      (o) =>
+        o.stationCode.toLowerCase().includes(q) ||
+        o.stationName.toLowerCase().includes(q)
+    );
+  }
+
+  if (searchTrainNo.trim()) {
+    const q = searchTrainNo.trim().toLowerCase();
+    filtered = filtered.filter((o) =>
+      (o.trainNo || "").toLowerCase().includes(q)
+    );
+  }
+
+  if (searchDate) {
+    filtered = filtered.filter(
+      (o) => o.deliveryDate === searchDate
+    );
+  }
+
+  filtered.sort((a, b) => {
+    const dateTimeA = new Date(
+      `${a.deliveryDate}T${a.deliveryTime || "00:00:00"}`
+    ).getTime();
+
+    const dateTimeB = new Date(
+      `${b.deliveryDate}T${b.deliveryTime || "00:00:00"}`
+    ).getTime();
+
+    if (dateTimeA !== dateTimeB) {
+      return dateTimeA - dateTimeB;
     }
 
-    if (searchDate) {
-      filtered = filtered.filter((o) => o.deliveryDate === searchDate);
-    }
+    const bookedTimeA = a.rawCreatedAt
+      ? new Date(a.rawCreatedAt).getTime()
+      : 0;
 
-    if (searchOutlet) {
-      const q = searchOutlet.trim().toLowerCase();
-      if (q) {
-        filtered = filtered.filter((o) => o.outletId.toLowerCase().includes(q) || o.outletName.toLowerCase().includes(q));
-      }
-    }
+    const bookedTimeB = b.rawCreatedAt
+      ? new Date(b.rawCreatedAt).getTime()
+      : 0;
 
-    // 2. Chronological Delivery Date + Time Ascending Sorting Engine (Tie-breaker: Latest Booked on Top)
-    filtered.sort((a, b) => {
-      const dateTimeA = new Date(`${a.deliveryDate}T${a.deliveryTime || "00:00:00"}`).getTime();
-      const dateTimeB = new Date(`${b.deliveryDate}T${b.deliveryTime || "00:00:00"}`).getTime();
+    return bookedTimeB - bookedTimeA;
+  });
 
-      if (dateTimeA !== dateTimeB) {
-        return dateTimeA - dateTimeB; // Earliest upcoming delivery window first
-      }
-
-      // Tie-breaker: If delivery timeline matches perfectly, sort by newest booked order creation
-      const bookedTimeA = a.rawCreatedAt ? new Date(a.rawCreatedAt).getTime() : 0;
-      const bookedTimeB = b.rawCreatedAt ? new Date(b.rawCreatedAt).getTime() : 0;
-      return bookedTimeB - bookedTimeA; 
-    });
-
-    return filtered;
-  };
+  return filtered;
+};
 
   const tabCounts = useMemo(() => {
     const counts: Record<string, number> = {
@@ -877,7 +911,10 @@ flatOrders.forEach((o) => {
     return counts;
   }, [allOrders]);
 
-  const visibleOrders = useMemo(() => applyFiltersAndSorting(orders), [orders, searchText, searchDate, searchType, searchOutlet]);
+  const visibleOrders = useMemo(
+  () => applyFiltersAndSorting(orders),
+  [orders, searchOrderId, searchCustomerMobile, searchOutlet, searchStation, searchDate, searchTrainNo]
+);
 
   function csvEscape(value: any) {
     const text = String(value ?? "");
@@ -894,8 +931,22 @@ flatOrders.forEach((o) => {
 
   params.set("status", activeTab);
 
-  if (searchType) params.set("searchType", searchType);
-  if (searchText.trim()) params.set("q", searchText.trim());
+  if (searchOrderId.trim()) {
+  params.set("searchType", "orderId");
+  params.set("q", searchOrderId.trim());
+} else if (searchCustomerMobile.trim()) {
+  params.set("searchType", "customerMobile");
+  params.set("q", searchCustomerMobile.trim());
+} else if (searchOutlet.trim()) {
+  params.set("searchType", "outletId");
+  params.set("q", searchOutlet.trim());
+} else if (searchStation.trim()) {
+  params.set("searchType", "stationCode");
+  params.set("q", searchStation.trim());
+} else if (searchTrainNo.trim()) {
+  params.set("searchType", "trainNo");
+  params.set("q", searchTrainNo.trim());
+}
   if (searchDate) params.set("deliveryDate", searchDate);
   if (searchOutlet.trim()) params.set("outlet", searchOutlet.trim());
 
@@ -1031,69 +1082,90 @@ flatOrders.forEach((o) => {
 >
   <input
     placeholder="Order ID"
-    value={searchType === "orderId" ? searchText : ""}
-    onChange={(e) => {
-      setSearchType("orderId");
-      setSearchText(e.target.value);
+    value={searchOrderId}
+    onChange={(e) => setSearchOrderId(e.target.value)}
+    style={{
+      padding: 8,
+      borderRadius: 6,
+      border: "1px solid #cbd5e1",
+      width: 150,
+      fontSize: 13,
     }}
-    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }}
   />
 
   <input
     placeholder="Customer Mobile"
-    value={searchType === "customerMobile" ? searchText : ""}
-    onChange={(e) => {
-      setSearchType("customerMobile");
-      setSearchText(e.target.value);
+    value={searchCustomerMobile}
+    onChange={(e) => setSearchCustomerMobile(e.target.value)}
+    style={{
+      padding: 8,
+      borderRadius: 6,
+      border: "1px solid #cbd5e1",
+      width: 150,
+      fontSize: 13,
     }}
-    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }}
   />
 
   <input
     placeholder="Outlet ID / Name"
-    value={searchType === "outletId" ? searchText : ""}
-    onChange={(e) => {
-      setSearchType("outletId");
-      setSearchText(e.target.value);
+    value={searchOutlet}
+    onChange={(e) => setSearchOutlet(e.target.value)}
+    style={{
+      padding: 8,
+      borderRadius: 6,
+      border: "1px solid #cbd5e1",
+      width: 160,
+      fontSize: 13,
     }}
-    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 160, fontSize: 13 }}
   />
 
   <input
     placeholder="Station Code / Name"
-    value={searchType === "stationCode" ? searchText : ""}
-    onChange={(e) => {
-      setSearchType("stationCode");
-      setSearchText(e.target.value);
+    value={searchStation}
+    onChange={(e) => setSearchStation(e.target.value)}
+    style={{
+      padding: 8,
+      borderRadius: 6,
+      border: "1px solid #cbd5e1",
+      width: 170,
+      fontSize: 13,
     }}
-    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 170, fontSize: 13 }}
   />
 
   <input
     type="date"
     value={searchDate}
-    onChange={(e) => {
-      setSearchType("deliveryDate");
-      setSearchDate(e.target.value);
+    onChange={(e) => setSearchDate(e.target.value)}
+    style={{
+      padding: 7,
+      borderRadius: 6,
+      border: "1px solid #cbd5e1",
+      width: 145,
+      fontSize: 13,
     }}
-    style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 145, fontSize: 13 }}
   />
 
   <input
     placeholder="Train No."
-    value={searchType === "trainNo" ? searchText : ""}
-    onChange={(e) => {
-      setSearchType("trainNo");
-      setSearchText(e.target.value);
+    value={searchTrainNo}
+    onChange={(e) => setSearchTrainNo(e.target.value)}
+    style={{
+      padding: 8,
+      borderRadius: 6,
+      border: "1px solid #cbd5e1",
+      width: 120,
+      fontSize: 13,
     }}
-    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 120, fontSize: 13 }}
   />
 
   <button
     onClick={() => {
-      setSearchText("");
-      setSearchDate("");
+      setSearchOrderId("");
+      setSearchCustomerMobile("");
       setSearchOutlet("");
+      setSearchStation("");
+      setSearchDate("");
+      setSearchTrainNo("");
     }}
     style={{
       padding: "8px 14px",
