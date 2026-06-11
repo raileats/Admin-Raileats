@@ -306,7 +306,8 @@ export async function GET(req: NextRequest) {
         pick(item, "ItemName", "itemName") || "Item"
       ).trim();
       const qty = String(pick(item, "Quantity", "quantity") || "1").trim();
-      const vendorPrice = Number(
+
+const vendorPrice = Number(
   pick(
     item,
     "VendorPrice",
@@ -318,10 +319,12 @@ export async function GET(req: NextRequest) {
   ) || 0
 );
 
-const quantity = Number(qty || 1
+const quantity = Number(qty || 1);
 
-      const text = `${itemName}*${qty}`;
+vendorPriceMap[orderId] =
+  (vendorPriceMap[orderId] || 0) + vendorPrice * quantity;
 
+const text = `${itemName}*${qty}`;
       itemsMap[orderId] = itemsMap[orderId]
         ? `${itemsMap[orderId]}, ${text}`
         : text;
