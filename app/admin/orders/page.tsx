@@ -199,6 +199,13 @@ const [searchOutlet, setSearchOutlet] = useState("");
 const [searchStation, setSearchStation] = useState("");
 const [searchDate, setSearchDate] = useState("");
 const [searchTrainNo, setSearchTrainNo] = useState("");
+
+const [draftOrderId, setDraftOrderId] = useState("");
+const [draftCustomerMobile, setDraftCustomerMobile] = useState("");
+const [draftOutlet, setDraftOutlet] = useState("");
+const [draftStation, setDraftStation] = useState("");
+const [draftDate, setDraftDate] = useState("");
+const [draftTrainNo, setDraftTrainNo] = useState("");
   
   const [newOrderCount, setNewOrderCount] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -1073,84 +1080,78 @@ const tabCounts = useMemo(() => {
 >
   <input
     placeholder="Order ID"
-    value={searchOrderId}
-    onChange={(e) => setSearchOrderId(e.target.value)}
-    style={{
-      padding: 8,
-      borderRadius: 6,
-      border: "1px solid #cbd5e1",
-      width: 150,
-      fontSize: 13,
-    }}
+    value={draftOrderId}
+    onChange={(e) => setDraftOrderId(e.target.value)}
+    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }}
   />
 
   <input
     placeholder="Customer Mobile"
-    value={searchCustomerMobile}
-    onChange={(e) => setSearchCustomerMobile(e.target.value)}
-    style={{
-      padding: 8,
-      borderRadius: 6,
-      border: "1px solid #cbd5e1",
-      width: 150,
-      fontSize: 13,
-    }}
+    value={draftCustomerMobile}
+    onChange={(e) => setDraftCustomerMobile(e.target.value)}
+    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }}
   />
 
   <input
     placeholder="Outlet ID / Name"
-    value={searchOutlet}
-    onChange={(e) => setSearchOutlet(e.target.value)}
-    style={{
-      padding: 8,
-      borderRadius: 6,
-      border: "1px solid #cbd5e1",
-      width: 160,
-      fontSize: 13,
-    }}
+    value={draftOutlet}
+    onChange={(e) => setDraftOutlet(e.target.value)}
+    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 160, fontSize: 13 }}
   />
 
   <input
     placeholder="Station Code / Name"
-    value={searchStation}
-    onChange={(e) => setSearchStation(e.target.value)}
-    style={{
-      padding: 8,
-      borderRadius: 6,
-      border: "1px solid #cbd5e1",
-      width: 170,
-      fontSize: 13,
-    }}
+    value={draftStation}
+    onChange={(e) => setDraftStation(e.target.value)}
+    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 170, fontSize: 13 }}
   />
 
   <input
     type="date"
-    value={searchDate}
-    onChange={(e) => setSearchDate(e.target.value)}
-    style={{
-      padding: 7,
-      borderRadius: 6,
-      border: "1px solid #cbd5e1",
-      width: 145,
-      fontSize: 13,
-    }}
+    value={draftDate}
+    onChange={(e) => setDraftDate(e.target.value)}
+    style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 145, fontSize: 13 }}
   />
 
   <input
     placeholder="Train No."
-    value={searchTrainNo}
-    onChange={(e) => setSearchTrainNo(e.target.value)}
-    style={{
-      padding: 8,
-      borderRadius: 6,
-      border: "1px solid #cbd5e1",
-      width: 120,
-      fontSize: 13,
-    }}
+    value={draftTrainNo}
+    onChange={(e) => setDraftTrainNo(e.target.value)}
+    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 120, fontSize: 13 }}
   />
 
   <button
     onClick={() => {
+      setSearchOrderId(draftOrderId);
+      setSearchCustomerMobile(draftCustomerMobile);
+      setSearchOutlet(draftOutlet);
+      setSearchStation(draftStation);
+      setSearchDate(draftDate);
+      setSearchTrainNo(draftTrainNo);
+    }}
+    style={{
+      padding: "8px 14px",
+      borderRadius: 6,
+      border: "none",
+      background: "#2563eb",
+      color: "#fff",
+      cursor: "pointer",
+      fontWeight: 700,
+      fontSize: 13,
+    }}
+  >
+    Search
+  </button>
+
+  <button
+    onClick={() => {
+      setDraftOrderId("");
+      setDraftCustomerMobile("");
+      setDraftOutlet("");
+      setDraftStation("");
+      setDraftDate("");
+      setDraftTrainNo("");
+
       setSearchOrderId("");
       setSearchCustomerMobile("");
       setSearchOutlet("");
