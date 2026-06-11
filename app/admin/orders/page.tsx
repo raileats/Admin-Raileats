@@ -6,7 +6,7 @@ import { Bell, Clock, MapPin, ShieldCheck, ShoppingBag, Smartphone, X } from "lu
 import Link from "next/link";
 
 type TabKey =
-  | "booked"
+    | "booked"
   | "verification"
   | "neworder"
   | "inkitchen"
@@ -14,7 +14,7 @@ type TabKey =
   | "delivered"
   | "cancelled"
   | "notdelivered"
-  | "baddelivery";
+  | "baddelivery"
   | "all";
 
 
