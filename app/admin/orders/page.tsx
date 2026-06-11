@@ -880,13 +880,16 @@ const applyFiltersAndSorting = (list: Order[]) => {
   }
 
   if (dateSearchType === "delivery" && (searchDeliveryFrom || searchDeliveryTo)) {
+  const fromTime = searchDeliveryFrom ? new Date(searchDeliveryFrom).getTime() : 0;
+  const toTime = searchDeliveryTo ? new Date(searchDeliveryTo).getTime() : Number.MAX_SAFE_INTEGER;
+
   filtered = filtered.filter((o) => {
     if (!o.deliveryDate) return false;
 
-    if (searchDeliveryFrom && o.deliveryDate < searchDeliveryFrom) return false;
-    if (searchDeliveryTo && o.deliveryDate > searchDeliveryTo) return false;
+    const deliveryDateTime = `${o.deliveryDate}T${o.deliveryTime || "00:00:00"}`;
+    const deliveryTime = new Date(deliveryDateTime).getTime();
 
-    return true;
+    return deliveryTime >= fromTime && deliveryTime <= toTime;
   });
 }
 
@@ -995,35 +998,49 @@ searchDeliveryTo,
   params.set("status", activeTab);
 
   if (searchOrderId.trim()) {
-  params.set("searchType", "orderId");
-  params.set("q", searchOrderId.trim());
-} else if (searchCustomerMobile.trim()) {
-  params.set("searchType", "customerMobile");
-  params.set("q", searchCustomerMobile.trim());
-} else if (searchOutlet.trim()) {
-  params.set("searchType", "outletId");
-  params.set("q", searchOutlet.trim());
-} else if (searchStation.trim()) {
-  params.set("searchType", "stationCode");
-  params.set("q", searchStation.trim());
-} else if (searchTrainNo.trim()) {
-  params.set("searchType", "trainNo");
-  params.set("q", searchTrainNo.trim());
-}
-  if (dateSearchType === "delivery") {
-  if (searchDeliveryFrom) params.set("deliveryFrom", searchDeliveryFrom);
-  if (searchDeliveryTo) params.set("deliveryTo", searchDeliveryTo);
-}
+    params.set("orderId", searchOrderId.trim());
+  }
 
-if (dateSearchType === "booking") {
-  if (searchBookingFrom) params.set("bookingFrom", searchBookingFrom);
-  if (searchBookingTo) params.set("bookingTo", searchBookingTo);
-}
-  if (searchOutlet.trim()) params.set("outlet", searchOutlet.trim());
+  if (searchCustomerMobile.trim()) {
+    params.set("customerMobile", searchCustomerMobile.trim());
+  }
+
+  if (searchOutlet.trim()) {
+    params.set("outlet", searchOutlet.trim());
+  }
+
+  if (searchStation.trim()) {
+    params.set("station", searchStation.trim());
+  }
+
+  if (searchTrainNo.trim()) {
+    params.set("trainNo", searchTrainNo.trim());
+  }
+
+  params.set("dateSearchType", dateSearchType);
+
+  if (dateSearchType === "delivery") {
+    if (searchDeliveryFrom) {
+      params.set("deliveryFrom", searchDeliveryFrom);
+    }
+
+    if (searchDeliveryTo) {
+      params.set("deliveryTo", searchDeliveryTo);
+    }
+  }
+
+  if (dateSearchType === "booking") {
+    if (searchBookingFrom) {
+      params.set("bookingFrom", searchBookingFrom);
+    }
+
+    if (searchBookingTo) {
+      params.set("bookingTo", searchBookingTo);
+    }
+  }
 
   window.open(`/api/admin/orders-report?${params.toString()}`, "_blank");
 }
-
   return (
     <section style={{ padding: 12, minHeight: "100vh", background: "#f8fafc", fontFamily: "sans-serif" }}>
       <header
