@@ -892,9 +892,7 @@ flatOrders.forEach((o) => {
 
   const params = new URLSearchParams();
 
-  if (activeTab !== "all") {
   params.set("status", activeTab);
-}
 
   if (searchType) params.set("searchType", searchType);
   if (searchText.trim()) params.set("q", searchText.trim());
