@@ -15,6 +15,8 @@ type TabKey =
   | "cancelled"
   | "notdelivered"
   | "baddelivery";
+  | "all";
+
 
 type OrderHistoryItem = { at: string; by: string; note?: string; status: TabKey };
 type Order = {
@@ -47,6 +49,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "cancelled", label: "Cancelled" },
   { key: "notdelivered", label: "Not Delivered" },
   { key: "baddelivery", label: "Bad Delivery" },
+  { key: "all", label: "All" },
 ];
 
 const CANCEL_REASONS = [
@@ -108,6 +111,7 @@ const NEXT_MAP: Record<
   cancelled: { next: null, actionLabel: "", dbValue: "Cancelled" },
   notdelivered: { next: null, actionLabel: "", dbValue: "Not Delivered" },
   baddelivery: { next: null, actionLabel: "", dbValue: "Bad Delivery" },
+  all: { next: null, actionLabel: "", dbValue: "All" },
 };
 
 const FINAL_MARK_OPTIONS = [
@@ -848,15 +852,18 @@ useEffect(() => {
       cancelled: 0,
       notdelivered: 0,
       baddelivery: 0,
+      all: 0,
     };
 
-    Object.values(allOrders)
-      .flat()
-      .forEach((o) => {
-        if (counts[o.status] !== undefined) {
-          counts[o.status]++;
-        }
-      });
+    const flatOrders = Object.values(allOrders).flat();
+
+counts.all = flatOrders.length;
+
+flatOrders.forEach((o) => {
+  if (counts[o.status] !== undefined) {
+    counts[o.status]++;
+  }
+});
 
     return counts;
   }, [allOrders]);
@@ -876,7 +883,9 @@ useEffect(() => {
 
   const params = new URLSearchParams();
 
+  if (activeTab !== "all") {
   params.set("status", activeTab);
+}
 
   if (searchType) params.set("searchType", searchType);
   if (searchText.trim()) params.set("q", searchText.trim());
