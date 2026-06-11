@@ -210,6 +210,9 @@ const [draftTrainNo, setDraftTrainNo] = useState("");
 
 const [searchBookingFrom, setSearchBookingFrom] = useState("");
 const [searchBookingTo, setSearchBookingTo] = useState("");
+    const [bookingDateFilterOn, setBookingDateFilterOn] = useState(false);
+
+const [newOrderCount, setNewOrderCount] = useState<number>(() => {
 
 const [draftBookingFrom, setDraftBookingFrom] = useState(`${todayDate}T00:00`);
 const [draftBookingTo, setDraftBookingTo] = useState(`${todayDate}T23:59`);
