@@ -56,6 +56,22 @@ function pick(row: any, ...keys: string[]) {
   return "";
 }
 
+function formatDateOnly(value: any) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+
+  const clean = text.replace("T", " ").split("+")[0].split(".")[0];
+  return clean.slice(0, 10);
+}
+
+function formatTimeOnly(value: any) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+
+  const clean = text.replace("T", " ").split("+")[0].split(".")[0];
+  return clean.slice(11, 19);
+}
+
 function getTabStatus(row: any): TabKey {
   const rawStatus = String(pick(row, "Status", "status") || "Booked")
     .toLowerCase()
@@ -297,7 +313,16 @@ export async function GET(req: NextRequest) {
 
     const historyStageMap: Record<
       string,
-      Record<string, { status: string; by: string; at: string }>
+      Record<
+        string,
+        {
+          status: string;
+          by: string;
+          date: string;
+          time: string;
+          rawAt: string;
+        }
+      >
     > = {};
 
     for (const log of historyRows) {
@@ -320,12 +345,14 @@ export async function GET(req: NextRequest) {
 
       if (
         !existing ||
-        new Date(at || 0).getTime() >= new Date(existing.at || 0).getTime()
+        new Date(at || 0).getTime() >= new Date(existing.rawAt || 0).getTime()
       ) {
         historyStageMap[orderId][stage] = {
           status: statusText,
           by,
-          at,
+          date: formatDateOnly(at),
+          time: formatTimeOnly(at),
+          rawAt: at,
         };
       }
     }
@@ -358,17 +385,23 @@ export async function GET(req: NextRequest) {
       ...STAGE_COLUMN_GROUPS.flatMap((stage) => [
         `${stage.label} Status`,
         `${stage.label} By`,
-        `${stage.label} At`,
+        `${stage.label} Date`,
+        `${stage.label} Time`,
       ]),
 
       "Order Remarks",
-      "Booked At",
-      "Updated At",
+      "Booked Date",
+      "Booked Time",
+      "Updated Date",
+      "Updated Time",
     ];
 
     const csvRows = orders.map((row: any) => {
       const orderId = String(pick(row, "OrderId", "id")).trim();
       const stageLogs = historyStageMap[orderId] || {};
+
+      const createdAt = pick(row, "CreatedAt", "createdAt", "created_at");
+      const updatedAt = pick(row, "UpdatedAt", "updatedAt", "updated_at");
 
       const orderRemarks = [
         pick(row, "Remarks", "remarks", "OrderRemarks", "orderRemarks")
@@ -439,12 +472,15 @@ export async function GET(req: NextRequest) {
         ...STAGE_COLUMN_GROUPS.flatMap((stage) => [
           stageLogs[stage.key]?.status || "",
           stageLogs[stage.key]?.by || "",
-          stageLogs[stage.key]?.at || "",
+          stageLogs[stage.key]?.date || "",
+          stageLogs[stage.key]?.time || "",
         ]),
 
         orderRemarks,
-        pick(row, "CreatedAt", "createdAt", "created_at"),
-        pick(row, "UpdatedAt", "updatedAt", "updated_at"),
+        formatDateOnly(createdAt),
+        formatTimeOnly(createdAt),
+        formatDateOnly(updatedAt),
+        formatTimeOnly(updatedAt),
       ];
     });
 
