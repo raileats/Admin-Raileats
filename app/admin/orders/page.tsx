@@ -996,48 +996,7 @@ searchDeliveryTo,
   const params = new URLSearchParams();
 
   params.set("status", activeTab);
-
-  if (searchOrderId.trim()) {
-    params.set("orderId", searchOrderId.trim());
-  }
-
-  if (searchCustomerMobile.trim()) {
-    params.set("customerMobile", searchCustomerMobile.trim());
-  }
-
-  if (searchOutlet.trim()) {
-    params.set("outlet", searchOutlet.trim());
-  }
-
-  if (searchStation.trim()) {
-    params.set("station", searchStation.trim());
-  }
-
-  if (searchTrainNo.trim()) {
-    params.set("trainNo", searchTrainNo.trim());
-  }
-
-  params.set("dateSearchType", dateSearchType);
-
-  if (dateSearchType === "delivery") {
-    if (searchDeliveryFrom) {
-      params.set("deliveryFrom", searchDeliveryFrom);
-    }
-
-    if (searchDeliveryTo) {
-      params.set("deliveryTo", searchDeliveryTo);
-    }
-  }
-
-  if (dateSearchType === "booking") {
-    if (searchBookingFrom) {
-      params.set("bookingFrom", searchBookingFrom);
-    }
-
-    if (searchBookingTo) {
-      params.set("bookingTo", searchBookingTo);
-    }
-  }
+  params.set("orderIds", visibleOrders.map((o) => o.id).join(","));
 
   window.open(`/api/admin/orders-report?${params.toString()}`, "_blank");
 }
