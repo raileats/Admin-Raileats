@@ -454,8 +454,9 @@ const text = `${itemName}*${qty}`;
         pick(row, "CustomerMobile", "customerMobile"),
         itemsMap[orderId] || "",
 
-        pick(row, "VendorPrice", "vendorPrice", "RestroPrice", "restroPrice"),
-        pick(row, "BasePrice", "basePrice", "SubTotal", "subTotal"),
+        vendorPriceMap[orderId] || "",
+
+pick(row, "BasePrice", "basePrice", "SubTotal", "subTotal"),
         pick(
           row,
           "GST",
