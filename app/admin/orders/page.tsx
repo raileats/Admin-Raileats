@@ -875,32 +875,33 @@ const res = await fetch(
 
   return filtered;
 };
-    const counts: Record<string, number> = {
-      booked: 0,
-      verification: 0,
-      neworder: 0,
-      inkitchen: 0,
-      outfordelivery: 0,
-      delivered: 0,
-      cancelled: 0,
-      notdelivered: 0,
-      baddelivery: 0,
-      all: 0,
-    };
 
-    const flatOrders = Object.values(allOrders).flat();
+const tabCounts = useMemo(() => {
+  const counts: Record<string, number> = {
+    booked: 0,
+    verification: 0,
+    neworder: 0,
+    inkitchen: 0,
+    outfordelivery: 0,
+    delivered: 0,
+    cancelled: 0,
+    notdelivered: 0,
+    baddelivery: 0,
+    all: 0,
+  };
 
-counts.all = flatOrders.length;
+  const flatOrders = Object.values(allOrders).flat();
 
-flatOrders.forEach((o) => {
-  if (counts[o.status] !== undefined) {
-    counts[o.status]++;
-  }
-});
+  counts.all = flatOrders.length;
 
-    return counts;
-  }, [allOrders]);
+  flatOrders.forEach((o) => {
+    if (counts[o.status] !== undefined) {
+      counts[o.status]++;
+    }
+  });
 
+  return counts;
+}, [allOrders]);
   const visibleOrders = useMemo(
   () => applyFiltersAndSorting(orders),
   [orders, searchOrderId, searchCustomerMobile, searchOutlet, searchStation, searchDate, searchTrainNo]
