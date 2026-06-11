@@ -208,8 +208,8 @@ const [draftDate, setDraftDate] = useState("");
 const [draftTrainNo, setDraftTrainNo] = useState("");
     const todayDate = new Date().toISOString().slice(0, 10);
 
-const [searchBookingFrom, setSearchBookingFrom] = useState(`${todayDate}T00:00`);
-const [searchBookingTo, setSearchBookingTo] = useState(`${todayDate}T23:59`);
+const [searchBookingFrom, setSearchBookingFrom] = useState("");
+const [searchBookingTo, setSearchBookingTo] = useState("");
 
 const [draftBookingFrom, setDraftBookingFrom] = useState(`${todayDate}T00:00`);
 const [draftBookingTo, setDraftBookingTo] = useState(`${todayDate}T23:59`);
