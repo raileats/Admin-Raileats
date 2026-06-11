@@ -210,14 +210,12 @@ const [draftTrainNo, setDraftTrainNo] = useState("");
 
 const [searchBookingFrom, setSearchBookingFrom] = useState("");
 const [searchBookingTo, setSearchBookingTo] = useState("");
-    const [bookingDateFilterOn, setBookingDateFilterOn] = useState(false);
-
-const [newOrderCount, setNewOrderCount] = useState<number>(() => {
+const [bookingDateFilterOn, setBookingDateFilterOn] = useState(false);
 
 const [draftBookingFrom, setDraftBookingFrom] = useState(`${todayDate}T00:00`);
 const [draftBookingTo, setDraftBookingTo] = useState(`${todayDate}T23:59`);
-  
-  const [newOrderCount, setNewOrderCount] = useState<number>(() => {
+
+const [newOrderCount, setNewOrderCount] = useState<number>(() => {
     if (typeof window !== "undefined") {
       return Number(localStorage.getItem("raileats_new_orders") || 0);
     }
@@ -1216,9 +1214,9 @@ setBookingDateFilterOn(true);
         setDraftBookingFrom(`${todayDate}T00:00`);
 setDraftBookingTo(`${todayDate}T23:59`);
 
-setSearchBookingFrom(`${todayDate}T00:00`);
-setSearchBookingTo(`${todayDate}T23:59`);
-        setBookingDateFilterOn(false);
+setSearchBookingFrom("");
+setSearchBookingTo("");
+setBookingDateFilterOn(false);
     }}
     style={{
       padding: "8px 14px",
