@@ -20,6 +20,7 @@ type TabKey =
   | "cancelled"
   | "notdelivered"
   | "baddelivery";
+  | "all";
 
 const STAGE_COLUMN_GROUPS = [
   { key: "Booked", label: "Booked" },
@@ -208,9 +209,10 @@ export async function GET(req: NextRequest) {
 
     if (ordersError) throw ordersError;
 
-    let orders = (ordersData || []).filter(
-      (row: any) => getTabStatus(row) === status
-    );
+    let orders =
+  status === "all"
+    ? ordersData || []
+    : (ordersData || []).filter((row: any) => getTabStatus(row) === status);
 
     if (q) {
       orders = orders.filter((row: any) => {
@@ -519,6 +521,9 @@ const statusLabel =
     ? "Not_Delivered"
     : status === "baddelivery"
     ? "Bad_Delivery"
+    : status;
+    : status === "all"
+    ? "All"
     : status;
 
 const fileName = `Order Report ${statusLabel}_${downloadDateTime}.csv`;
