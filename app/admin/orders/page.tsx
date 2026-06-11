@@ -198,13 +198,22 @@ const [searchCustomerMobile, setSearchCustomerMobile] = useState("");
 const [searchOutlet, setSearchOutlet] = useState("");
 const [searchStation, setSearchStation] = useState("");
     const [searchTrainNo, setSearchTrainNo] = useState("");
-const todayDate = new Date().toISOString().slice(0, 10);
+const nowIndia = new Date(
+  new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+);
+
+const todayDate =
+  nowIndia.getFullYear() +
+  "-" +
+  String(nowIndia.getMonth() + 1).padStart(2, "0") +
+  "-" +
+  String(nowIndia.getDate()).padStart(2, "0");
 
 const [searchDeliveryFrom, setSearchDeliveryFrom] = useState("");
 const [searchDeliveryTo, setSearchDeliveryTo] = useState("");
 
-const [draftDeliveryFrom, setDraftDeliveryFrom] = useState(todayDate);
-const [draftDeliveryTo, setDraftDeliveryTo] = useState(todayDate);
+const [draftDeliveryFrom, setDraftDeliveryFrom] = useState(`${todayDate}T00:00`);
+const [draftDeliveryTo, setDraftDeliveryTo] = useState(`${todayDate}T23:59`);
 
 const [draftOrderId, setDraftOrderId] = useState("");
 const [draftCustomerMobile, setDraftCustomerMobile] = useState("");
@@ -1170,19 +1179,19 @@ if (dateSearchType === "booking") {
 {draftDateSearchType === "delivery" && (
   <>
     <input
-      type="date"
+      type="datetime-local"
       value={draftDeliveryFrom}
       onChange={(e) => setDraftDeliveryFrom(e.target.value)}
       title="Delivery From"
-      style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 145, fontSize: 13 }}
+      style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }}
     />
 
     <input
-      type="date"
+      type="datetime-local"
       value={draftDeliveryTo}
       onChange={(e) => setDraftDeliveryTo(e.target.value)}
       title="Delivery To"
-      style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 145, fontSize: 13 }}
+      style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }}
     />
   </>
 )}
@@ -1253,8 +1262,8 @@ if (dateSearchType === "booking") {
     setDraftTrainNo("");
 
     setDraftDateSearchType("delivery");
-    setDraftDeliveryFrom(`${todayDate}`);
-    setDraftDeliveryTo(`${todayDate}`);
+    setDraftDeliveryFrom(`${todayDate}T00:00`);
+setDraftDeliveryTo(`${todayDate}T23:59`);
     setDraftBookingFrom(`${todayDate}T00:00`);
     setDraftBookingTo(`${todayDate}T23:59`);
 
