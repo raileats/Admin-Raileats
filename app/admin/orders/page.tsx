@@ -206,6 +206,13 @@ const [draftOutlet, setDraftOutlet] = useState("");
 const [draftStation, setDraftStation] = useState("");
 const [draftDate, setDraftDate] = useState("");
 const [draftTrainNo, setDraftTrainNo] = useState("");
+    const todayDate = new Date().toISOString().slice(0, 10);
+
+const [searchBookingFrom, setSearchBookingFrom] = useState(`${todayDate}T00:00`);
+const [searchBookingTo, setSearchBookingTo] = useState(`${todayDate}T23:59`);
+
+const [draftBookingFrom, setDraftBookingFrom] = useState(`${todayDate}T00:00`);
+const [draftBookingTo, setDraftBookingTo] = useState(`${todayDate}T23:59`);
   
   const [newOrderCount, setNewOrderCount] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -857,6 +864,21 @@ const res = await fetch(
   if (searchDate) {
     filtered = filtered.filter((o) => o.deliveryDate === searchDate);
   }
+        if (searchBookingFrom || searchBookingTo) {
+  const fromTime = searchBookingFrom
+    ? new Date(searchBookingFrom).getTime()
+    : 0;
+
+  const toTime = searchBookingTo
+    ? new Date(searchBookingTo).getTime()
+    : Number.MAX_SAFE_INTEGER;
+
+  filtered = filtered.filter((o) => {
+    if (!o.rawCreatedAt) return false;
+    const bookedTime = new Date(o.rawCreatedAt).getTime();
+    return bookedTime >= fromTime && bookedTime <= toTime;
+  });
+}
 
   filtered.sort((a, b) => {
     const dateTimeA = new Date(
@@ -911,7 +933,17 @@ const tabCounts = useMemo(() => {
 }, [allOrders]);
   const visibleOrders = useMemo(
   () => applyFiltersAndSorting(orders),
-  [orders, searchOrderId, searchCustomerMobile, searchOutlet, searchStation, searchDate, searchTrainNo]
+  [
+  orders,
+  searchOrderId,
+  searchCustomerMobile,
+  searchOutlet,
+  searchStation,
+  searchDate,
+  searchTrainNo,
+  searchBookingFrom,
+  searchBookingTo,
+]
 );
 
   function csvEscape(value: any) {
@@ -1120,6 +1152,22 @@ const tabCounts = useMemo(() => {
     style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 120, fontSize: 13 }}
   />
 
+    <input
+  type="datetime-local"
+  value={draftBookingFrom}
+  onChange={(e) => setDraftBookingFrom(e.target.value)}
+  title="Booking From"
+  style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }}
+/>
+
+<input
+  type="datetime-local"
+  value={draftBookingTo}
+  onChange={(e) => setDraftBookingTo(e.target.value)}
+  title="Booking To"
+  style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }}
+/>
+
   <button
     onClick={() => {
       setSearchOrderId(draftOrderId);
@@ -1128,6 +1176,8 @@ const tabCounts = useMemo(() => {
       setSearchStation(draftStation);
       setSearchDate(draftDate);
       setSearchTrainNo(draftTrainNo);
+        setSearchBookingFrom(draftBookingFrom);
+setSearchBookingTo(draftBookingTo);
     }}
     style={{
       padding: "8px 14px",
@@ -1158,6 +1208,11 @@ const tabCounts = useMemo(() => {
       setSearchStation("");
       setSearchDate("");
       setSearchTrainNo("");
+        setDraftBookingFrom(`${todayDate}T00:00`);
+setDraftBookingTo(`${todayDate}T23:59`);
+
+setSearchBookingFrom(`${todayDate}T00:00`);
+setSearchBookingTo(`${todayDate}T23:59`);
     }}
     style={{
       padding: "8px 14px",
