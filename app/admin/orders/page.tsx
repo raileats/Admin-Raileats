@@ -814,9 +814,7 @@ const res = await fetch(
 
   if (searchOrderId.trim()) {
     const q = searchOrderId.trim().toLowerCase();
-    filtered = filtered.filter((o) =>
-      o.id.toLowerCase().includes(q)
-    );
+    filtered = filtered.filter((o) => o.id.toLowerCase().includes(q));
   }
 
   if (searchCustomerMobile.trim()) {
@@ -852,9 +850,7 @@ const res = await fetch(
   }
 
   if (searchDate) {
-    filtered = filtered.filter(
-      (o) => o.deliveryDate === searchDate
-    );
+    filtered = filtered.filter((o) => o.deliveryDate === searchDate);
   }
 
   filtered.sort((a, b) => {
@@ -866,9 +862,7 @@ const res = await fetch(
       `${b.deliveryDate}T${b.deliveryTime || "00:00:00"}`
     ).getTime();
 
-    if (dateTimeA !== dateTimeB) {
-      return dateTimeA - dateTimeB;
-    }
+    if (dateTimeA !== dateTimeB) return dateTimeA - dateTimeB;
 
     const bookedTimeA = a.rawCreatedAt
       ? new Date(a.rawCreatedAt).getTime()
@@ -883,8 +877,6 @@ const res = await fetch(
 
   return filtered;
 };
-
-  const tabCounts = useMemo(() => {
     const counts: Record<string, number> = {
       booked: 0,
       verification: 0,
