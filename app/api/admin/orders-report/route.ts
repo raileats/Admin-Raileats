@@ -19,7 +19,7 @@ type TabKey =
   | "delivered"
   | "cancelled"
   | "notdelivered"
-  | "baddelivery";
+  | "baddelivery"
   | "all";
 
 const STAGE_COLUMN_GROUPS = [
@@ -298,6 +298,7 @@ export async function GET(req: NextRequest) {
       : [[], []];
 
     const itemsMap: Record<string, string> = {};
+    const vendorPriceMap: Record<string, number> = {};
 
     for (const item of itemsRows) {
       const orderId = String(pick(item, "OrderId", "orderId")).trim();
@@ -305,6 +306,19 @@ export async function GET(req: NextRequest) {
         pick(item, "ItemName", "itemName") || "Item"
       ).trim();
       const qty = String(pick(item, "Quantity", "quantity") || "1").trim();
+      const vendorPrice = Number(
+  pick(
+    item,
+    "VendorPrice",
+    "vendorPrice",
+    "RestroPrice",
+    "restroPrice",
+    "BasePrice",
+    "basePrice"
+  ) || 0
+);
+
+const quantity = Number(qty || 1
 
       const text = `${itemName}*${qty}`;
 
@@ -491,7 +505,6 @@ export async function GET(req: NextRequest) {
       ...csvRows.map((row) => row.map(csvEscape).join(",")),
     ].join("\n");
 
-    const today = new Date().toISOString().slice(0, 10);
     const now = new Date();
 
 const downloadDateTime = now
@@ -503,7 +516,9 @@ const downloadDateTime = now
   .replace(/:/g, "_");
 
 const statusLabel =
-  status === "booked"
+  status === "all"
+    ? "All"
+    : status === "booked"
     ? "Booked"
     : status === "verification"
     ? "In_Verification"
@@ -521,9 +536,6 @@ const statusLabel =
     ? "Not_Delivered"
     : status === "baddelivery"
     ? "Bad_Delivery"
-    : status;
-    : status === "all"
-    ? "All"
     : status;
 
 const fileName = `Order Report ${statusLabel}_${downloadDateTime}.csv`;
