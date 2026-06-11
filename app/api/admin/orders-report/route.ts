@@ -21,6 +21,18 @@ type TabKey =
   | "notdelivered"
   | "baddelivery";
 
+const STATUS_COLUMNS = [
+  "Booked",
+  "In Verification",
+  "New Order",
+  "In Kitchen",
+  "Out for Delivery",
+  "Delivered",
+  "Cancelled",
+  "Not Delivered",
+  "Bad Delivery",
+];
+
 function csvEscape(value: any) {
   const text = String(value ?? "");
   return `"${text.replace(/"/g, '""')}"`;
@@ -59,7 +71,46 @@ function getTabStatus(row: any): TabKey {
   return "booked";
 }
 
-async function fetchByOrderIds(tableName: string, orderIds: string[]) {
+function normalizeStatusName(value: any) {
+  const s = String(value ?? "").trim().toLowerCase();
+
+  if (s === "booked") return "Booked";
+  if (s === "verification" || s === "in verification") return "In Verification";
+  if (s === "neworder" || s === "new order") return "New Order";
+  if (s === "inkitchen" || s === "in kitchen") return "In Kitchen";
+  if (s === "outfordelivery" || s === "out for delivery") return "Out for Delivery";
+  if (s === "delivered") return "Delivered";
+  if (s === "cancelled") return "Cancelled";
+  if (s === "notdelivered" || s === "not delivered") return "Not Delivered";
+  if (s === "baddelivery" || s === "bad delivery") return "Bad Delivery";
+
+  return String(value ?? "").trim();
+}
+
+function formatLogCell(log: any) {
+  const oldStatus = normalizeStatusName(pick(log, "OldStatus", "oldStatus"));
+  const newStatus = normalizeStatusName(pick(log, "NewStatus", "newStatus", "Status", "status"));
+  const note = String(pick(log, "Note", "note")).trim();
+  const remarks = String(pick(log, "Remarks", "remarks")).trim();
+  const by = String(pick(log, "ChangedBy", "changedBy", "Actor", "actor")).trim();
+  const at = String(pick(log, "ChangedAt", "changedAt", "CreatedAt", "created_at")).trim();
+
+  const statusText =
+    oldStatus && newStatus
+      ? `${oldStatus} → ${newStatus}`
+      : newStatus || oldStatus;
+
+  return [
+    statusText,
+    remarks ? `Remarks: ${remarks}` : note ? `Remarks: ${note}` : "",
+    by ? `By: ${by}` : "",
+    at ? `At: ${at}` : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+async function fetchByOrderIds(tableName: string, orderIds: string[], orderColumn = "OrderId") {
   const allRows: any[] = [];
   const chunkSize = 300;
 
@@ -69,10 +120,9 @@ async function fetchByOrderIds(tableName: string, orderIds: string[]) {
     const { data, error } = await supabase
       .from(tableName)
       .select("*")
-      .in("OrderId", chunk);
+      .in(orderColumn, chunk);
 
     if (error) throw error;
-
     allRows.push(...(data || []));
   }
 
@@ -156,42 +206,40 @@ export async function GET(req: NextRequest) {
       : [[], []];
 
     const itemsMap: Record<string, string> = {};
+    const itemPricingMap: Record<string, string> = {};
 
     for (const item of itemsRows) {
       const orderId = String(pick(item, "OrderId", "orderId")).trim();
       const itemName = String(pick(item, "ItemName", "itemName") || "Item").trim();
       const qty = String(pick(item, "Quantity", "quantity") || "1").trim();
 
+      const sellingPrice = pick(item, "SellingPrice", "sellingPrice");
+      const lineTotal = pick(item, "LineTotal", "lineTotal");
+
       const text = `${itemName}*${qty}`;
+      const pricingText = `${itemName}*${qty} @ ${sellingPrice || "-"} = ${lineTotal || "-"}`;
+
       itemsMap[orderId] = itemsMap[orderId]
         ? `${itemsMap[orderId]}, ${text}`
         : text;
+
+      itemPricingMap[orderId] = itemPricingMap[orderId]
+        ? `${itemPricingMap[orderId]}, ${pricingText}`
+        : pricingText;
     }
 
-    const historyMap: Record<string, string> = {};
+    const historyStageMap: Record<string, Record<string, string>> = {};
 
     for (const log of historyRows) {
       const orderId = String(pick(log, "OrderId", "orderId")).trim();
+      const newStatus = normalizeStatusName(pick(log, "NewStatus", "newStatus", "Status", "status"));
+      const stage = STATUS_COLUMNS.includes(newStatus) ? newStatus : "Booked";
+      const text = formatLogCell(log);
 
-      const oldStatus = String(pick(log, "OldStatus", "oldStatus")).trim();
-      const newStatus = String(pick(log, "NewStatus", "newStatus")).trim();
-      const subStatus = String(pick(log, "SubStatus", "subStatus")).trim();
-      const remarks = String(pick(log, "Remarks", "remarks", "Note", "note")).trim();
-      const changedBy = String(pick(log, "ChangedBy", "changedBy", "UserName", "userName")).trim();
-      const changedAt = String(pick(log, "ChangedAt", "changedAt", "CreatedAt", "created_at")).trim();
+      if (!historyStageMap[orderId]) historyStageMap[orderId] = {};
 
-      const parts = [
-        oldStatus && newStatus ? `${oldStatus} → ${newStatus}` : newStatus,
-        subStatus ? `Sub: ${subStatus}` : "",
-        remarks ? `Remarks: ${remarks}` : "",
-        changedBy ? `By: ${changedBy}` : "",
-        changedAt ? `At: ${changedAt}` : "",
-      ].filter(Boolean);
-
-      const text = parts.join(" | ");
-
-      historyMap[orderId] = historyMap[orderId]
-        ? `${historyMap[orderId]} || ${text}`
+      historyStageMap[orderId][stage] = historyStageMap[orderId][stage]
+        ? `${historyStageMap[orderId][stage]} || ${text}`
         : text;
     }
 
@@ -209,15 +257,40 @@ export async function GET(req: NextRequest) {
       "Customer Name",
       "Customer Mobile",
       "Items",
-      "Order Process History",
+      "Item Pricing",
+      "Sub Total",
+      "GST Amount",
+      "Platform Charge",
+      "Total Amount",
+      "Payment Mode",
       "Order Status",
       "Sub Status",
-      "Total Amount",
+      "Booked Status Log",
+      "In Verification Status Log",
+      "New Order Status Log",
+      "In Kitchen Status Log",
+      "Out for Delivery Status Log",
+      "Delivered Status Log",
+      "Cancelled Status Log",
+      "Not Delivered Status Log",
+      "Bad Delivery Status Log",
+      "Order Remarks",
       "Booked At",
+      "Updated At",
     ];
 
     const csvRows = orders.map((row: any) => {
       const orderId = String(pick(row, "OrderId", "id")).trim();
+      const stageLogs = historyStageMap[orderId] || {};
+
+      const orderRemarks = [
+        pick(row, "SubStatus", "subStatus") ? `SubStatus: ${pick(row, "SubStatus", "subStatus")}` : "",
+        stageLogs["Cancelled"] || "",
+        stageLogs["Not Delivered"] || "",
+        stageLogs["Bad Delivery"] || "",
+      ]
+        .filter(Boolean)
+        .join(" || ");
 
       return [
         orderId,
@@ -233,11 +306,26 @@ export async function GET(req: NextRequest) {
         pick(row, "CustomerName", "customerName"),
         pick(row, "CustomerMobile", "customerMobile"),
         itemsMap[orderId] || "",
-        historyMap[orderId] || "",
+        itemPricingMap[orderId] || "",
+        pick(row, "SubTotal", "subTotal"),
+        pick(row, "GSTAmount", "gstAmount"),
+        pick(row, "PlatformCharge", "platformCharge"),
+        pick(row, "TotalAmount", "totalAmount"),
+        pick(row, "PaymentMode", "paymentMode"),
         pick(row, "Status", "status"),
         pick(row, "SubStatus", "subStatus"),
-        pick(row, "TotalAmount", "totalAmount"),
+        stageLogs["Booked"] || "",
+        stageLogs["In Verification"] || "",
+        stageLogs["New Order"] || "",
+        stageLogs["In Kitchen"] || "",
+        stageLogs["Out for Delivery"] || "",
+        stageLogs["Delivered"] || "",
+        stageLogs["Cancelled"] || "",
+        stageLogs["Not Delivered"] || "",
+        stageLogs["Bad Delivery"] || "",
+        orderRemarks,
         pick(row, "CreatedAt", "createdAt", "created_at"),
+        pick(row, "UpdatedAt", "updatedAt", "updated_at"),
       ];
     });
 
