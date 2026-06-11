@@ -197,6 +197,7 @@ const [searchOrderId, setSearchOrderId] = useState("");
 const [searchCustomerMobile, setSearchCustomerMobile] = useState("");
 const [searchOutlet, setSearchOutlet] = useState("");
 const [searchStation, setSearchStation] = useState("");
+    const [searchTrainNo, setSearchTrainNo] = useState("");
 const todayDate = new Date().toISOString().slice(0, 10);
 
 const [searchDeliveryFrom, setSearchDeliveryFrom] = useState("");
@@ -1000,7 +1001,15 @@ searchDeliveryTo,
   params.set("searchType", "trainNo");
   params.set("q", searchTrainNo.trim());
 }
-  if (searchDate) params.set("deliveryDate", searchDate);
+  if (dateSearchType === "delivery") {
+  if (searchDeliveryFrom) params.set("deliveryFrom", searchDeliveryFrom);
+  if (searchDeliveryTo) params.set("deliveryTo", searchDeliveryTo);
+}
+
+if (dateSearchType === "booking") {
+  if (searchBookingFrom) params.set("bookingFrom", searchBookingFrom);
+  if (searchBookingTo) params.set("bookingTo", searchBookingTo);
+}
   if (searchOutlet.trim()) params.set("outlet", searchOutlet.trim());
 
   window.open(`/api/admin/orders-report?${params.toString()}`, "_blank");
@@ -1141,14 +1150,6 @@ searchDeliveryTo,
 
   <input placeholder="Station Code / Name" value={draftStation} onChange={(e) => setDraftStation(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 170, fontSize: 13 }} />
 
-  
-
-  {draftDateSearchType === "booking" && (
-    <>
-      <input type="datetime-local" value={draftBookingFrom} onChange={(e) => setDraftBookingFrom(e.target.value)} title="Booking From" style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }} />
-      <input type="datetime-local" value={draftBookingTo} onChange={(e) => setDraftBookingTo(e.target.value)} title="Booking To" style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }} />
-    </>
-  )}
 
   <input
   placeholder="Train No."
