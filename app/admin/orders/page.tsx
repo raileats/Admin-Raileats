@@ -805,8 +805,6 @@ const res = await fetch(
     }
   }
 
-  const applyFiltersAndSorting = (list: Order[]) => {
-    let filtered = list.slice();
 
     // 1. Appling Search Filters
     const applyFiltersAndSorting = (list: Order[]) => {
