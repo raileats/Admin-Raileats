@@ -878,26 +878,12 @@ useEffect(() => {
 
   params.set("status", activeTab);
 
-  if (searchType) {
-    params.set("searchType", searchType);
-  }
+  if (searchType) params.set("searchType", searchType);
+  if (searchText.trim()) params.set("q", searchText.trim());
+  if (searchDate) params.set("deliveryDate", searchDate);
+  if (searchOutlet.trim()) params.set("outlet", searchOutlet.trim());
 
-  if (searchText.trim()) {
-    params.set("q", searchText.trim());
-  }
-
-  if (searchDate) {
-    params.set("deliveryDate", searchDate);
-  }
-
-  if (searchOutlet.trim()) {
-    params.set("outlet", searchOutlet.trim());
-  }
-
-  window.open(
-    `/api/admin/orders-report?${params.toString()}`,
-    "_blank"
-  );
+  window.open(`/api/admin/orders-report?${params.toString()}`, "_blank");
 }
 
   return (
