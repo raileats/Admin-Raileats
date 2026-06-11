@@ -869,70 +869,36 @@ useEffect(() => {
   }
 
   function downloadOrdersReport() {
-    if (!visibleOrders.length) {
-      alert("No data found to download");
-      return;
-    }
-
-    const activeLabel = TABS.find((t) => t.key === activeTab)?.label ?? activeTab;
-
-    const headers = [
-      "Order ID",
-      "Outlet ID",
-      "Outlet Name",
-      "Station Code",
-      "Station Name",
-      "Delivery Date",
-      "Delivery Time",
-      "Train No.",
-      "Coach",
-      "Seat",
-      "Customer Name",
-      "Customer Mobile",
-      "Order Status",
-      "Total Amount",
-      "Booked At",
-    ];
-
-    const csvRows = visibleOrders.map((o) => [
-      o.id,
-      o.outletId,
-      o.outletName,
-      o.stationCode,
-      o.stationName,
-      o.deliveryDate,
-      o.deliveryTime,
-      o.trainNo || "",
-      o.coach || "",
-      o.seat || "",
-      o.customerName,
-      o.customerMobile,
-      o.dbStatus || o.status,
-      o.total || "",
-      o.rawCreatedAt || "",
-    ]);
-
-    const csv = [
-      headers.map(csvEscape).join(","),
-      ...csvRows.map((row) => row.map(csvEscape).join(",")),
-    ].join("\n");
-
-    const blob = new Blob(["\ufeff" + csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const today = new Date().toISOString().slice(0, 10);
-
-    a.href = url;
-    a.download = `Orders_Report_${activeLabel.replace(/\s+/g, "_")}_${today}.csv`;
-
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  if (!visibleOrders.length) {
+    alert("No data found to download");
+    return;
   }
+
+  const params = new URLSearchParams();
+
+  params.set("status", activeTab);
+
+  if (searchType) {
+    params.set("searchType", searchType);
+  }
+
+  if (searchText.trim()) {
+    params.set("q", searchText.trim());
+  }
+
+  if (searchDate) {
+    params.set("deliveryDate", searchDate);
+  }
+
+  if (searchOutlet.trim()) {
+    params.set("outlet", searchOutlet.trim());
+  }
+
+  window.open(
+    `/api/admin/orders-report?${params.toString()}`,
+    "_blank"
+  );
+}
 
   return (
     <section style={{ padding: 12, minHeight: "100vh", background: "#f8fafc", fontFamily: "sans-serif" }}>
