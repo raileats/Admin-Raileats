@@ -823,8 +823,8 @@ const res = await fetch(
   }
 
 
-    // 1. Appling Search Filters
-    const applyFiltersAndSorting = (list: Order[]) => {
+    // 1. Applying Search Filters
+const applyFiltersAndSorting = (list: Order[]) => {
   let filtered = list.slice();
 
   if (searchOrderId.trim()) {
@@ -864,25 +864,29 @@ const res = await fetch(
     );
   }
 
-  if (searchDate) {
-    if (dateSearchType === "delivery" && searchDate) {
-  filtered = filtered.filter((o) => o.deliveryDate === searchDate);
-}
+  if (dateSearchType === "delivery" && searchDate) {
+    filtered = filtered.filter((o) => o.deliveryDate === searchDate);
+  }
 
-if (
-  dateSearchType === "booking" &&
-  bookingDateFilterOn &&
-  (searchBookingFrom || searchBookingTo)
-) {
-  const fromTime = searchBookingFrom ? new Date(searchBookingFrom).getTime() : 0;
-  const toTime = searchBookingTo ? new Date(searchBookingTo).getTime() : Number.MAX_SAFE_INTEGER;
+  if (
+    dateSearchType === "booking" &&
+    bookingDateFilterOn &&
+    (searchBookingFrom || searchBookingTo)
+  ) {
+    const fromTime = searchBookingFrom
+      ? new Date(searchBookingFrom).getTime()
+      : 0;
 
-  filtered = filtered.filter((o) => {
-    if (!o.rawCreatedAt) return false;
-    const bookedTime = new Date(o.rawCreatedAt).getTime();
-    return bookedTime >= fromTime && bookedTime <= toTime;
-  });
-}
+    const toTime = searchBookingTo
+      ? new Date(searchBookingTo).getTime()
+      : Number.MAX_SAFE_INTEGER;
+
+    filtered = filtered.filter((o) => {
+      if (!o.rawCreatedAt) return false;
+      const bookedTime = new Date(o.rawCreatedAt).getTime();
+      return bookedTime >= fromTime && bookedTime <= toTime;
+    });
+  }
 
   filtered.sort((a, b) => {
     const dateTimeA = new Date(
