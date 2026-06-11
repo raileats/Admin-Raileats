@@ -490,7 +490,38 @@ export async function GET(req: NextRequest) {
     ].join("\n");
 
     const today = new Date().toISOString().slice(0, 10);
-    const fileName = `Orders_Report_${status}_${today}.csv`;
+    const now = new Date();
+
+const downloadDateTime = now
+  .toLocaleString("sv-SE", {
+    timeZone: "Asia/Kolkata",
+    hour12: false,
+  })
+  .replace(" ", "_")
+  .replace(/:/g, "_");
+
+const statusLabel =
+  status === "booked"
+    ? "Booked"
+    : status === "verification"
+    ? "In_Verification"
+    : status === "neworder"
+    ? "New_Order"
+    : status === "inkitchen"
+    ? "In_Kitchen"
+    : status === "outfordelivery"
+    ? "Out_for_Delivery"
+    : status === "delivered"
+    ? "Delivered"
+    : status === "cancelled"
+    ? "Cancelled"
+    : status === "notdelivered"
+    ? "Not_Delivered"
+    : status === "baddelivery"
+    ? "Bad_Delivery"
+    : status;
+
+const fileName = `Order Report ${statusLabel}_${downloadDateTime}.csv`;
 
     return new NextResponse("\ufeff" + csv, {
       status: 200,
