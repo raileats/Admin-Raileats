@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Bell, Clock, MapPin, ShieldCheck, ShoppingBag, Smartphone, X } from "lucide-react";
+import { Bell, Clock, Eye, MapPin, ShieldCheck, ShoppingBag, Smartphone, X } from "lucide-react";
 import Link from "next/link";
 
 type TabKey =
@@ -1016,70 +1016,114 @@ flatOrders.forEach((o) => {
       </div>
 
       {/* FILTER CONTROLS */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap", background: "#fff", padding: 12, borderRadius: 10, border: "1px solid #e2e8f0" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "#475569" }}>
-          <span>Search Field</span>
-          <select value={searchType} onChange={(e) => setSearchType(e.target.value as SearchType)} style={{ padding: 6, borderRadius: 6, border: "1px solid #cbd5e1" }}>
-            <option value="orderId">Order ID</option>
-            <option value="customerMobile">Customer Mobile</option>
-            <option value="outletId">Outlet ID / Name</option>
-            <option value="stationCode">Station Code / Name</option>
-            <option value="deliveryDate">Delivery Date</option>
-            <option value="trainNo">Train No.</option>
-          </select>
-        </label>
+<div
+  style={{
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    marginBottom: 12,
+    flexWrap: "wrap",
+    background: "#fff",
+    padding: 12,
+    borderRadius: 10,
+    border: "1px solid #e2e8f0",
+  }}
+>
+  <input
+    placeholder="Order ID"
+    value={searchType === "orderId" ? searchText : ""}
+    onChange={(e) => {
+      setSearchType("orderId");
+      setSearchText(e.target.value);
+    }}
+    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }}
+  />
 
-        {searchType === "deliveryDate" ? (
-          <input type="date" value={searchDate} onChange={(e) => setSearchDate(e.target.value)} style={{ padding: 6, borderRadius: 6, border: "1px solid #cbd5e1" }} />
-        ) : (
-          <input
-            placeholder={
-              searchType === "customerMobile" ? "Enter customer mobile" :
-              searchType === "orderId" ? "Enter order id" :
-              searchType === "outletId" ? "Enter outlet id or name" :
-              searchType === "stationCode" ? "Enter station code or name" : "Enter train no"
-            }
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", minWidth: 220, fontSize: 13 }}
-          />
-        )}
+  <input
+    placeholder="Customer Mobile"
+    value={searchType === "customerMobile" ? searchText : ""}
+    onChange={(e) => {
+      setSearchType("customerMobile");
+      setSearchText(e.target.value);
+    }}
+    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }}
+  />
 
-        <input
-          placeholder="Outlet Name filter fallback"
-          value={searchOutlet}
-          onChange={(e) => setSearchOutlet(e.target.value)}
-          style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", minWidth: 180, fontSize: 13 }}
-        />
+  <input
+    placeholder="Outlet ID / Name"
+    value={searchType === "outletId" ? searchText : ""}
+    onChange={(e) => {
+      setSearchType("outletId");
+      setSearchText(e.target.value);
+    }}
+    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 160, fontSize: 13 }}
+  />
 
-        <button
-          onClick={() => {
-            setSearchText("");
-            setSearchDate("");
-            setSearchOutlet("");
-          }}
-          style={{ padding: "8px 14px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f1f5f9", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
-        >
-          Reset Filters
-        </button>
+  <input
+    placeholder="Station Code / Name"
+    value={searchType === "stationCode" ? searchText : ""}
+    onChange={(e) => {
+      setSearchType("stationCode");
+      setSearchText(e.target.value);
+    }}
+    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 170, fontSize: 13 }}
+  />
 
-        <button
-          onClick={downloadOrdersReport}
-          style={{
-            padding: "8px 14px",
-            borderRadius: 6,
-            border: "none",
-            background: "#16a34a",
-            color: "#fff",
-            cursor: "pointer",
-            fontWeight: 700,
-            fontSize: 13,
-          }}
-        >
-          Download Report
-        </button>
-      </div>
+  <input
+    type="date"
+    value={searchDate}
+    onChange={(e) => {
+      setSearchType("deliveryDate");
+      setSearchDate(e.target.value);
+    }}
+    style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 145, fontSize: 13 }}
+  />
 
+  <input
+    placeholder="Train No."
+    value={searchType === "trainNo" ? searchText : ""}
+    onChange={(e) => {
+      setSearchType("trainNo");
+      setSearchText(e.target.value);
+    }}
+    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 120, fontSize: 13 }}
+  />
+
+  <button
+    onClick={() => {
+      setSearchText("");
+      setSearchDate("");
+      setSearchOutlet("");
+    }}
+    style={{
+      padding: "8px 14px",
+      borderRadius: 6,
+      border: "1px solid #cbd5e1",
+      background: "#f1f5f9",
+      cursor: "pointer",
+      fontWeight: 600,
+      fontSize: 13,
+    }}
+  >
+    Reset Filters
+  </button>
+
+  <button
+    onClick={downloadOrdersReport}
+    style={{
+      padding: "8px 14px",
+      borderRadius: 6,
+      border: "none",
+      background: "#16a34a",
+      color: "#fff",
+      cursor: "pointer",
+      fontWeight: 700,
+      fontSize: 13,
+    }}
+  >
+    Download Report
+  </button>
+</div>
       {/* TABLE VIEW */}
       <div style={{ background: "#fff", borderRadius: 8, padding: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.03)", border: "1px solid #e2e8f0" }}>
         <div style={{ overflowX: "auto" }}>
@@ -1191,20 +1235,20 @@ flatOrders.forEach((o) => {
                     <button
                       onClick={() => handleOpenDiagnosticsDrawer(o, "logs")}
                       style={{
-                        background: "#f0fdf4",
-                        color: "#16a34a",
-                        border: "1px solid #bbf7d0",
-                        padding: "5px 10px",
-                        borderRadius: 6,
-                        fontWeight: 700,
-                        fontSize: 11,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4
-                      }}
+  background: "#eff6ff",
+  color: "#2563eb",
+  border: "1px solid #bfdbfe",
+  width: 38,
+  height: 34,
+  borderRadius: 8,
+  fontWeight: 700,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+}}
                     >
-                      View Log ({o.history?.length || 0})
+                      <Eye size={18} />
                     </button>
                   </td>
 
