@@ -197,11 +197,13 @@ const [searchOrderId, setSearchOrderId] = useState("");
 const [searchCustomerMobile, setSearchCustomerMobile] = useState("");
 const [searchOutlet, setSearchOutlet] = useState("");
 const [searchStation, setSearchStation] = useState("");
+const todayDate = new Date().toISOString().slice(0, 10);
+
 const [searchDeliveryFrom, setSearchDeliveryFrom] = useState("");
 const [searchDeliveryTo, setSearchDeliveryTo] = useState("");
 
-const [draftDeliveryFrom, setDraftDeliveryFrom] = useState(`${todayDate}`);
-const [draftDeliveryTo, setDraftDeliveryTo] = useState(`${todayDate}`);
+const [draftDeliveryFrom, setDraftDeliveryFrom] = useState(todayDate);
+const [draftDeliveryTo, setDraftDeliveryTo] = useState(todayDate);
 
 const [draftOrderId, setDraftOrderId] = useState("");
 const [draftCustomerMobile, setDraftCustomerMobile] = useState("");
@@ -211,7 +213,7 @@ const [draftDate, setDraftDate] = useState("");
 const [draftTrainNo, setDraftTrainNo] = useState("");
     const [dateSearchType, setDateSearchType] = useState<"delivery" | "booking">("delivery");
 const [draftDateSearchType, setDraftDateSearchType] = useState<"delivery" | "booking">("delivery");
-    const todayDate = new Date().toISOString().slice(0, 10);
+   
 
 const [searchBookingFrom, setSearchBookingFrom] = useState("");
 const [searchBookingTo, setSearchBookingTo] = useState("");
@@ -1139,23 +1141,7 @@ searchDeliveryTo,
 
   <input placeholder="Station Code / Name" value={draftStation} onChange={(e) => setDraftStation(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 170, fontSize: 13 }} />
 
-  <select
-    value={draftDateSearchType}
-    onChange={(e) => setDraftDateSearchType(e.target.value as "delivery" | "booking")}
-    style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 160, fontSize: 13 }}
-  >
-    <option value="delivery">By Delivery Date</option>
-    <option value="booking">By Booking Date</option>
-  </select>
-
-  {draftDateSearchType === "delivery" && (
-    <input
-      type="date"
-      value={draftDate}
-      onChange={(e) => setDraftDate(e.target.value)}
-      style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 145, fontSize: 13 }}
-    />
-  )}
+  
 
   {draftDateSearchType === "booking" && (
     <>
