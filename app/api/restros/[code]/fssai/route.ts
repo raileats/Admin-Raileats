@@ -10,6 +10,44 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+/* ========================= DATE STATUS HELPERS ========================= */
+function parseDateOnly(value: any): Date | null {
+  if (!value) return null;
+
+  const text = String(value).trim();
+  if (!text) return null;
+
+  // yyyy-mm-dd OR yyyy-mm-ddTHH:mm:ss
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+    const [y, m, d] = text.slice(0, 10).split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  // dd/mm/yyyy
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
+    const [d, m, y] = text.split("/").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  const dt = new Date(text);
+  if (Number.isNaN(dt.getTime())) return null;
+
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+}
+
+function getFssaiStatus(expiryDate: any): "active" | "inactive" {
+  const expiry = parseDateOnly(expiryDate);
+
+  if (!expiry) return "inactive";
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  expiry.setHours(0, 0, 0, 0);
+
+  return expiry >= today ? "active" : "inactive";
+}
+
 /* ========================= GET ========================= */
 export async function GET(
   req: NextRequest,
@@ -34,14 +72,18 @@ export async function GET(
     return NextResponse.json({ ok: false, error: error.message });
   }
 
-  const rows = (data || []).map((r: any, idx: number) => ({
-    id: r.id ?? r.FssaiId ?? `${r.RestroCode}-${r.fssai_number}-${idx}`,
-    fssai_number: r.fssai_number,
-    expiry_date: r.expiry_date,
-    file_url: r.file_url ?? null,
-    status: String(r.status || "").toLowerCase() === "active" ? "active" : "inactive",
-    created_at: r.created_at ?? r.CreatedDate ?? null,
-  }));
+  const rows = (data || []).map((r: any, idx: number) => {
+    const computedStatus = getFssaiStatus(r.expiry_date);
+
+    return {
+      id: r.id ?? r.FssaiId ?? `${r.RestroCode}-${r.fssai_number}-${idx}`,
+      fssai_number: r.fssai_number,
+      expiry_date: r.expiry_date,
+      file_url: r.file_url ?? null,
+      status: computedStatus,
+      created_at: r.created_at ?? r.CreatedDate ?? null,
+    };
+  });
 
   return NextResponse.json(
     { ok: true, rows },
@@ -80,6 +122,8 @@ export async function POST(
     });
   }
 
+  const newStatus = getFssaiStatus(expiry_date);
+
   /* 🔥 STEP 1: OLD ACTIVE → INACTIVE (BANK LOGIC) */
   await supabase
     .from("RestroFSSAI")
@@ -112,15 +156,15 @@ export async function POST(
     file_url = data.publicUrl;
   }
 
-  /* 🔥 STEP 3: INSERT NEW ACTIVE FSSAI */
+  /* 🔥 STEP 3: INSERT NEW FSSAI */
   const { data: row, error } = await supabase
     .from("RestroFSSAI")
     .insert({
       RestroCode: restroCode,
-      fssai_number, // ✅ CORRECT COLUMN NAME
+      fssai_number,
       expiry_date,
       file_url,
-      status: "active",
+      status: newStatus,
     })
     .select("*")
     .single();
@@ -139,7 +183,7 @@ export async function POST(
       FSSAINumber: fssai_number,
       FSSAIExpiryDate: expiry_date,
       FSSAICopyUpload: file_url,
-      FSSAIStatus: "Active",
+      FSSAIStatus: newStatus === "active" ? "Active" : "Inactive",
       UpdatedAt: new Date().toISOString(),
     })
     .eq("RestroCode", restroCode);
