@@ -51,7 +51,7 @@ export default function NewRestroBasicPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [displayPhotoFile, setDisplayPhotoFile] = useState<File | null>(null);
-const [displayPhotoFileName, setDisplayPhotoFileName] = useState("");
+  const [displayPhotoFileName, setDisplayPhotoFileName] = useState("");
 
   useEffect(() => {
     try {
@@ -99,6 +99,18 @@ const [displayPhotoFileName, setDisplayPhotoFileName] = useState("");
   const filteredStations = useMemo(() => {
     return stations.slice(0, 50);
   }, [stations]);
+
+  const isBasicFormValid =
+    !!String(form.StationCode ?? "").trim() &&
+    !!String(form.StationName ?? "").trim() &&
+    !!String(form.RestroName ?? "").trim() &&
+    String(form.RaileatsStatus ?? "") !== "" &&
+    !!String(form.IsIrctcApproved ?? "").trim() &&
+    String(form.IsPureVeg ?? "") !== "" &&
+    !!String(form.OwnerName ?? "").trim() &&
+    phoneDigits(form.OwnerPhone).length === 10 &&
+    !!String(form.RestroEmail ?? "").trim() &&
+    phoneDigits(form.RestroPhone).length === 10;
 
   function updateField(key: string, value: any) {
     setForm((prev: any) => ({ ...prev, [key]: value }));
@@ -171,12 +183,12 @@ const [displayPhotoFileName, setDisplayPhotoFileName] = useState("");
 
       const json = await res.json().catch(() => ({}));
       const rows = Array.isArray(json?.data)
-  ? json.data
-  : Array.isArray(json?.rows)
-  ? json.rows
-  : Array.isArray(json)
-  ? json
-  : [];
+        ? json.data
+        : Array.isArray(json?.rows)
+        ? json.rows
+        : Array.isArray(json)
+        ? json
+        : [];
 
       const mapped = mapStations(rows);
       setStations(mapped);
@@ -204,6 +216,11 @@ const [displayPhotoFileName, setDisplayPhotoFileName] = useState("");
   }
 
   async function saveAndNext() {
+    if (!isBasicFormValid) {
+      setMsg("Please complete all required details.");
+      return;
+    }
+
     setSaving(true);
     setMsg(null);
 
@@ -267,48 +284,50 @@ const [displayPhotoFileName, setDisplayPhotoFileName] = useState("");
         data?.id;
 
       if (!code) throw new Error("Restro created but RestroCode not returned");
+
       const finalOwnerPhone = phoneDigits(form.OwnerPhone);
-const finalRestroPhone = phoneDigits(form.RestroPhone);
+      const finalRestroPhone = phoneDigits(form.RestroPhone);
 
-if (finalOwnerPhone || finalRestroPhone) {
-  const phoneRes = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      RestroCode: Number(code),
-      OwnerPhone: finalOwnerPhone || null,
-      RestroPhone: finalRestroPhone || null,
-    }),
-  });
+      if (finalOwnerPhone || finalRestroPhone) {
+        const phoneRes = await fetch(`/api/restros/${encodeURIComponent(String(code))}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            RestroCode: Number(code),
+            OwnerPhone: finalOwnerPhone || null,
+            RestroPhone: finalRestroPhone || null,
+          }),
+        });
 
-  const phoneJson = await phoneRes.json().catch(() => ({}));
+        const phoneJson = await phoneRes.json().catch(() => ({}));
 
-  if (!phoneRes.ok || phoneJson?.ok === false) {
-    throw new Error(phoneJson?.error || "Owner/Restro phone save failed");
-  }
-}
+        if (!phoneRes.ok || phoneJson?.ok === false) {
+          throw new Error(phoneJson?.error || "Owner/Restro phone save failed");
+        }
+      }
+
       let finalDisplayPhoto = payload.RestroDisplayPhoto;
 
-if (displayPhotoFile) {
-  const formData = new FormData();
-  formData.append("file", displayPhotoFile);
+      if (displayPhotoFile) {
+        const formData = new FormData();
+        formData.append("file", displayPhotoFile);
 
-  const uploadRes = await fetch(
-    `/api/admin/restros/${encodeURIComponent(String(code))}/display-photo`,
-    {
-      method: "POST",
-      body: formData,
-    }
-  );
+        const uploadRes = await fetch(
+          `/api/admin/restros/${encodeURIComponent(String(code))}/display-photo`,
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
 
-  const uploadJson = await uploadRes.json().catch(() => ({}));
+        const uploadJson = await uploadRes.json().catch(() => ({}));
 
-  if (!uploadRes.ok || uploadJson?.ok === false) {
-    throw new Error(uploadJson?.error || "Display photo upload failed");
-  }
+        if (!uploadRes.ok || uploadJson?.ok === false) {
+          throw new Error(uploadJson?.error || "Display photo upload failed");
+        }
 
-  finalDisplayPhoto = uploadJson.fileName || `${code}.webp`;
-}
+        finalDisplayPhoto = uploadJson.fileName || `${code}.webp`;
+      }
 
       localStorage.setItem("new_restro_code", String(code));
 
@@ -319,7 +338,7 @@ if (displayPhotoFile) {
           ...(data?.row ?? data),
           RestroCode: code,
           OwnerPhone: finalOwnerPhone || payload.OwnerPhone,
-RestroPhone: finalRestroPhone || payload.RestroPhone,
+          RestroPhone: finalRestroPhone || payload.RestroPhone,
           RestroDisplayPhoto: finalDisplayPhoto,
           StationCode:
             data?.row?.StationCode ?? data?.StationCode ?? payload.StationCode,
@@ -352,7 +371,7 @@ RestroPhone: finalRestroPhone || payload.RestroPhone,
     <AdminCard
       title="Basic Information"
       actions={
-        <AdminButton onClick={saveAndNext} disabled={saving}>
+        <AdminButton onClick={saveAndNext} disabled={saving || !isBasicFormValid}>
           {saving ? "Saving..." : "Save & Next"}
         </AdminButton>
       }
@@ -481,45 +500,45 @@ RestroPhone: finalRestroPhone || payload.RestroPhone,
         </AdminField>
 
         <AdminField label="Display Photo">
-  <input
-    type="file"
-    accept=".webp,image/webp"
-    className="block h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
-    onChange={(e) => {
-      const file = e.target.files?.[0] || null;
+          <input
+            type="file"
+            accept=".webp,image/webp"
+            className="block h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
+            onChange={(e) => {
+              const file = e.target.files?.[0] || null;
 
-      if (!file) {
-        setDisplayPhotoFile(null);
-        setDisplayPhotoFileName("");
-        updateField("RestroDisplayPhoto", "");
-        return;
-      }
+              if (!file) {
+                setDisplayPhotoFile(null);
+                setDisplayPhotoFileName("");
+                updateField("RestroDisplayPhoto", "");
+                return;
+              }
 
-      if (!file.name.toLowerCase().endsWith(".webp")) {
-        alert("Only WEBP image allowed");
-        e.target.value = "";
-        setDisplayPhotoFile(null);
-        setDisplayPhotoFileName("");
-        updateField("RestroDisplayPhoto", "");
-        return;
-      }
+              if (!file.name.toLowerCase().endsWith(".webp")) {
+                alert("Only WEBP image allowed");
+                e.target.value = "";
+                setDisplayPhotoFile(null);
+                setDisplayPhotoFileName("");
+                updateField("RestroDisplayPhoto", "");
+                return;
+              }
 
-      setDisplayPhotoFile(file);
-      setDisplayPhotoFileName(file.name);
-      updateField("RestroDisplayPhoto", file.name);
-    }}
-  />
+              setDisplayPhotoFile(file);
+              setDisplayPhotoFileName(file.name);
+              updateField("RestroDisplayPhoto", file.name);
+            }}
+          />
 
-  {displayPhotoFileName ? (
-    <div className="mt-1 text-xs font-semibold text-green-700">
-      Selected: {displayPhotoFileName}
-    </div>
-  ) : null}
+          {displayPhotoFileName ? (
+            <div className="mt-1 text-xs font-semibold text-green-700">
+              Selected: {displayPhotoFileName}
+            </div>
+          ) : null}
 
-  <div className="mt-1 text-xs text-slate-500">
-    Save ke baad file name auto RestroCode.webp ho jayega.
-  </div>
-</AdminField>
+          <div className="mt-1 text-xs text-slate-500">
+            Save ke baad file name auto RestroCode.webp ho jayega.
+          </div>
+        </AdminField>
 
         <AdminField label="Owner Name">
           <AdminInput
@@ -537,12 +556,12 @@ RestroPhone: finalRestroPhone || payload.RestroPhone,
 
         <AdminField label="Owner Phone">
           <input
-  inputMode="numeric"
-  maxLength={10}
-  value={phoneDigits(form.OwnerPhone)}
-  onChange={(e) => updateField("OwnerPhone", phoneDigits(e.target.value))}
-  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500"
-/>
+            inputMode="numeric"
+            maxLength={10}
+            value={phoneDigits(form.OwnerPhone)}
+            onChange={(e) => updateField("OwnerPhone", phoneDigits(e.target.value))}
+            className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500"
+          />
         </AdminField>
 
         <AdminField label="Restro Email">
@@ -554,12 +573,12 @@ RestroPhone: finalRestroPhone || payload.RestroPhone,
 
         <AdminField label="Restro Phone">
           <input
-  inputMode="numeric"
-  maxLength={10}
-  value={phoneDigits(form.RestroPhone)}
-  onChange={(e) => updateField("RestroPhone", phoneDigits(e.target.value))}
-  className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500"
-/>
+            inputMode="numeric"
+            maxLength={10}
+            value={phoneDigits(form.RestroPhone)}
+            onChange={(e) => updateField("RestroPhone", phoneDigits(e.target.value))}
+            className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500"
+          />
         </AdminField>
       </div>
 
