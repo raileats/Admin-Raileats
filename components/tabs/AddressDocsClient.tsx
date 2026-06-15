@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput, AdminTextarea } from "@/components/admin/AdminField";
@@ -99,6 +100,10 @@ export default function AddressDocsClient({
   initialData = {},
   restroCode = "",
 }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const isNewFlow = String(pathname || "").includes("/admin/restros/new/");
+
   const code = useMemo(
     () => restroCode || initialData?.RestroCode || initialData?.restroCode || "",
     [initialData, restroCode]
@@ -134,6 +139,12 @@ export default function AddressDocsClient({
   const [savingPan, setSavingPan] = useState(false);
 
   const stateLocked = String(initialData?.State ?? "").trim() !== "";
+
+  const isAddressFormValid =
+    String(local.RestroAddress ?? "").trim() &&
+    String(local.City ?? "").trim() &&
+    String(local.State ?? "").trim() &&
+    String(local.PinCode ?? "").trim().length === 6;
 
   useEffect(() => {
     if (!hasAddressValue(initialData)) return;
@@ -197,6 +208,11 @@ export default function AddressDocsClient({
       return;
     }
 
+    if (!isAddressFormValid) {
+      alert("Please complete Address, City, State and 6 digit Pin Code");
+      return;
+    }
+
     setSavingAddress(true);
     setMessage("");
     try {
@@ -240,8 +256,11 @@ export default function AddressDocsClient({
       }
 
       setLocal((prev: any) => mergeFilledAddress({ ...prev, ...payload }, savedAddress));
-
       setMessage("Address saved in RestroMaster");
+
+      if (isNewFlow) {
+        router.push("/admin/restros/new/contacts");
+      }
     } catch (err: any) {
       console.error("Address save failed", err);
       alert(err?.message || "Address save failed");
@@ -406,7 +425,7 @@ export default function AddressDocsClient({
         <AdminCard
           title="Address"
           actions={
-            <AdminButton type="button" onClick={saveAddress} disabled={savingAddress}>
+            <AdminButton type="button" onClick={saveAddress} disabled={savingAddress || !isAddressFormValid}>
               {savingAddress ? "Saving..." : "Save Address"}
             </AdminButton>
           }
