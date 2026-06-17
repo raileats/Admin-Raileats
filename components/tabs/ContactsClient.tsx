@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput } from "@/components/admin/AdminField";
@@ -133,6 +133,8 @@ export default function ContactsClient({
   initialData = {},
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
+  const isNewFlow = String(pathname || "").includes("/admin/restros/new/");
 
   const code = useMemo(() => {
     if (restroCode) return String(restroCode);
@@ -306,6 +308,10 @@ export default function ContactsClient({
       setEmails(rows.emails);
       setWhatsapps(rows.whatsapps);
       setMessage("Saved successfully");
+
+      if (isNewFlow) {
+        router.push("/admin/restros/new/bank");
+      }
     } catch (error: any) {
       setMessage(error?.message || "Save failed");
     } finally {
@@ -426,24 +432,24 @@ export default function ContactsClient({
                   </AdminField>
 
                   <AdminField label="Mobile">
-  <input
-    name={`WhatsappMobileNumberforOrderDetails${index + 1}`}
-    placeholder={`Mobile ${index + 1}`}
-    inputMode="numeric"
-    maxLength={10}
-    value={row.value}
-    onChange={(event) =>
-      updateWhatsapp(index, "value", digits(event.target.value))
-    }
-    className={`h-10 w-full rounded-md border bg-white px-3 text-sm outline-none ${
-      row.value && PHONE_RE.test(row.value)
-        ? "border-emerald-400"
-        : row.value
-        ? "border-red-400"
-        : "border-slate-300"
-    }`}
-  />
-</AdminField>
+                    <input
+                      name={`WhatsappMobileNumberforOrderDetails${index + 1}`}
+                      placeholder={`Mobile ${index + 1}`}
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={row.value}
+                      onChange={(event) =>
+                        updateWhatsapp(index, "value", digits(event.target.value))
+                      }
+                      className={`h-10 w-full rounded-md border bg-white px-3 text-sm outline-none ${
+                        row.value && PHONE_RE.test(row.value)
+                          ? "border-emerald-400"
+                          : row.value
+                          ? "border-red-400"
+                          : "border-slate-300"
+                      }`}
+                    />
+                  </AdminField>
                 </div>
               </div>
             ))}
