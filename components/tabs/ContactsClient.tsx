@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput } from "@/components/admin/AdminField";
@@ -133,8 +133,6 @@ export default function ContactsClient({
   initialData = {},
 }: Props) {
   const router = useRouter();
-  const pathname = usePathname();
-  const isNewFlow = String(pathname || "").includes("/admin/restros/new/");
 
   const code = useMemo(() => {
     if (restroCode) return String(restroCode);
@@ -309,8 +307,11 @@ export default function ContactsClient({
       setWhatsapps(rows.whatsapps);
       setMessage("Saved successfully");
 
-      if (isNewFlow) {
-        router.push("/admin/restros/new/bank");
+      const currentPath =
+        typeof window !== "undefined" ? window.location.pathname : "";
+
+      if (currentPath.includes("/admin/restros/new")) {
+        window.location.href = "/admin/restros/new/bank";
       }
     } catch (error: any) {
       setMessage(error?.message || "Save failed");
@@ -434,6 +435,7 @@ export default function ContactsClient({
                   <AdminField label="Mobile">
                     <input
                       name={`WhatsappMobileNumberforOrderDetails${index + 1}`}
+                      data-wa-mobile={index + 1}
                       placeholder={`Mobile ${index + 1}`}
                       inputMode="numeric"
                       maxLength={10}
