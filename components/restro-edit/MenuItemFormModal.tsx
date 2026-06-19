@@ -324,6 +324,14 @@ export default function MenuItemFormModal({
         }
       }
 
+      const currentPath =
+        typeof window !== "undefined" ? window.location.pathname : "";
+
+      if (mode === "create" && currentPath.includes("/admin/restros/new")) {
+        window.location.replace("/admin/restros/new/user-password");
+        return;
+      }
+
       onSaved();
       onClose();
     } catch (e: any) {
