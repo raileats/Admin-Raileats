@@ -47,6 +47,15 @@ export default function FutureClosedTab({ restroCode }: Props) {
     }
   };
 
+  function goNextAfterFutureClosedSave() {
+    const currentPath =
+      typeof window !== "undefined" ? window.location.pathname : "";
+
+    if (currentPath.includes("/admin/restros/new")) {
+      window.location.href = "/admin/restros/new/menu";
+    }
+  }
+
   useEffect(() => {
     load();
   }, [codeStr]);
@@ -176,6 +185,7 @@ export default function FutureClosedTab({ restroCode }: Props) {
         onSaved={() => {
           setOpen(false);
           load();
+          goNextAfterFutureClosedSave();
         }}
       />
     </AdminCard>
