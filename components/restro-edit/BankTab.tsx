@@ -139,6 +139,15 @@ export default function BankTab({
     }
   };
 
+  function goNextAfterBankSave() {
+    const currentPath =
+      typeof window !== "undefined" ? window.location.pathname : "";
+
+    if (currentPath.includes("/admin/restros/new")) {
+      window.location.href = "/admin/restros/new/future-closed";
+    }
+  }
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -205,7 +214,8 @@ export default function BankTab({
         onClose={() => setOpen(false)}
         onSaved={() => {
           setOpen(false);
-          load(); // save के तुरंत बाद fresh history
+          load();
+          goNextAfterBankSave();
         }}
         historyTable={historyTable}
         masterTable={masterTable}
