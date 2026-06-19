@@ -66,6 +66,15 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
     }
   }
 
+  function goNextAfterMenuSave() {
+    const currentPath =
+      typeof window !== "undefined" ? window.location.pathname : "";
+
+    if (currentPath.includes("/admin/restros/new")) {
+      window.location.href = "/admin/restros/new/user-password";
+    }
+  }
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -257,7 +266,10 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
         initial={editRow ?? undefined}
         supabase={supabase}
         onClose={() => { setOpenModal(false); setEditRow(null); }}
-        onSaved={load}
+        onSaved={() => {
+          load();
+          goNextAfterMenuSave();
+        }}
       />
     </AdminCard>
   );
