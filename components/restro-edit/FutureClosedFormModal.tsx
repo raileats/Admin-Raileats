@@ -96,6 +96,13 @@ export default function FutureClosedFormModal({
 
       onSaved();
       onClose();
+
+      const currentPath =
+        typeof window !== "undefined" ? window.location.pathname : "";
+
+      if (currentPath.includes("/admin/restros/new")) {
+        window.location.href = "/admin/restros/new/menu";
+      }
     } catch (e: any) {
       setErr(e?.message || "Failed to save");
     } finally {
