@@ -218,6 +218,8 @@ export default function RestroEditModal({
 
       setNotification(null);
 
+      const currentTab = activeTab;
+
       const payload: any = {};
 
       const setIf = (
@@ -452,6 +454,11 @@ export default function RestroEditModal({
         type: "success",
         text: "Saved successfully ✅",
       });
+
+      // ✅ FIX: Restro User & Password save ke baad Basic Information tab par land kare
+      if (currentTab === "Restro User & Password") {
+        setActiveTab("Basic Information");
+      }
     } catch (e: any) {
       console.error(
         "SAVE ERROR:",
