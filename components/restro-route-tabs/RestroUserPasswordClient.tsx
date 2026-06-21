@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput } from "@/components/admin/AdminField";
@@ -23,7 +23,6 @@ export default function RestroUserPasswordClient({
   restroCode,
 }: Props) {
   const router = useRouter();
-  const pathname = usePathname();
 
   const [form, setForm] = useState({
     RestroUserName:
@@ -42,9 +41,9 @@ export default function RestroUserPasswordClient({
 
   const canSave = useMemo(() => {
     return (
-      String(form.RestroUserName ?? "").trim() &&
+      String(form.RestroUserName ?? "").trim().length > 0 &&
       INDIAN_MOBILE_RE.test(cleanMobile(form.RestroLoginMobile)) &&
-      String(form.RestroPassword ?? "").trim()
+      String(form.RestroPassword ?? "").trim().length > 0
     );
   }, [form]);
 
@@ -55,7 +54,7 @@ export default function RestroUserPasswordClient({
     }
 
     if (!canSave) {
-      setMsg("Please fill username, valid 10 digit mobile and password.");
+      setMsg("Username, valid 10 digit mobile and password required hai.");
       return;
     }
 
@@ -82,29 +81,13 @@ export default function RestroUserPasswordClient({
         throw new Error(json?.error || "Save failed");
       }
 
-      if (json?.row) {
-        setForm({
-          RestroUserName:
-            json.row.RestroUserName ??
-            json.row.RestroUsername ??
-            json.row.UserName ??
-            form.RestroUserName ??
-            "",
-          RestroLoginMobile: cleanMobile(json.row.RestroLoginMobile),
-          RestroPassword: json.row.RestroPassword ?? "",
-        });
-      }
-
       setMsg("Saved successfully");
 
       setTimeout(() => {
-        if (pathname?.includes("/admin/restros/new/")) {
-          router.push("/admin/restros/new/basic");
-        } else {
-          router.push(`/admin/restros/${encodeURIComponent(code)}/edit`);
-        }
+        router.push("/admin/restros/new/basic");
       }, 500);
     } catch (error: any) {
+      console.error("SAVE ERROR:", error);
       setMsg(error?.message || "Save failed");
     } finally {
       setSaving(false);
