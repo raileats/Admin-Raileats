@@ -77,13 +77,13 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
   const missingColumn = /column .* does not exist/i.test(error.message || "");
   if (!missingColumn) return { data, error };
 
-  // Some deployments do not yet have optional login alias columns.
-  // Retry with the core RestroMaster columns so normal saves never break.
   const optionalKeys = [
     "RestroUserName",
     "RestroUsername",
     "UserName",
     "Password",
+    "HolidayStatus",
+    "MinimumOrderAmount",
   ];
 
   const safePayload = { ...payload };
@@ -186,7 +186,6 @@ export async function PATCH(
     setIfDefined(payload, "RestroRating", num(body.RestroRating));
     setIfDefined(payload, "IsPureVeg", num(body.IsPureVeg));
 
-    // Important: keep the exact path/URL typed by admin. Do not auto-clean it.
     setIfDefined(payload, "RestroDisplayPhoto", text(body.RestroDisplayPhoto));
 
     setIfDefined(payload, "open_time", text(body.open_time ?? body.OpenTime));
@@ -202,11 +201,12 @@ export async function PATCH(
     setIfDefined(payload, "IRCTCOrdersPaymentOptionforCustomer", text(body.IRCTCOrdersPaymentOptionforCustomer));
     setIfDefined(payload, "RestroTypeofDeliveryRailEatsorVendor", text(body.RestroTypeofDeliveryRailEatsorVendor));
 
-    setIfDefined(payload, "RestroLoginMobile", text(body.RestroLoginMobile));
+    setIfDefined(payload, "RestroLoginMobile", phone(body.RestroLoginMobile));
+    setIfDefined(payload, "RestroPassword", text(body.RestroPassword));
+
     setIfDefined(payload, "RestroUserName", text(body.RestroUserName));
     setIfDefined(payload, "RestroUsername", text(body.RestroUsername));
     setIfDefined(payload, "UserName", text(body.UserName));
-    setIfDefined(payload, "RestroPassword", text(body.RestroPassword));
     setIfDefined(payload, "Password", text(body.Password));
     setIfDefined(payload, "HolidayStatus", num(body.HolidayStatus));
     setIfDefined(payload, "MinimumOrderAmount", num(body.MinimumOrderAmount));
@@ -222,7 +222,10 @@ export async function PATCH(
         body.Phone
       )
     );
+
     const expectedDeliveryGst = num(body.RaileatsCustomerDeliveryChargeGST);
+    const expectedLoginMobile = phone(body.RestroLoginMobile);
+    const expectedPassword = text(body.RestroPassword);
 
     const { data, error } = await updateRestro(RestroCode, payload);
 
@@ -277,6 +280,24 @@ export async function PATCH(
     ) {
       verifyErrors.push(
         `RaileatsCustomerDeliveryChargeGST save verify failed. Expected ${expectedDeliveryGst ?? "blank"}, got ${freshRow?.RaileatsCustomerDeliveryChargeGST ?? "blank"}`
+      );
+    }
+
+    if (
+      body.RestroLoginMobile !== undefined &&
+      !sameText(freshRow?.RestroLoginMobile, expectedLoginMobile)
+    ) {
+      verifyErrors.push(
+        `RestroLoginMobile save verify failed. Expected ${expectedLoginMobile ?? "blank"}, got ${freshRow?.RestroLoginMobile ?? "blank"}`
+      );
+    }
+
+    if (
+      body.RestroPassword !== undefined &&
+      !sameText(freshRow?.RestroPassword, expectedPassword)
+    ) {
+      verifyErrors.push(
+        `RestroPassword save verify failed. Expected ${expectedPassword ?? "blank"}, got ${freshRow?.RestroPassword ?? "blank"}`
       );
     }
 
