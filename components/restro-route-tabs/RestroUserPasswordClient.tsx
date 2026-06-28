@@ -1,7 +1,7 @@
 // components/restro-route-tabs/RestroUserPasswordClient.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput } from "@/components/admin/AdminField";
@@ -10,8 +10,6 @@ type Props = {
   initialData?: any;
   restroCode?: string | number;
 };
-
-const INDIAN_MOBILE_RE = /^[6-9][0-9]{9}$/;
 
 function cleanMobile(value: any) {
   return String(value ?? "").replace(/\D/g, "").slice(0, 10);
@@ -38,19 +36,19 @@ export default function RestroUserPasswordClient({
 
   const code = String(restroCode ?? initialData?.RestroCode ?? "");
 
-  const canSave = useMemo(() => {
-    return (
-      String(form.RestroUserName ?? "").trim().length > 0 &&
-      INDIAN_MOBILE_RE.test(cleanMobile(form.RestroLoginMobile)) &&
-      String(form.RestroPassword ?? "").trim().length > 0
-    );
-  }, [form]);
+  const canSave =
+    String(form.RestroUserName ?? "").trim() !== "" &&
+    cleanMobile(form.RestroLoginMobile).length === 10 &&
+    String(form.RestroPassword ?? "").trim() !== "";
 
   async function save() {
-    if (saving || !canSave) return;
-
     if (!code) {
       setMsg("Missing RestroCode. Please save Basic Information first.");
+      return;
+    }
+
+    if (!canSave) {
+      setMsg("Username, 10 digit mobile and password required hai.");
       return;
     }
 
@@ -135,14 +133,6 @@ export default function RestroUserPasswordClient({
               }))
             }
             placeholder="Enter 10 digit mobile"
-            className={
-              form.RestroLoginMobile &&
-              INDIAN_MOBILE_RE.test(cleanMobile(form.RestroLoginMobile))
-                ? "border-emerald-400"
-                : form.RestroLoginMobile
-                ? "border-red-400"
-                : ""
-            }
           />
         </AdminField>
 
