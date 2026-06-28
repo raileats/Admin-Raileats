@@ -31,6 +31,8 @@ export default function RestroUserPasswordClient({
 }: Props) {
   const router = useRouter();
 
+  const code = String(restroCode ?? initialData?.RestroCode ?? "");
+
   const [form, setForm] = useState({
     RestroUserName: getUsername(initialData),
     RestroLoginMobile: cleanMobile(initialData?.RestroLoginMobile),
@@ -40,20 +42,19 @@ export default function RestroUserPasswordClient({
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const code = String(restroCode ?? initialData?.RestroCode ?? "");
-
   useEffect(() => {
     async function loadSavedData() {
       if (!code) return;
 
       try {
-        const res = await fetch(`/api/restros/${encodeURIComponent(code)}`, {
-          method: "GET",
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-store",
-          },
-        });
+        const res = await fetch(
+          `/api/restros/${encodeURIComponent(code)}?t=${Date.now()}`,
+          {
+            method: "GET",
+            cache: "no-store",
+            headers: { "Cache-Control": "no-store" },
+          }
+        );
 
         const json = await res.json().catch(() => ({}));
         const row = json?.row || json?.data || json;
@@ -92,6 +93,9 @@ export default function RestroUserPasswordClient({
     setSaving(true);
     setMsg(null);
 
+    const nextMobile = cleanMobile(form.RestroLoginMobile);
+    const nextPassword = String(form.RestroPassword ?? "").trim();
+
     try {
       const res = await fetch(`/api/restros/${encodeURIComponent(code)}`, {
         method: "PATCH",
@@ -100,8 +104,8 @@ export default function RestroUserPasswordClient({
           "Cache-Control": "no-store",
         },
         body: JSON.stringify({
-          RestroLoginMobile: cleanMobile(form.RestroLoginMobile),
-          RestroPassword: String(form.RestroPassword ?? "").trim(),
+          RestroLoginMobile: nextMobile,
+          RestroPassword: nextPassword,
         }),
       });
 
@@ -111,7 +115,15 @@ export default function RestroUserPasswordClient({
         throw new Error(json?.error || "Save failed");
       }
 
+      setForm((prev) => ({
+        ...prev,
+        RestroLoginMobile: nextMobile,
+        RestroPassword: nextPassword,
+      }));
+
       setMsg("Saved successfully");
+
+      router.refresh();
 
       setTimeout(() => {
         router.push("/admin/restros/new/basic");
@@ -148,10 +160,7 @@ export default function RestroUserPasswordClient({
           <AdminInput
             value={form.RestroUserName}
             onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                RestroUserName: e.target.value,
-              }))
+              setForm((prev) => ({ ...prev, RestroUserName: e.target.value }))
             }
             placeholder="Enter username"
           />
@@ -177,10 +186,7 @@ export default function RestroUserPasswordClient({
             type="text"
             value={form.RestroPassword}
             onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                RestroPassword: e.target.value,
-              }))
+              setForm((prev) => ({ ...prev, RestroPassword: e.target.value }))
             }
             placeholder="Enter password"
           />
@@ -188,9 +194,7 @@ export default function RestroUserPasswordClient({
       </div>
 
       {msg ? (
-        <div className="mt-4 text-sm font-semibold text-blue-700">
-          {msg}
-        </div>
+        <div className="mt-4 text-sm font-semibold text-blue-700">{msg}</div>
       ) : null}
     </AdminCard>
   );
