@@ -3,7 +3,6 @@
 
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput } from "@/components/admin/AdminField";
 
@@ -48,13 +47,10 @@ export default function RestroUserPasswordClient({
   }, [form]);
 
   async function save() {
+    if (saving || !canSave) return;
+
     if (!code) {
       setMsg("Missing RestroCode. Please save Basic Information first.");
-      return;
-    }
-
-    if (!canSave) {
-      setMsg("Username, valid 10 digit mobile and password required hai.");
       return;
     }
 
@@ -99,17 +95,18 @@ export default function RestroUserPasswordClient({
       title="Restro User & Password"
       subtitle="Manage restaurant login credentials"
       actions={
-        <AdminButton
+        <button
+          type="button"
           onClick={save}
           disabled={saving || !canSave}
-          className={
+          className={`rounded-md px-4 py-2 text-sm font-semibold ${
             saving || !canSave
-              ? "cursor-not-allowed opacity-50 pointer-events-none"
-              : ""
-          }
+              ? "cursor-not-allowed bg-gray-300 text-gray-500 opacity-60"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+          }`}
         >
           {saving ? "Saving..." : "Save"}
-        </AdminButton>
+        </button>
       }
     >
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
