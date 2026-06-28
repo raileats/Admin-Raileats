@@ -1,7 +1,7 @@
 // components/restro-route-tabs/RestroUserPasswordClient.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminCard from "@/components/admin/AdminCard";
 import { AdminField, AdminInput } from "@/components/admin/AdminField";
@@ -15,6 +15,16 @@ function cleanMobile(value: any) {
   return String(value ?? "").replace(/\D/g, "").slice(0, 10);
 }
 
+function getUsername(data: any) {
+  return (
+    data?.RestroUserName ??
+    data?.RestroUsername ??
+    data?.UserName ??
+    data?.OwnerName ??
+    ""
+  );
+}
+
 export default function RestroUserPasswordClient({
   initialData = {},
   restroCode,
@@ -22,11 +32,7 @@ export default function RestroUserPasswordClient({
   const router = useRouter();
 
   const [form, setForm] = useState({
-    RestroUserName:
-      initialData?.RestroUserName ??
-      initialData?.RestroUsername ??
-      initialData?.UserName ??
-      "",
+    RestroUserName: getUsername(initialData),
     RestroLoginMobile: cleanMobile(initialData?.RestroLoginMobile),
     RestroPassword: initialData?.RestroPassword ?? "",
   });
@@ -35,6 +41,37 @@ export default function RestroUserPasswordClient({
   const [msg, setMsg] = useState<string | null>(null);
 
   const code = String(restroCode ?? initialData?.RestroCode ?? "");
+
+  useEffect(() => {
+    async function loadSavedData() {
+      if (!code) return;
+
+      try {
+        const res = await fetch(`/api/restros/${encodeURIComponent(code)}`, {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        });
+
+        const json = await res.json().catch(() => ({}));
+        const row = json?.row || json?.data || json;
+
+        if (row) {
+          setForm({
+            RestroUserName: getUsername(row),
+            RestroLoginMobile: cleanMobile(row?.RestroLoginMobile),
+            RestroPassword: row?.RestroPassword ?? "",
+          });
+        }
+      } catch (e) {
+        console.error("Restro user password load failed:", e);
+      }
+    }
+
+    loadSavedData();
+  }, [code]);
 
   const canSave =
     String(form.RestroUserName ?? "").trim() !== "" &&
