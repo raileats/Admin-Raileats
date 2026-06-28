@@ -63,7 +63,6 @@ export default function RestroUserPasswordClient({
           "Cache-Control": "no-store",
         },
         body: JSON.stringify({
-          RestroUserName: String(form.RestroUserName ?? "").trim(),
           RestroLoginMobile: cleanMobile(form.RestroLoginMobile),
           RestroPassword: String(form.RestroPassword ?? "").trim(),
         }),
