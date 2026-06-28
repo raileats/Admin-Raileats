@@ -40,7 +40,7 @@ function num(v: any) {
 
 function statusValue(v: any) {
   const s = text(v).toUpperCase();
-  if (s === "OFF") return "OFF";
+  if (s === "OFF" || s === "DEACTIVE" || s === "INACTIVE") return "OFF";
   if (s === "DELETED") return "DELETED";
   return "ON";
 }
@@ -60,6 +60,23 @@ function excelTime(v: any) {
   if (/^\d{1,2}:\d{2}$/.test(s)) return `${s}:00`;
   if (/^\d{1,2}:\d{2}:\d{2}$/.test(s)) return s;
   return s;
+}
+
+function menuRank(menuType: any) {
+  const s = text(menuType).toLowerCase();
+
+  if (s.includes("breakfast")) return 1;
+  if (s.includes("combo")) return 2;
+  if (s.includes("thali")) return 3;
+  if (s.includes("rice")) return 4;
+  if (s.includes("biryani")) return 5;
+  if (s.includes("roti")) return 6;
+  if (s.includes("paratha")) return 7;
+  if (s.includes("snack")) return 8;
+  if (s.includes("sweet")) return 9;
+  if (s.includes("bulk")) return 10;
+
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -127,14 +144,14 @@ export async function POST(req: Request) {
       const row = excelRows[i];
       const rowNo = i + 2;
 
-      const itemName = text(value(row, ["item_name", "Item Name", "ItemName"]));
+      const itemName = text(value(row, ["item_name", "Item Name", "ItemName", "itemName"]));
 
       if (!itemName) {
         errors.push(`Row ${rowNo}: item_name required`);
         continue;
       }
 
-      let itemCode = text(value(row, ["item_code", "Item Code", "ItemCode"]));
+      let itemCode = text(value(row, ["item_code", "Item Code", "ItemCode", "itemId", "item_id"]));
 
       let existing: any = null;
 
@@ -150,29 +167,36 @@ export async function POST(req: Request) {
         itemCode = String(maxItemCode);
       }
 
-      const basePrice = num(value(row, ["base_price", "Base Price", "BasePrice"]));
-      const gstPercent = num(value(row, ["gst_percent", "GST %", "GST", "GST Percent", "GstPercent"]));
-      let sellingPrice = num(value(row, ["selling_price", "Selling Price", "SellingPrice"]));
+      const basePrice = num(value(row, ["base_price", "Base Price", "BasePrice", "basePrice"]));
+      const gstPercent = num(value(row, ["gst_percent", "GST %", "GST", "GST Percent", "GstPercent", "basePriceGstRate"]));
+      const basePriceGst = num(value(row, ["base_price_gst", "Base Price GST", "basePriceGst"]));
+
+      let sellingPrice = num(value(row, ["selling_price", "Selling Price", "SellingPrice", "sellingPrice"]));
 
       if (sellingPrice === null && basePrice !== null && gstPercent !== null) {
         sellingPrice = Number((basePrice + (basePrice * gstPercent) / 100).toFixed(2));
       }
 
+      const menuType = text(value(row, ["menu_type", "Menu Type", "MenuType", "typeName"]));
+
       const payload: any = {
         restro_code: restroCode,
         item_code: itemCode,
         item_name: itemName,
-        item_description: text(value(row, ["item_description", "Item Description", "Description"])) || null,
-        item_category: text(value(row, ["item_category", "Item Category", "Category"])) || null,
-        item_cuisine: text(value(row, ["item_cuisine", "Item Cuisine", "Cuisine"])) || null,
-        menu_type: text(value(row, ["menu_type", "Menu Type", "MenuType"])) || null,
-        start_time: excelTime(value(row, ["start_time", "Start Time", "StartTime"])),
-        end_time: excelTime(value(row, ["end_time", "End Time", "EndTime"])),
-        restro_price: num(value(row, ["restro_price", "Restro Price", "RestroPrice"])),
+        item_description: text(value(row, ["item_description", "Item Description", "Description", "itemDescription"])) || null,
+        item_category: text(value(row, ["item_category", "Item Category", "Category", "categoryType"])) || null,
+        item_cuisine: text(value(row, ["item_cuisine", "Item Cuisine", "Cuisine", "cuisineName"])) || null,
+        menu_type: menuType || null,
+        start_time: excelTime(value(row, ["start_time", "Start Time", "StartTime", "itemStartTime"])),
+        end_time: excelTime(value(row, ["end_time", "End Time", "EndTime", "itemEndTime"])),
+        restro_price: num(value(row, ["restro_price", "Restro Price", "RestroPrice", "Vendor Price", "VendorPrice"])),
         base_price: basePrice,
         gst_percent: gstPercent,
         selling_price: sellingPrice,
         status: statusValue(value(row, ["status", "Status"])),
+        base_price_gst: basePriceGst,
+        menu_type_rank: menuRank(menuType),
+        menu_item_image: text(value(row, ["menu_item_image", "Menu Item Image", "image"])) || null,
         updated_at: new Date().toISOString(),
       };
 
