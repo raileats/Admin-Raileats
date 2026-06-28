@@ -99,7 +99,15 @@ export default function RestroUserPasswordClient({
       title="Restro User & Password"
       subtitle="Manage restaurant login credentials"
       actions={
-        <AdminButton onClick={save} disabled={saving || !canSave}>
+        <AdminButton
+          onClick={save}
+          disabled={saving || !canSave}
+          className={
+            saving || !canSave
+              ? "cursor-not-allowed opacity-50 pointer-events-none"
+              : ""
+          }
+        >
           {saving ? "Saving..." : "Save"}
         </AdminButton>
       }
