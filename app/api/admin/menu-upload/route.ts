@@ -62,6 +62,23 @@ function excelTime(v: any) {
   return s;
 }
 
+function safeMenuType(v: any) {
+  const s = text(v);
+
+  const allowed = [
+    "Thalis",
+    "Combos",
+    "Rice And Biryani",
+    "Roti Paratha",
+    "Breakfast",
+    "Snacks",
+    "Sweets",
+  ];
+
+  const found = allowed.find((x) => x.toLowerCase() === s.toLowerCase());
+  return found || null;
+}
+
 function menuRank(menuType: any) {
   const s = text(menuType).toLowerCase();
 
@@ -177,7 +194,8 @@ export async function POST(req: Request) {
         sellingPrice = Number((basePrice + (basePrice * gstPercent) / 100).toFixed(2));
       }
 
-      const menuType = text(value(row, ["menu_type", "Menu Type", "MenuType", "typeName"]));
+      const rawMenuType = text(value(row, ["menu_type", "Menu Type", "MenuType", "typeName"]));
+      const menuType = safeMenuType(rawMenuType);
 
       const payload: any = {
         restro_code: restroCode,
@@ -186,7 +204,7 @@ export async function POST(req: Request) {
         item_description: text(value(row, ["item_description", "Item Description", "Description", "itemDescription"])) || null,
         item_category: text(value(row, ["item_category", "Item Category", "Category", "categoryType"])) || null,
         item_cuisine: text(value(row, ["item_cuisine", "Item Cuisine", "Cuisine", "cuisineName"])) || null,
-        menu_type: menuType || null,
+        menu_type: menuType,
         start_time: excelTime(value(row, ["start_time", "Start Time", "StartTime", "itemStartTime"])),
         end_time: excelTime(value(row, ["end_time", "End Time", "EndTime", "itemEndTime"])),
         restro_price: num(value(row, ["restro_price", "Restro Price", "RestroPrice", "Vendor Price", "VendorPrice"])),
@@ -195,7 +213,7 @@ export async function POST(req: Request) {
         selling_price: sellingPrice,
         status: statusValue(value(row, ["status", "Status"])),
         base_price_gst: basePriceGst,
-        menu_type_rank: menuRank(menuType),
+        menu_type_rank: menuRank(rawMenuType),
         menu_item_image: text(value(row, ["menu_item_image", "Menu Item Image", "image"])) || null,
         updated_at: new Date().toISOString(),
       };
