@@ -40,6 +40,12 @@ export default function MenuItemsTable() {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadRestroCode, setUploadRestroCode] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   const pageSize = 50;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -70,6 +76,48 @@ export default function MenuItemsTable() {
       setError(e?.message || "Failed to load menu items");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function uploadMenuExcel() {
+    if (!uploadRestroCode.trim()) {
+      alert("Restro Code required");
+      return;
+    }
+    if (!uploadFile) {
+      alert("Please select Excel file");
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("restroCode", uploadRestroCode.trim());
+      formData.append("file", uploadFile);
+
+      const res = await fetch("/api/admin/menu-upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || "Menu upload failed");
+      }
+
+      alert(json?.message || "Menu uploaded successfully");
+      setUploadOpen(false);
+      setUploadRestroCode("");
+      setUploadFile(null);
+      setRestroCode(uploadRestroCode.trim());
+      load(1);
+    } catch (e: any) {
+      setError(e?.message || "Menu upload failed");
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -147,7 +195,7 @@ export default function MenuItemsTable() {
           event.preventDefault();
           load(1);
         }}
-        className="grid grid-cols-1 gap-3 lg:grid-cols-[180px_1fr_180px_auto_auto_auto] lg:items-end"
+        className="grid grid-cols-1 gap-3 lg:grid-cols-[180px_1fr_180px_auto_auto_auto_auto] lg:items-end"
       >
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-slate-600">Restro Code</span>
@@ -158,6 +206,7 @@ export default function MenuItemsTable() {
             placeholder="1004"
           />
         </label>
+
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-slate-600">Item Name</span>
           <input
@@ -167,6 +216,7 @@ export default function MenuItemsTable() {
             placeholder="Veg Mini Thali"
           />
         </label>
+
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-slate-600">Status</span>
           <select
@@ -180,12 +230,15 @@ export default function MenuItemsTable() {
             <option value="DELETED">DELETED</option>
           </select>
         </label>
+
         <button type="button" onClick={clearFilters} className="h-10 rounded-md border px-4 text-sm font-semibold">
           Clear
         </button>
+
         <button type="submit" className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white">
           Search
         </button>
+
         <button
           type="button"
           onClick={downloadMenuReport}
@@ -194,9 +247,70 @@ export default function MenuItemsTable() {
         >
           {downloading ? "Downloading..." : "Download Report"}
         </button>
+
+        <button
+          type="button"
+          onClick={() => setUploadOpen(true)}
+          className="h-10 rounded-md bg-purple-600 px-4 text-sm font-semibold text-white"
+        >
+          Upload Menu
+        </button>
       </form>
 
       {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div> : null}
+
+      {uploadOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">Upload Menu Excel</h3>
+              <button
+                type="button"
+                onClick={() => setUploadOpen(false)}
+                className="rounded border px-3 py-1 text-sm font-semibold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-600">Restro Code</span>
+                <input
+                  value={uploadRestroCode}
+                  onChange={(e) => setUploadRestroCode(e.target.value.replace(/\D/g, ""))}
+                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
+                  placeholder="1004"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-600">Excel File</span>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <div className="rounded bg-slate-50 p-3 text-xs text-slate-600">
+                Required columns: item_name, item_category, menu_type, start_time, end_time,
+                restro_price, base_price, gst_percent, selling_price, status
+              </div>
+
+              <button
+                type="button"
+                onClick={uploadMenuExcel}
+                disabled={uploading}
+                className="h-10 w-full rounded-md bg-purple-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {uploading ? "Uploading..." : "Upload Menu"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="overflow-auto rounded-md border">
         <table className="min-w-full text-sm">
