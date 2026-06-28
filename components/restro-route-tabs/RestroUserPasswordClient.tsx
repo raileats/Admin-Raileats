@@ -104,6 +104,7 @@ export default function RestroUserPasswordClient({
           "Cache-Control": "no-store",
         },
         body: JSON.stringify({
+          RestroUserName: String(form.RestroUserName ?? "").trim(),
           RestroLoginMobile: nextMobile,
           RestroPassword: nextPassword,
         }),
@@ -117,6 +118,7 @@ export default function RestroUserPasswordClient({
 
       setForm((prev) => ({
         ...prev,
+        RestroUserName: String(form.RestroUserName ?? "").trim(),
         RestroLoginMobile: nextMobile,
         RestroPassword: nextPassword,
       }));
