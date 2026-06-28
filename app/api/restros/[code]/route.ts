@@ -78,7 +78,6 @@ async function updateRestro(restroCode: number, payload: Record<string, any>) {
   if (!missingColumn) return { data, error };
 
   const optionalKeys = [
-    "RestroUserName",
     "RestroUsername",
     "UserName",
     "Password",
@@ -168,15 +167,7 @@ export async function PATCH(
     setIfDefined(
       payload,
       "RestroPhone",
-      phone(
-        firstDefined(
-          body.RestroPhone,
-          body.restroPhone,
-          body.RestroMobile,
-          body.RestaurantPhone,
-          body.Phone
-        )
-      )
+      phone(firstDefined(body.RestroPhone, body.restroPhone, body.RestroMobile, body.RestaurantPhone, body.Phone))
     );
     setIfDefined(payload, "BrandNameifAny", text(body.BrandNameifAny));
 
@@ -203,8 +194,8 @@ export async function PATCH(
 
     setIfDefined(payload, "RestroLoginMobile", phone(body.RestroLoginMobile));
     setIfDefined(payload, "RestroPassword", text(body.RestroPassword));
-
     setIfDefined(payload, "RestroUserName", text(body.RestroUserName));
+
     setIfDefined(payload, "RestroUsername", text(body.RestroUsername));
     setIfDefined(payload, "UserName", text(body.UserName));
     setIfDefined(payload, "Password", text(body.Password));
@@ -214,18 +205,12 @@ export async function PATCH(
     payload.UpdatedAt = new Date().toISOString();
 
     const expectedRestroPhone = phone(
-      firstDefined(
-        body.RestroPhone,
-        body.restroPhone,
-        body.RestroMobile,
-        body.RestaurantPhone,
-        body.Phone
-      )
+      firstDefined(body.RestroPhone, body.restroPhone, body.RestroMobile, body.RestaurantPhone, body.Phone)
     );
-
     const expectedDeliveryGst = num(body.RaileatsCustomerDeliveryChargeGST);
     const expectedLoginMobile = phone(body.RestroLoginMobile);
     const expectedPassword = text(body.RestroPassword);
+    const expectedUserName = text(body.RestroUserName);
 
     const { data, error } = await updateRestro(RestroCode, payload);
 
@@ -262,10 +247,7 @@ export async function PATCH(
         .select("*")
         .single();
 
-      if (
-        phoneRetryError ||
-        !sameText(phoneRetryRow?.RestroPhone, expectedRestroPhone)
-      ) {
+      if (phoneRetryError || !sameText(phoneRetryRow?.RestroPhone, expectedRestroPhone)) {
         verifyErrors.push(
           `RestroPhone save verify failed. Expected ${expectedRestroPhone ?? "blank"}, got ${phoneRetryRow?.RestroPhone ?? freshRow?.RestroPhone ?? "blank"}`
         );
@@ -298,6 +280,15 @@ export async function PATCH(
     ) {
       verifyErrors.push(
         `RestroPassword save verify failed. Expected ${expectedPassword ?? "blank"}, got ${freshRow?.RestroPassword ?? "blank"}`
+      );
+    }
+
+    if (
+      body.RestroUserName !== undefined &&
+      !sameText(freshRow?.RestroUserName, expectedUserName)
+    ) {
+      verifyErrors.push(
+        `RestroUserName save verify failed. Expected ${expectedUserName ?? "blank"}, got ${freshRow?.RestroUserName ?? "blank"}`
       );
     }
 
