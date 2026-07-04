@@ -24,6 +24,9 @@ const menu: Item[] = [
   { href: '/admin/bulk', label: 'Bulk Orders', icon: 'fa-solid fa-layer-group' },
   { href: '/admin/customers', label: 'Customers', icon: 'fa-solid fa-user-group' },
   { href: '/admin/feedback', label: 'Feedback', icon: 'fa-solid fa-comments' },
+
+  // 🌐 NEW WEBSITE CMS
+  { href: '/admin/website', label: 'Website CMS', icon: 'fa-solid fa-globe' },
 ];
 
 export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
@@ -59,7 +62,9 @@ export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) 
 
         <ul className="nav flex-column">
           {menu.map((m) => {
-            const isActive = pathname === m.href;
+            const isActive =
+              pathname === m.href ||
+              (m.href !== '/admin' && pathname.startsWith(m.href));
 
             return (
               <li key={m.href} className="sidebar-item">
