@@ -33,7 +33,8 @@ type Order = {
   coach?: string;
   seat?: string;
   customerName: string;
-  customerMobile: string;
+  customerMobile: string; 
+  paymentMode?: string;
   total?: string;
   history: OrderHistoryItem[];
   rawCreatedAt?: string; // Correct fallback sorting key for booking chronology
