@@ -288,32 +288,27 @@ const dbStatus = statusFilter
   ? statusMap[statusFilter] || statusFilter
   : null;
 
-    let query = supa
-      .from("Orders")
-      .select(
-  `
-  .select(
-  `
-  OrderId,
-  RestroCode,
-  RestroName,
-  StationCode,
-  StationName,
-  DeliveryDate,
-  DeliveryTime,
-  TrainNumber,
-  Coach,
-  Seat,
-  CustomerName,
-  CustomerMobile,
-  TotalAmount,
-  PaymentMode,
-  Status,
-  SubStatus
-`
-)
-      .order("CreatedAt", { ascending: false });
-
+   let query = supa
+  .from("Orders")
+  .select(`
+    OrderId,
+    RestroCode,
+    RestroName,
+    StationCode,
+    StationName,
+    DeliveryDate,
+    DeliveryTime,
+    TrainNumber,
+    Coach,
+    Seat,
+    CustomerName,
+    CustomerMobile,
+    TotalAmount,
+    PaymentMode,
+    Status,
+    SubStatus
+  `)
+  .order("CreatedAt", { ascending: false });
     if (statusFilter) {
 
   if (statusFilter === "baddelivery") {
