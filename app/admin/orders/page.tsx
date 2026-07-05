@@ -418,7 +418,8 @@ const res = await fetch(
             customerName: String(row.customerName ?? row.CustomerName ?? ""),
             customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
             total: row.totalAmount != null ? String(row.totalAmount) : (row.TotalAmount != null ? String(row.TotalAmount) : undefined),
-            history: Array.isArray(row.history) ? row.history : [],
+            paymentMode: row.paymentMode ?? row.PaymentMode ?? "COD",
+      history: Array.isArray(row.history) ? row.history : [],
             rawCreatedAt: row.CreatedAt ?? row.createdAt ?? "",
           };
         });
@@ -1303,6 +1304,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                 <th style={{ padding: 12 }}>Seat</th>
                 <th style={{ padding: 12 }}>Customer Name</th>
                 <th style={{ padding: 12 }}>Customer Mobile</th>
+                <th style={{ padding: 12 }}>Payment</th>
                 <th style={{ padding: 12 }}>Order Process Log</th>
                 <th style={{ padding: 12, textAlign: "center" }}>Actions</th>
               </tr>
@@ -1390,6 +1392,18 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                   <td style={{ padding: 12 }}>{o.seat || "-"}</td>
                   <td style={{ padding: 12, fontWeight: 600 }}>{o.customerName}</td>
                   <td style={{ padding: 12, fontFamily: "monospace" }}>{o.customerMobile}</td>
+                <td style={{ padding: 12 }}>
+                  <span style={{
+                    padding:"4px 10px",
+                    borderRadius:999,
+                    fontWeight:700,
+                    fontSize:12,
+                    background:(o.paymentMode==="ONLINE"?"#dcfce7":"#fee2e2"),
+                    color:(o.paymentMode==="ONLINE"?"#166534":"#991b1b")
+                  }}>
+                    {o.paymentMode==="ONLINE"?"PPD":"COD"}
+                  </span>
+                </td>
 
                   {/* Order process log opens the centered log view */}
                   <td style={{ padding: 12 }}>
