@@ -292,6 +292,8 @@ const dbStatus = statusFilter
       .from("Orders")
       .select(
   `
+  .select(
+  `
   OrderId,
   RestroCode,
   RestroName,
@@ -305,6 +307,7 @@ const dbStatus = statusFilter
   CustomerName,
   CustomerMobile,
   TotalAmount,
+  PaymentMode,
   Status,
   SubStatus
 `
@@ -339,23 +342,24 @@ const dbStatus = statusFilter
       return NextResponse.json({ error: "orders_fetch_failed" }, { status: 500 });
     }
 
-    const orders = (data || []).map((row: any) => ({
-      id: row.OrderId as string,
-      status: (row.Status || "booked") as string,
-      restroCode: row.RestroCode,
-      restroName: row.RestroName,
-      stationCode: row.StationCode,
-      stationName: row.StationName,
-      deliveryDate: row.DeliveryDate, // "YYYY-MM-DD"
-      deliveryTime: row.DeliveryTime, // "HH:MM" / "HH:MM:SS"
-      trainNumber: row.TrainNumber,
-      coach: row.Coach,
-      seat: row.Seat,
-      customerName: row.CustomerName,
-      customerMobile: row.CustomerMobile,
-      totalAmount: Number(row.TotalAmount ?? 0),
-      history: [] as any[], // baad me OrderStatusHistory se bhi bhar sakte hain
-    }));
+   const orders = (data || []).map((row: any) => ({
+  id: row.OrderId as string,
+  status: (row.Status || "booked") as string,
+  restroCode: row.RestroCode,
+  restroName: row.RestroName,
+  stationCode: row.StationCode,
+  stationName: row.StationName,
+  deliveryDate: row.DeliveryDate,
+  deliveryTime: row.DeliveryTime,
+  trainNumber: row.TrainNumber,
+  coach: row.Coach,
+  seat: row.Seat,
+  customerName: row.CustomerName,
+  customerMobile: row.CustomerMobile,
+  totalAmount: Number(row.TotalAmount ?? 0),
+  paymentMode: row.PaymentMode ?? "COD",
+  history: [] as any[],
+}));
 
     return NextResponse.json({ ok: true, orders });
   } catch (err) {
