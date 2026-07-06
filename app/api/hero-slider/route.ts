@@ -4,6 +4,20 @@ import { serviceClient } from "@/lib/supabaseServer";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Cache-Control": "no-store",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 export async function GET() {
   try {
     const { data, error } = await serviceClient
@@ -14,14 +28,23 @@ export async function GET() {
       .order("id", { ascending: true });
 
     if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500, headers: corsHeaders }
+      );
     }
 
-    return NextResponse.json({ success: true, data: data ?? [] }, { status: 200 });
+    return NextResponse.json(
+      { success: true, data: data ?? [] },
+      { status: 200, headers: corsHeaders }
+    );
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Unexpected server error" },
-      { status: 500 }
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Unexpected server error",
+      },
+      { status: 500, headers: corsHeaders }
     );
   }
 }
