@@ -71,7 +71,7 @@ export default function HeroSlider() {
 
     async function loadSliders() {
       try {
-        const response = await fetch("/api/hero-slider", {
+        const response = await fetch("https://admin.raileats.in/api/hero-slider", {
           method: "GET",
           cache: "no-store",
         });
