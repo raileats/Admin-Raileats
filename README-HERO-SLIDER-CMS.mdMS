@@ -1,0 +1,92 @@
+# RailEats Hero Slider CMS
+
+## SQL Table
+
+The feature uses the existing Supabase table:
+
+```sql
+public.hero_slider
+- id bigint identity primary key
+- title text
+- image_url text not null
+- sort_order integer default 1
+- active boolean default true
+- created_at timestamptz default now()
+```
+
+## Storage Bucket
+
+The feature uses the existing Supabase Storage bucket:
+
+```txt
+hero-slider
+```
+
+Uploaded files are stored under:
+
+```txt
+hero-slider/homepage/
+```
+
+## Files Created
+
+```txt
+app/admin/website/hero-slider/page.tsx
+components/admin/HeroSliderManager.tsx
+app/api/admin/hero-slider/route.ts
+app/api/hero-slider/route.ts
+components/HeroSlider.tsx
+```
+
+## How Admin Uploads Image
+
+1. Open Admin page:
+
+```txt
+/admin/website/hero-slider
+```
+
+2. Select a JPG, PNG or WebP image.
+3. Enter optional title.
+4. Set sort order.
+5. Choose active or inactive.
+6. Click Save Slider.
+
+The admin API uploads the image to Supabase Storage bucket `hero-slider`, creates a public URL, and inserts the record into `public.hero_slider`.
+
+Editing a slider can update title, order, active status, and optionally replace the image.
+
+Deleting a slider removes the database row and also tries to remove the uploaded storage image.
+
+## How Homepage Fetches Slider
+
+The public frontend component `components/HeroSlider.tsx` fetches:
+
+```txt
+/api/hero-slider
+```
+
+That API returns only active sliders ordered by `sort_order` ascending:
+
+```txt
+id
+title
+image_url
+sort_order
+```
+
+If there are no active sliders or the API fails, the component uses fallback images:
+
+```txt
+/slides/happy-new-year.png
+/slides/offer50.png
+/slides/offer20.png
+/slides/offer-combo.png
+/slides/hot-fresh.png
+```
+
+Recommended uploaded image size:
+
+```txt
+1600 x 900 px
+```
