@@ -44,4 +44,9 @@ export const adminNavItems = [
     label: "Users",
     icon: Users,
   },
+  {
+    href: "/admin/customers",
+    label: "Customers",
+    icon: Users,
+  },
 ] as const;
