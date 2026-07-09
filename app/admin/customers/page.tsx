@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { serviceClient } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
@@ -302,7 +303,7 @@ function SearchField({
   );
 }
 
-function TableHead({ children }: { children: React.ReactNode }) {
+function TableHead({ children }: { children: ReactNode }) {
   return (
     <th className="border border-slate-200 px-3 py-3 text-left text-sm font-black text-slate-700">
       {children}
@@ -314,7 +315,7 @@ function TableCell({
   children,
   strong,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   strong?: boolean;
 }) {
   return (
