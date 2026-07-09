@@ -20,15 +20,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error } = await serviceClient
-      .from("customers")
-      .update({ active })
-      .eq("customer_id", customerId);
+    const activeColumnCandidates = ["active", "Active", "is_active", "IsActive"];
+    let lastError: any = null;
+    let updated = false;
 
-    if (error) {
-      console.error("ADMIN CUSTOMER STATUS UPDATE ERROR:", error);
+    for (const columnName of activeColumnCandidates) {
+      const { error } = await serviceClient
+        .from("customers")
+        .update({ [columnName]: active })
+        .eq("customer_id", customerId);
+
+      if (!error) {
+        updated = true;
+        break;
+      }
+
+      lastError = error;
+    }
+
+    if (!updated) {
+      console.error("ADMIN CUSTOMER STATUS UPDATE ERROR:", lastError);
       return NextResponse.json(
-        { ok: false, error: "db_update_failed" },
+        {
+          ok: false,
+          error: "db_update_failed",
+          details:
+            "No supported active column found. Add active boolean column in customers table or rename the API column.",
+        },
         { status: 500 },
       );
     }
