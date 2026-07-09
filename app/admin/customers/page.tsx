@@ -13,10 +13,6 @@ type CustomerRow = {
   created_at: string | null;
   user_type_agent?: string | null;
   UserTypeAgent?: string | null;
-  active?: boolean | string | number | null;
-  Active?: boolean | string | number | null;
-  is_active?: boolean | string | number | null;
-  IsActive?: boolean | string | number | null;
 };
 
 type PageProps = {
@@ -70,22 +66,9 @@ function getUserTypeAgent(customer: CustomerRow) {
   return customer.user_type_agent || customer.UserTypeAgent || "-";
 }
 
-function getCustomerActiveValue(customer: CustomerRow) {
-  return (
-    customer.active ??
-    customer.Active ??
-    customer.is_active ??
-    customer.IsActive ??
-    true
-  );
-}
-
-function isActiveCustomer(value: CustomerRow["active"]) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value === 1;
-
-  const text = String(value ?? "").trim().toLowerCase();
-  return ["1", "true", "active", "yes"].includes(text);
+function isActiveCustomer(customer: CustomerRow) {
+  const text = getUserTypeAgent(customer).trim().toLowerCase();
+  return text === "active";
 }
 
 function normalizeSearch(value?: string) {
@@ -256,29 +239,25 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                         />
                         <input
                           type="hidden"
-                          name="active"
-                          value={
-                            isActiveCustomer(getCustomerActiveValue(customer))
-                              ? "false"
-                              : "true"
-                          }
+                          name="user_type_agent"
+                          value={isActiveCustomer(customer) ? "Inactive" : "Active"}
                         />
                         <button
                           type="submit"
                           aria-label={
-                            isActiveCustomer(getCustomerActiveValue(customer))
+                            isActiveCustomer(customer)
                               ? "Set customer inactive"
                               : "Set customer active"
                           }
                           className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                            isActiveCustomer(getCustomerActiveValue(customer))
+                            isActiveCustomer(customer)
                               ? "bg-emerald-500"
                               : "bg-slate-300"
                           }`}
                         >
                           <span
                             className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${
-                              isActiveCustomer(getCustomerActiveValue(customer))
+                              isActiveCustomer(customer)
                                 ? "translate-x-5"
                                 : "translate-x-1"
                             }`}
