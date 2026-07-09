@@ -3,15 +3,16 @@ import { serviceClient } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
 
-function parseActive(value: FormDataEntryValue | null) {
-  return String(value ?? "").trim().toLowerCase() === "true";
+function normalizeStatus(value: FormDataEntryValue | null) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return text === "active" ? "Active" : "Inactive";
 }
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const customerId = String(formData.get("customer_id") ?? "").trim();
-    const active = parseActive(formData.get("active"));
+    const userTypeAgent = normalizeStatus(formData.get("user_type_agent"));
 
     if (!customerId) {
       return NextResponse.json(
@@ -20,32 +21,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const activeColumnCandidates = ["active", "Active", "is_active", "IsActive"];
-    let lastError: any = null;
-    let updated = false;
+    const { error } = await serviceClient
+      .from("customers")
+      .update({ user_type_agent: userTypeAgent })
+      .eq("customer_id", customerId);
 
-    for (const columnName of activeColumnCandidates) {
-      const { error } = await serviceClient
-        .from("customers")
-        .update({ [columnName]: active })
-        .eq("customer_id", customerId);
-
-      if (!error) {
-        updated = true;
-        break;
-      }
-
-      lastError = error;
-    }
-
-    if (!updated) {
-      console.error("ADMIN CUSTOMER STATUS UPDATE ERROR:", lastError);
+    if (error) {
+      console.error("ADMIN CUSTOMER STATUS UPDATE ERROR:", error);
       return NextResponse.json(
         {
           ok: false,
           error: "db_update_failed",
-          details:
-            "No supported active column found. Add active boolean column in customers table or rename the API column.",
+          details: error.message,
         },
         { status: 500 },
       );
