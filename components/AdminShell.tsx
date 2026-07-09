@@ -1,374 +1,330 @@
-"use client";
+import type { ReactNode } from "react";
+import { serviceClient } from "@/lib/supabaseServer";
 
-import React, { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-import {
-  Home,
-  ListOrdered,
-  LogOut,
-  MapPin,
-  Menu,
-  Train,
-  Users,
-  Utensils,
-  WalletCards,
-  X,
-} from "lucide-react";
-import AuthGuard from "@/components/admin/AuthGuard";
+export const dynamic = "force-dynamic";
 
-const supabaseNotify = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-type User = {
-  id?: string;
-  user_id?: string;
-  user_type?: string;
-  name?: string | null;
-  mobile?: string | null;
-  photo_url?: string | null;
-  email?: string | null;
-} | null;
-
-type Props = {
-  children: React.ReactNode;
-  currentUser?: User;
-  requireAuth?: boolean;
+type CustomerRow = {
+  customer_id: string | number | null;
+  mobile: string | number | null;
+  name: string | null;
+  email: string | null;
+  wallet_balance: string | number | null;
+  last_login_at: string | null;
+  created_at: string | null;
+  user_type_agent: string | null;
+  active: boolean | string | number | null;
 };
 
-const adminNavItems = [
-  { href: "/admin/home", label: "Dashboard", icon: Home },
-  { href: "/admin/orders", label: "Orders", icon: ListOrdered },
-  { href: "/admin/restros", label: "Restro Master", icon: Utensils },
-  { href: "/admin/menu", label: "Menu", icon: WalletCards },
-  { href: "/admin/trains", label: "Trains", icon: Train },
-  { href: "/admin/stations", label: "Stations", icon: MapPin },
-  { href: "/admin/users", label: "Users", icon: Users },
-  { href: "/admin/customers", label: "Customers", icon: Users },
-] as const;
+type PageProps = {
+  searchParams?: {
+    customer_id?: string;
+    mobile?: string;
+    name?: string;
+    email?: string;
+  };
+};
 
-function userLabel(user?: User) {
-  if (!user) return "Admin";
-  return user.name || user.mobile || user.email || "Admin";
-}
+function formatMobile(value: string | number | null) {
+  const digits = String(value ?? "").replace(/\D/g, "");
 
-function isActivePath(pathname: string, href: string) {
-  if (href === "/admin/home") {
-    return pathname === "/admin" || pathname === "/admin/home";
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return digits.slice(2);
   }
-  return pathname === href || pathname.startsWith(`${href}/`);
+
+  return digits || "-";
 }
 
-export default function AdminShell({
-  children,
-  currentUser,
-  requireAuth = true,
-}: Props) {
-  const pathname = usePathname() || "";
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+function formatDateTime(value: string | null) {
+  if (!value) return "-";
 
-  const hideChrome =
-    pathname === "/admin/login" || pathname.startsWith("/admin/login/");
+  const text = String(value).trim();
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/);
 
-  const playGlobalNewOrderSound = async () => {
-    try {
-      if (!audioRef.current) {
-        audioRef.current = new Audio("/sounds/new-order.mp3");
-        audioRef.current.preload = "auto";
-        audioRef.current.volume = 1;
-      }
+  if (match) {
+    return `${match[1]} ${match[2]}`;
+  }
 
-      audioRef.current.muted = false;
-      audioRef.current.volume = 1;
-      audioRef.current.currentTime = 0;
-      await audioRef.current.play();
-    } catch (e) {
-      console.log("Global MP3 failed", e);
-    }
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text.slice(0, 16);
 
-    try {
-      const AudioContextClass =
-        window.AudioContext || (window as any).webkitAudioContext;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
 
-      const ctx = new AudioContextClass();
-      await ctx.resume();
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
 
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
+function formatWallet(value: string | number | null) {
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) return "0";
+  return amount.toFixed(2).replace(/\.00$/, "");
+}
 
-      oscillator.type = "sine";
-      oscillator.frequency.value = 880;
+function isActiveCustomer(value: CustomerRow["active"]) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
 
-      gain.gain.setValueAtTime(0.8, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
+  const text = String(value ?? "").trim().toLowerCase();
+  return ["1", "true", "active", "yes"].includes(text);
+}
 
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
+function normalizeSearch(value?: string) {
+  return String(value || "").trim();
+}
 
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.8);
-    } catch (e) {
-      console.log("Global fallback beep failed", e);
-    }
+async function getCustomers(searchParams: PageProps["searchParams"]) {
+  const customerId = normalizeSearch(searchParams?.customer_id);
+  const mobile = normalizeSearch(searchParams?.mobile).replace(/\D/g, "");
+  const name = normalizeSearch(searchParams?.name);
+  const email = normalizeSearch(searchParams?.email);
+
+  let query = serviceClient
+    .from("customers")
+    .select(
+      "customer_id,mobile,name,email,wallet_balance,last_login_at,created_at,user_type_agent,active",
+    )
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (customerId) {
+    query = query.eq("customer_id", customerId);
+  }
+
+  if (mobile) {
+    const mobileWithCountryCode =
+      mobile.length === 10 ? `91${mobile}` : mobile;
+    query = query.ilike("mobile", `%${mobileWithCountryCode}%`);
+  }
+
+  if (name) {
+    query = query.ilike("name", `%${name}%`);
+  }
+
+  if (email) {
+    query = query.ilike("email", `%${email}%`);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("ADMIN CUSTOMERS FETCH ERROR:", error);
+    return {
+      customers: [] as CustomerRow[],
+      error: "Unable to load customers right now.",
+    };
+  }
+
+  return {
+    customers: (Array.isArray(data) ? data : []) as CustomerRow[],
+    error: "",
   };
+}
 
-  useEffect(() => {
-    if (hideChrome) return;
+export default async function AdminCustomersPage({ searchParams }: PageProps) {
+  const { customers, error } = await getCustomers(searchParams);
+  const customerId = normalizeSearch(searchParams?.customer_id);
+  const mobile = normalizeSearch(searchParams?.mobile);
+  const name = normalizeSearch(searchParams?.name);
+  const email = normalizeSearch(searchParams?.email);
 
-    audioRef.current = new Audio("/sounds/new-order.mp3");
-    audioRef.current.preload = "auto";
-    audioRef.current.volume = 1;
+  return (
+    <main className="space-y-6">
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-3xl font-black text-slate-950">Customers</h1>
+        <p className="mt-2 text-sm font-semibold text-slate-500">
+          Manage registered customer master data
+        </p>
+      </section>
 
-    const unlockAudio = async () => {
-      try {
-        if (!audioRef.current) return;
-
-        audioRef.current.muted = true;
-        await audioRef.current.play();
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current.muted = false;
-
-        console.log("Admin audio unlocked");
-      } catch (e) {
-        console.log("Audio unlock failed", e);
-      }
-    };
-
-    window.addEventListener("click", unlockAudio, { once: true });
-    window.addEventListener("touchstart", unlockAudio, { once: true });
-    window.addEventListener("keydown", unlockAudio, { once: true });
-
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission().catch(() => {});
-    }
-
-    return () => {
-      window.removeEventListener("click", unlockAudio);
-      window.removeEventListener("touchstart", unlockAudio);
-      window.removeEventListener("keydown", unlockAudio);
-    };
-  }, [hideChrome]);
-
-  useEffect(() => {
-    if (hideChrome) return;
-
-    const channel = supabaseNotify
-      .channel("admin-global-new-order-notification")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "Orders" },
-        async (payload) => {
-          console.log("GLOBAL NEW ORDER:", payload);
-
-          await playGlobalNewOrderSound();
-
-          try {
-            if ("Notification" in window && Notification.permission === "granted") {
-              new Notification("🚆 New RailEats Order", {
-                body: `${payload.new?.customerName || "Customer"} • ${
-                  payload.new?.stationName || ""
-                }`,
-              });
-            }
-          } catch (e) {}
-        }
-      )
-      .subscribe((status) => {
-        console.log("Global order notification status:", status);
-      });
-
-    return () => {
-      supabaseNotify.removeChannel(channel);
-    };
-  }, [hideChrome]);
-
-  const handleLogout = async (e?: React.MouseEvent) => {
-    e?.preventDefault();
-
-    try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch (err) {
-      console.error("Logout failed", err);
-    } finally {
-      window.location.replace("/admin/login");
-    }
-  };
-
-  if (hideChrome) return <>{children}</>;
-
-  const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
-    <>
-      <div className="flex h-20 items-center gap-3 border-b border-slate-200 px-4">
-        <img
-          src="/logo.png"
-          alt="RailEats"
-          className="h-10 w-10 shrink-0 rounded-md object-contain"
-        />
-
-        <div
-          className={
-            mobile
-              ? "whitespace-nowrap"
-              : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
-          }
-        >
-          <div className="text-base font-bold leading-tight">RailEats Admin</div>
-          <div className="text-xs font-medium text-slate-500">Operations</div>
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-7">
+          <h2 className="text-xl font-black text-slate-900">
+            Customers Management
+          </h2>
+          <p className="mt-2 text-sm font-semibold text-slate-500">
+            Showing {customers.length} customer records
+          </p>
         </div>
 
-        {mobile && (
-          <button
-            type="button"
-            onClick={() => setMobileOpen(false)}
-            className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"
-            aria-label="Close navigation"
-          >
-            <X size={18} />
-          </button>
-        )}
-      </div>
+        <form className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr_1fr_1fr_auto_auto]">
+          <SearchField
+            label="Search by Customer ID"
+            name="customer_id"
+            placeholder="Customer ID"
+            defaultValue={customerId}
+          />
+          <SearchField
+            label="Search by Mobile"
+            name="mobile"
+            placeholder="Mobile"
+            defaultValue={mobile}
+          />
+          <SearchField
+            label="Search by Name"
+            name="name"
+            placeholder="Name"
+            defaultValue={name}
+          />
+          <SearchField
+            label="Search by Email"
+            name="email"
+            placeholder="Email"
+            defaultValue={email}
+          />
 
-      <nav className="flex-1 space-y-1 px-3 py-5">
-        {adminNavItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActivePath(pathname, item.href);
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={item.label}
-              onClick={() => mobile && setMobileOpen(false)}
-              className={[
-                "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
-                active
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
-              ].join(" ")}
+          <div className="flex items-end">
+            <a
+              href="/admin/customers"
+              className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
-              <Icon size={20} className="shrink-0" />
-              <span
-                className={
-                  mobile
-                    ? "whitespace-nowrap"
-                    : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
-                }
-              >
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
+              Clear
+            </a>
+          </div>
 
-      <div className="border-t border-slate-200 p-3">
-        <button
-          type="button"
-          onClick={handleLogout}
-          title="Logout"
-          className="flex h-11 w-full items-center gap-3 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          <LogOut size={20} className="shrink-0" />
-          <span
-            className={
-              mobile
-                ? "whitespace-nowrap"
-                : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
-            }
-          >
-            Logout
-          </span>
-        </button>
-      </div>
-    </>
+          <div className="flex items-end">
+            <button
+              type="submit"
+              className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm hover:bg-blue-700"
+            >
+              Search
+            </button>
+          </div>
+        </form>
+
+        {error ? (
+          <div className="rounded-lg bg-red-50 p-4 text-sm font-semibold text-red-600">
+            {error}
+          </div>
+        ) : customers.length === 0 ? (
+          <div className="rounded-lg bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+            No customers found.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-50">
+                  <TableHead>Customer Id</TableHead>
+                  <TableHead>Mobile</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Wallet Balance</TableHead>
+                  <TableHead>Last Login At</TableHead>
+                  <TableHead>Created At</TableHead>
+                  <TableHead>User Type Agent</TableHead>
+                  <TableHead>Active</TableHead>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((customer, index) => (
+                  <tr
+                    key={`${customer.customer_id ?? customer.mobile}-${index}`}
+                    className={index % 2 === 0 ? "bg-white" : "bg-slate-50/60"}
+                  >
+                    <TableCell strong>{customer.customer_id ?? "-"}</TableCell>
+                    <TableCell>{formatMobile(customer.mobile)}</TableCell>
+                    <TableCell>{customer.name || "-"}</TableCell>
+                    <TableCell>{customer.email || "-"}</TableCell>
+                    <TableCell>Rs {formatWallet(customer.wallet_balance)}</TableCell>
+                    <TableCell>{formatDateTime(customer.last_login_at)}</TableCell>
+                    <TableCell>{formatDateTime(customer.created_at)}</TableCell>
+                    <TableCell>{customer.user_type_agent || "-"}</TableCell>
+                    <TableCell>
+                      <form action="/api/admin/customers/status" method="POST">
+                        <input
+                          type="hidden"
+                          name="customer_id"
+                          value={String(customer.customer_id ?? "")}
+                        />
+                        <input
+                          type="hidden"
+                          name="active"
+                          value={isActiveCustomer(customer.active) ? "false" : "true"}
+                        />
+                        <button
+                          type="submit"
+                          aria-label={
+                            isActiveCustomer(customer.active)
+                              ? "Set customer inactive"
+                              : "Set customer active"
+                          }
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                            isActiveCustomer(customer.active)
+                              ? "bg-emerald-500"
+                              : "bg-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${
+                              isActiveCustomer(customer.active)
+                                ? "translate-x-5"
+                                : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </form>
+                    </TableCell>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </main>
   );
+}
 
-  const shell = (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
-      <aside
-        className={[
-          "fixed left-0 top-0 z-50 flex h-screen w-72 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 lg:hidden",
-          mobileOpen ? "translate-x-0" : "-translate-x-full",
-        ].join(" ")}
-      >
-        <SidebarContent mobile />
-      </aside>
-
-      <div className="flex min-h-screen">
-        <aside className="group/sidebar hidden w-20 shrink-0 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 hover:w-56 lg:flex lg:flex-col">
-          <SidebarContent />
-        </aside>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-7">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setMobileOpen(true)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 lg:hidden"
-                aria-label="Open navigation"
-              >
-                <Menu size={20} />
-              </button>
-
-              <div>
-                <div className="text-lg font-bold leading-tight">Admin Panel</div>
-                <div className="hidden text-xs font-medium text-slate-500 sm:block">
-                  RailEats operations console
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="hidden text-right sm:block">
-                <div className="text-sm font-semibold">
-                  {userLabel(currentUser)}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="text-xs font-semibold text-blue-600 underline"
-                >
-                  Logout
-                </button>
-              </div>
-
-              {currentUser?.photo_url ? (
-                <img
-                  src={currentUser.photo_url}
-                  alt="Admin"
-                  className="h-10 w-10 rounded-full border border-slate-200 object-cover"
-                />
-              ) : (
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-700">
-                  <Users size={20} />
-                </div>
-              )}
-            </div>
-          </header>
-
-          <main className="flex-1 px-4 py-6 lg:px-7">
-            <div className="mx-auto w-full max-w-[1560px]">{children}</div>
-          </main>
-        </div>
-      </div>
-    </div>
+function SearchField({
+  label,
+  name,
+  placeholder,
+  defaultValue,
+}: {
+  label: string;
+  name: string;
+  placeholder: string;
+  defaultValue: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-semibold text-slate-600">
+        {label}
+      </span>
+      <input
+        name={name}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className="h-11 w-full rounded-2xl border border-amber-100 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      />
+    </label>
   );
+}
 
-  return requireAuth ? <AuthGuard>{shell}</AuthGuard> : shell;
+function TableHead({ children }: { children: ReactNode }) {
+  return (
+    <th className="border border-slate-200 px-3 py-3 text-left text-sm font-black text-slate-700">
+      {children}
+    </th>
+  );
+}
+
+function TableCell({
+  children,
+  strong,
+}: {
+  children: ReactNode;
+  strong?: boolean;
+}) {
+  return (
+    <td
+      className={`border border-slate-200 px-3 py-4 align-top ${
+        strong ? "font-black text-slate-900" : "font-semibold text-slate-700"
+      }`}
+    >
+      {children}
+    </td>
+  );
 }
