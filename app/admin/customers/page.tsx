@@ -11,8 +11,12 @@ type CustomerRow = {
   wallet_balance: string | number | null;
   last_login_at: string | null;
   created_at: string | null;
-  user_type_agent: string | null;
-  active: boolean | string | number | null;
+  user_type_agent?: string | null;
+  UserTypeAgent?: string | null;
+  active?: boolean | string | number | null;
+  Active?: boolean | string | number | null;
+  is_active?: boolean | string | number | null;
+  IsActive?: boolean | string | number | null;
 };
 
 type PageProps = {
@@ -62,6 +66,20 @@ function formatWallet(value: string | number | null) {
   return amount.toFixed(2).replace(/\.00$/, "");
 }
 
+function getUserTypeAgent(customer: CustomerRow) {
+  return customer.user_type_agent || customer.UserTypeAgent || "-";
+}
+
+function getCustomerActiveValue(customer: CustomerRow) {
+  return (
+    customer.active ??
+    customer.Active ??
+    customer.is_active ??
+    customer.IsActive ??
+    true
+  );
+}
+
 function isActiveCustomer(value: CustomerRow["active"]) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value === 1;
@@ -82,9 +100,7 @@ async function getCustomers(searchParams: PageProps["searchParams"]) {
 
   let query = serviceClient
     .from("customers")
-    .select(
-      "customer_id,mobile,name,email,wallet_balance,last_login_at,created_at,user_type_agent,active",
-    )
+    .select("*")
     .order("created_at", { ascending: false })
     .limit(500);
 
@@ -230,7 +246,7 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                     <TableCell>Rs {formatWallet(customer.wallet_balance)}</TableCell>
                     <TableCell>{formatDateTime(customer.last_login_at)}</TableCell>
                     <TableCell>{formatDateTime(customer.created_at)}</TableCell>
-                    <TableCell>{customer.user_type_agent || "-"}</TableCell>
+                    <TableCell>{getUserTypeAgent(customer)}</TableCell>
                     <TableCell>
                       <form action="/api/admin/customers/status" method="POST">
                         <input
@@ -241,24 +257,28 @@ export default async function AdminCustomersPage({ searchParams }: PageProps) {
                         <input
                           type="hidden"
                           name="active"
-                          value={isActiveCustomer(customer.active) ? "false" : "true"}
+                          value={
+                            isActiveCustomer(getCustomerActiveValue(customer))
+                              ? "false"
+                              : "true"
+                          }
                         />
                         <button
                           type="submit"
                           aria-label={
-                            isActiveCustomer(customer.active)
+                            isActiveCustomer(getCustomerActiveValue(customer))
                               ? "Set customer inactive"
                               : "Set customer active"
                           }
                           className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                            isActiveCustomer(customer.active)
+                            isActiveCustomer(getCustomerActiveValue(customer))
                               ? "bg-emerald-500"
                               : "bg-slate-300"
                           }`}
                         >
                           <span
                             className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${
-                              isActiveCustomer(customer.active)
+                              isActiveCustomer(getCustomerActiveValue(customer))
                                 ? "translate-x-5"
                                 : "translate-x-1"
                             }`}
