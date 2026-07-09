@@ -47,6 +47,7 @@ const adminNavItems = [
   { href: "/admin/trains", label: "Trains", icon: Train },
   { href: "/admin/stations", label: "Stations", icon: MapPin },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/customers", label: "Customers", icon: Users },
 ] as const;
 
 function userLabel(user?: User) {
