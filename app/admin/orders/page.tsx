@@ -62,6 +62,8 @@ const CANCEL_REASONS = [
   "Item Issue",
   "Restro Refused without Reason",
   "Other",
+  "Low & Order",
+  "Natural Calamity",
 ];
 
 const NOT_DELIVERED_REASONS = [
@@ -74,6 +76,121 @@ const DELIVERED_REASONS = [
   "Delivered",
   "Bad Delivery",
 ];
+
+type OutcomeOption = {
+  key: string;
+  label: string;
+  dbValue: string;
+  targetTab: TabKey;
+  vendorPenalty: number;
+  manualPenalty?: boolean;
+};
+
+const OUT_FOR_DELIVERY_OUTCOME_OPTIONS: OutcomeOption[] = [
+  {
+    key: "Partial Delivery",
+    label: "Partial Delivery",
+    dbValue: "Delivered",
+    targetTab: "delivered",
+    vendorPenalty: 0,
+    manualPenalty: true,
+  },
+  {
+    key: "Bad Delivery",
+    label: "Bad Delivery",
+    dbValue: "Delivered",
+    targetTab: "baddelivery",
+    vendorPenalty: 50,
+  },
+  {
+    key: "Customer Plan Change",
+    label: "Customer Plan Change",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 0,
+  },
+  {
+    key: "Customer Call Not Connect",
+    label: "Customer Call Not Connect",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 0,
+  },
+  {
+    key: "Customer Not on Seat",
+    label: "Customer Not on Seat",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 0,
+  },
+  {
+    key: "Customer Refused Delivery",
+    label: "Customer Refused Delivery",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 0,
+  },
+  {
+    key: "Restro Closed",
+    label: "Restro Closed",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 100,
+  },
+  {
+    key: "Train Late",
+    label: "Train Late",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 0,
+  },
+  {
+    key: "Train Divert",
+    label: "Train Divert",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 0,
+  },
+  {
+    key: "Item Issue",
+    label: "Item Issue",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 100,
+  },
+  {
+    key: "Restro Refused without Reason",
+    label: "Restro Refused without Reason",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 100,
+  },
+  {
+    key: "Other",
+    label: "Other",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 0,
+  },
+  {
+    key: "Low & Order",
+    label: "Low & Order",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 0,
+  },
+  {
+    key: "Natural Calamity",
+    label: "Natural Calamity",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 0,
+  },
+];
+
+const OUT_FOR_DELIVERY_NOT_DELIVERED_REASONS = OUT_FOR_DELIVERY_OUTCOME_OPTIONS
+  .filter((option) => option.dbValue === "Not Delivered")
+  .map((option) => option.label);
 
 const NEXT_MAP: Record<
   TabKey,
@@ -338,6 +455,8 @@ const [actionType, setActionType] = useState("");
 const [subStatus, setSubStatus] = useState("");
 
 const [remarks, setRemarks] = useState("");
+
+const [vendorPenaltyAmount, setVendorPenaltyAmount] = useState("");
 
   const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
 
@@ -1034,16 +1153,36 @@ const res = await fetch(
       return;
     }
 
-    try {
+      try {
+      const outForDeliveryOption =
+        selectedOrder.status === "outfordelivery"
+          ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find((option) => option.key === subStatus)
+          : null;
+      const selectedVendorPenalty =
+        outForDeliveryOption?.manualPenalty
+          ? Number(vendorPenaltyAmount || 0)
+          : outForDeliveryOption?.vendorPenalty ?? 0;
+
+      if (
+        outForDeliveryOption?.manualPenalty &&
+        (!Number.isFinite(selectedVendorPenalty) || selectedVendorPenalty < 0)
+      ) {
+        alert("Please enter valid vendor penalty amount");
+        return;
+      }
+
       let computedMainStatus = "";
       if (actionType === "cancel") {
         computedMainStatus = "Cancelled";
+      } else if (outForDeliveryOption) {
+        computedMainStatus = outForDeliveryOption.dbValue;
       } else {
         if (subStatus === "Delivered" || subStatus === "Bad Delivery") {
           computedMainStatus = subStatus;
         } else if (
           subStatus === "Not Delivered" ||
-          NOT_DELIVERED_REASONS.includes(subStatus)
+          NOT_DELIVERED_REASONS.includes(subStatus) ||
+          OUT_FOR_DELIVERY_NOT_DELIVERED_REASONS.includes(subStatus)
         ) {
           computedMainStatus = "Not Delivered";
         } else if (subStatus === "Cancelled") {
@@ -1071,6 +1210,9 @@ const res = await fetch(
           userType: actor.userType,
           userName: actor.userName,
           actionSource: actor.userType || "Admin",
+          vendorPenalty: selectedVendorPenalty,
+          vendorPenaltyAmount: selectedVendorPenalty,
+          VendorPenalty: selectedVendorPenalty,
         }),
       });
 
@@ -1080,7 +1222,9 @@ const res = await fetch(
         return;
       }
 
-      const targetKey: TabKey = subStatus === "Bad Delivery"
+      const targetKey: TabKey = outForDeliveryOption
+        ? outForDeliveryOption.targetTab
+        : subStatus === "Bad Delivery"
         ? "baddelivery"
         : (computedMainStatus.toLowerCase().replace(/\s/g, "")) as TabKey;
 
@@ -1093,7 +1237,7 @@ const res = await fetch(
           {
             at: new Date().toISOString(),
             by: actor.userName,
-            note: `${subStatus}${cleanRemarks ? ` • ${cleanRemarks}` : ""}`,
+            note: `${subStatus}${selectedVendorPenalty > 0 || outForDeliveryOption?.manualPenalty ? ` • Vendor Penalty Rs ${selectedVendorPenalty}` : ""}${cleanRemarks ? ` • ${cleanRemarks}` : ""}`,
             status: targetKey,
           },
         ],
@@ -1123,6 +1267,7 @@ const res = await fetch(
       setSelectedOrder(null);
       setSubStatus("");
       setRemarks("");
+      setVendorPenaltyAmount("");
       setActiveTab(targetKey);
     } catch (e) {
       console.error(e);
@@ -1839,6 +1984,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                                 setActionType("cancel");
                                 setSubStatus("");
                                 setRemarks("");
+                                setVendorPenaltyAmount("");
                                 setStatusModalOpen(true);
                               }}
                               style={{
@@ -1863,6 +2009,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                                 setActionType("mark");
                                 setSubStatus("");
                                 setRemarks("");
+                                setVendorPenaltyAmount("");
                                 setStatusModalOpen(true);
                               }}
                               style={{
@@ -2380,7 +2527,15 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
 
             <select
               value={subStatus}
-              onChange={(e) => setSubStatus(e.target.value)}
+              onChange={(e) => {
+                setSubStatus(e.target.value);
+                const option = OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find(
+                  (item) => item.key === e.target.value
+                );
+                setVendorPenaltyAmount(
+                  option?.manualPenalty ? "" : String(option?.vendorPenalty ?? "")
+                );
+              }}
               style={{
                 width: "100%",
                 padding: 10,
@@ -2403,11 +2558,58 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                 ? NOT_DELIVERED_REASONS.map((reason) => (
                     <option key={reason} value={reason}>{reason}</option>
                   ))
+                : selectedOrder?.status === "outfordelivery"
+                ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.manualPenalty
+                        ? `${option.label} - Manual Penalty`
+                        : `${option.label} - Rs ${option.vendorPenalty}`}
+                    </option>
+                  ))
                 : DELIVERED_REASONS.map((reason) => (
                     <option key={reason} value={reason}>{reason}</option>
                   ))
               }
             </select>
+
+            {actionType === "mark" && selectedOrder?.status === "outfordelivery" && subStatus && (
+              <div
+                style={{
+                  marginTop: -6,
+                  marginBottom: 16,
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #e2e8f0",
+                  background: "#f8fafc",
+                }}
+              >
+                {OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find((option) => option.key === subStatus)?.manualPenalty ? (
+                  <label style={{ display: "grid", gap: 6, fontSize: 12, fontWeight: 700, color: "#334155" }}>
+                    Vendor Penalty Amount (Rs)
+                    <input
+                      type="number"
+                      min="0"
+                      value={vendorPenaltyAmount}
+                      onChange={(e) => setVendorPenaltyAmount(e.target.value)}
+                      placeholder="Enter manual amount"
+                      style={{
+                        width: "100%",
+                        padding: 10,
+                        borderRadius: 8,
+                        border: "1px solid #cbd5e1",
+                        fontSize: 13,
+                        fontWeight: 700,
+                      }}
+                    />
+                  </label>
+                ) : (
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#0f172a" }}>
+                    Vendor Penalty: Rs{" "}
+                    {OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find((option) => option.key === subStatus)?.vendorPenalty ?? 0}
+                  </div>
+                )}
+              </div>
+            )}
 
             <textarea
               placeholder="Internal administrative remarks annotation ledger (Optional)"
@@ -2432,6 +2634,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                   setSelectedOrder(null);
                   setSubStatus("");
                   setRemarks("");
+                  setVendorPenaltyAmount("");
                 }}
                 style={{
                   padding: "10px 14px",
