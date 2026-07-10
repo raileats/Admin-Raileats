@@ -168,6 +168,153 @@ const rowMatchesTrain = (row: TrainRouteRow, trainNo: string) => {
   return candidates.some((value) => normalizeRouteValue(value) === trainNo);
 };
 
+const AUTO_VERIFICATION_BEFORE_MINUTES = 90;
+const AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES = 5;
+const SYSTEM_AUTO_ACTOR = { userType: "Auto", userName: "System" };
+const AUTO_SYNC_TABS: TabKey[] = ["booked", "verification", "inkitchen"];
+
+const parseOrderDeliveryDateTime = (deliveryDate?: string, deliveryTime?: string) => {
+  const rawDate = String(deliveryDate || "").trim();
+  const rawTime = String(deliveryTime || "00:00").trim();
+
+  if (!rawDate) return null;
+
+  let year = "";
+  let month = "";
+  let day = "";
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    [year, month, day] = rawDate.split("-");
+  } else if (/^\d{2}-\d{2}-\d{4}$/.test(rawDate)) {
+    [day, month, year] = rawDate.split("-");
+  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawDate)) {
+    [day, month, year] = rawDate.split("/");
+  }
+
+  if (!year || !month || !day) {
+    const fallback = new Date(`${rawDate} ${rawTime}`);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+  }
+
+  const [hour = "00", minute = "00"] = rawTime.split(":");
+  const parsed = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    0,
+    0
+  );
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const shouldAutoMoveBookedToVerification = (order: Order) => {
+  if (order.status !== "booked") return false;
+
+  const deliveryDateTime = parseOrderDeliveryDateTime(
+    order.deliveryDate,
+    order.deliveryTime
+  );
+
+  if (!deliveryDateTime) return false;
+
+  const now = new Date();
+  const minutesUntilDelivery =
+    (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
+
+  return minutesUntilDelivery <= AUTO_VERIFICATION_BEFORE_MINUTES;
+};
+
+const isPrepaidOrder = (order: Order) => {
+  const mode = String(order.paymentMode || "").trim().toLowerCase();
+  if (!mode) return false;
+
+  return ["prepaid", "ppd", "online", "paid", "paytm", "upi"].some((token) =>
+    mode.includes(token)
+  );
+};
+
+const shouldAutoMoveVerificationToNewOrder = (order: Order) => {
+  if (order.status !== "verification") return false;
+  if (!isPrepaidOrder(order)) return false;
+
+  const deliveryDateTime = parseOrderDeliveryDateTime(
+    order.deliveryDate,
+    order.deliveryTime
+  );
+
+  if (!deliveryDateTime) return false;
+
+  const now = new Date();
+  const minutesUntilDelivery =
+    (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
+
+  return minutesUntilDelivery <= AUTO_VERIFICATION_BEFORE_MINUTES;
+};
+
+const shouldAutoMoveKitchenToOutForDelivery = (order: Order) => {
+  if (order.status !== "inkitchen") return false;
+
+  const deliveryDateTime = parseOrderDeliveryDateTime(
+    order.deliveryDate,
+    order.deliveryTime
+  );
+
+  if (!deliveryDateTime) return false;
+
+  const now = new Date();
+  const minutesUntilDelivery =
+    (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
+
+  return minutesUntilDelivery <= AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES;
+};
+
+const mapOrderRowToOrder = (row: any): Order => {
+  const rawStatus = String(row.status ?? row.Status ?? "Booked");
+  let tabStatus: TabKey = "booked";
+  const lowerRaw = rawStatus.toLowerCase().trim();
+
+  if (lowerRaw === "booked") tabStatus = "booked";
+  else if (lowerRaw === "verification" || lowerRaw === "in verification") tabStatus = "verification";
+  else if (lowerRaw === "neworder" || lowerRaw === "new order") tabStatus = "neworder";
+  else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") tabStatus = "inkitchen";
+  else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") tabStatus = "outfordelivery";
+  else if (lowerRaw === "delivered") {
+    const sub = String(row.subStatus ?? row.SubStatus ?? "").toLowerCase().trim();
+    tabStatus = sub === "bad delivery" ? "baddelivery" : "delivered";
+  } else if (lowerRaw === "cancelled") tabStatus = "cancelled";
+  else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") tabStatus = "notdelivered";
+  else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") tabStatus = "baddelivery";
+
+  return {
+    id: String(row.id ?? row.OrderId ?? ""),
+    status: tabStatus,
+    dbStatus: rawStatus,
+    outletId: String(row.restroCode ?? row.RestroCode ?? ""),
+    outletName: String(row.restroName ?? row.RestroName ?? ""),
+    stationCode: String(row.stationCode ?? row.StationCode ?? ""),
+    stationName: String(row.stationName ?? row.StationName ?? ""),
+    deliveryDate: String(row.deliveryDate ?? row.DeliveryDate ?? ""),
+    deliveryTime: String(row.deliveryTime ?? row.DeliveryTime ?? ""),
+    trainNo: row.trainNumber ?? row.TrainNumber ?? "",
+    coach: row.coach ?? row.Coach ?? "",
+    seat: row.seat ?? row.Seat ?? "",
+    customerName: String(row.customerName ?? row.CustomerName ?? ""),
+    customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
+    total:
+      row.totalAmount != null
+        ? String(row.totalAmount)
+        : row.TotalAmount != null
+          ? String(row.TotalAmount)
+          : undefined,
+    paymentMode: row.paymentMode ?? row.PaymentMode ?? "COD",
+    history: Array.isArray(row.history) ? row.history : [],
+    rawCreatedAt: row.CreatedAt ?? row.createdAt ?? "",
+  };
+};
+
 export default function AdminOrdersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     if (typeof window !== "undefined") {
@@ -261,6 +408,9 @@ const [newOrderCount, setNewOrderCount] = useState<number>(() => {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const hasLoadedTabRef = useRef<Partial<Record<TabKey, boolean>>>({});
+  const autoVerificationInFlightRef = useRef<Record<string, boolean>>({});
+  const autoNewOrderInFlightRef = useRef<Record<string, boolean>>({});
+  const autoOutForDeliveryInFlightRef = useRef<Record<string, boolean>>({});
 
   const getAdminActor = () => {
     if (typeof window === "undefined") {
@@ -385,45 +535,7 @@ const res = await fetch(
           return;
         }
 
-        const mapped: Order[] = (json.orders || []).map((row: any) => {
-          const rawStatus = String(row.status ?? row.Status ?? "Booked");
-          let tabStatus: TabKey = "booked";
-          const lowerRaw = rawStatus.toLowerCase().trim();
-          
-          if (lowerRaw === "booked") tabStatus = "booked";
-          else if (lowerRaw === "verification" || lowerRaw === "in verification") tabStatus = "verification";
-          else if (lowerRaw === "neworder" || lowerRaw === "new order") tabStatus = "neworder";
-          else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") tabStatus = "inkitchen";
-          else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") tabStatus = "outfordelivery";
-          else if (lowerRaw === "delivered") {
-            const sub = String(row.subStatus ?? row.SubStatus ?? "").toLowerCase().trim();
-            tabStatus = sub === "bad delivery" ? "baddelivery" : "delivered";
-          }
-          else if (lowerRaw === "cancelled") tabStatus = "cancelled";
-          else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") tabStatus = "notdelivered";
-          else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") tabStatus = "baddelivery";
-
-          return {
-            id: String(row.id ?? row.OrderId ?? ""),
-            status: tabStatus,
-            dbStatus: rawStatus, 
-            outletId: String(row.restroCode ?? row.RestroCode ?? ""),
-            outletName: String(row.restroName ?? row.RestroName ?? ""),
-            stationCode: String(row.stationCode ?? row.StationCode ?? ""),
-            stationName: String(row.stationName ?? row.StationName ?? ""),
-            deliveryDate: String(row.deliveryDate ?? row.DeliveryDate ?? ""),
-            deliveryTime: String(row.deliveryTime ?? row.DeliveryTime ?? ""),
-            trainNo: row.trainNumber ?? row.TrainNumber ?? "",
-            coach: row.coach ?? row.Coach ?? "",
-            seat: row.seat ?? row.Seat ?? "",
-            customerName: String(row.customerName ?? row.CustomerName ?? ""),
-            customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
-            total: row.totalAmount != null ? String(row.totalAmount) : (row.TotalAmount != null ? String(row.TotalAmount) : undefined),
-            paymentMode: row.paymentMode ?? row.PaymentMode ?? "COD",
-      history: Array.isArray(row.history) ? row.history : [],
-            rawCreatedAt: row.CreatedAt ?? row.createdAt ?? "",
-          };
-        });
+        const mapped: Order[] = (json.orders || []).map(mapOrderRowToOrder);
 
         setAllOrders((prev) => ({ ...prev, [activeTab]: mapped }));
       } catch (e) {
@@ -438,7 +550,266 @@ const res = await fetch(
     load();
   }, [activeTab, refreshTick]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncAutoMoveTabs = async () => {
+      try {
+        const results = await Promise.all(
+          AUTO_SYNC_TABS.map(async (tab) => {
+            const params = new URLSearchParams();
+            params.set("status", tab);
+
+            const res = await fetch(`/api/orders?${params.toString()}`, {
+              cache: "no-store",
+            });
+            const json = await res.json().catch(() => ({} as any));
+
+            if (!res.ok || !json?.ok) {
+              console.error("auto orders sync failed", tab, json);
+              return [tab, null] as const;
+            }
+
+            const mapped: Order[] = (json.orders || []).map(mapOrderRowToOrder);
+            return [tab, mapped] as const;
+          })
+        );
+
+        if (cancelled) return;
+
+        setAllOrders((prev) => {
+          const copy = { ...prev };
+          results.forEach(([tab, mapped]) => {
+            if (mapped) copy[tab] = mapped;
+          });
+          return copy;
+        });
+      } catch (error) {
+        console.error("auto orders sync network error", error);
+      }
+    };
+
+    syncAutoMoveTabs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
+
   const orders = useMemo(() => allOrders[activeTab] ?? [], [allOrders, activeTab]);
+
+  useEffect(() => {
+    const bookedOrders = allOrders.booked ?? [];
+    const dueForVerification = bookedOrders.filter((order) => {
+      if (autoVerificationInFlightRef.current[order.id]) return false;
+      return shouldAutoMoveBookedToVerification(order);
+    });
+
+    if (dueForVerification.length === 0) return;
+
+    const actor = SYSTEM_AUTO_ACTOR;
+
+    dueForVerification.forEach((order) => {
+      autoVerificationInFlightRef.current[order.id] = true;
+
+      (async () => {
+        const nextStatus: TabKey = "verification";
+        const targetDbValue = "In Verification";
+        const actionNote = `Auto moved to In Verification before ${AUTO_VERIFICATION_BEFORE_MINUTES} minutes of delivery time`;
+
+        try {
+          const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              newStatus: targetDbValue,
+              subStatus: null,
+              remarks: actionNote,
+              note: actionNote,
+              changedBy: actor.userName,
+              userType: actor.userType,
+              userName: actor.userName,
+              actionSource: "Auto",
+            }),
+          });
+
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok || !json?.ok) {
+            autoVerificationInFlightRef.current[order.id] = false;
+            console.error("Auto verification move failed", order.id, json);
+            return;
+          }
+
+          const updated: Order = {
+            ...order,
+            status: nextStatus,
+            dbStatus: targetDbValue,
+            history: [
+              ...order.history,
+              {
+                at: new Date().toISOString(),
+                by: actor.userName,
+                note: actionNote,
+                status: nextStatus,
+              },
+            ],
+          };
+
+          setAllOrders((prev) => {
+            const copy = { ...prev };
+            copy.booked = (copy.booked ?? []).filter((o) => o.id !== order.id);
+            copy.verification = [updated, ...(copy.verification ?? [])];
+            return copy;
+          });
+        } catch (error) {
+          autoVerificationInFlightRef.current[order.id] = false;
+          console.error("Auto verification move network error", error);
+        }
+      })();
+    });
+  }, [allOrders.booked]);
+
+  useEffect(() => {
+    const verificationOrders = allOrders.verification ?? [];
+    const dueForNewOrder = verificationOrders.filter((order) => {
+      if (autoNewOrderInFlightRef.current[order.id]) return false;
+      return shouldAutoMoveVerificationToNewOrder(order);
+    });
+
+    if (dueForNewOrder.length === 0) return;
+
+    const actor = SYSTEM_AUTO_ACTOR;
+
+    dueForNewOrder.forEach((order) => {
+      autoNewOrderInFlightRef.current[order.id] = true;
+
+      (async () => {
+        const nextStatus: TabKey = "neworder";
+        const targetDbValue = "New Order";
+        const actionNote = `Auto moved prepaid order to New Order before ${AUTO_VERIFICATION_BEFORE_MINUTES} minutes of delivery time`;
+
+        try {
+          const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              newStatus: targetDbValue,
+              subStatus: null,
+              remarks: actionNote,
+              note: actionNote,
+              changedBy: actor.userName,
+              userType: actor.userType,
+              userName: actor.userName,
+              actionSource: "Auto",
+            }),
+          });
+
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok || !json?.ok) {
+            autoNewOrderInFlightRef.current[order.id] = false;
+            console.error("Auto new order move failed", order.id, json);
+            return;
+          }
+
+          const updated: Order = {
+            ...order,
+            status: nextStatus,
+            dbStatus: targetDbValue,
+            history: [
+              ...order.history,
+              {
+                at: new Date().toISOString(),
+                by: actor.userName,
+                note: actionNote,
+                status: nextStatus,
+              },
+            ],
+          };
+
+          setAllOrders((prev) => {
+            const copy = { ...prev };
+            copy.verification = (copy.verification ?? []).filter((o) => o.id !== order.id);
+            copy.neworder = [updated, ...(copy.neworder ?? [])];
+            return copy;
+          });
+        } catch (error) {
+          autoNewOrderInFlightRef.current[order.id] = false;
+          console.error("Auto new order move network error", error);
+        }
+      })();
+    });
+  }, [allOrders.verification]);
+
+  useEffect(() => {
+    const kitchenOrders = allOrders.inkitchen ?? [];
+    const dueForOutForDelivery = kitchenOrders.filter((order) => {
+      if (autoOutForDeliveryInFlightRef.current[order.id]) return false;
+      return shouldAutoMoveKitchenToOutForDelivery(order);
+    });
+
+    if (dueForOutForDelivery.length === 0) return;
+
+    const actor = SYSTEM_AUTO_ACTOR;
+
+    dueForOutForDelivery.forEach((order) => {
+      autoOutForDeliveryInFlightRef.current[order.id] = true;
+
+      (async () => {
+        const nextStatus: TabKey = "outfordelivery";
+        const targetDbValue = "Out for Delivery";
+        const actionNote = `Auto moved to Out for Delivery before ${AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES} minutes of delivery time`;
+
+        try {
+          const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              newStatus: targetDbValue,
+              subStatus: null,
+              remarks: actionNote,
+              note: actionNote,
+              changedBy: actor.userName,
+              userType: actor.userType,
+              userName: actor.userName,
+              actionSource: "Auto",
+            }),
+          });
+
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok || !json?.ok) {
+            autoOutForDeliveryInFlightRef.current[order.id] = false;
+            console.error("Auto out for delivery move failed", order.id, json);
+            return;
+          }
+
+          const updated: Order = {
+            ...order,
+            status: nextStatus,
+            dbStatus: targetDbValue,
+            history: [
+              ...order.history,
+              {
+                at: new Date().toISOString(),
+                by: actor.userName,
+                note: actionNote,
+                status: nextStatus,
+              },
+            ],
+          };
+
+          setAllOrders((prev) => {
+            const copy = { ...prev };
+            copy.inkitchen = (copy.inkitchen ?? []).filter((o) => o.id !== order.id);
+            copy.outfordelivery = [updated, ...(copy.outfordelivery ?? [])];
+            return copy;
+          });
+        } catch (error) {
+          autoOutForDeliveryInFlightRef.current[order.id] = false;
+          console.error("Auto out for delivery move network error", error);
+        }
+      })();
+    });
+  }, [allOrders.inkitchen]);
 
   useEffect(() => {
     if (detailedOrder) {
@@ -609,7 +980,7 @@ const res = await fetch(
             changedBy: actor.userName,
             userType: actor.userType,
             userName: actor.userName,
-            actionSource: "Admin",
+            actionSource: actor.userType || "Admin",
           }),
         });
         const json = await res.json().catch(() => ({}));
@@ -699,7 +1070,7 @@ const res = await fetch(
           changedBy: actor.userName,
           userType: actor.userType,
           userName: actor.userName,
-          actionSource: "Admin",
+          actionSource: actor.userType || "Admin",
         }),
       });
 
@@ -783,7 +1154,7 @@ const res = await fetch(
           changedBy: actor.userName,
           userType: actor.userType,
           userName: actor.userName,
-          actionSource: "Admin",
+          actionSource: actor.userType || "Admin",
         }),
       });
       const json = await res.json().catch(() => ({}));
