@@ -1210,6 +1210,7 @@ const res = await fetch(
           userType: actor.userType,
           userName: actor.userName,
           actionSource: actor.userType || "Admin",
+          OrderPenalty: selectedVendorPenalty,
           vendorPenalty: selectedVendorPenalty,
           vendorPenaltyAmount: selectedVendorPenalty,
           VendorPenalty: selectedVendorPenalty,
