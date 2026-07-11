@@ -1171,6 +1171,7 @@ const res = await fetch(
 
       try {
       const outForDeliveryOption =
+        selectedOrder.status === "inkitchen" ||
         selectedOrder.status === "outfordelivery"
           ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find((option) => option.key === subStatus)
           : null;
@@ -2580,11 +2581,8 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                 ? CANCEL_REASONS.map((reason) => (
                     <option key={reason} value={reason}>{reason}</option>
                   ))
-                : selectedOrder?.status === "inkitchen"
-                ? NOT_DELIVERED_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>{reason}</option>
-                  ))
-                : selectedOrder?.status === "outfordelivery"
+                : selectedOrder?.status === "inkitchen" ||
+                  selectedOrder?.status === "outfordelivery"
                 ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.map((option) => (
                     <option key={option.key} value={option.key}>
                       {option.manualPenalty
@@ -2598,7 +2596,10 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
               }
             </select>
 
-            {actionType === "mark" && selectedOrder?.status === "outfordelivery" && subStatus && (
+            {actionType === "mark" &&
+              (selectedOrder?.status === "inkitchen" ||
+                selectedOrder?.status === "outfordelivery") &&
+              subStatus && (
               <div
                 style={{
                   marginTop: -6,
