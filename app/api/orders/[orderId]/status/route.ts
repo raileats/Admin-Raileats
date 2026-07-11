@@ -47,6 +47,60 @@ function normalizeStatus(value: any) {
   return aliases[key] || raw;
 }
 
+function normalizePenalty(value: any) {
+  if (value === null || value === undefined || value === "") return null;
+
+  const numericValue = Number(String(value).replace(/[^\d.-]/g, ""));
+
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
+    return 0;
+  }
+
+  return numericValue;
+}
+
+function readOrderPenalty(body: any) {
+  const directValue =
+    body.OrderPenalty ??
+    body.orderPenalty ??
+    body.VendorPenalty ??
+    body.vendorPenalty ??
+    body.vendorPenaltyAmount ??
+    body.VendorPenaltyAmount ??
+    body.penalty ??
+    body.Penalty;
+
+  const parsedDirectValue = normalizePenalty(directValue);
+  if (parsedDirectValue !== null) return parsedDirectValue;
+
+  const subStatus = cleanText(body.subStatus ?? body.SubStatus) || "";
+  const key = subStatus.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const penaltyBySubStatus: Record<string, number> = {
+    partialdelivery: 0,
+    baddelivery: 50,
+    customerplanchange: 0,
+    customercallnotconnect: 0,
+    customernotonseat: 0,
+    customerrefuseddelivery: 0,
+    restroclosed: 100,
+    trainlate: 0,
+    traindivert: 0,
+    itemissue: 100,
+    restrorefusedwithoutreason: 100,
+    other: 0,
+    loworder: 0,
+    lowandorder: 0,
+    naturalcalamity: 0,
+  };
+
+  if (key in penaltyBySubStatus) {
+    return penaltyBySubStatus[key];
+  }
+
+  return null;
+}
+
 function pickStatusColumn(row: any) {
   const candidates = [
     "OrderStatus",
@@ -107,7 +161,8 @@ async function updateOrderStatus(
   existing: any,
   newStatus: string,
   subStatus: string | null,
-  changedAt: string
+  changedAt: string,
+  orderPenalty: number | null
 ) {
   const statusColumn = pickStatusColumn(existing);
   const payload: Record<string, any> = {
@@ -120,6 +175,12 @@ async function updateOrderStatus(
   if (existing.UpdatedAt !== undefined) payload.UpdatedAt = changedAt;
   if (existing.updated_at !== undefined) payload.updated_at = changedAt;
   if (existing.LastModified !== undefined) payload.LastModified = changedAt;
+  if (orderPenalty !== null) {
+    if (existing.OrderPenalty !== undefined) payload.OrderPenalty = orderPenalty;
+    if (existing.orderPenalty !== undefined) payload.orderPenalty = orderPenalty;
+    if (existing.VendorPenalty !== undefined) payload.VendorPenalty = orderPenalty;
+    if (existing.vendorPenalty !== undefined) payload.vendorPenalty = orderPenalty;
+  }
 
   return supabase
     .from("Orders")
@@ -223,6 +284,7 @@ export async function PATCH(
       "Admin";
     const actionSource =
       cleanText(body.actionSource ?? body.ActionSource) || userType;
+    const orderPenalty = readOrderPenalty(body);
 
     const { data: updatedRows, error: updateError } = await updateOrderStatus(
       supabase,
@@ -231,7 +293,8 @@ export async function PATCH(
       existing,
       newStatus,
       subStatus,
-      changedAt
+      changedAt,
+      orderPenalty
     );
 
     if (updateError) {
@@ -261,6 +324,8 @@ export async function PATCH(
       UserType: userType,
       UserName: userName,
       ActionSource: actionSource,
+      OrderPenalty: orderPenalty,
+      VendorPenalty: orderPenalty,
       ChangedAt: changedAt,
       CreatedAt: changedAt,
     };
