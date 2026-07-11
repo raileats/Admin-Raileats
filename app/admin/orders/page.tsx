@@ -77,6 +77,22 @@ const DELIVERED_REASONS = [
   "Bad Delivery",
 ];
 
+const ORDER_PENALTY_BY_SUB_STATUS: Record<string, number> = {
+  "Customer Plan Change": 0,
+  "Customer Call Not Connect": 0,
+  "Customer Not on Seat": 0,
+  "Customer Refused Delivery": 0,
+  "Restro Closed": 100,
+  "Train Late": 0,
+  "Train Divert": 0,
+  "Item Issue": 100,
+  "Restro Refused without Reason": 100,
+  "Other": 0,
+  "Low & Order": 0,
+  "Natural Calamity": 0,
+  "Bad Delivery": 50,
+};
+
 type OutcomeOption = {
   key: string;
   label: string;
@@ -1158,12 +1174,21 @@ const res = await fetch(
         selectedOrder.status === "outfordelivery"
           ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find((option) => option.key === subStatus)
           : null;
+      const shouldApplyOrderPenalty =
+        actionType === "mark" &&
+        (selectedOrder.status === "inkitchen" ||
+          selectedOrder.status === "outfordelivery");
       const selectedVendorPenalty =
-        outForDeliveryOption?.manualPenalty
+        !shouldApplyOrderPenalty
+          ? 0
+          : outForDeliveryOption?.manualPenalty
           ? Number(vendorPenaltyAmount || 0)
-          : outForDeliveryOption?.vendorPenalty ?? 0;
+          : outForDeliveryOption?.vendorPenalty ??
+            ORDER_PENALTY_BY_SUB_STATUS[subStatus] ??
+            0;
 
       if (
+        shouldApplyOrderPenalty &&
         outForDeliveryOption?.manualPenalty &&
         (!Number.isFinite(selectedVendorPenalty) || selectedVendorPenalty < 0)
       ) {
