@@ -56,6 +56,7 @@ const TABS: { key: TabKey; label: string }[] = [
 const CANCEL_REASONS = [
   "Customer Plan Change",
   "Customer Call Not Connect",
+  "Delivery Boy Missed",
   "Restro Closed",
   "Train Late",
   "Train Divert",
@@ -82,6 +83,7 @@ const ORDER_PENALTY_BY_SUB_STATUS: Record<string, number> = {
   "Customer Call Not Connect": 0,
   "Customer Not on Seat": 0,
   "Customer Refused Delivery": 0,
+  "Delivery Boy Missed": 100,
   "Restro Closed": 100,
   "Train Late": 0,
   "Train Divert": 0,
@@ -145,6 +147,13 @@ const OUT_FOR_DELIVERY_OUTCOME_OPTIONS: OutcomeOption[] = [
     dbValue: "Not Delivered",
     targetTab: "notdelivered",
     vendorPenalty: 0,
+  },
+    {
+    key: "Delivery Boy Missed",
+    label: "Delivery Boy Missed",
+    dbValue: "Not Delivered",
+    targetTab: "notdelivered",
+    vendorPenalty: 100,
   },
   {
     key: "Restro Closed",
