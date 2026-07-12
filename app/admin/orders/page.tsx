@@ -735,8 +735,21 @@ const [newOrderCount, setNewOrderCount] = useState<number>(() => {
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const hasLoadedTabRef = useRef<Partial<Record<TabKey, boolean>>>({});
-  const autoVerificationInFlightRef = useRef<Record<string, boolean>>({});
+
+const hasLoadedTabRef =
+  useRef<Partial<Record<TabKey, boolean>>>({});
+
+const autoVerificationInFlightRef =
+  useRef<Record<string, boolean>>({});
+
+const autoNewOrderInFlightRef =
+  useRef<Record<string, boolean>>({});
+
+const autoOutForDeliveryInFlightRef =
+  useRef<Record<string, boolean>>({});
+
+const autoCancellationRequestInFlightRef =
+  useRef<Record<string, boolean>>({});
 
   const getAdminActor = () => {
     if (typeof window === "undefined") {
@@ -1535,16 +1548,20 @@ useEffect(() => {
   const liveFlatArray =
     Object.values(allOrders).flat();
 
-  const matchUpdate =
-    liveFlatArray.find(
-      (order) =>
-        order.id === detailedOrder.id
-    );
+  const matchUpdate = liveFlatArray.find(
+    (order) => order.id === detailedOrder.id
+  );
 
-  if (matchUpdate) {
+  if (
+    matchUpdate &&
+    (
+      matchUpdate.status !== detailedOrder.status ||
+      matchUpdate.dbStatus !== detailedOrder.dbStatus
+    )
+  ) {
     setDetailedOrder(matchUpdate);
   }
-}, [allOrders, detailedOrder]);
+}, [allOrders]);
 
   /* ================= TRAIN ROUTE MODAL ================= */
   const openRouteModal = async (trainNo?: string, stationCode?: string) => {
