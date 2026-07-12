@@ -405,20 +405,31 @@ const shouldAutoMoveBookedToVerification = (order: Order) => {
     (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
 
   return (
-  minutesUntilDelivery > 0 &&
-  minutesUntilDelivery <= AUTO_VERIFICATION_BEFORE_MINUTES
-);
-
-const isPrepaidOrder = (order: Order) => {
-  const mode = String(order.paymentMode || "").trim().toLowerCase();
-  if (!mode) return false;
-
-  return ["prepaid", "ppd", "online", "paid", "paytm", "upi"].some((token) =>
-    mode.includes(token)
+    minutesUntilDelivery > 0 &&
+    minutesUntilDelivery <= AUTO_VERIFICATION_BEFORE_MINUTES
   );
 };
 
-const shouldAutoMoveVerificationToNewOrder = (order: Order) => {
+const isPrepaidOrder = (order: Order) => {
+  const mode = String(order.paymentMode || "")
+    .trim()
+    .toLowerCase();
+
+  if (!mode) return false;
+
+  return [
+    "prepaid",
+    "ppd",
+    "online",
+    "paid",
+    "paytm",
+    "upi",
+  ].some((token) => mode.includes(token));
+};
+
+const shouldAutoMoveVerificationToNewOrder = (
+  order: Order
+) => {
   if (order.status !== "verification") return false;
   if (!isPrepaidOrder(order)) return false;
 
@@ -431,14 +442,19 @@ const shouldAutoMoveVerificationToNewOrder = (order: Order) => {
 
   const now = new Date();
   const minutesUntilDelivery =
-    (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
+    (deliveryDateTime.getTime() - now.getTime()) /
+    (1000 * 60);
 
   return (
-  minutesUntilDelivery > 0 &&
-  minutesUntilDelivery <= AUTO_VERIFICATION_BEFORE_MINUTES
-);
+    minutesUntilDelivery > 0 &&
+    minutesUntilDelivery <=
+      AUTO_VERIFICATION_BEFORE_MINUTES
+  );
+};
 
-const shouldAutoMoveKitchenToOutForDelivery = (order: Order) => {
+const shouldAutoMoveKitchenToOutForDelivery = (
+  order: Order
+) => {
   if (order.status !== "inkitchen") return false;
 
   const deliveryDateTime = parseOrderDeliveryDateTime(
@@ -450,13 +466,17 @@ const shouldAutoMoveKitchenToOutForDelivery = (order: Order) => {
 
   const now = new Date();
   const minutesUntilDelivery =
-    (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
+    (deliveryDateTime.getTime() - now.getTime()) /
+    (1000 * 60);
 
   return (
-  minutesUntilDelivery > 0 &&
-  minutesUntilDelivery <= AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES
-);
-    const shouldAutoMoveToCancellationRequest = (
+    minutesUntilDelivery > 0 &&
+    minutesUntilDelivery <=
+      AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES
+  );
+};
+
+const shouldAutoMoveToCancellationRequest = (
   order: Order
 ) => {
   if (
@@ -466,11 +486,10 @@ const shouldAutoMoveKitchenToOutForDelivery = (order: Order) => {
     return false;
   }
 
-  const deliveryDateTime =
-    parseOrderDeliveryDateTime(
-      order.deliveryDate,
-      order.deliveryTime
-    );
+  const deliveryDateTime = parseOrderDeliveryDateTime(
+    order.deliveryDate,
+    order.deliveryTime
+  );
 
   if (!deliveryDateTime) return false;
 
@@ -478,61 +497,142 @@ const shouldAutoMoveKitchenToOutForDelivery = (order: Order) => {
 };
 
 const mapOrderRowToOrder = (row: any): Order => {
-  const rawStatus = String(row.status ?? row.Status ?? "Booked");
+  const rawStatus = String(
+    row.status ?? row.Status ?? "Booked"
+  );
+
   let tabStatus: TabKey = "booked";
-  const lowerRaw = rawStatus.toLowerCase().trim();
+
+  const lowerRaw = rawStatus
+    .toLowerCase()
+    .trim();
 
   if (lowerRaw === "booked") {
-  tabStatus = "booked";
-} else if (
-  lowerRaw === "verification" ||
-  lowerRaw === "in verification"
-) {
-  tabStatus = "verification";
-} else if (
-  lowerRaw === "cancellationrequest" ||
-  lowerRaw === "cancellation request"
-) {
-  tabStatus = "cancellationrequest";
-} else if (
-  lowerRaw === "neworder" ||
-  lowerRaw === "new order"
-) {
-  tabStatus = "neworder";
-}
-  else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") tabStatus = "inkitchen";
-  else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") tabStatus = "outfordelivery";
-  else if (lowerRaw === "delivered") {
-    const sub = String(row.subStatus ?? row.SubStatus ?? "").toLowerCase().trim();
-    tabStatus = sub === "bad delivery" ? "baddelivery" : "delivered";
-  } else if (lowerRaw === "cancelled") tabStatus = "cancelled";
-  else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") tabStatus = "notdelivered";
-  else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") tabStatus = "baddelivery";
+    tabStatus = "booked";
+  } else if (
+    lowerRaw === "verification" ||
+    lowerRaw === "in verification"
+  ) {
+    tabStatus = "verification";
+  } else if (
+    lowerRaw === "cancellationrequest" ||
+    lowerRaw === "cancellation request"
+  ) {
+    tabStatus = "cancellationrequest";
+  } else if (
+    lowerRaw === "neworder" ||
+    lowerRaw === "new order"
+  ) {
+    tabStatus = "neworder";
+  } else if (
+    lowerRaw === "inkitchen" ||
+    lowerRaw === "in kitchen"
+  ) {
+    tabStatus = "inkitchen";
+  } else if (
+    lowerRaw === "outfordelivery" ||
+    lowerRaw === "out for delivery"
+  ) {
+    tabStatus = "outfordelivery";
+  } else if (lowerRaw === "delivered") {
+    const subStatus = String(
+      row.subStatus ?? row.SubStatus ?? ""
+    )
+      .toLowerCase()
+      .trim();
+
+    tabStatus =
+      subStatus === "bad delivery"
+        ? "baddelivery"
+        : "delivered";
+  } else if (lowerRaw === "cancelled") {
+    tabStatus = "cancelled";
+  } else if (
+    lowerRaw === "notdelivered" ||
+    lowerRaw === "not delivered"
+  ) {
+    tabStatus = "notdelivered";
+  } else if (
+    lowerRaw === "baddelivery" ||
+    lowerRaw === "bad delivery"
+  ) {
+    tabStatus = "baddelivery";
+  }
 
   return {
     id: String(row.id ?? row.OrderId ?? ""),
     status: tabStatus,
     dbStatus: rawStatus,
-    outletId: String(row.restroCode ?? row.RestroCode ?? ""),
-    outletName: String(row.restroName ?? row.RestroName ?? ""),
-    stationCode: String(row.stationCode ?? row.StationCode ?? ""),
-    stationName: String(row.stationName ?? row.StationName ?? ""),
-    deliveryDate: String(row.deliveryDate ?? row.DeliveryDate ?? ""),
-    deliveryTime: String(row.deliveryTime ?? row.DeliveryTime ?? ""),
-    trainNo: row.trainNumber ?? row.TrainNumber ?? "",
-    coach: row.coach ?? row.Coach ?? "",
-    seat: row.seat ?? row.Seat ?? "",
-    customerName: String(row.customerName ?? row.CustomerName ?? ""),
-    customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
+
+    outletId: String(
+      row.restroCode ?? row.RestroCode ?? ""
+    ),
+
+    outletName: String(
+      row.restroName ?? row.RestroName ?? ""
+    ),
+
+    stationCode: String(
+      row.stationCode ?? row.StationCode ?? ""
+    ),
+
+    stationName: String(
+      row.stationName ?? row.StationName ?? ""
+    ),
+
+    deliveryDate: String(
+      row.deliveryDate ?? row.DeliveryDate ?? ""
+    ),
+
+    deliveryTime: String(
+      row.deliveryTime ?? row.DeliveryTime ?? ""
+    ),
+
+    trainNo:
+      row.trainNumber ??
+      row.TrainNumber ??
+      "",
+
+    coach:
+      row.coach ??
+      row.Coach ??
+      "",
+
+    seat:
+      row.seat ??
+      row.Seat ??
+      "",
+
+    customerName: String(
+      row.customerName ?? row.CustomerName ?? ""
+    ),
+
+    customerMobile: String(
+      row.customerMobile ??
+        row.CustomerMobile ??
+        ""
+    ),
+
     total:
       row.totalAmount != null
         ? String(row.totalAmount)
         : row.TotalAmount != null
-          ? String(row.TotalAmount)
-          : undefined,
-    paymentMode: row.paymentMode ?? row.PaymentMode ?? "COD",
-    history: Array.isArray(row.history) ? row.history : [],
-    rawCreatedAt: row.CreatedAt ?? row.createdAt ?? "",
+        ? String(row.TotalAmount)
+        : undefined,
+
+    paymentMode:
+      row.paymentMode ??
+      row.PaymentMode ??
+      "COD",
+
+    history: Array.isArray(row.history)
+      ? row.history
+      : [],
+
+    rawCreatedAt:
+      row.CreatedAt ??
+      row.createdAt ??
+      "",
   };
 };
 
