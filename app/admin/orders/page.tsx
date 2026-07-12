@@ -6,8 +6,9 @@ import { Bell, Clock, Eye, MapPin, ShieldCheck, ShoppingBag, Smartphone, X } fro
 import Link from "next/link";
 
 type TabKey =
-    | "booked"
+  | "booked"
   | "verification"
+  | "cancellationrequest"
   | "neworder"
   | "inkitchen"
   | "outfordelivery"
@@ -43,6 +44,10 @@ type Order = {
 const TABS: { key: TabKey; label: string }[] = [
   { key: "booked", label: "Booked" },
   { key: "verification", label: "In Verification" },
+  {
+    key: "cancellationrequest",
+    label: "Cancellation Request",
+  },
   { key: "neworder", label: "New Order" },
   { key: "inkitchen", label: "In Kitchen" },
   { key: "outfordelivery", label: "Out for Delivery" },
@@ -52,7 +57,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "baddelivery", label: "Bad Delivery" },
   { key: "all", label: "All" },
 ];
-
 const CANCEL_REASONS = [
   "Customer Plan Change",
   "Customer Call Not Connect",
@@ -230,33 +234,67 @@ const NEXT_MAP: Record<
     actionLabel: "Move to In Verification",
     dbValue: "In Verification",
   },
+
   verification: {
     next: "neworder",
     actionLabel: "Send to Restaurant",
     dbValue: "New Order",
   },
+
+  cancellationrequest: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Cancellation Request",
+  },
+
   neworder: {
     next: "inkitchen",
     actionLabel: "Move to In Kitchen",
     dbValue: "In Kitchen",
   },
+
   inkitchen: {
     next: "outfordelivery",
     actionLabel: "Move to Out for Delivery 🛵",
     dbValue: "Out for Delivery",
   },
+
   outfordelivery: {
     next: "delivered",
     actionLabel: "Mark as Delivered ✅",
     dbValue: "Delivered",
   },
-  delivered: { next: null, actionLabel: "", dbValue: "Delivered" },
-  cancelled: { next: null, actionLabel: "", dbValue: "Cancelled" },
-  notdelivered: { next: null, actionLabel: "", dbValue: "Not Delivered" },
-  baddelivery: { next: null, actionLabel: "", dbValue: "Bad Delivery" },
-  all: { next: null, actionLabel: "", dbValue: "All" },
-};
 
+  delivered: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Delivered",
+  },
+
+  cancelled: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Cancelled",
+  },
+
+  notdelivered: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Not Delivered",
+  },
+
+  baddelivery: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Bad Delivery",
+  },
+
+  all: {
+    next: null,
+    actionLabel: "",
+    dbValue: "All",
+  },
+};
 const FINAL_MARK_OPTIONS = [
   { key: "delivered", label: "Delivered", dbValue: "Delivered" },
   { key: "cancelled", label: "Cancelled", dbValue: "Cancelled" },
@@ -366,8 +404,10 @@ const shouldAutoMoveBookedToVerification = (order: Order) => {
   const minutesUntilDelivery =
     (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
 
-  return minutesUntilDelivery <= AUTO_VERIFICATION_BEFORE_MINUTES;
-};
+  return (
+  minutesUntilDelivery > 0 &&
+  minutesUntilDelivery <= AUTO_VERIFICATION_BEFORE_MINUTES
+);
 
 const isPrepaidOrder = (order: Order) => {
   const mode = String(order.paymentMode || "").trim().toLowerCase();
@@ -393,8 +433,10 @@ const shouldAutoMoveVerificationToNewOrder = (order: Order) => {
   const minutesUntilDelivery =
     (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
 
-  return minutesUntilDelivery <= AUTO_VERIFICATION_BEFORE_MINUTES;
-};
+  return (
+  minutesUntilDelivery > 0 &&
+  minutesUntilDelivery <= AUTO_VERIFICATION_BEFORE_MINUTES
+);
 
 const shouldAutoMoveKitchenToOutForDelivery = (order: Order) => {
   if (order.status !== "inkitchen") return false;
@@ -410,7 +452,29 @@ const shouldAutoMoveKitchenToOutForDelivery = (order: Order) => {
   const minutesUntilDelivery =
     (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
 
-  return minutesUntilDelivery <= AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES;
+  return (
+  minutesUntilDelivery > 0 &&
+  minutesUntilDelivery <= AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES
+);
+    const shouldAutoMoveToCancellationRequest = (
+  order: Order
+) => {
+  if (
+    order.status !== "booked" &&
+    order.status !== "verification"
+  ) {
+    return false;
+  }
+
+  const deliveryDateTime =
+    parseOrderDeliveryDateTime(
+      order.deliveryDate,
+      order.deliveryTime
+    );
+
+  if (!deliveryDateTime) return false;
+
+  return deliveryDateTime.getTime() <= Date.now();
 };
 
 const mapOrderRowToOrder = (row: any): Order => {
@@ -418,9 +482,24 @@ const mapOrderRowToOrder = (row: any): Order => {
   let tabStatus: TabKey = "booked";
   const lowerRaw = rawStatus.toLowerCase().trim();
 
-  if (lowerRaw === "booked") tabStatus = "booked";
-  else if (lowerRaw === "verification" || lowerRaw === "in verification") tabStatus = "verification";
-  else if (lowerRaw === "neworder" || lowerRaw === "new order") tabStatus = "neworder";
+  if (lowerRaw === "booked") {
+  tabStatus = "booked";
+} else if (
+  lowerRaw === "verification" ||
+  lowerRaw === "in verification"
+) {
+  tabStatus = "verification";
+} else if (
+  lowerRaw === "cancellationrequest" ||
+  lowerRaw === "cancellation request"
+) {
+  tabStatus = "cancellationrequest";
+} else if (
+  lowerRaw === "neworder" ||
+  lowerRaw === "new order"
+) {
+  tabStatus = "neworder";
+}
   else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") tabStatus = "inkitchen";
   else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") tabStatus = "outfordelivery";
   else if (lowerRaw === "delivered") {
