@@ -264,11 +264,21 @@ export async function GET(req: Request) {
   try {
     const supa = serviceClient;
     const { searchParams } = new URL(req.url);
-    const statusFilter = searchParams.get("status"); // e.g. "booked", "inkitchen", ...
-    const statusMap: Record<string, string> = {
+    const rawStatusFilter = String(
+  searchParams.get("status") || ""
+).trim();
+
+const normalizedStatusFilter = rawStatusFilter
+  .toLowerCase()
+  .replace(/[^a-z0-9]/g, "");
+
+const statusMap: Record<string, string> = {
   booked: "Booked",
 
   verification: "In Verification",
+  inverification: "In Verification",
+
+  cancellationrequest: "Cancellation Request",
 
   neworder: "New Order",
 
@@ -279,13 +289,15 @@ export async function GET(req: Request) {
   delivered: "Delivered",
 
   cancelled: "Cancelled",
+  canceled: "Cancelled",
 
   notdelivered: "Not Delivered",
 
   baddelivery: "Bad Delivery",
 };
-const dbStatus = statusFilter
-  ? statusMap[statusFilter] || statusFilter
+
+const dbStatus = normalizedStatusFilter
+  ? statusMap[normalizedStatusFilter] || rawStatusFilter
   : null;
 
    let query = supa
@@ -309,25 +321,17 @@ const dbStatus = statusFilter
     SubStatus
   `)
   .order("CreatedAt", { ascending: false });
-    if (statusFilter) {
-
-  if (statusFilter === "baddelivery") {
-
+    if (
+  normalizedStatusFilter &&
+  normalizedStatusFilter !== "all"
+) {
+  if (normalizedStatusFilter === "baddelivery") {
     query = query
       .eq("Status", "Delivered")
       .eq("SubStatus", "Bad Delivery");
-
+  } else if (dbStatus) {
+    query = query.eq("Status", dbStatus);
   }
-
-  else {
-
-    query = query.eq(
-      "Status",
-      dbStatus
-    );
-
-  }
-
 }
 
     const { data, error } = await query;
