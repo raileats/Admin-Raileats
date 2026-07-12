@@ -24,6 +24,14 @@ type BaseRow = {
   menu_item_image?: string | null;
 };
 
+type MenuImageResult = {
+  name: string;
+  publicUrl: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  size?: number | null;
+};
+
 type Props = {
   open: boolean;
   restroCode: string | number;
@@ -71,6 +79,43 @@ function normalizeTime(value: any) {
   return String(value).slice(0, 5);
 }
 
+function fileNameFromValue(value: unknown) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return "";
+
+  try {
+    if (/^https?:\/\//i.test(raw)) {
+      const url = new URL(raw);
+      return decodeURIComponent(url.pathname.split("/").pop() || "");
+    }
+  } catch {
+    // Existing value will be returned unchanged.
+  }
+
+  return raw.split("/").pop() || raw;
+}
+
+function getMenuImagePublicUrl(value: unknown) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return "";
+
+  if (/^https?:\/\//i.test(raw)) {
+    return raw;
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  if (!baseUrl) return "";
+
+  const fileName = fileNameFromValue(raw);
+
+  return `${baseUrl}/storage/v1/object/public/menu_item_image/${encodeURIComponent(
+    fileName
+  )}`;
+}
+
 export default function MenuItemFormModal({
   open,
   restroCode,
@@ -101,6 +146,20 @@ export default function MenuItemFormModal({
 
   const [menuImage, setMenuImage] = useState<File | null>(null);
   const [menuImageName, setMenuImageName] = useState("");
+  const [selectedImageUrl, setSelectedImageUrl] = useState("");
+
+  const [imageMode, setImageMode] = useState<"upload" | "search">(
+    "upload"
+  );
+
+  const [photoName, setPhotoName] = useState("");
+
+  const [imageSearch, setImageSearch] = useState("");
+  const [imageResults, setImageResults] = useState<MenuImageResult[]>(
+    []
+  );
+  const [searchingImages, setSearchingImages] = useState(false);
+  const [imageSearchDone, setImageSearchDone] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -111,7 +170,19 @@ export default function MenuItemFormModal({
     let cancelled = false;
 
     async function loadDefaults() {
+      setMenuImage(null);
+      setPhotoName("");
+      setImageMode("upload");
+      setImageSearch("");
+      setImageResults([]);
+      setImageSearchDone(false);
+      setErr(null);
+
       if (mode === "edit" && initial) {
+        const currentImageName = fileNameFromValue(
+          initial.menu_item_image
+        );
+
         setItemName(initial.item_name ?? "");
         setItemDescription(initial.item_description ?? "");
         setItemCategory(initial.item_category ?? "");
@@ -119,16 +190,31 @@ export default function MenuItemFormModal({
         setMenuType(initial.menu_type ?? "");
         setStartTime(normalizeTime(initial.start_time));
         setEndTime(normalizeTime(initial.end_time));
-        setRestroPrice(
-          initial.restro_price == null ? "" : Number(initial.restro_price)
-        );
-        setBasePrice(initial.base_price == null ? "" : Number(initial.base_price));
-        setGstPercent(
-          initial.gst_percent == null ? 5 : Number(initial.gst_percent)
-        );
-        setStatus((initial.status as any) === "OFF" ? "OFF" : "ON");
 
-        setMenuImageName(initial.menu_item_image ?? "");
+        setRestroPrice(
+          initial.restro_price == null
+            ? ""
+            : Number(initial.restro_price)
+        );
+
+        setBasePrice(
+          initial.base_price == null ? "" : Number(initial.base_price)
+        );
+
+        setGstPercent(
+          initial.gst_percent == null
+            ? 5
+            : Number(initial.gst_percent)
+        );
+
+        setStatus(
+          (initial.status as any) === "OFF" ? "OFF" : "ON"
+        );
+
+        setMenuImageName(currentImageName);
+        setSelectedImageUrl(
+          getMenuImagePublicUrl(initial.menu_item_image)
+        );
 
         return;
       }
@@ -144,9 +230,8 @@ export default function MenuItemFormModal({
       setBasePrice("");
       setGstPercent(5);
       setStatus("ON");
-      setMenuImage(null);
       setMenuImageName("");
-      setErr(null);
+      setSelectedImageUrl("");
 
       const { data } = await supabase
         .from("RestroMaster")
@@ -170,20 +255,41 @@ export default function MenuItemFormModal({
   const selling_price = useMemo(() => {
     const base = Number(base_price || 0);
     const gst = Number(gst_percent || 0);
+
     if (!base || Number.isNaN(base)) return 0;
+
     return Math.round(base * (1 + gst / 100) * 100) / 100;
   }, [base_price, gst_percent]);
+
+  const localImagePreview = useMemo(() => {
+    if (!menuImage) return "";
+
+    return URL.createObjectURL(menuImage);
+  }, [menuImage]);
+
+  useEffect(() => {
+    return () => {
+      if (localImagePreview) {
+        URL.revokeObjectURL(localImagePreview);
+      }
+    };
+  }, [localImagePreview]);
 
   if (!open) return null;
 
   function toNumOrEmpty(val: string) {
     const cleaned = val.replace(/[^\d.]/g, "");
+
     if (cleaned === "") return "";
+
     const n = Number(cleaned);
+
     return Number.isFinite(n) ? n : "";
   }
 
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleImageChange(
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
     const file = e.target.files?.[0];
 
     if (!file) return;
@@ -201,34 +307,120 @@ export default function MenuItemFormModal({
     }
 
     setMenuImage(file);
+
+    /*
+      Filename abhi original file name nahi dikhaya jayega.
+      Actual final filename server upload ke samay banayega.
+    */
     setMenuImageName(file.name);
+    setSelectedImageUrl("");
+    setErr(null);
   }
 
-  async function uploadMenuImage(
-    file: File,
-    itemId: number,
-    itemName: string
-  ) {
-    const cleanName = itemName
-      .trim()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-zA-Z0-9-_]/g, "");
+  async function searchExistingImages() {
+    try {
+      setSearchingImages(true);
+      setImageSearchDone(false);
+      setErr(null);
 
-    const finalFileName = `${restroCode}_${cleanName}_${itemId}.webp`;
+      const query = imageSearch.trim();
 
-    const { error: uploadError } = await supabase.storage
-      .from("menu_item_image")
-      .upload(finalFileName, file, {
-        cacheControl: "3600",
-        upsert: true,
-        contentType: "image/webp",
-      });
+      const response = await fetch(
+        `/api/admin/menu-images?search=${encodeURIComponent(query)}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
 
-    if (uploadError) {
-      throw uploadError;
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result?.ok) {
+        throw new Error(
+          result?.error ||
+            `Image search failed (${response.status})`
+        );
+      }
+
+      setImageResults(
+        Array.isArray(result?.rows) ? result.rows : []
+      );
+
+      setImageSearchDone(true);
+    } catch (e: any) {
+      setImageResults([]);
+      setImageSearchDone(true);
+      setErr(e?.message ?? "Failed to search images");
+    } finally {
+      setSearchingImages(false);
+    }
+  }
+
+  function selectExistingImage(image: MenuImageResult) {
+    setMenuImage(null);
+    setMenuImageName(image.name);
+    setSelectedImageUrl(image.publicUrl);
+    setErr(null);
+  }
+
+  async function uploadMenuImage(file: File) {
+    if (!photoName.trim()) {
+      throw new Error(
+        "Photo Name required before uploading image"
+      );
     }
 
-    return finalFileName;
+    const formData = new FormData();
+
+    formData.append("file", file);
+    formData.append("photoName", photoName.trim());
+
+    const response = await fetch("/api/admin/menu-images", {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result?.ok) {
+      throw new Error(
+        result?.error || `Image upload failed (${response.status})`
+      );
+    }
+
+    const uploadedFileName = fileNameFromValue(
+      result?.fileName || result?.name || ""
+    );
+
+    if (!uploadedFileName) {
+      throw new Error(
+        "Image uploaded but filename was not returned"
+      );
+    }
+
+    setMenuImageName(uploadedFileName);
+
+    if (result?.publicUrl) {
+      setSelectedImageUrl(result.publicUrl);
+    }
+
+    return uploadedFileName;
+  }
+
+  async function updateItemImage(
+    itemId: number,
+    imageFileName: string
+  ) {
+    const { error: imageUpdateError } = await supabase
+      .from("RestroMenuItems")
+      .update({
+        menu_item_image: imageFileName,
+      })
+      .eq("id", itemId);
+
+    if (imageUpdateError) {
+      throw imageUpdateError;
+    }
   }
 
   async function handleSave() {
@@ -240,17 +432,31 @@ export default function MenuItemFormModal({
         throw new Error("Item Name required");
       }
 
+      if (menuImage && !photoName.trim()) {
+        throw new Error(
+          "Photo Name required before uploading image"
+        );
+      }
+
       const basePayload = {
         item_name: item_name.trim(),
-        item_description: item_description.trim() || null,
+        item_description:
+          item_description.trim() || null,
         item_category: item_category || null,
         item_cuisine: item_cuisine || null,
         menu_type: menu_type || null,
         start_time: start_time || null,
         end_time: end_time || null,
-        restro_price: restro_price === "" ? null : Number(restro_price),
-        base_price: base_price === "" ? null : Number(base_price),
-        gst_percent: gst_percent === "" ? 0 : Number(gst_percent),
+        restro_price:
+          restro_price === ""
+            ? null
+            : Number(restro_price),
+        base_price:
+          base_price === "" ? null : Number(base_price),
+        gst_percent:
+          gst_percent === ""
+            ? 0
+            : Number(gst_percent),
         selling_price,
         status,
       };
@@ -263,32 +469,55 @@ export default function MenuItemFormModal({
 
         if (error) throw error;
 
+        /*
+          New local file selected:
+          upload through server API, then save returned filename.
+        */
         if (menuImage) {
-          const uploadedFileName = await uploadMenuImage(
-            menuImage,
+          const uploadedFileName =
+            await uploadMenuImage(menuImage);
+
+          await updateItemImage(
             Number(initial.id),
-            item_name
+            uploadedFileName
+          );
+        } else {
+          /*
+            Existing bucket image selected:
+            save that filename.
+
+            If the user did not select/change any image,
+            the existing filename stays unchanged.
+          */
+          const initialImageName = fileNameFromValue(
+            initial.menu_item_image
           );
 
-          const { error: imageUpdateError } = await supabase
-            .from("RestroMenuItems")
-            .update({
-              menu_item_image: uploadedFileName,
-            })
-            .eq("id", initial.id);
-
-          if (imageUpdateError) {
-            throw imageUpdateError;
+          if (
+            menuImageName &&
+            menuImageName !== initialImageName
+          ) {
+            await updateItemImage(
+              Number(initial.id),
+              menuImageName
+            );
           }
         }
       } else {
-        const payloadCreate = { ...basePayload, item_code: null };
+        const payloadCreate = {
+          ...basePayload,
+          item_code: null,
+        };
 
         const res = await fetch(
-          `/api/restros/${encodeURIComponent(String(restroCode))}/menu`,
+          `/api/restros/${encodeURIComponent(
+            String(restroCode)
+          )}/menu`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+            },
             body: JSON.stringify(payloadCreate),
           }
         );
@@ -296,39 +525,44 @@ export default function MenuItemFormModal({
         const j = await res.json().catch(() => ({}));
 
         if (!res.ok || !j?.ok) {
-          throw new Error(j?.error || `Save failed (${res.status})`);
+          throw new Error(
+            j?.error || `Save failed (${res.status})`
+          );
         }
 
         const createdId =
-          j?.data?.id ||
-          j?.item?.id ||
-          j?.id;
+          j?.data?.id || j?.item?.id || j?.id;
 
-        if (menuImage && createdId) {
-          const uploadedFileName = await uploadMenuImage(
-            menuImage,
-            Number(createdId),
-            item_name
-          );
+        if (createdId) {
+          if (menuImage) {
+            const uploadedFileName =
+              await uploadMenuImage(menuImage);
 
-          const { error: imageUpdateError } = await supabase
-            .from("RestroMenuItems")
-            .update({
-              menu_item_image: uploadedFileName,
-            })
-            .eq("id", createdId);
-
-          if (imageUpdateError) {
-            throw imageUpdateError;
+            await updateItemImage(
+              Number(createdId),
+              uploadedFileName
+            );
+          } else if (menuImageName) {
+            await updateItemImage(
+              Number(createdId),
+              menuImageName
+            );
           }
         }
       }
 
       const currentPath =
-        typeof window !== "undefined" ? window.location.pathname : "";
+        typeof window !== "undefined"
+          ? window.location.pathname
+          : "";
 
-      if (mode === "create" && currentPath.includes("/admin/restros/new")) {
-window.location.replace("/admin/restros/new/restro-user-password");
+      if (
+        mode === "create" &&
+        currentPath.includes("/admin/restros/new")
+      ) {
+        window.location.replace(
+          "/admin/restros/new/restro-user-password"
+        );
         return;
       }
 
@@ -341,7 +575,11 @@ window.location.replace("/admin/restros/new/restro-user-password");
     }
   }
 
-  const smallInput = "w-full md:w-40 rounded border px-2 py-1.5";
+  const smallInput =
+    "w-full md:w-40 rounded border px-2 py-1.5";
+
+  const previewUrl =
+    localImagePreview || selectedImageUrl;
 
   return (
     <div
@@ -356,10 +594,12 @@ window.location.replace("/admin/restros/new/restro-user-password");
         aria-label="Close"
       />
 
-      <div className="relative z-10 w-[980px] max-w-[96vw] rounded-2xl bg-white p-6 shadow-xl">
+      <div className="relative z-10 max-h-[94vh] w-[980px] max-w-[96vw] overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold">
-            {mode === "edit" ? "Edit Item" : "Add New Item"}
+            {mode === "edit"
+              ? "Edit Item"
+              : "Add New Item"}
           </h2>
 
           <button
@@ -379,29 +619,39 @@ window.location.replace("/admin/restros/new/restro-user-password");
             <input
               className="w-full rounded border px-3 py-2"
               value={item_name}
-              onChange={(e) => setItemName(e.target.value)}
+              onChange={(e) =>
+                setItemName(e.target.value)
+              }
               placeholder="e.g., Veg Mini Thali"
             />
           </div>
 
           <div className="md:col-span-3">
-            <label className="text-sm">Item Description</label>
+            <label className="text-sm">
+              Item Description
+            </label>
 
             <input
               className="w-full rounded border px-3 py-2"
               value={item_description}
-              onChange={(e) => setItemDescription(e.target.value)}
+              onChange={(e) =>
+                setItemDescription(e.target.value)
+              }
               placeholder="Short description"
             />
           </div>
 
           <div>
-            <label className="text-sm">Item Category</label>
+            <label className="text-sm">
+              Item Category
+            </label>
 
             <select
               className="w-full rounded border px-3 py-2"
               value={item_category}
-              onChange={(e) => setItemCategory(e.target.value)}
+              onChange={(e) =>
+                setItemCategory(e.target.value)
+              }
             >
               <option value="">Select category</option>
 
@@ -419,7 +669,9 @@ window.location.replace("/admin/restros/new/restro-user-password");
             <select
               className="w-full rounded border px-3 py-2"
               value={item_cuisine}
-              onChange={(e) => setItemCuisine(e.target.value)}
+              onChange={(e) =>
+                setItemCuisine(e.target.value)
+              }
             >
               <option value="">Select cuisine</option>
 
@@ -437,7 +689,9 @@ window.location.replace("/admin/restros/new/restro-user-password");
             <select
               className="w-full rounded border px-3 py-2"
               value={menu_type}
-              onChange={(e) => setMenuType(e.target.value)}
+              onChange={(e) =>
+                setMenuType(e.target.value)
+              }
             >
               <option value="">Select menu type</option>
 
@@ -449,42 +703,217 @@ window.location.replace("/admin/restros/new/restro-user-password");
             </select>
           </div>
 
-          <div>
-            <label className="text-sm">Menu Item Image (.webp max 50KB)</label>
+          <div className="md:col-span-3 rounded-lg border p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={
+                  imageMode === "upload"
+                    ? "rounded-md bg-blue-600 px-4 py-2 text-sm text-white"
+                    : "rounded-md border px-4 py-2 text-sm"
+                }
+                onClick={() => setImageMode("upload")}
+              >
+                Upload New Photo
+              </button>
 
-            <input
-              type="file"
-              accept=".webp"
-              className="w-full rounded border px-3 py-2"
-              onChange={handleImageChange}
-            />
+              <button
+                type="button"
+                className={
+                  imageMode === "search"
+                    ? "rounded-md bg-blue-600 px-4 py-2 text-sm text-white"
+                    : "rounded-md border px-4 py-2 text-sm"
+                }
+                onClick={() => setImageMode("search")}
+              >
+                Search Existing Photo
+              </button>
+            </div>
 
-            {menuImageName && (
-              <div className="mt-1 text-xs text-green-600 break-all">
-                Selected: {menuImageName}
+            {imageMode === "upload" && (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="text-sm">
+                    Photo Name
+                  </label>
+
+                  <input
+                    type="text"
+                    className="w-full rounded border px-3 py-2"
+                    value={photoName}
+                    onChange={(e) =>
+                      setPhotoName(e.target.value)
+                    }
+                    placeholder="e.g., Dal Fry"
+                  />
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    File will save like
+                    dal-fry-1.webp, dal-fry-2.webp
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-sm">
+                    Menu Item Image (.webp max 50KB)
+                  </label>
+
+                  <input
+                    type="file"
+                    accept=".webp,image/webp"
+                    className="w-full rounded border px-3 py-2"
+                    onChange={handleImageChange}
+                  />
+                </div>
+              </div>
+            )}
+
+            {imageMode === "search" && (
+              <div>
+                <label className="text-sm">
+                  Search Supabase Photo
+                </label>
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    className="w-full rounded border px-3 py-2"
+                    value={imageSearch}
+                    onChange={(e) =>
+                      setImageSearch(e.target.value)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        searchExistingImages();
+                      }
+                    }}
+                    placeholder="e.g., Dal Fry"
+                  />
+
+                  <button
+                    type="button"
+                    className="rounded-md bg-gray-800 px-5 py-2 text-white disabled:opacity-60"
+                    onClick={searchExistingImages}
+                    disabled={searchingImages}
+                  >
+                    {searchingImages
+                      ? "Searching..."
+                      : "Search"}
+                  </button>
+                </div>
+
+                {imageSearchDone &&
+                  imageResults.length === 0 && (
+                    <p className="mt-3 text-sm text-gray-500">
+                      No matching photos found.
+                    </p>
+                  )}
+
+                {imageResults.length > 0 && (
+                  <div className="mt-4 grid max-h-72 grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">
+                    {imageResults.map((image) => {
+                      const selected =
+                        menuImageName === image.name &&
+                        !menuImage;
+
+                      return (
+                        <button
+                          key={image.name}
+                          type="button"
+                          className={
+                            selected
+                              ? "overflow-hidden rounded-lg border-2 border-blue-600 bg-blue-50 text-left"
+                              : "overflow-hidden rounded-lg border bg-white text-left hover:border-blue-400"
+                          }
+                          onClick={() =>
+                            selectExistingImage(image)
+                          }
+                        >
+                          <img
+                            src={image.publicUrl}
+                            alt={image.name}
+                            className="h-28 w-full object-cover"
+                          />
+
+                          <div className="p-2">
+                            <p className="break-all text-xs">
+                              {image.name}
+                            </p>
+
+                            <p className="mt-1 text-xs font-medium text-blue-600">
+                              {selected
+                                ? "Selected"
+                                : "Select"}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(menuImageName || previewUrl) && (
+              <div className="mt-4 flex items-center gap-3 rounded-md bg-gray-50 p-3">
+                {previewUrl && (
+                  <img
+                    src={previewUrl}
+                    alt="Selected menu item"
+                    className="h-20 w-20 rounded-md border object-cover"
+                  />
+                )}
+
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500">
+                    Selected photo
+                  </p>
+
+                  <p className="break-all text-sm font-medium text-green-700">
+                    {menuImage
+                      ? menuImage.name
+                      : menuImageName}
+                  </p>
+
+                  {menuImage && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Final filename will be generated
+                      from Photo Name.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
 
           <div>
-            <label className="text-sm">Item Start Time</label>
+            <label className="text-sm">
+              Item Start Time
+            </label>
 
             <input
               type="time"
               className="w-full rounded border px-3 py-2"
               value={start_time}
-              onChange={(e) => setStartTime(e.target.value)}
+              onChange={(e) =>
+                setStartTime(e.target.value)
+              }
             />
           </div>
 
           <div>
-            <label className="text-sm">Item Closed Time</label>
+            <label className="text-sm">
+              Item Closed Time
+            </label>
 
             <input
               type="time"
               className="w-full rounded border px-3 py-2"
               value={end_time}
-              onChange={(e) => setEndTime(e.target.value)}
+              onChange={(e) =>
+                setEndTime(e.target.value)
+              }
             />
           </div>
 
@@ -500,25 +929,39 @@ window.location.replace("/admin/restros/new/restro-user-password");
                   inputMode="decimal"
                   pattern="[0-9]*"
                   className={smallInput}
-                  value={restro_price === "" ? "" : String(restro_price)}
+                  value={
+                    restro_price === ""
+                      ? ""
+                      : String(restro_price)
+                  }
                   onChange={(e) =>
-                    setRestroPrice(toNumOrEmpty(e.target.value))
+                    setRestroPrice(
+                      toNumOrEmpty(e.target.value)
+                    )
                   }
                   autoComplete="off"
                 />
               </div>
 
               <div>
-                <label className="text-sm">Base Price</label>
+                <label className="text-sm">
+                  Base Price
+                </label>
 
                 <input
                   type="text"
                   inputMode="decimal"
                   pattern="[0-9]*"
                   className={smallInput}
-                  value={base_price === "" ? "" : String(base_price)}
+                  value={
+                    base_price === ""
+                      ? ""
+                      : String(base_price)
+                  }
                   onChange={(e) =>
-                    setBasePrice(toNumOrEmpty(e.target.value))
+                    setBasePrice(
+                      toNumOrEmpty(e.target.value)
+                    )
                   }
                   autoComplete="off"
                 />
@@ -529,7 +972,11 @@ window.location.replace("/admin/restros/new/restro-user-password");
 
                 <select
                   className={smallInput}
-                  value={String(gst_percent === "" ? "" : gst_percent)}
+                  value={String(
+                    gst_percent === ""
+                      ? ""
+                      : gst_percent
+                  )}
                   onChange={(e) =>
                     setGstPercent(
                       e.target.value === ""
@@ -550,20 +997,26 @@ window.location.replace("/admin/restros/new/restro-user-password");
                 </label>
 
                 <input
-                  className={smallInput + " bg-gray-50"}
+                  className={
+                    smallInput + " bg-gray-50"
+                  }
                   value={selling_price}
                   readOnly
                 />
               </div>
 
               <div>
-                <label className="text-sm">Status</label>
+                <label className="text-sm">
+                  Status
+                </label>
 
                 <select
                   className={smallInput}
                   value={status}
                   onChange={(e) =>
-                    setStatus(e.target.value as "ON" | "OFF")
+                    setStatus(
+                      e.target.value as "ON" | "OFF"
+                    )
                   }
                 >
                   <option value="ON">On</option>
@@ -592,7 +1045,7 @@ window.location.replace("/admin/restros/new/restro-user-password");
 
           <button
             type="button"
-            className="rounded-md bg-blue-600 px-4 py-2 text-white"
+            className="rounded-md bg-blue-600 px-4 py-2 text-white disabled:opacity-60"
             onClick={handleSave}
             disabled={saving}
           >
