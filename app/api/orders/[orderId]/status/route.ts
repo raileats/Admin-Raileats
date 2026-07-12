@@ -29,17 +29,27 @@ function normalizeStatus(value: any) {
   const raw = cleanText(value);
   if (!raw) return null;
 
-  const key = raw.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const key = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
   const aliases: Record<string, string> = {
     booked: "Booked",
+
     verification: "In Verification",
     inverification: "In Verification",
+
+    cancellationrequest: "Cancellation Request",
+
     neworder: "New Order",
     inkitchen: "In Kitchen",
     outfordelivery: "Out for Delivery",
+
     delivered: "Delivered",
+
     cancelled: "Cancelled",
     canceled: "Cancelled",
+
     notdelivered: "Not Delivered",
     baddelivery: "Bad Delivery",
   };
