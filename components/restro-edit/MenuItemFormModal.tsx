@@ -152,7 +152,6 @@ export default function MenuItemFormModal({
     "upload"
   );
 
-  const [photoName, setPhotoName] = useState("");
 
   const [imageSearch, setImageSearch] = useState("");
   const [imageResults, setImageResults] = useState<MenuImageResult[]>(
@@ -171,7 +170,6 @@ export default function MenuItemFormModal({
 
     async function loadDefaults() {
       setMenuImage(null);
-      setPhotoName("");
       setImageMode("upload");
       setImageSearch("");
       setImageResults([]);
@@ -308,10 +306,6 @@ export default function MenuItemFormModal({
 
     setMenuImage(file);
 
-    /*
-      Filename abhi original file name nahi dikhaya jayega.
-      Actual final filename server upload ke samay banayega.
-    */
     setMenuImageName(file.name);
     setSelectedImageUrl("");
     setErr(null);
@@ -364,16 +358,9 @@ export default function MenuItemFormModal({
   }
 
   async function uploadMenuImage(file: File) {
-    if (!photoName.trim()) {
-      throw new Error(
-        "Photo Name required before uploading image"
-      );
-    }
-
     const formData = new FormData();
 
     formData.append("file", file);
-    formData.append("photoName", photoName.trim());
 
     const response = await fetch("/api/admin/menu-images", {
       method: "POST",
@@ -430,12 +417,6 @@ export default function MenuItemFormModal({
 
       if (!item_name.trim()) {
         throw new Error("Item Name required");
-      }
-
-      if (menuImage && !photoName.trim()) {
-        throw new Error(
-          "Photo Name required before uploading image"
-        );
       }
 
       const basePayload = {
@@ -731,40 +712,22 @@ export default function MenuItemFormModal({
             </div>
 
             {imageMode === "upload" && (
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-sm">
-                    Photo Name
-                  </label>
+              <div>
+                <label className="text-sm">
+                  Menu Item Image (.webp max 50KB)
+                </label>
 
-                  <input
-                    type="text"
-                    className="w-full rounded border px-3 py-2"
-                    value={photoName}
-                    onChange={(e) =>
-                      setPhotoName(e.target.value)
-                    }
-                    placeholder="e.g., Dal Fry"
-                  />
+                <input
+                  type="file"
+                  accept=".webp,image/webp"
+                  className="w-full rounded border px-3 py-2"
+                  onChange={handleImageChange}
+                />
 
-                  <p className="mt-1 text-xs text-gray-500">
-                    File will save like
-                    dal-fry-1.webp, dal-fry-2.webp
-                  </p>
-                </div>
-
-                <div>
-                  <label className="text-sm">
-                    Menu Item Image (.webp max 50KB)
-                  </label>
-
-                  <input
-                    type="file"
-                    accept=".webp,image/webp"
-                    className="w-full rounded border px-3 py-2"
-                    onChange={handleImageChange}
-                  />
-                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Upload the file using the exact name you want in Supabase,
+                  for example: Dal Fry.webp, Dal Fry 2.webp, Dal Fry 3.webp
+                </p>
               </div>
             )}
 
@@ -878,8 +841,7 @@ export default function MenuItemFormModal({
 
                   {menuImage && (
                     <p className="mt-1 text-xs text-gray-500">
-                      Final filename will be generated
-                      from Photo Name.
+                      The selected file name will be used in Supabase.
                     </p>
                   )}
                 </div>
