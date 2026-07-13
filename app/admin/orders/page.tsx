@@ -1647,7 +1647,13 @@ useEffect(() => {
       matchUpdate.dbStatus !== detailedOrder.dbStatus
     )
   ) {
-    setDetailedOrder(matchUpdate);
+    setDetailedOrder((current: any) => ({
+      ...matchUpdate,
+      raw: {
+        ...(current?.raw || {}),
+        ...(matchUpdate.raw || {}),
+      },
+    }));
   }
 }, [allOrders]);
 
@@ -1731,13 +1737,73 @@ useEffect(() => {
   };
 
   /* ================= DIAGNOSTICS LAUNCH PANEL ================= */
-  const handleOpenDiagnosticsDrawer = async (order: Order, preferredSection: "details" | "logs" = "details") => {
+  const handleOpenDiagnosticsDrawer = async (
+    order: Order,
+    preferredSection: "details" | "logs" = "details"
+  ) => {
     setDetailedOrder(order);
     setActiveDrawerSection(preferredSection);
     setViewDrawerOpen(true);
-    
+
     const targetOrderId = order.id;
     const targetRestroCode = order.outletId;
+
+    /*
+      API list response kabhi-kabhi sirf table ke required columns bhejta hai.
+      Popup khulte hi Orders table ki complete row dobara load ki jaati hai,
+      jisse PNR, BookingSource, BookedBy aur payment breakup mil sake.
+    */
+    if (targetOrderId) {
+      try {
+        let fullOrderRow: any = null;
+
+        const byId = await supabase
+          .from("Orders")
+          .select("*")
+          .eq("id", targetOrderId)
+          .maybeSingle();
+
+        if (!byId.error && byId.data) {
+          fullOrderRow = byId.data;
+        } else {
+          const byOrderId = await supabase
+            .from("Orders")
+            .select("*")
+            .eq("OrderId", targetOrderId)
+            .maybeSingle();
+
+          if (!byOrderId.error && byOrderId.data) {
+            fullOrderRow = byOrderId.data;
+          } else if (byId.error && byOrderId.error) {
+            console.error("Complete Orders row could not be loaded", {
+              idError: byId.error,
+              orderIdError: byOrderId.error,
+            });
+          }
+        }
+
+        if (fullOrderRow) {
+          const mappedFullOrder = mapOrderRowToOrder(fullOrderRow);
+
+          setDetailedOrder((current: any) => ({
+            ...(current || order),
+            ...mappedFullOrder,
+            status: current?.status || order.status,
+            dbStatus:
+              valueFrom(fullOrderRow, "Status", "status") ||
+              current?.dbStatus ||
+              order.dbStatus,
+            raw: {
+              ...(order.raw || {}),
+              ...(current?.raw || {}),
+              ...fullOrderRow,
+            },
+          }));
+        }
+      } catch (e) {
+        console.error("Error loading complete Orders row:", e);
+      }
+    }
 
     if (targetOrderId) {
       setLoadingItems(true);
@@ -1747,9 +1813,17 @@ useEffect(() => {
           .from("OrderItems")
           .select("*")
           .eq("OrderId", targetOrderId);
-        if (!error && data) setFetchedItems(data);
-      } catch (e) { console.error("Error connecting OrderItems database links:", e); }
-      finally { setLoadingItems(false); }
+
+        if (!error && data) {
+          setFetchedItems(data);
+        } else if (error) {
+          console.error("OrderItems loading failed:", error);
+        }
+      } catch (e) {
+        console.error("Error connecting OrderItems database links:", e);
+      } finally {
+        setLoadingItems(false);
+      }
     }
 
     if (targetRestroCode) {
@@ -1761,9 +1835,17 @@ useEffect(() => {
           .select("*")
           .eq("RestroCode", targetRestroCode)
           .maybeSingle();
-        if (!error && data) setFetchedRestro(data);
-      } catch (e) { console.error("Error connecting RestroMaster database links:", e); }
-      finally { setLoadingRestro(false); }
+
+        if (!error && data) {
+          setFetchedRestro(data);
+        } else if (error) {
+          console.error("RestroMaster loading failed:", error);
+        }
+      } catch (e) {
+        console.error("Error connecting RestroMaster database links:", e);
+      } finally {
+        setLoadingRestro(false);
+      }
     }
 
     if (targetOrderId) {
@@ -1775,9 +1857,17 @@ useEffect(() => {
           .select("*")
           .eq("OrderId", targetOrderId)
           .order("ChangedAt", { ascending: true });
-        if (!error && data) setOrderLogs(data);
-      } catch (e) { console.error("Error connecting OrderStatusHistory database links:", e); }
-      finally { setLoadingLogs(false); }
+
+        if (!error && data) {
+          setOrderLogs(data);
+        } else if (error) {
+          console.error("OrderStatusHistory loading failed:", error);
+        }
+      } catch (e) {
+        console.error("Error connecting OrderStatusHistory database links:", e);
+      } finally {
+        setLoadingLogs(false);
+      }
     }
   };
 
@@ -3036,7 +3126,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
             <div
               style={{
                 background: "#f8fafc",
-                padding: "18px 24px",
+                padding: "12px 18px",
                 borderBottom: "1px solid #e2e8f0",
                 display: "flex",
                 alignItems: "center",
@@ -3050,18 +3140,6 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                   <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "#0f172a" }}>
                     Order Details
                   </h2>
-                  <span
-                    style={{
-                      background: "#2563eb",
-                      color: "#fff",
-                      fontWeight: 800,
-                      fontSize: 11,
-                      padding: "3px 9px",
-                      borderRadius: 6,
-                    }}
-                  >
-                    #{detailedOrder.id}
-                  </span>
                 </div>
                 <p style={{ margin: "5px 0 0", fontSize: 11, color: "#64748b", fontWeight: 600 }}>
                   Current Status:{" "}
@@ -3100,14 +3178,14 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                 display: "flex",
                 borderBottom: "1px solid #e2e8f0",
                 background: "#fff",
-                padding: "0 24px",
+                padding: "0 18px",
                 flexShrink: 0,
               }}
             >
               <button
                 onClick={() => setActiveDrawerSection("details")}
                 style={{
-                  padding: "14px 20px",
+                  padding: "9px 16px",
                   background: "none",
                   border: "none",
                   borderBottom:
@@ -3125,7 +3203,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
               <button
                 onClick={() => setActiveDrawerSection("logs")}
                 style={{
-                  padding: "14px 20px",
+                  padding: "9px 16px",
                   background: "none",
                   border: "none",
                   borderBottom:
@@ -3145,37 +3223,113 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
             <div
               style={{
                 flex: 1,
-                padding: 22,
+                padding: 12,
                 overflowY: "auto",
                 minHeight: 0,
               }}
             >
               {activeDrawerSection === "details" ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div className="order-top-grid">
                     <div className="order-info-card">
                       <h3 className="order-card-title">
                         <Smartphone size={15} /> Journey &amp; Customer Details
                       </h3>
-                      <div className="order-field-grid">
-                        <OrderDetailField label="Customer Name" value={detailedOrder.customerName || valueFrom(detailedOrder.raw, "CustomerName", "customerName") || "Guest"} />
-                        <OrderDetailField label="Customer Mobile" value={detailedOrder.customerMobile || valueFrom(detailedOrder.raw, "CustomerMobile", "customerMobile") || "N/A"} />
-                        <OrderDetailField label="PNR Number" value={valueFrom(detailedOrder.raw, "PNR", "pnr", "PnrNumber", "PNRNumber") || "N/A"} />
-                        <OrderDetailField label="Train Number" value={detailedOrder.trainNo ? `Train ${detailedOrder.trainNo}` : "N/A"} />
-                        <OrderDetailField label="Coach" value={detailedOrder.coach || "-"} />
-                        <OrderDetailField label="Seat" value={detailedOrder.seat || "-"} />
-                        <OrderDetailField label="Delivery Date" value={detailedOrder.deliveryDate || "N/A"} highlight />
-                        <OrderDetailField label="Delivery Time" value={detailedOrder.deliveryTime || "N/A"} highlight />
-                        <OrderDetailField label="Station Code" value={detailedOrder.stationCode || "N/A"} />
-                        <OrderDetailField label="Station Name" value={detailedOrder.stationName || "N/A"} />
-                        <OrderDetailField label="Booking Source" value={valueFrom(detailedOrder.raw, "BookingSource", "bookingSource", "Source", "source") || "N/A"} />
-                        <OrderDetailField label="Booked By" value={valueFrom(detailedOrder.raw, "BookedBy", "bookedBy") || "Customer"} />
-                        <div className="order-field-full">
-                          <OrderDetailField
-                            label="Order Booked At"
-                            value={formatAdminDateTime(valueFrom(detailedOrder.raw, "CreatedAt", "createdAt", "created_at") || detailedOrder.rawCreatedAt)}
-                          />
+                      <div className="order-field-grid compact-order-fields">
+                        <div className="order-id-field">
+                          <span className="order-field-label">Order ID</span>
+                          <span className="order-id-value">#{detailedOrder.id}</span>
                         </div>
+
+                        <OrderDetailField
+                          label="Customer Name"
+                          value={
+                            detailedOrder.customerName ||
+                            valueFrom(detailedOrder.raw, "CustomerName", "customerName") ||
+                            "Guest"
+                          }
+                        />
+                        <OrderDetailField
+                          label="Customer Mobile"
+                          value={
+                            detailedOrder.customerMobile ||
+                            valueFrom(detailedOrder.raw, "CustomerMobile", "customerMobile") ||
+                            "N/A"
+                          }
+                        />
+                        <OrderDetailField
+                          label="PNR Number"
+                          value={
+                            valueFrom(
+                              detailedOrder.raw,
+                              "PNR",
+                              "pnr",
+                              "Pnr",
+                              "PnrNumber",
+                              "PNRNumber",
+                              "PnrNo",
+                              "pnrNo"
+                            ) || "N/A"
+                          }
+                        />
+                        <OrderDetailField
+                          label="Train Number"
+                          value={detailedOrder.trainNo ? `Train ${detailedOrder.trainNo}` : "N/A"}
+                        />
+                        <OrderDetailField
+                          label="Coach / Seat"
+                          value={`Coach ${detailedOrder.coach || "-"} / Seat ${detailedOrder.seat || "-"}`}
+                        />
+                        <OrderDetailField
+                          label="Delivery Date & Time"
+                          value={`${detailedOrder.deliveryDate || "N/A"} • ${detailedOrder.deliveryTime || "N/A"}`}
+                          highlight
+                        />
+                        <OrderDetailField
+                          label="Station"
+                          value={`${detailedOrder.stationName || "N/A"} (${detailedOrder.stationCode || "-"})`}
+                        />
+                        <OrderDetailField
+                          label="Booking Source"
+                          value={
+                            valueFrom(
+                              detailedOrder.raw,
+                              "BookingSource",
+                              "bookingSource",
+                              "Booking_Source",
+                              "booking_source",
+                              "Source",
+                              "source"
+                            ) || "N/A"
+                          }
+                        />
+                        <OrderDetailField
+                          label="Booked By"
+                          value={
+                            valueFrom(
+                              detailedOrder.raw,
+                              "BookedBy",
+                              "bookedBy",
+                              "Booked_By",
+                              "booked_by"
+                            ) || "Customer"
+                          }
+                        />
+                        <OrderDetailField
+                          label="Order Booked At"
+                          value={formatAdminDateTime(
+                            valueFrom(
+                              detailedOrder.raw,
+                              "CreatedAt",
+                              "createdAt",
+                              "created_at",
+                              "BookedAt",
+                              "bookedAt",
+                              "OrderDate",
+                              "orderDate"
+                            ) || detailedOrder.rawCreatedAt
+                          )}
+                        />
                       </div>
                     </div>
 
@@ -3199,13 +3353,54 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                       </div>
 
                       <div className="payment-lines">
-                        <PaymentLine label="Base Price / Subtotal" value={moneyFrom(detailedOrder.raw, "BasePrice", "basePrice", "Subtotal", "subtotal", "SubTotal")} />
-                        <PaymentLine label="GST Amount" value={moneyFrom(detailedOrder.raw, "GSTAmount", "gstAmount", "GST", "gst", "TaxAmount", "taxAmount")} />
-                        <PaymentLine label="Platform Charge" value={moneyFrom(detailedOrder.raw, "PlatformCharge", "platformCharge")} />
-                        <PaymentLine label="Delivery Charge" value={moneyFrom(detailedOrder.raw, "DeliveryCharge", "deliveryCharge")} />
+                        <PaymentLine
+                          label="Base Price / Subtotal"
+                          value={
+                            moneyFrom(
+                              detailedOrder.raw,
+                              "BasePrice",
+                              "basePrice",
+                              "BaseAmount",
+                              "baseAmount",
+                              "Subtotal",
+                              "subtotal",
+                              "SubTotal",
+                              "ItemTotal",
+                              "itemTotal",
+                              "ItemsTotal",
+                              "itemsTotal"
+                            ) ??
+                            (fetchedItems.length
+                              ? fetchedItems.reduce((sum: number, item: any) => {
+                                  const quantity = Number(
+                                    valueFrom(item, "Quantity", "quantity", "Qty", "qty") || 1
+                                  );
+                                  const lineTotal = Number(
+                                    valueFrom(item, "LineTotal", "lineTotal", "Total", "total")
+                                  );
+                                  const unitPrice = Number(
+                                    valueFrom(
+                                      item,
+                                      "SellingPrice",
+                                      "sellingPrice",
+                                      "UnitPrice",
+                                      "unitPrice",
+                                      "Price",
+                                      "price"
+                                    ) || 0
+                                  );
+                                  return sum + (Number.isFinite(lineTotal) && lineTotal > 0
+                                    ? lineTotal
+                                    : unitPrice * quantity);
+                                }, 0)
+                              : null)
+                          }
+                        />
+                        <PaymentLine label="GST Amount" value={moneyFrom(detailedOrder.raw, "GSTAmount", "gstAmount", "GstAmount", "gst_amount", "GST", "gst", "TaxAmount", "taxAmount", "tax_amount")} />
+                        <PaymentLine label="Platform Charge" value={moneyFrom(detailedOrder.raw, "PlatformCharge", "platformCharge", "platform_charge", "ConvenienceFee", "convenienceFee")} />
+                        <PaymentLine label="Delivery Charge" value={moneyFrom(detailedOrder.raw, "DeliveryCharge", "deliveryCharge", "delivery_charge")} />
                         <PaymentLine label="Coupon Code" textValue={valueFrom(detailedOrder.raw, "CouponCode", "couponCode", "AppliedCoupon", "appliedCoupon") || "Not Applied"} />
                         <PaymentLine label="Coupon Discount" value={moneyFrom(detailedOrder.raw, "CouponDiscount", "couponDiscount", "DiscountAmount", "discountAmount", "Discount")} negative />
-                        <PaymentLine label="Transaction ID" textValue={valueFrom(detailedOrder.raw, "TransactionId", "TransactionID", "transactionId", "PaymentId", "paymentId", "RazorpayPaymentId") || "N/A"} />
                       </div>
 
                       <div className="payable-box">
@@ -3532,26 +3727,30 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
         @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
         @keyframes scaleIn { from { opacity: 0; transform: scale(0.96) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         .table-row-hover:hover { background-color: #f8fafc !important; transition: background-color 0.15s ease; }
-        .order-top-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr); gap: 18px; align-items: stretch; }
-        .order-info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
+        .order-top-grid { display: grid; grid-template-columns: minmax(0, 1.42fr) minmax(320px, 0.58fr); gap: 12px; align-items: stretch; }
+        .order-info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 13px 14px; }
         .payment-card { background: #f8fafc; }
-        .order-card-title, .section-heading { margin: 0 0 14px; font-size: 12px; font-weight: 900; color: #475569; text-transform: uppercase; letter-spacing: .55px; display: flex; align-items: center; gap: 7px; }
+        .order-card-title, .section-heading { margin: 0 0 9px; font-size: 12px; font-weight: 900; color: #475569; text-transform: uppercase; letter-spacing: .55px; display: flex; align-items: center; gap: 7px; }
         .payment-title { color: #2563eb; }
         .restaurant-title { color: #16a34a; }
         .section-heading { margin-bottom: 0; color: #64748b; }
-        .order-field-grid, .restaurant-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 18px; }
+        .order-field-grid, .restaurant-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 14px; }
         .restaurant-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .order-field, .order-field-highlight { min-width: 0; }
-        .order-field-highlight { background: #eff6ff; border: 1px solid #bfdbfe; padding: 9px 11px; border-radius: 8px; }
+        .order-field-highlight { background: #eff6ff; border: 1px solid #bfdbfe; padding: 6px 9px; border-radius: 7px; }
         .order-field-full { grid-column: 1 / -1; }
-        .order-field-label { display: block; margin-bottom: 4px; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .35px; }
-        .order-field-value { display: block; color: #0f172a; font-size: 13px; font-weight: 700; line-height: 1.45; word-break: break-word; }
-        .payment-summary-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+        .order-id-field { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 8px; background: #eaf2ff; border: 1px solid #bfdbfe; }
+        .order-id-field .order-field-label { margin: 0; color: #1d4ed8; }
+        .order-id-value { color: #1d4ed8; font-size: 13px; font-weight: 900; word-break: break-all; }
+        .compact-order-fields .order-field, .compact-order-fields .order-field-highlight { align-self: start; }
+        .order-field-label { display: block; margin-bottom: 2px; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .35px; }
+        .order-field-value { display: block; color: #0f172a; font-size: 12px; font-weight: 700; line-height: 1.45; word-break: break-word; }
+        .payment-summary-row { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 10px; margin-bottom: 7px; }
         .payment-mode-pill { display: inline-flex; padding: 5px 10px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: 12px; font-weight: 900; }
         .payment-lines { display: flex; flex-direction: column; }
-        .payment-line { display: flex; justify-content: space-between; gap: 18px; padding: 8px 2px; border-bottom: 1px dashed #dbe3ee; color: #64748b; font-size: 12px; }
+        .payment-line { display: flex; justify-content: space-between; gap: 14px; padding: 5px 2px; border-bottom: 1px dashed #dbe3ee; color: #64748b; font-size: 12px; }
         .payment-line strong { text-align: right; word-break: break-word; }
-        .payable-box { margin-top: 14px; padding: 13px 14px; border-radius: 10px; background: #2563eb; color: #fff; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 800; }
+        .payable-box { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: #2563eb; color: #fff; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 800; }
         .payable-box strong { font-size: 20px; }
         .items-table-wrap { border: 1px solid #e2e8f0; border-radius: 14px; overflow-x: auto; }
         .items-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; }
