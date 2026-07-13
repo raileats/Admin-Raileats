@@ -39,6 +39,7 @@ type Order = {
   total?: string;
   history: OrderHistoryItem[];
   rawCreatedAt?: string; // Correct fallback sorting key for booking chronology
+  raw?: any;
 };
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -637,9 +638,96 @@ const mapOrderRowToOrder = (row: any): Order => {
     rawCreatedAt:
       row.CreatedAt ??
       row.createdAt ??
+      row.created_at ??
       "",
+
+    raw: row,
   };
 };
+
+
+const valueFrom = (source: any, ...keys: string[]) => {
+  if (!source) return "";
+  for (const key of keys) {
+    const value = source[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
+  }
+  return "";
+};
+
+const moneyNumber = (value: any) => {
+  const numberValue = Number(value ?? 0);
+  if (!Number.isFinite(numberValue)) return "0";
+  return numberValue.toLocaleString("en-IN", {
+    minimumFractionDigits: Number.isInteger(numberValue) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const moneyFrom = (source: any, ...keys: string[]) => {
+  const value = valueFrom(source, ...keys);
+  if (value === "") return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+};
+
+const formatAdminDateTime = (value: any) => {
+  if (!value) return "N/A";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+function OrderDetailField({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: any;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={highlight ? "order-field-highlight" : "order-field"}>
+      <span className="order-field-label">{label}</span>
+      <span className="order-field-value">{String(value ?? "N/A")}</span>
+    </div>
+  );
+}
+
+function PaymentLine({
+  label,
+  value,
+  textValue,
+  negative = false,
+}: {
+  label: string;
+  value?: number | null;
+  textValue?: any;
+  negative?: boolean;
+}) {
+  const shown = textValue !== undefined
+    ? String(textValue)
+    : value === null || value === undefined
+    ? "N/A"
+    : `${negative && value > 0 ? "- " : ""}₹${moneyNumber(value)}`;
+
+  return (
+    <div className="payment-line">
+      <span>{label}</span>
+      <strong style={{ color: negative && value ? "#dc2626" : "#0f172a" }}>{shown}</strong>
+    </div>
+  );
+}
 
 export default function AdminOrdersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
@@ -2912,73 +3000,124 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
       {/* ORDER DETAILS / LOGS CENTER MODAL */}
       {/* ========================================================================= */}
       {viewDrawerOpen && detailedOrder && (
-        <div 
+        <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(15, 23, 42, 0.6)",
-            backdropFilter: "blur(4px)",
+            background: "rgba(15, 23, 42, 0.64)",
+            backdropFilter: "blur(5px)",
             zIndex: 999,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: "24px",
-            animation: "fadeIn 0.2s ease"
+            padding: "18px",
+            animation: "fadeIn 0.2s ease",
           }}
-          onClick={() => { setViewDrawerOpen(false); setDetailedOrder(null); }}
+          onClick={() => {
+            setViewDrawerOpen(false);
+            setDetailedOrder(null);
+          }}
         >
-          <div 
+          <div
+            className="order-details-modal"
             style={{
-              width: "100%",
-              maxWidth: "920px",
-              height: "88vh",
+              width: "min(1220px, 96vw)",
+              height: "92vh",
               background: "#ffffff",
               borderRadius: "18px",
-              boxShadow: "0 24px 60px rgba(15,23,42,0.28)",
+              boxShadow: "0 28px 80px rgba(15,23,42,0.34)",
               display: "flex",
               flexDirection: "column",
               animation: "scaleIn 0.18s ease-out",
-              overflow: "hidden"
+              overflow: "hidden",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            
-            {/* DRAWER HEADER CONSOLE ROW */}
-            <div style={{ background: "#f8fafc", padding: "18px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div
+              style={{
+                background: "#f8fafc",
+                padding: "18px 24px",
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
+                flexShrink: 0,
+              }}
+            >
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "#0f172a", letterSpacing: "0" }}>Order Details</h2>
-                  <span style={{ background: "#2563eb", color: "#fff", fontWeight: 800, fontSize: "11px", padding: "2px 8px", borderRadius: "5px" }}>#{detailedOrder.id}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "#0f172a" }}>
+                    Order Details
+                  </h2>
+                  <span
+                    style={{
+                      background: "#2563eb",
+                      color: "#fff",
+                      fontWeight: 800,
+                      fontSize: 11,
+                      padding: "3px 9px",
+                      borderRadius: 6,
+                    }}
+                  >
+                    #{detailedOrder.id}
+                  </span>
                 </div>
-                <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "#64748b", fontWeight: 600 }}>
-                  Current Status: <span style={{ color: "#2563eb", fontWeight: 800 }}>{detailedOrder.dbStatus || detailedOrder.status}</span>
+                <p style={{ margin: "5px 0 0", fontSize: 11, color: "#64748b", fontWeight: 600 }}>
+                  Current Status:{" "}
+                  <span style={{ color: "#2563eb", fontWeight: 800 }}>
+                    {detailedOrder.dbStatus || detailedOrder.status}
+                  </span>
                 </p>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button 
-                  onClick={() => { setViewDrawerOpen(false); setDetailedOrder(null); }}
-                  style={{ width: "32px", height: "32px", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "50%", cursor: "pointer", fontWeight: "bold", color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center" }}
-                >
-                  ✕
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setViewDrawerOpen(false);
+                  setDetailedOrder(null);
+                }}
+                title="Close"
+                style={{
+                  width: 36,
+                  height: 36,
+                  background: "#fff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "50%",
+                  cursor: "pointer",
+                  color: "#64748b",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <X size={19} />
+              </button>
             </div>
 
-            {/* MODIFIED: TAB TOGGLES INSIDE THE DRAWER TO SWITCH PREFERENCES EASILY */}
-            <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", background: "#fff", padding: "0 24px" }}>
+            <div
+              style={{
+                display: "flex",
+                borderBottom: "1px solid #e2e8f0",
+                background: "#fff",
+                padding: "0 24px",
+                flexShrink: 0,
+              }}
+            >
               <button
                 onClick={() => setActiveDrawerSection("details")}
                 style={{
                   padding: "14px 20px",
                   background: "none",
                   border: "none",
-                  borderBottom: activeDrawerSection === "details" ? "3px solid #2563eb" : "3px solid transparent",
+                  borderBottom:
+                    activeDrawerSection === "details"
+                      ? "3px solid #2563eb"
+                      : "3px solid transparent",
                   color: activeDrawerSection === "details" ? "#2563eb" : "#64748b",
                   fontWeight: 700,
-                  fontSize: "13px",
+                  fontSize: 13,
                   cursor: "pointer",
-                  transition: "all 0.15s"
                 }}
               >
                 Order Details
@@ -2989,122 +3128,186 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                   padding: "14px 20px",
                   background: "none",
                   border: "none",
-                  borderBottom: activeDrawerSection === "logs" ? "3px solid #2563eb" : "3px solid transparent",
+                  borderBottom:
+                    activeDrawerSection === "logs"
+                      ? "3px solid #2563eb"
+                      : "3px solid transparent",
                   color: activeDrawerSection === "logs" ? "#2563eb" : "#64748b",
                   fontWeight: 700,
-                  fontSize: "13px",
+                  fontSize: 13,
                   cursor: "pointer",
-                  transition: "all 0.15s"
                 }}
               >
                 Order Process Log
               </button>
             </div>
 
-            {/* CORE INNER DRAWER PANEL */}
-            <div style={{ flex: 1, padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "24px" }}>
-              
+            <div
+              style={{
+                flex: 1,
+                padding: 22,
+                overflowY: "auto",
+                minHeight: 0,
+              }}
+            >
               {activeDrawerSection === "details" ? (
-                <>
-                  {/* TRANSIT METRICS PANEL */}
-                  <div style={{ background: "#f8fafc", borderRadius: "12px", padding: "16px", border: "1px solid #e2e8f0" }}>
-                    <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <Smartphone size={14} /> Customer &amp; Delivery Details
-                    </h3>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", fontSize: "13px", fontWeight: "600", color: "#334155" }}>
-                      <div><span style={{ color: "#64748b", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Customer Name</span>{detailedOrder.customerName || "Guest"}</div>
-                      <div><span style={{ color: "#64748b", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Customer Mobile</span>{detailedOrder.customerMobile || "N/A"}</div>
-                      <div><span style={{ color: "#64748b", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Train Number</span>Train {detailedOrder.trainNo || "N/A"}</div>
-                      <div><span style={{ color: "#64748b", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Coach / Seat</span>Coach {detailedOrder.coach || "-"} / Seat {detailedOrder.seat || "-"}</div>
-                      <div style={{ background: "#eff6ff", padding: "6px 10px", borderRadius: "6px", border: "1px solid #bfdbfe" }}>
-                        <span style={{ color: "#2563eb", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Delivery Date</span>
-                        {detailedOrder.deliveryDate}
+                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                  <div className="order-top-grid">
+                    <div className="order-info-card">
+                      <h3 className="order-card-title">
+                        <Smartphone size={15} /> Journey &amp; Customer Details
+                      </h3>
+                      <div className="order-field-grid">
+                        <OrderDetailField label="Customer Name" value={detailedOrder.customerName || valueFrom(detailedOrder.raw, "CustomerName", "customerName") || "Guest"} />
+                        <OrderDetailField label="Customer Mobile" value={detailedOrder.customerMobile || valueFrom(detailedOrder.raw, "CustomerMobile", "customerMobile") || "N/A"} />
+                        <OrderDetailField label="PNR Number" value={valueFrom(detailedOrder.raw, "PNR", "pnr", "PnrNumber", "PNRNumber") || "N/A"} />
+                        <OrderDetailField label="Train Number" value={detailedOrder.trainNo ? `Train ${detailedOrder.trainNo}` : "N/A"} />
+                        <OrderDetailField label="Coach" value={detailedOrder.coach || "-"} />
+                        <OrderDetailField label="Seat" value={detailedOrder.seat || "-"} />
+                        <OrderDetailField label="Delivery Date" value={detailedOrder.deliveryDate || "N/A"} highlight />
+                        <OrderDetailField label="Delivery Time" value={detailedOrder.deliveryTime || "N/A"} highlight />
+                        <OrderDetailField label="Station Code" value={detailedOrder.stationCode || "N/A"} />
+                        <OrderDetailField label="Station Name" value={detailedOrder.stationName || "N/A"} />
+                        <OrderDetailField label="Booking Source" value={valueFrom(detailedOrder.raw, "BookingSource", "bookingSource", "Source", "source") || "N/A"} />
+                        <OrderDetailField label="Booked By" value={valueFrom(detailedOrder.raw, "BookedBy", "bookedBy") || "Customer"} />
+                        <div className="order-field-full">
+                          <OrderDetailField
+                            label="Order Booked At"
+                            value={formatAdminDateTime(valueFrom(detailedOrder.raw, "CreatedAt", "createdAt", "created_at") || detailedOrder.rawCreatedAt)}
+                          />
+                        </div>
                       </div>
-                      <div style={{ background: "#eff6ff", padding: "6px 10px", borderRadius: "6px", border: "1px solid #bfdbfe" }}>
-                        <span style={{ color: "#2563eb", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Delivery Time</span>
-                        {detailedOrder.deliveryTime}
+                    </div>
+
+                    <div className="order-info-card payment-card">
+                      <h3 className="order-card-title payment-title">
+                        <ShieldCheck size={15} /> Payment Details
+                      </h3>
+                      <div className="payment-summary-row">
+                        <div>
+                          <span className="order-field-label">Payment Mode</span>
+                          <span className="payment-mode-pill">
+                            {String(detailedOrder.paymentMode || valueFrom(detailedOrder.raw, "PaymentMode", "paymentMode") || "COD").toUpperCase()}
+                          </span>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <span className="order-field-label">Payment Status</span>
+                          <strong style={{ color: "#166534", fontSize: 14 }}>
+                            {valueFrom(detailedOrder.raw, "PaymentStatus", "paymentStatus") || (isPrepaidOrder(detailedOrder) ? "Paid / Online" : "Pay on Delivery")}
+                          </strong>
+                        </div>
                       </div>
-                      <div style={{ gridColumn: "span 2" }}><span style={{ color: "#64748b", display: "block", fontSize: "11px", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px" }}>Station</span>{detailedOrder.stationName} ({detailedOrder.stationCode})</div>
+
+                      <div className="payment-lines">
+                        <PaymentLine label="Base Price / Subtotal" value={moneyFrom(detailedOrder.raw, "BasePrice", "basePrice", "Subtotal", "subtotal", "SubTotal")} />
+                        <PaymentLine label="GST Amount" value={moneyFrom(detailedOrder.raw, "GSTAmount", "gstAmount", "GST", "gst", "TaxAmount", "taxAmount")} />
+                        <PaymentLine label="Platform Charge" value={moneyFrom(detailedOrder.raw, "PlatformCharge", "platformCharge")} />
+                        <PaymentLine label="Delivery Charge" value={moneyFrom(detailedOrder.raw, "DeliveryCharge", "deliveryCharge")} />
+                        <PaymentLine label="Coupon Code" textValue={valueFrom(detailedOrder.raw, "CouponCode", "couponCode", "AppliedCoupon", "appliedCoupon") || "Not Applied"} />
+                        <PaymentLine label="Coupon Discount" value={moneyFrom(detailedOrder.raw, "CouponDiscount", "couponDiscount", "DiscountAmount", "discountAmount", "Discount")} negative />
+                        <PaymentLine label="Transaction ID" textValue={valueFrom(detailedOrder.raw, "TransactionId", "TransactionID", "transactionId", "PaymentId", "paymentId", "RazorpayPaymentId") || "N/A"} />
+                      </div>
+
+                      <div className="payable-box">
+                        <span>Payable Amount</span>
+                        <strong>₹{moneyNumber(valueFrom(detailedOrder.raw, "PayableAmount", "payableAmount", "TotalAmount", "totalAmount") ?? detailedOrder.total)}</strong>
+                      </div>
                     </div>
                   </div>
 
-                  {/* FOOD ITEMS SUM BLOCK */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <ShoppingBag size={14} /> Order Items
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <h3 className="section-heading">
+                      <ShoppingBag size={15} /> Menu Items ({fetchedItems.length})
                     </h3>
-                    <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                        <thead style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", textAlign: "left" }}>
+                    <div className="items-table-wrap">
+                      <table className="items-table">
+                        <thead>
                           <tr>
-                            <th style={{ padding: "10px 16px" }}>Item Name</th>
-                            <th style={{ padding: "10px 16px", textAlign: "center" }}>Qty</th>
-                            <th style={{ padding: "10px 16px", textAlign: "right" }}>Line Total</th>
+                            <th>Item &amp; Description</th>
+                            <th>Type</th>
+                            <th style={{ textAlign: "right" }}>Unit Price</th>
+                            <th style={{ textAlign: "center" }}>Qty</th>
+                            <th style={{ textAlign: "right" }}>Line Total</th>
                           </tr>
                         </thead>
-                        <tbody style={{ color: "#334155", fontWeight: 600 }}>
+                        <tbody>
                           {loadingItems ? (
-                            <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>Loading order items...</td></tr>
+                            <tr>
+                              <td colSpan={5} className="empty-cell">Loading order items...</td>
+                            </tr>
                           ) : fetchedItems.length > 0 ? (
-                            fetchedItems.map((item: any, idx: number) => (
-                              <tr key={item.ItemId || idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                                <td style={{ padding: "12px 16px", fontWeight: 700, color: "#0f172a" }}>{item.ItemName}</td>
-                                <td style={{ padding: "12px 16px", textAlign: "center", color: "#2563eb", fontWeight: 800 }}>× {item.Quantity}</td>
-                                <td style={{ padding: "12px 16px", textAlign: "right", fontFamily: "monospace" }}>₹{item.LineTotal || (Number(item.SellingPrice || 0) * Number(item.Quantity || 1))}</td>
-                              </tr>
-                            ))
+                            fetchedItems.map((item: any, idx: number) => {
+                              const itemName = valueFrom(item, "ItemName", "itemName", "item_name", "Name", "name") || `Item ${idx + 1}`;
+                              const description = valueFrom(item, "ItemDescription", "itemDescription", "item_description", "Description", "description");
+                              const quantity = Number(valueFrom(item, "Quantity", "quantity", "Qty", "qty") || 1);
+                              const unitPrice = Number(valueFrom(item, "SellingPrice", "sellingPrice", "UnitPrice", "unitPrice", "Price", "price") || 0);
+                              const lineTotal = Number(valueFrom(item, "LineTotal", "lineTotal", "Total", "total") || unitPrice * quantity);
+                              const menuType = valueFrom(item, "MenuType", "menuType", "menu_type", "TypeName", "typeName", "FoodType", "foodType") || "-";
+                              return (
+                                <tr key={valueFrom(item, "ItemId", "itemId", "id") || idx}>
+                                  <td>
+                                    <div style={{ fontWeight: 800, color: "#0f172a" }}>{itemName}</div>
+                                    <div className="item-description">{description || "No item description available"}</div>
+                                  </td>
+                                  <td><span className="type-chip">{menuType}</span></td>
+                                  <td style={{ textAlign: "right" }}>₹{moneyNumber(unitPrice)}</td>
+                                  <td style={{ textAlign: "center", color: "#2563eb", fontWeight: 900 }}>× {quantity}</td>
+                                  <td style={{ textAlign: "right", fontWeight: 800 }}>₹{moneyNumber(lineTotal)}</td>
+                                </tr>
+                              );
+                            })
                           ) : (
-                            <tr><td colSpan={3} style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}>No order items found.</td></tr>
+                            <tr>
+                              <td colSpan={5} className="empty-cell">No order items found.</td>
+                            </tr>
                           )}
                         </tbody>
                       </table>
                     </div>
-
-                    <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "12px", border: "1px solid #e2e8f0", fontSize: "13px", fontWeight: 600, display: "flex", flexDirection: "column", gap: "6px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}><span>Order Total</span><span style={{ color: "#334155" }}>₹{detailedOrder.total || "0"}</span></div>
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#0f172a", fontWeight: 800, fontSize: "14px", paddingTop: "6px", borderTop: "1px dashed #cbd5e1" }}>
-                        <span>Payable Amount</span>
-                        <span style={{ color: "#2563eb" }}>₹{detailedOrder.total || "0"}</span>
-                      </div>
-                    </div>
                   </div>
 
-                  {/* RESTRO COMPLIANCE CARD */}
-                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "16px" }}>
-                    <h3 style={{ margin: "0 0 12px 0", fontSize: "11px", fontWeight: 800, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <ShieldCheck size={14} style={{ color: "#16a34a" }} /> Restaurant Details
+                  <div className="restaurant-card">
+                    <h3 className="order-card-title restaurant-title">
+                      <ShieldCheck size={15} /> Restaurant / Outlet Details
                     </h3>
                     {loadingRestro ? (
-                      <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Loading restaurant details...</p>
+                      <p className="loading-text">Loading restaurant details...</p>
                     ) : fetchedRestro ? (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px", fontSize: "13px", fontWeight: "600", color: "#334155" }}>
-                        <div><span style={{ color: "#16a34a", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Restro Code</span><span style={{ color: "#111827", fontWeight: 800 }}>{fetchedRestro.RestroCode || "N/A"}</span></div>
-                        <div><span style={{ color: "#16a34a", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Restro Name</span><span style={{ color: "#0f172a", fontWeight: 700 }}>{fetchedRestro.RestroName || "N/A"}</span></div>
-                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>Open Time</span>{fetchedRestro.open_time || "N/A"} - {fetchedRestro.closed_time || "N/A"}</div>
-                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Number</span><span style={{ fontFamily: "monospace" }}>{fetchedRestro.FSSAINumber || "N/A"}</span></div>
-                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>FSSAI Expiry</span><span style={{ color: "#b45309" }}>{fetchedRestro.FSSAIExpiryDate || "N/A"}</span></div>
-                        <div><span style={{ color: "#64748b", display: "block", fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>GST Number</span><span style={{ fontFamily: "monospace" }}>{fetchedRestro.GSTNumber || "N/A"}</span></div>
+                      <div className="restaurant-grid">
+                        <OrderDetailField label="Restro Code" value={valueFrom(fetchedRestro, "RestroCode", "restroCode") || detailedOrder.outletId || "N/A"} />
+                        <OrderDetailField label="Restro Name" value={valueFrom(fetchedRestro, "RestroName", "restroName") || detailedOrder.outletName || "N/A"} />
+                        <OrderDetailField label="Station" value={`${valueFrom(fetchedRestro, "StationName", "stationName") || detailedOrder.stationName || "N/A"} (${valueFrom(fetchedRestro, "StationCode", "stationCode") || detailedOrder.stationCode || "-"})`} />
+                        <OrderDetailField label="Outlet Mobile" value={valueFrom(fetchedRestro, "RestroPhone", "restroPhone", "OwnerPhone", "ownerPhone", "RestroLoginMobile") || "N/A"} />
+                        <OrderDetailField label="Open / Close Time" value={`${valueFrom(fetchedRestro, "open_time", "OpenTime", "openTime") || "N/A"} - ${valueFrom(fetchedRestro, "closed_time", "CloseTime", "closeTime") || "N/A"}`} />
+                        <OrderDetailField label="FSSAI Number" value={valueFrom(fetchedRestro, "FSSAINumber", "FssaiNumber", "fssaiNumber") || "N/A"} />
+                        <OrderDetailField label="FSSAI Expiry" value={valueFrom(fetchedRestro, "FSSAIExpiryDate", "fssaiExpiryDate") || "N/A"} />
+                        <OrderDetailField label="GST Number" value={valueFrom(fetchedRestro, "GSTNumber", "GstNumber", "gstNumber") || "N/A"} />
+                        <div className="order-field-full">
+                          <OrderDetailField
+                            label="Outlet Address"
+                            value={valueFrom(fetchedRestro, "RestroAddress", "Address", "address", "FullAddress", "fullAddress") || "N/A"}
+                          />
+                        </div>
                       </div>
                     ) : (
-                      <p style={{ margin: 0, fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>No restaurant details found.</p>
+                      <p className="loading-text">No restaurant details found.</p>
                     )}
                   </div>
-                </>
+                </div>
               ) : (
-                /* TIMELINE LOGGER NODES SECTION */
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <h3 style={{ margin: 0, fontSize: "11px", fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <Clock size={14} /> Order Process Timeline ({orderLogs.length})
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <h3 className="section-heading">
+                    <Clock size={15} /> Order Process Timeline ({orderLogs.length})
                   </h3>
-                  
+
                   {loadingLogs ? (
-                    <p style={{ fontSize: "12px", color: "#64748b", fontStyle: "italic" }}>Loading order process log...</p>
+                    <p className="loading-text">Loading order process log...</p>
                   ) : orderLogs.length === 0 ? (
-                    <div style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", padding: "12px", borderRadius: "8px", fontSize: "12px", fontWeight: 600 }}>
+                    <div style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", padding: 12, borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
                       No order process log found for this order.
                     </div>
                   ) : (
-                    <div style={{ position: "relative", borderLeft: "2px dashed #e2e8f0", paddingLeft: "18px", marginLeft: "6px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={{ position: "relative", borderLeft: "2px dashed #e2e8f0", paddingLeft: 18, marginLeft: 6, display: "flex", flexDirection: "column", gap: 14 }}>
                       {orderLogs.map((log: any, idx: number) => {
                         const newStatus = log.NewStatus ?? log.newStatus ?? log.Status ?? "N/A";
                         const oldStatus = log.OldStatus ?? log.oldStatus ?? "";
@@ -3118,28 +3321,24 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
 
                         return (
                           <div key={log.Id || log.id || idx} style={{ position: "relative" }}>
-                            <span style={{ position: "absolute", left: "-24px", top: "4px", background: "#2563eb", width: "10px", height: "10px", borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
-
-                            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px", fontSize: "12px" }}>
+                            <span style={{ position: "absolute", left: -24, top: 4, background: "#2563eb", width: 10, height: 10, borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
+                            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4, fontSize: 12 }}>
                                 <span style={{ fontWeight: 800, color: "#0f172a" }}>Status: <span style={{ color: "#2563eb" }}>{newStatus}</span></span>
-                                <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700 }}>{changedAt ? new Date(changedAt).toLocaleString() : "N/A"}</span>
+                                <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700 }}>{formatAdminDateTime(changedAt)}</span>
                               </div>
-
-                              {oldStatus && <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 500 }}>Previous Status: <span style={{ textDecoration: "line-through" }}>{oldStatus}</span></div>}
-
+                              {oldStatus && <div style={{ fontSize: 11, color: "#94a3b8" }}>Previous Status: <span style={{ textDecoration: "line-through" }}>{oldStatus}</span></div>}
                               {(subStatusText || remarksText || noteText) && (
-                                <div style={{ background: "#fff", border: "1px solid #e2e8f0", padding: "10px", borderRadius: "8px", fontSize: "11px", color: "#475569", display: "grid", gap: "5px" }}>
+                                <div style={{ background: "#fff", border: "1px solid #e2e8f0", padding: 10, borderRadius: 8, fontSize: 11, color: "#475569", display: "grid", gap: 5 }}>
                                   {subStatusText && <div><strong style={{ color: "#e11d48" }}>Sub Status:</strong> {subStatusText}</div>}
-                                  {remarksText && <div><strong style={{ color: "#475569" }}>Remarks:</strong> {remarksText}</div>}
-                                  {noteText && noteText !== remarksText && <div><strong style={{ color: "#64748b" }}>Note:</strong> {noteText}</div>}
+                                  {remarksText && <div><strong>Remarks:</strong> {remarksText}</div>}
+                                  {noteText && noteText !== remarksText && <div><strong>Note:</strong> {noteText}</div>}
                                 </div>
                               )}
-
-                              <div style={{ marginTop: "2px", paddingTop: "8px", borderTop: "1px solid #e2e8f0", fontSize: "10px", color: "#64748b", fontWeight: 800, textTransform: "uppercase", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
-                                <span>User Type: <span style={{ color: "#0f172a" }}>{userType}</span></span>
-                                <span>User Name: <span style={{ color: "#0f172a" }}>{userName}</span></span>
-                                <span>Source: <span style={{ color: "#0f172a" }}>{source}</span></span>
+                              <div className="log-meta-grid">
+                                <span>User Type: <strong>{userType}</strong></span>
+                                <span>User Name: <strong>{userName}</strong></span>
+                                <span>Source: <strong>{source}</strong></span>
                               </div>
                             </div>
                           </div>
@@ -3333,6 +3532,49 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
         @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
         @keyframes scaleIn { from { opacity: 0; transform: scale(0.96) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         .table-row-hover:hover { background-color: #f8fafc !important; transition: background-color 0.15s ease; }
+        .order-top-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr); gap: 18px; align-items: stretch; }
+        .order-info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
+        .payment-card { background: #f8fafc; }
+        .order-card-title, .section-heading { margin: 0 0 14px; font-size: 12px; font-weight: 900; color: #475569; text-transform: uppercase; letter-spacing: .55px; display: flex; align-items: center; gap: 7px; }
+        .payment-title { color: #2563eb; }
+        .restaurant-title { color: #16a34a; }
+        .section-heading { margin-bottom: 0; color: #64748b; }
+        .order-field-grid, .restaurant-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 18px; }
+        .restaurant-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .order-field, .order-field-highlight { min-width: 0; }
+        .order-field-highlight { background: #eff6ff; border: 1px solid #bfdbfe; padding: 9px 11px; border-radius: 8px; }
+        .order-field-full { grid-column: 1 / -1; }
+        .order-field-label { display: block; margin-bottom: 4px; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .35px; }
+        .order-field-value { display: block; color: #0f172a; font-size: 13px; font-weight: 700; line-height: 1.45; word-break: break-word; }
+        .payment-summary-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+        .payment-mode-pill { display: inline-flex; padding: 5px 10px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: 12px; font-weight: 900; }
+        .payment-lines { display: flex; flex-direction: column; }
+        .payment-line { display: flex; justify-content: space-between; gap: 18px; padding: 8px 2px; border-bottom: 1px dashed #dbe3ee; color: #64748b; font-size: 12px; }
+        .payment-line strong { text-align: right; word-break: break-word; }
+        .payable-box { margin-top: 14px; padding: 13px 14px; border-radius: 10px; background: #2563eb; color: #fff; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 800; }
+        .payable-box strong { font-size: 20px; }
+        .items-table-wrap { border: 1px solid #e2e8f0; border-radius: 14px; overflow-x: auto; }
+        .items-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; }
+        .items-table thead { background: #f8fafc; color: #64748b; text-transform: uppercase; font-size: 10px; letter-spacing: .35px; text-align: left; }
+        .items-table th, .items-table td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+        .items-table tbody tr:last-child td { border-bottom: none; }
+        .item-description { margin-top: 4px; max-width: 560px; color: #64748b; font-size: 11px; font-weight: 500; line-height: 1.45; white-space: normal; }
+        .type-chip { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 10px; font-weight: 800; }
+        .empty-cell { padding: 22px !important; text-align: center; color: #94a3b8; font-style: italic; }
+        .restaurant-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 18px; }
+        .loading-text { margin: 0; font-size: 12px; color: #64748b; font-style: italic; }
+        .log-meta-grid { margin-top: 2px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #64748b; font-weight: 800; text-transform: uppercase; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .log-meta-grid strong { color: #0f172a; }
+        @media (max-width: 980px) {
+          .order-top-grid { grid-template-columns: 1fr; }
+          .restaurant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 640px) {
+          .order-details-modal { width: 100% !important; height: 95vh !important; border-radius: 14px !important; }
+          .order-field-grid, .restaurant-grid { grid-template-columns: 1fr; }
+          .payment-summary-row { flex-direction: column; }
+          .log-meta-grid { grid-template-columns: 1fr; }
+        }
       `}} />
     </section>
   );
