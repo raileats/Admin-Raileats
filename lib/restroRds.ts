@@ -1,300 +1,183 @@
-// lib/restroRds.ts
-
 import { serviceClient } from "./supabaseServer";
 
-type AnyRecord = Record<string, any>;
+type AnyRow = Record<string, any>;
 
-type RestroRdsInput = {
-  order: AnyRecord;
-  status: string;
-  subStatus?: string | null;
-  remarks?: string | null;
+export type RestroRdsSyncResult = {
+  ok: boolean;
+  data?: any;
+  error?: string;
 };
 
-function toNumber(value: unknown, fallback = 0) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-}
-
-function toText(value: unknown) {
+function cleanText(value: unknown) {
   return String(value ?? "").trim();
 }
 
-function normalizeStatus(value: unknown) {
-  return toText(value).toLowerCase().replace(/[\s_-]+/g, "");
+function numberValue(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.round(numeric * 100) / 100 : 0;
 }
 
-function pickValue(row: AnyRecord, keys: string[], fallback: any = null) {
+function intValue(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function pick(row: AnyRow, keys: string[]) {
   for (const key of keys) {
-    if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
-      return row[key];
-    }
+    const value = row?.[key];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return null;
+}
+
+function compactObject(payload: AnyRow) {
+  const output: AnyRow = {};
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined) output[key] = value;
+  });
+
+  return output;
+}
+
+async function upsertRestroRds(fullPayload: AnyRow, fallbackPayload: AnyRow) {
+  const full = await serviceClient
+    .from("RestroRDS")
+    .upsert(compactObject(fullPayload), { onConflict: "OrderId" })
+    .select("*")
+    .maybeSingle();
+
+  if (!full.error) {
+    return { ok: true, data: full.data };
   }
 
-  return fallback;
-}
+  console.error("RESTRO RDS FULL UPSERT ERROR:", full.error);
 
-function getOrderId(order: AnyRecord) {
-  return toText(
-    pickValue(order, [
-      "OrderId",
-      "order_id",
-      "id",
-      "order_number",
-      "OrderNumber",
-    ])
-  );
-}
+  const fallback = await serviceClient
+    .from("RestroRDS")
+    .upsert(compactObject(fallbackPayload), { onConflict: "OrderId" })
+    .select("*")
+    .maybeSingle();
 
-function getRestroCode(order: AnyRecord) {
-  return toText(
-    pickValue(order, [
-      "RestroCode",
-      "restro_code",
-      "OutletId",
-      "outlet_id",
-      "restroCode",
-    ])
-  );
-}
+  if (!fallback.error) {
+    return { ok: true, data: fallback.data };
+  }
 
-function getOrderAmount(order: AnyRecord) {
-  return toNumber(
-    pickValue(order, [
-      "TotalAmount",
-      "total_amount",
-      "FinalAmount",
-      "final_amount",
-      "GrandTotal",
-      "grand_total",
-      "OrderAmount",
-    ])
-  );
-}
+  console.error("RESTRO RDS FALLBACK UPSERT ERROR:", fallback.error);
 
-function getRestroPrice(order: AnyRecord) {
-  return toNumber(
-    pickValue(order, [
-      "RestroPrice",
-      "restro_price",
-      "RestaurantPrice",
-      "restaurant_price",
-    ])
-  );
-}
+  const minimal = await serviceClient
+    .from("RestroRDS")
+    .upsert(
+      compactObject({
+        RestroCode: fallbackPayload.RestroCode,
+        OrderId: fallbackPayload.OrderId,
+        RestroName: fallbackPayload.RestroName,
+        StationCode: fallbackPayload.StationCode,
+        Status: fallbackPayload.Status,
+        SubStatus: fallbackPayload.SubStatus,
+        Remarks: fallbackPayload.Remarks,
+      }),
+      { onConflict: "OrderId" }
+    )
+    .select("*")
+    .maybeSingle();
 
-function getBasePrice(order: AnyRecord) {
-  return toNumber(
-    pickValue(order, [
-      "BasePrice",
-      "base_price",
-      "SubTotal",
-      "subtotal",
-      "ItemTotal",
-      "item_total",
-    ])
-  );
-}
+  if (!minimal.error) {
+    return { ok: true, data: minimal.data };
+  }
 
-function getDeliveryDate(order: AnyRecord) {
-  return toText(
-    pickValue(order, [
-      "DeliveryDate",
-      "delivery_date",
-      "ArrivalDate",
-      "arrival_date",
-      "Delivery_Date",
-    ])
-  );
-}
-
-function getDeliveryTime(order: AnyRecord) {
-  return toText(
-    pickValue(order, [
-      "DeliveryTime",
-      "delivery_time",
-      "ArrivalTime",
-      "arrival_time",
-      "Delivery_Time",
-    ])
-  );
-}
-
-function getPreviousBalance(_order: AnyRecord) {
-  return 0;
-}
-
-function calculateRestroRds(input: RestroRdsInput) {
-  const { order, status, subStatus, remarks } = input;
-
-  const orderAmount = getOrderAmount(order);
-  const restroPrice = getRestroPrice(order);
-  const basePrice = getBasePrice(order);
-  const orderPenalty = toNumber(
-    pickValue(order, ["OrderPenalty", "order_penalty"], 0)
-  );
-  const restroDiscount = toNumber(
-    pickValue(order, ["RestroDiscount", "restro_discount"], 0)
-  );
-
-  const previousBal = getPreviousBalance(order);
-
-  const normalizedStatus = normalizeStatus(status);
-  const normalizedSubStatus = normalizeStatus(subStatus);
-
-  const isDelivered =
-    normalizedStatus === "delivered" ||
-    normalizedSubStatus === "partialdelivery" ||
-    normalizedSubStatus === "baddelivery";
-
-  const isCancelled = normalizedStatus === "cancelled";
-  const isNotDelivered =
-    normalizedStatus === "notdelivered" || normalizedStatus === "baddelivery";
-
-  const grossRestroAmount =
-    restroPrice > 0 ? restroPrice : basePrice > 0 ? basePrice : orderAmount;
-
-  const payableBase = isDelivered ? grossRestroAmount : 0;
-  const penalty = isCancelled ? 0 : orderPenalty;
-  const discountDebit = isDelivered ? restroDiscount : 0;
-
-  const settlementAmount = Math.max(
-    0,
-    Number((payableBase - penalty - discountDebit).toFixed(2))
-  );
-
-  const closingBal = Number((previousBal + settlementAmount).toFixed(2));
+  console.error("RESTRO RDS MINIMAL UPSERT ERROR:", minimal.error);
 
   return {
-    RDSId: undefined,
-
-    RestroCode: getRestroCode(order),
-    OrderId: getOrderId(order),
-    RestroName: toText(
-      pickValue(order, ["RestroName", "restro_name", "OutletName", "outlet_name"])
-    ),
-    StationCode: toText(pickValue(order, ["StationCode", "station_code"])),
-    StationName: toText(pickValue(order, ["StationName", "station_name"])),
-
-    Status: status,
-    SubStatus: subStatus || null,
-    Remarks: remarks || null,
-
-    DeliveryDate: getDeliveryDate(order) || null,
-    DeliveryTime: getDeliveryTime(order) || null,
-
-    OrderAmount: orderAmount,
-    BasePrice: basePrice,
-    RestroPrice: restroPrice,
-
-    RestroDiscount: restroDiscount,
-    OrderPenalty: penalty,
-
-    PreviousBal: previousBal,
-    SettlementAmount: settlementAmount,
-    ClosingBal: closingBal,
-
-    IsDelivered: isDelivered,
-    IsCancelled: isCancelled,
-    IsNotDelivered: isNotDelivered,
-
-    CreatedAt: new Date().toISOString(),
-    UpdatedAt: new Date().toISOString(),
+    ok: false,
+    error: `${full.error.message} | ${fallback.error.message} | ${minimal.error.message}`,
   };
 }
 
-function getMissingColumnName(error: any) {
-  const message = String(error?.message || error?.details || "");
+export async function syncRestroRdsForOrder(
+  orderId: string
+): Promise<RestroRdsSyncResult> {
+  try {
+    const normalizedOrderId = cleanText(orderId);
 
-  const missingColumnMatch =
-    message.match(/Could not find the '([^']+)' column/i) ||
-    message.match(/column "([^"]+)" of relation/i) ||
-    message.match(/column "([^"]+)" does not exist/i);
+    if (!normalizedOrderId) {
+      return { ok: false, error: "Missing order id" };
+    }
 
-  return missingColumnMatch?.[1] || "";
-}
-
-async function safeUpsertRestroRds(payload: AnyRecord) {
-  let cleanPayload: AnyRecord = { ...payload };
-
-  delete cleanPayload.RDSId;
-
-  for (let attempt = 0; attempt < 25; attempt += 1) {
-    const { data, error } = await serviceClient
-      .from("RestroRDS")
-      .upsert(cleanPayload, { onConflict: "OrderId" })
+    const { data: order, error } = await serviceClient
+      .from("Orders")
       .select("*")
+      .eq("OrderId", normalizedOrderId)
       .maybeSingle();
 
-    if (!error) {
-      return { data, error: null };
+    if (error) {
+      console.error("RESTRO RDS ORDER FETCH ERROR:", error);
+      return { ok: false, error: error.message };
     }
 
-    const missingColumn = getMissingColumnName(error);
-
-    if (missingColumn && cleanPayload[missingColumn] !== undefined) {
-      delete cleanPayload[missingColumn];
-      continue;
+    if (!order) {
+      return { ok: false, error: "Order not found" };
     }
 
-    return { data: null, error };
-  }
+    const restroCode = intValue(
+      pick(order, ["RestroCode", "restro_code", "OutletId", "outlet_id"])
+    );
 
-  return {
-    data: null,
-    error: new Error("RestroRDS upsert failed after column fallback"),
-  };
-}
+    const orderPenalty = numberValue(
+      pick(order, ["OrderPenalty", "order_penalty"])
+    );
 
-export async function syncRestroRds(input: RestroRdsInput) {
-  const statusKey = normalizeStatus(input.status);
-  const subStatusKey = normalizeStatus(input.subStatus);
-
-  const shouldCreateRds =
-    statusKey === "delivered" ||
-    statusKey === "cancelled" ||
-    statusKey === "notdelivered" ||
-    statusKey === "baddelivery" ||
-    subStatusKey === "partialdelivery" ||
-    subStatusKey === "baddelivery";
-
-  if (!shouldCreateRds) {
-    return {
-      ok: true,
-      skipped: true,
-      data: null,
-      error: null,
+    const fullPayload = {
+      RestroCode: restroCode,
+      OrderId: normalizedOrderId,
+      RestroName: pick(order, ["RestroName", "OutletName", "restro_name"]) || "",
+      StationCode: pick(order, ["StationCode", "station_code"]) || "",
+      StationName: pick(order, ["StationName", "station_name"]) || "",
+      Status: pick(order, ["Status", "order_status"]) || "",
+      SubStatus: pick(order, ["SubStatus", "sub_status"]) || "",
+      Remarks: pick(order, ["Remarks", "remarks"]) || "",
+      DeliveryDate: pick(order, ["DeliveryDate", "arrival_date"]) || null,
+      DeliveryTime: pick(order, ["DeliveryTime", "arrival_time"]) || null,
+      PaymentMode: pick(order, ["PaymentMode", "payment_mode"]) || "",
+      PaymentStatus: pick(order, ["PaymentStatus", "payment_status"]) || "",
+      CustomerName: pick(order, ["CustomerName", "customer_name"]) || "",
+      CustomerMobile: pick(order, ["CustomerMobile", "customer_mobile"]) || "",
+      TrainNumber: pick(order, ["TrainNumber", "train_number"]) || "",
+      BasePrice: numberValue(pick(order, ["BasePrice", "base_price"])),
+      RestroPrice: numberValue(pick(order, ["RestroPrice", "restro_price"])),
+      CouponDiscount: numberValue(
+        pick(order, ["CouponDiscount", "coupon_discount"])
+      ),
+      RestroDiscount: numberValue(
+        pick(order, ["RestroDiscount", "restro_discount"])
+      ),
+      REDiscount: numberValue(pick(order, ["REDiscount", "re_discount"])),
+      OrderPenalty: orderPenalty,
+      TotalAmount: numberValue(
+        pick(order, ["TotalAmount", "FinalTotal", "total_amount"])
+      ),
+      PreviousBal: 0,
+      UpdatedAt: new Date().toISOString(),
     };
-  }
 
-  const payload = calculateRestroRds(input);
+    const fallbackPayload = {
+      RestroCode: restroCode,
+      OrderId: normalizedOrderId,
+      RestroName: fullPayload.RestroName,
+      StationCode: fullPayload.StationCode,
+      Status: fullPayload.Status,
+      SubStatus: fullPayload.SubStatus,
+      Remarks: fullPayload.Remarks,
+      OrderPenalty: orderPenalty,
+      UpdatedAt: new Date().toISOString(),
+    };
 
-  if (!payload.OrderId || !payload.RestroCode) {
+    return await upsertRestroRds(fullPayload, fallbackPayload);
+  } catch (error) {
+    console.error("RESTRO RDS SYNC ERROR:", error);
     return {
       ok: false,
-      skipped: true,
-      data: null,
-      error: "OrderId or RestroCode missing for RestroRDS",
+      error: error instanceof Error ? error.message : "Unknown RDS sync error",
     };
   }
-
-  const { data, error } = await safeUpsertRestroRds(payload);
-
-  if (error) {
-    console.error("RESTRO RDS UPSERT ERROR:", error);
-
-    return {
-      ok: false,
-      skipped: false,
-      data: null,
-      error,
-    };
-  }
-
-  return {
-    ok: true,
-    skipped: false,
-    data,
-    error: null,
-  };
 }
