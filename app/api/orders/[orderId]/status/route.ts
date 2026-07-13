@@ -1,741 +1,543 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from "next/server";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+import { serviceClient } from "../../../../../lib/supabaseServer";
 
-type AnyRow = Record<string, any>;
+type AnyRecord = Record<string, any>;
 
-function supabaseServer() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
-    process.env.SUPABASE_PROJECT_URL ||
-    "";
+type RouteContext = {
+  params: {
+    orderId: string;
+  };
+};
 
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.SUPABASE_SERVICE_KEY ||
-    "";
+const PENALTY_STAGE_KEYS = new Set(["inkitchen", "outfordelivery"]);
 
-  if (!url || !key) {
-    throw new Error("Supabase configuration missing");
-  }
+const DELIVERED_OUTCOME_REASONS = new Set([
+  "Bad Delivery",
+  "Partial Delivery",
+]);
 
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-}
+const NOT_DELIVERED_REASONS = new Set([
+  "Customer Plan Change",
+  "Customer Call Not Connect",
+  "Customer Not on Seat",
+  "Customer Refused Delivery",
+  "Restro Closed",
+  "Train Late",
+  "Train Divert",
+  "Item Issue",
+  "Restro Refused without Reason",
+  "Other",
+  "Low & Order",
+  "Natural Calamity",
+]);
+
+const PENALTY_BY_REASON: Record<string, number> = {
+  "Partial Delivery": 0,
+  "Bad Delivery": 50,
+  "Customer Plan Change": 0,
+  "Customer Call Not Connect": 0,
+  "Customer Not on Seat": 0,
+  "Customer Refused Delivery": 0,
+  "Restro Closed": 100,
+  "Train Late": 0,
+  "Train Divert": 0,
+  "Item Issue": 100,
+  "Restro Refused without Reason": 100,
+  Other: 0,
+  "Low & Order": 0,
+  "Natural Calamity": 0,
+};
 
 function cleanText(value: unknown) {
   return String(value ?? "").trim();
+}
+
+function normalizeOrderId(value: unknown) {
+  return decodeURIComponent(cleanText(value)).replace(/^#/, "");
 }
 
 function normalizeKey(value: unknown) {
   return cleanText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function normalizeNumber(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+function normalizeOutcome(value: unknown) {
+  return cleanText(value).replace(/\s*\(delivered\)\s*$/i, "").trim();
 }
 
-function roundMoney(value: number) {
-  return Math.round((Number(value) || 0) * 100) / 100;
+function toNumber(value: unknown) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : 0;
 }
 
-function normalizeStatus(value: unknown) {
-  const key = normalizeKey(value);
-
-  const map: Record<string, string> = {
-    booked: "Booked",
-    verification: "In Verification",
-    inverification: "In Verification",
-    neworder: "New Order",
-    inkitchen: "In Kitchen",
-    outfordelivery: "Out for Delivery",
-    delivered: "Delivered",
-    cancelled: "Cancelled",
-    canceled: "Cancelled",
-    notdelivered: "Not Delivered",
-    baddelivery: "Bad Delivery",
-    cancellationrequest: "Cancellation Request",
-  };
-
-  return map[key] || cleanText(value);
+function nullableText(value: unknown) {
+  const text = cleanText(value);
+  return text || null;
 }
 
-const ORDER_PENALTY_RULES: Record<string, number> = {
-  partialdelivery: 0,
-  baddelivery: 50,
-
-  customerplanchange: 0,
-  customercallnotconnect: 0,
-  customernotonseat: 0,
-  customerrefuseddelivery: 0,
-
-  deliveryboymissed: 100,
-  restroclosed: 100,
-  trainlate: 0,
-  traindivert: 0,
-  itemissue: 100,
-  restrorefusedwithoutreason: 100,
-  other: 0,
-  loworder: 0,
-  lowandorder: 0,
-  naturalcalamity: 0,
-};
-
-function readOrderPenalty(body: AnyRow, status: string, subStatus: string) {
-  const explicit =
-    body.OrderPenalty ??
-    body.orderPenalty ??
-    body.penalty ??
-    body.vendorPenalty ??
-    body.VendorPenalty;
-
-  if (explicit !== undefined && explicit !== null && explicit !== "") {
-    return roundMoney(normalizeNumber(explicit));
-  }
-
-  const statusKey = normalizeKey(status);
-  const subStatusKey = normalizeKey(subStatus);
-
-  if (
-    statusKey === "inkitchen" ||
-    statusKey === "outfordelivery" ||
-    statusKey === "delivered" ||
-    statusKey === "notdelivered" ||
-    statusKey === "baddelivery"
-  ) {
-    return roundMoney(ORDER_PENALTY_RULES[subStatusKey] ?? 0);
-  }
-
-  return 0;
-}
-
-function pickValue(row: AnyRow, keys: string[], fallback: any = "") {
+function firstValue(source: AnyRecord, keys: string[]) {
   for (const key of keys) {
-    if (row && row[key] !== undefined && row[key] !== null && row[key] !== "") {
-      return row[key];
+    if (source[key] !== undefined && source[key] !== null && source[key] !== "") {
+      return source[key];
     }
   }
 
-  return fallback;
+  return undefined;
 }
 
-function pickMoney(row: AnyRow, keys: string[]) {
-  for (const key of keys) {
-    const value = row?.[key];
+function pickExisting(source: AnyRecord, keys: string[]) {
+  return firstValue(source, keys);
+}
 
-    if (value !== undefined && value !== null && value !== "") {
-      const parsed = Number(value);
-      if (Number.isFinite(parsed)) return roundMoney(parsed);
-    }
+function compactPayload(payload: AnyRecord) {
+  const output: AnyRecord = {};
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined) continue;
+    if (typeof value === "number" && !Number.isFinite(value)) continue;
+    output[key] = value;
   }
 
-  return 0;
+  return output;
 }
 
-function missingColumnName(error: any) {
-  const message = String(error?.message || error?.details || "");
-
-  const patterns = [
-    /Could not find the '([^']+)' column/i,
-    /column "([^"]+)" does not exist/i,
-    /record "new" has no field "([^"]+)"/i,
-    /schema cache.*'([^']+)'/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = message.match(pattern);
-    if (match?.[1]) return match[1];
-  }
-
-  return "";
+function isPenaltyStage(status: unknown) {
+  return PENALTY_STAGE_KEYS.has(normalizeKey(status));
 }
 
-async function safeUpdate(
-  supabase: SupabaseClient,
-  tableName: string,
-  matchColumn: string,
-  matchValue: any,
-  payload: AnyRow,
+function resolveFinalStatus(
+  requestedStatus: string,
+  outcomeStatus: string,
+  currentStatus: string
 ) {
-  let currentPayload: AnyRow = { ...payload };
-
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    const { data, error } = await supabase
-      .from(tableName)
-      .update(currentPayload)
-      .eq(matchColumn, matchValue)
-      .select("*")
-      .maybeSingle();
-
-    if (!error) {
-      return { data, error: null };
+  if (isPenaltyStage(currentStatus) && outcomeStatus) {
+    if (DELIVERED_OUTCOME_REASONS.has(outcomeStatus)) {
+      return "Delivered";
     }
 
-    const column = missingColumnName(error);
-
-    if (column && Object.prototype.hasOwnProperty.call(currentPayload, column)) {
-      const nextPayload: AnyRow = {};
-
-      Object.keys(currentPayload).forEach((key) => {
-        if (key !== column) nextPayload[key] = currentPayload[key];
-      });
-
-      currentPayload = nextPayload;
-      continue;
+    if (NOT_DELIVERED_REASONS.has(outcomeStatus)) {
+      return "Not Delivered";
     }
-
-    return { data: null, error };
   }
+
+  return requestedStatus || currentStatus;
+}
+
+function resolvePenalty(
+  currentStatus: string,
+  outcomeStatus: string,
+  body: AnyRecord
+) {
+  if (!isPenaltyStage(currentStatus) || !outcomeStatus) {
+    return null;
+  }
+
+  if (outcomeStatus === "Partial Delivery") {
+    const manualPenalty = firstValue(body, [
+      "OrderPenalty",
+      "orderPenalty",
+      "penalty",
+      "penaltyAmount",
+      "vendorPenalty",
+      "partialPenalty",
+      "amount",
+    ]);
+
+    return Math.max(0, toNumber(manualPenalty));
+  }
+
+  return PENALTY_BY_REASON[outcomeStatus] ?? 0;
+}
+
+function resolveActor(body: AnyRecord) {
+  const actorName = cleanText(
+    firstValue(body, [
+      "actorName",
+      "userName",
+      "adminName",
+      "name",
+      "updatedBy",
+      "actionBy",
+      "changedBy",
+    ]) || "System"
+  );
+
+  const actorType = cleanText(
+    firstValue(body, [
+      "actorType",
+      "userType",
+      "adminType",
+      "type",
+      "role",
+      "actionType",
+    ]) || "Admin"
+  );
 
   return {
-    data: null,
-    error: new Error("Unable to update order after removing unsupported columns"),
+    actorName,
+    actorType,
+    actorLabel: `${actorName} ${actorType}`.trim(),
   };
 }
 
-async function safeInsert(
-  supabase: SupabaseClient,
-  tableName: string,
-  payload: AnyRow,
-) {
-  let currentPayload: AnyRow = { ...payload };
+async function fetchOrderById(orderId: string) {
+  const normalizedId = normalizeOrderId(orderId);
 
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    const { data, error } = await supabase
-      .from(tableName)
-      .insert(currentPayload)
-      .select("*")
-      .maybeSingle();
+  const firstAttempt = await serviceClient
+    .from("Orders")
+    .select("*")
+    .eq("OrderId", normalizedId)
+    .maybeSingle();
 
-    if (!error) {
-      return { data, error: null };
-    }
-
-    const column = missingColumnName(error);
-
-    if (column && Object.prototype.hasOwnProperty.call(currentPayload, column)) {
-      const nextPayload: AnyRow = {};
-
-      Object.keys(currentPayload).forEach((key) => {
-        if (key !== column) nextPayload[key] = currentPayload[key];
-      });
-
-      currentPayload = nextPayload;
-      continue;
-    }
-
-    return { data: null, error };
+  if (firstAttempt.data || firstAttempt.error) {
+    return firstAttempt;
   }
 
-  return {
-    data: null,
-    error: new Error("Unable to insert after removing unsupported columns"),
-  };
+  return serviceClient
+    .from("Orders")
+    .select("*")
+    .eq("OrderId", `#${normalizedId}`)
+    .maybeSingle();
 }
 
-async function safeUpsertRestroRDS(
-  supabase: SupabaseClient,
-  payload: AnyRow,
-) {
-  let currentPayload: AnyRow = { ...payload };
-
-  for (let attempt = 0; attempt < 35; attempt += 1) {
-    const { data, error } = await supabase
-      .from("RestroRDS")
-      .upsert(currentPayload, { onConflict: "OrderId" })
-      .select("*")
-      .maybeSingle();
-
-    if (!error) {
-      return { data, error: null };
-    }
-
-    const column = missingColumnName(error);
-
-    if (column && Object.prototype.hasOwnProperty.call(currentPayload, column)) {
-      const nextPayload: AnyRow = {};
-
-      Object.keys(currentPayload).forEach((key) => {
-        if (key !== column) nextPayload[key] = currentPayload[key];
-      });
-
-      currentPayload = nextPayload;
-      continue;
-    }
-
-    return { data: null, error };
-  }
-
-  return {
-    data: null,
-    error: new Error("Unable to sync RestroRDS after removing unsupported columns"),
-  };
-}
-
-async function findOrder(supabase: SupabaseClient, orderId: string) {
-  const decodedOrderId = decodeURIComponent(orderId);
-  const tableNames = ["Orders", "orders"];
-  const searchColumns = ["OrderId", "order_id", "order_number", "id"];
-
-  for (const tableName of tableNames) {
-    for (const column of searchColumns) {
-      if (column === "id" && Number.isNaN(Number(decodedOrderId))) continue;
-
-      const matchValue = column === "id" ? Number(decodedOrderId) : decodedOrderId;
-
-      const { data, error } = await supabase
-        .from(tableName)
-        .select("*")
-        .eq(column, matchValue)
-        .maybeSingle();
-
-      if (data && !error) {
-        return {
-          tableName,
-          matchColumn: column,
-          matchValue,
-          order: data as AnyRow,
-        };
-      }
-    }
-  }
-
-  return null;
-}
-
-function shouldSyncRestroRDS(status: string, subStatus: string) {
-  const statusKey = normalizeKey(status);
-  const subStatusKey = normalizeKey(subStatus);
-
-  return (
-    statusKey === "delivered" ||
-    statusKey === "cancelled" ||
-    statusKey === "canceled" ||
-    statusKey === "notdelivered" ||
-    statusKey === "baddelivery" ||
-    subStatusKey === "baddelivery" ||
-    subStatusKey === "partialdelivery"
-  );
-}
-
-async function getPreviousRestroBalance(
-  supabase: SupabaseClient,
-  restroCode: string,
-  orderId: string,
-) {
-  if (!restroCode) return 0;
-
-  const { data, error } = await supabase
-    .from("RestroRDS")
-    .select("ClosingBal")
-    .eq("RestroCode", restroCode)
-    .neq("OrderId", orderId)
-    .order("RDSId", { ascending: false })
-    .limit(1);
-
-  if (error || !Array.isArray(data) || data.length === 0) {
-    return 0;
-  }
-
-  return roundMoney(normalizeNumber(data[0]?.ClosingBal));
-}
-
-function calculateSettlement(
-  row: AnyRow,
-  status: string,
-  subStatus: string,
-  orderPenalty: number,
-  previousBal: number,
-) {
-  const statusKey = normalizeKey(status);
-  const subStatusKey = normalizeKey(subStatus);
-
-  const basePrice = pickMoney(row, [
-    "BasePrice",
-    "base_price",
-    "Subtotal",
-    "subtotal",
-    "SubTotal",
-    "ItemTotal",
-    "item_total",
-  ]);
-
-  const restroPrice =
-    pickMoney(row, ["RestroPrice", "restro_price"]) ||
-    basePrice ||
-    pickMoney(row, ["TotalAmount", "total_amount", "FinalTotal", "final_total"]);
-
-  const couponDiscount = pickMoney(row, [
-    "CouponDiscount",
-    "coupon_discount",
-    "DiscountAmount",
-    "discount_amount",
-  ]);
-
-  const restroDiscount = pickMoney(row, [
-    "RestroDiscount",
-    "restro_discount",
-  ]);
-
-  const reDiscount = pickMoney(row, [
-    "REDiscount",
-    "re_discount",
-  ]);
-
-  const gstAmount = pickMoney(row, [
-    "GST",
-    "GstAmount",
-    "gst_amount",
-    "TaxAmount",
-    "tax_amount",
-  ]);
-
-  const convenienceFee = pickMoney(row, [
-    "ConvenienceFee",
-    "convenience_fee",
-    "PlatformFee",
-    "platform_fee",
-  ]);
-
-  let settlementAmount = 0;
-
-  if (
-    statusKey === "delivered" ||
-    subStatusKey === "baddelivery" ||
-    subStatusKey === "partialdelivery"
-  ) {
-    settlementAmount = restroPrice - restroDiscount - orderPenalty;
-  } else if (
-    statusKey === "cancelled" ||
-    statusKey === "canceled" ||
-    statusKey === "notdelivered" ||
-    statusKey === "baddelivery"
-  ) {
-    settlementAmount = 0 - orderPenalty;
-  }
-
-  settlementAmount = roundMoney(settlementAmount);
-  const closingBal = roundMoney(previousBal + settlementAmount);
-
-  return {
-    basePrice: roundMoney(basePrice),
-    restroPrice: roundMoney(restroPrice),
-    couponDiscount: roundMoney(couponDiscount),
-    restroDiscount: roundMoney(restroDiscount),
-    reDiscount: roundMoney(reDiscount),
-    gstAmount: roundMoney(gstAmount),
-    convenienceFee: roundMoney(convenienceFee),
-    settlementAmount,
-    closingBal,
-  };
-}
-
-async function syncRestroRDS(
-  supabase: SupabaseClient,
-  order: AnyRow,
-  status: string,
-  subStatus: string,
-  remarks: string,
-  orderPenalty: number,
-) {
-  if (!shouldSyncRestroRDS(status, subStatus)) {
-    return { ok: true, skipped: true, reason: "status_not_settlement_stage" };
-  }
-
-  const orderId = cleanText(
-    pickValue(order, ["OrderId", "order_id", "order_number", "id"]),
-  );
-
-  const restroCode = cleanText(
-    pickValue(order, ["RestroCode", "restro_code", "OutletId", "outlet_id"]),
-  );
-
-  if (!orderId || !restroCode) {
-    return { ok: true, skipped: true, reason: "missing_order_or_restro_code" };
-  }
-
-  const previousBal = await getPreviousRestroBalance(
-    supabase,
-    restroCode,
-    orderId,
-  );
-
-  const financials = calculateSettlement(
-    order,
-    status,
-    subStatus,
-    orderPenalty,
-    previousBal,
-  );
-
+async function insertStatusHistorySafely(params: {
+  orderId: string;
+  previousStatus: string;
+  nextStatus: string;
+  subStatus: string | null;
+  remarks: string | null;
+  actorName: string;
+  actorType: string;
+  actorLabel: string;
+  orderPenalty: number | null;
+}) {
   const now = new Date().toISOString();
 
-  const payload: AnyRow = {
-    RestroCode: restroCode,
-    OrderId: orderId,
-    RestroName: cleanText(
-      pickValue(order, ["RestroName", "restro_name", "OutletName", "outlet_name"]),
-    ),
-    StationCode: cleanText(pickValue(order, ["StationCode", "station_code"])),
-    StationName: cleanText(pickValue(order, ["StationName", "station_name"])),
-    Status: normalizeStatus(status),
-    SubStatus: cleanText(subStatus),
-    Remarks: cleanText(remarks),
-    DeliveryDate: pickValue(order, [
-      "DeliveryDate",
-      "delivery_date",
-      "ArrivalDate",
-      "arrival_date",
-    ]),
-    DeliveryTime: pickValue(order, [
-      "DeliveryTime",
-      "delivery_time",
-      "ArrivalTime",
-      "arrival_time",
-    ]),
-    PaymentMode: cleanText(pickValue(order, ["PaymentMode", "payment_mode"])),
-    PaymentStatus: cleanText(pickValue(order, ["PaymentStatus", "payment_status"])),
-    OrderAmount: roundMoney(
-      pickMoney(order, [
-        "FinalTotal",
-        "final_total",
-        "TotalAmount",
-        "total_amount",
-        "OrderAmount",
-        "order_amount",
-      ]),
-    ),
-    BasePrice: financials.basePrice,
-    RestroPrice: financials.restroPrice,
-    CouponDiscount: financials.couponDiscount,
-    RestroDiscount: financials.restroDiscount,
-    REDiscount: financials.reDiscount,
-    GstAmount: financials.gstAmount,
-    ConvenienceFee: financials.convenienceFee,
-    OrderPenalty: roundMoney(orderPenalty),
-    PreviousBal: previousBal,
-    SettlementAmount: financials.settlementAmount,
-    ClosingBal: financials.closingBal,
-    CreatedAt: pickValue(order, ["CreatedAt", "created_at"], now),
-    UpdatedAt: now,
-  };
+  const fullPayload = compactPayload({
+    OrderId: params.orderId,
+    order_id: params.orderId,
+    PreviousStatus: params.previousStatus,
+    previous_status: params.previousStatus,
+    Status: params.nextStatus,
+    status: params.nextStatus,
+    NewStatus: params.nextStatus,
+    new_status: params.nextStatus,
+    SubStatus: params.subStatus,
+    sub_status: params.subStatus,
+    Remarks: params.remarks,
+    remarks: params.remarks,
+    ActionBy: params.actorLabel,
+    action_by: params.actorLabel,
+    ActorName: params.actorName,
+    actor_name: params.actorName,
+    ActorType: params.actorType,
+    actor_type: params.actorType,
+    OrderPenalty: params.orderPenalty,
+    order_penalty: params.orderPenalty,
+    CreatedAt: now,
+    created_at: now,
+  });
 
-  const result = await safeUpsertRestroRDS(supabase, payload);
+  const { error } = await serviceClient
+    .from("OrderStatusHistory")
+    .insert(fullPayload);
 
-  if (result.error) {
-    console.error("RESTRO RDS SYNC ERROR:", result.error);
-    return {
-      ok: false,
-      skipped: false,
-      error: result.error instanceof Error ? result.error.message : String(result.error),
-    };
+  if (!error) return;
+
+  console.error("ORDER_STATUS_HISTORY_INSERT_ERROR:", error);
+
+  const fallbackPayload = compactPayload({
+    OrderId: params.orderId,
+    Status: params.nextStatus,
+    SubStatus: params.subStatus,
+    Remarks: params.remarks,
+    ActionBy: params.actorLabel,
+    CreatedAt: now,
+  });
+
+  const { error: fallbackError } = await serviceClient
+    .from("OrderStatusHistory")
+    .insert(fallbackPayload);
+
+  if (fallbackError) {
+    console.error("ORDER_STATUS_HISTORY_FALLBACK_ERROR:", fallbackError);
   }
+}
+
+function buildRestroRdsPayload(order: AnyRecord) {
+  const basePrice = toNumber(
+    pickExisting(order, ["BasePrice", "base_price", "basePrice"])
+  );
+
+  const restroPrice = toNumber(
+    pickExisting(order, ["RestroPrice", "restro_price", "restroPrice"])
+  );
+
+  const couponDiscount = toNumber(
+    pickExisting(order, ["CouponDiscount", "coupon_discount", "couponDiscount"])
+  );
+
+  const restroDiscount = toNumber(
+    pickExisting(order, ["RestroDiscount", "restro_discount", "restroDiscount"])
+  );
+
+  const reDiscount = toNumber(
+    pickExisting(order, ["REDiscount", "re_discount", "raileatsDiscount"])
+  );
+
+  const orderPenalty = toNumber(
+    pickExisting(order, ["OrderPenalty", "order_penalty", "orderPenalty"])
+  );
+
+  const finalTotal = toNumber(
+    pickExisting(order, [
+      "FinalTotal",
+      "TotalAmount",
+      "total_amount",
+      "final_total",
+      "PayableAmount",
+    ])
+  );
+
+  const paymentMode = cleanText(
+    pickExisting(order, ["PaymentMode", "payment_mode", "paymentMode"])
+  );
+
+  const paymentStatus = cleanText(
+    pickExisting(order, ["PaymentStatus", "payment_status", "paymentStatus"])
+  );
+
+  const status = cleanText(pickExisting(order, ["Status", "order_status"]));
+  const subStatus = cleanText(pickExisting(order, ["SubStatus", "sub_status"]));
 
   return {
-    ok: true,
-    skipped: false,
-    data: result.data,
+    OrderId: pickExisting(order, ["OrderId", "order_id", "id"]),
+    RestroCode: pickExisting(order, ["RestroCode", "restro_code"]),
+    RestroName: pickExisting(order, ["RestroName", "restro_name"]),
+    StationCode: pickExisting(order, ["StationCode", "station_code"]),
+    StationName: pickExisting(order, ["StationName", "station_name"]),
+    DeliveryDate: pickExisting(order, ["DeliveryDate", "arrival_date"]),
+    DeliveryTime: pickExisting(order, ["DeliveryTime", "arrival_time"]),
+    TrainNumber: pickExisting(order, ["TrainNumber", "train_number"]),
+    CustomerName: pickExisting(order, ["CustomerName", "customer_name"]),
+    CustomerMobile: pickExisting(order, ["CustomerMobile", "customer_mobile"]),
+    Status: status,
+    SubStatus: subStatus || null,
+    Remarks: pickExisting(order, ["Remarks", "remarks"]),
+    PaymentMode: paymentMode || null,
+    PaymentStatus: paymentStatus || null,
+    BasePrice: basePrice,
+    RestroPrice: restroPrice,
+    CouponDiscount: couponDiscount,
+    RestroDiscount: restroDiscount,
+    REDiscount: reDiscount,
+    OrderPenalty: orderPenalty,
+    FinalTotal: finalTotal,
+    PreviousBal: toNumber(pickExisting(order, ["PreviousBal"])) || 0,
+    UpdatedAt: new Date().toISOString(),
   };
 }
 
-async function insertStatusHistory(
-  supabase: SupabaseClient,
-  orderId: string,
-  body: AnyRow,
-  status: string,
-  subStatus: string,
-  remarks: string,
-  orderPenalty: number,
-) {
-  const actionBy =
-    cleanText(body.actionBy) ||
-    cleanText(body.ActionBy) ||
-    cleanText(body.userName) ||
-    cleanText(body.UserName) ||
-    "System";
+async function syncRestroRdsSafely(order: AnyRecord) {
+  try {
+    const fullPayload = compactPayload(buildRestroRdsPayload(order));
 
-  const actionType =
-    cleanText(body.actionType) ||
-    cleanText(body.ActionType) ||
-    cleanText(body.userType) ||
-    cleanText(body.UserType) ||
-    "Manual";
+    if (!fullPayload.OrderId) {
+      return;
+    }
 
-  const payload: AnyRow = {
-    OrderId: orderId,
-    Status: normalizeStatus(status),
-    SubStatus: cleanText(subStatus),
-    Remarks: cleanText(remarks),
-    ActionBy: actionBy,
-    ActionType: actionType,
-    OrderPenalty: roundMoney(orderPenalty),
-    CreatedAt: new Date().toISOString(),
-  };
+    const { error } = await serviceClient
+      .from("RestroRDS")
+      .upsert(fullPayload, { onConflict: "OrderId" });
 
-  const result = await safeInsert(supabase, "OrderStatusHistory", payload);
+    if (!error) return;
 
-  if (result.error) {
-    console.error("ORDER STATUS HISTORY INSERT ERROR:", result.error);
+    console.error("RESTRO_RDS_UPSERT_ERROR:", error);
+
+    const minimalPayload = compactPayload({
+      OrderId: fullPayload.OrderId,
+      RestroCode: fullPayload.RestroCode,
+      RestroName: fullPayload.RestroName,
+      StationCode: fullPayload.StationCode,
+      StationName: fullPayload.StationName,
+      Status: fullPayload.Status,
+      SubStatus: fullPayload.SubStatus,
+      Remarks: fullPayload.Remarks,
+      OrderPenalty: fullPayload.OrderPenalty,
+      UpdatedAt: new Date().toISOString(),
+    });
+
+    const { error: minimalError } = await serviceClient
+      .from("RestroRDS")
+      .upsert(minimalPayload, { onConflict: "OrderId" });
+
+    if (!minimalError) return;
+
+    console.error("RESTRO_RDS_MINIMAL_UPSERT_ERROR:", minimalError);
+
+    const safePayload = compactPayload({
+      OrderId: fullPayload.OrderId,
+      RestroCode: fullPayload.RestroCode,
+      RestroName: fullPayload.RestroName,
+      StationCode: fullPayload.StationCode,
+      Status: fullPayload.Status,
+      SubStatus: fullPayload.SubStatus,
+      Remarks: fullPayload.Remarks,
+    });
+
+    const { error: safeError } = await serviceClient
+      .from("RestroRDS")
+      .upsert(safePayload, { onConflict: "OrderId" });
+
+    if (safeError) {
+      console.error("RESTRO_RDS_SAFE_UPSERT_ERROR:", safeError);
+    }
+  } catch (error) {
+    console.error("RESTRO_RDS_SYNC_ERROR:", error);
   }
 }
 
-export async function PATCH(
-  req: NextRequest,
-  context: { params: { orderId: string } },
-) {
+async function handleStatusChange(request: Request, context: RouteContext) {
   try {
-    const supabase = supabaseServer();
-    const orderId = decodeURIComponent(context.params.orderId || "");
-    const body = (await req.json().catch(() => ({}))) as AnyRow;
+    const orderId = normalizeOrderId(context.params.orderId);
 
     if (!orderId) {
       return NextResponse.json(
         { ok: false, success: false, error: "missing_order_id" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    const found = await findOrder(supabase, orderId);
+    const body = (await request.json().catch(() => ({}))) as AnyRecord;
 
-    if (!found?.order) {
+    const { data: existingOrder, error: fetchError } = await fetchOrderById(orderId);
+
+    if (fetchError) {
+      console.error("ORDER_FETCH_ERROR:", fetchError);
+      return NextResponse.json(
+        { ok: false, success: false, error: "order_fetch_failed" },
+        { status: 500 }
+      );
+    }
+
+    if (!existingOrder) {
       return NextResponse.json(
         { ok: false, success: false, error: "order_not_found" },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
-    const requestedStatus =
-      cleanText(body.status) ||
-      cleanText(body.Status) ||
-      cleanText(body.order_status) ||
-      cleanText(body.OrderStatus) ||
-      cleanText(body.nextStatus) ||
-      cleanText(body.NextStatus);
-
-    if (!requestedStatus) {
-      return NextResponse.json(
-        { ok: false, success: false, error: "missing_status" },
-        { status: 400 },
-      );
-    }
-
-    const status = normalizeStatus(requestedStatus);
-
-    const subStatus =
-      cleanText(body.subStatus) ||
-      cleanText(body.SubStatus) ||
-      cleanText(body.sub_status) ||
-      cleanText(body.reason) ||
-      cleanText(body.Reason) ||
-      cleanText(body.outcomeStatus) ||
-      cleanText(body.OutcomeStatus);
-
-    const remarks =
-      cleanText(body.remarks) ||
-      cleanText(body.Remarks) ||
-      cleanText(body.comment) ||
-      cleanText(body.Comment) ||
-      cleanText(body.notes) ||
-      cleanText(body.Notes);
-
-    const orderPenalty = readOrderPenalty(body, status, subStatus);
-
-    const previousOrder = found.order;
-    const now = new Date().toISOString();
-
-    const statusColumn =
-      ["Status", "OrderStatus", "order_status", "status"].find(
-        (key) => previousOrder[key] !== undefined,
-      ) || "Status";
-
-    const updatePayload: AnyRow = {
-      [statusColumn]: status,
-      Status: status,
-      OrderStatus: status,
-      SubStatus: subStatus,
-      sub_status: subStatus,
-      Remarks: remarks,
-      remarks,
-      OrderPenalty: orderPenalty,
-      UpdatedAt: now,
-      updated_at: now,
-    };
-
-    const updateResult = await safeUpdate(
-      supabase,
-      found.tableName,
-      found.matchColumn,
-      found.matchValue,
-      updatePayload,
+    const currentStatus = cleanText(
+      existingOrder.Status || existingOrder.order_status || ""
     );
 
-    if (updateResult.error) {
-      console.error("ORDER STATUS UPDATE ERROR:", updateResult.error);
+    const requestedStatus = cleanText(
+      firstValue(body, [
+        "Status",
+        "status",
+        "newStatus",
+        "targetStatus",
+        "order_status",
+      ]) || ""
+    );
 
+    const outcomeStatus = normalizeOutcome(
+      firstValue(body, [
+        "SubStatus",
+        "subStatus",
+        "sub_status",
+        "reason",
+        "outcome",
+        "outcomeStatus",
+        "markStatus",
+        "mark_status",
+      ]) || ""
+    );
+
+    const finalStatus = resolveFinalStatus(
+      requestedStatus,
+      outcomeStatus,
+      currentStatus
+    );
+
+    if (!finalStatus) {
+      return NextResponse.json(
+        { ok: false, success: false, error: "missing_status" },
+        { status: 400 }
+      );
+    }
+
+    const remarks = nullableText(
+      firstValue(body, ["Remarks", "remarks", "remark", "note", "notes"])
+    );
+
+    const resolvedPenalty = resolvePenalty(currentStatus, outcomeStatus, body);
+
+    const { actorName, actorType, actorLabel } = resolveActor(body);
+
+    const updatePayload: AnyRecord = compactPayload({
+      Status: finalStatus,
+      SubStatus: outcomeStatus || nullableText(body.SubStatus),
+      Remarks: remarks,
+      UpdatedAt: new Date().toISOString(),
+    });
+
+    if (resolvedPenalty !== null) {
+      updatePayload.OrderPenalty = resolvedPenalty;
+    }
+
+    const actualOrderId = cleanText(existingOrder.OrderId || orderId);
+
+    const { data: updatedRows, error: updateError } = await serviceClient
+      .from("Orders")
+      .update(updatePayload)
+      .eq("OrderId", actualOrderId)
+      .select("*");
+
+    if (updateError) {
+      console.error("ORDER_STATUS_UPDATE_ERROR:", updateError);
       return NextResponse.json(
         {
           ok: false,
           success: false,
           error: "db_update_failed",
-          details:
-            updateResult.error instanceof Error
-              ? updateResult.error.message
-              : String(updateResult.error),
+          details: updateError.message,
         },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
-    const updatedOrder: AnyRow = {
-      ...previousOrder,
-      ...(updateResult.data || {}),
-      [statusColumn]: status,
-      Status: status,
-      OrderStatus: status,
-      SubStatus: subStatus,
-      Remarks: remarks,
-      OrderPenalty: orderPenalty,
-      UpdatedAt: now,
-    };
+    const updatedOrder = Array.isArray(updatedRows) && updatedRows.length > 0
+      ? updatedRows[0]
+      : {
+          ...existingOrder,
+          ...updatePayload,
+        };
 
-    await insertStatusHistory(
-      supabase,
-      cleanText(pickValue(updatedOrder, ["OrderId", "order_id", "order_number", "id"], orderId)),
-      body,
-      status,
-      subStatus,
+    await insertStatusHistorySafely({
+      orderId: actualOrderId,
+      previousStatus: currentStatus,
+      nextStatus: finalStatus,
+      subStatus: updatePayload.SubStatus ?? null,
       remarks,
-      orderPenalty,
-    );
+      actorName,
+      actorType,
+      actorLabel,
+      orderPenalty: resolvedPenalty,
+    });
 
-    const restroRDS = await syncRestroRDS(
-      supabase,
-      updatedOrder,
-      status,
-      subStatus,
-      remarks,
-      orderPenalty,
-    );
+    await syncRestroRdsSafely(updatedOrder);
 
     return NextResponse.json({
       ok: true,
       success: true,
+      message: "Order status updated",
       order: updatedOrder,
-      data: updatedOrder,
-      restroRDS,
     });
   } catch (error) {
-    console.error("ORDER STATUS API ERROR:", error);
+    console.error("ORDER_STATUS_ROUTE_ERROR:", error);
 
     return NextResponse.json(
       {
@@ -744,7 +546,26 @@ export async function PATCH(
         error: "server_error",
         details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  return handleStatusChange(request, context);
+}
+
+export async function POST(request: Request, context: RouteContext) {
+  return handleStatusChange(request, context);
+}
+
+export async function GET() {
+  return NextResponse.json(
+    {
+      ok: false,
+      success: false,
+      error: "method_not_allowed",
+    },
+    { status: 405 }
+  );
 }
