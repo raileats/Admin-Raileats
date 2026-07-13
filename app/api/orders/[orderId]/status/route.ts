@@ -2,786 +2,749 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+
+type AnyRow = Record<string, any>;
 
 function supabaseServer() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
+    process.env.SUPABASE_PROJECT_URL ||
     "";
 
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE ||
+    process.env.SUPABASE_SERVICE_KEY ||
     "";
 
+  if (!url || !key) {
+    throw new Error("Supabase configuration missing");
+  }
+
   return createClient(url, key, {
-    auth: { persistSession: false },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
   });
 }
 
-function cleanText(value: any) {
-  const text = String(value ?? "").trim();
-  return text || null;
+function cleanText(value: unknown) {
+  return String(value ?? "").trim();
 }
 
-function normalizeStatus(value: any) {
-  const raw = cleanText(value);
-  if (!raw) return null;
-
-  const key = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-
-  const aliases: Record<string, string> = {
-    booked: "Booked",
-
-    verification: "In Verification",
-    inverification: "In Verification",
-
-    cancellationrequest: "Cancellation Request",
-
-    neworder: "New Order",
-    inkitchen: "In Kitchen",
-    outfordelivery: "Out for Delivery",
-
-    delivered: "Delivered",
-
-    cancelled: "Cancelled",
-    canceled: "Cancelled",
-
-    notdelivered: "Not Delivered",
-    baddelivery: "Bad Delivery",
-    partialdelivery: "Partial Delivery",
-  };
-
-  return aliases[key] || raw;
+function normalizeKey(value: unknown) {
+  return cleanText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function normalizeNumber(
-  value: any,
-  fallback: number | null = null
-) {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
-    return fallback;
-  }
-
-  const numericValue = Number(
-    String(value).replace(/[^\d.-]/g, "")
-  );
-
-  if (!Number.isFinite(numericValue)) {
-    return fallback;
-  }
-
-  return numericValue;
-}
-
-function normalizePenalty(value: any) {
-  const numericValue = normalizeNumber(value, null);
-
-  if (numericValue === null) {
-    return null;
-  }
-
-  if (numericValue < 0) {
-    return 0;
-  }
-
-  return numericValue;
-}
-
-function readOrderPenalty(body: any) {
-  const directValue =
-    body.OrderPenalty ??
-    body.orderPenalty ??
-    body.VendorPenalty ??
-    body.vendorPenalty ??
-    body.vendorPenaltyAmount ??
-    body.VendorPenaltyAmount ??
-    body.penalty ??
-    body.Penalty;
-
-  const parsedDirectValue =
-    normalizePenalty(directValue);
-
-  if (parsedDirectValue !== null) {
-    return parsedDirectValue;
-  }
-
-  const subStatus =
-    cleanText(
-      body.subStatus ??
-        body.SubStatus
-    ) || "";
-
-  const key = subStatus
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-
-  const penaltyBySubStatus: Record<
-    string,
-    number
-  > = {
-    partialdelivery: 0,
-    baddelivery: 50,
-
-    customerplanchange: 0,
-    customercallnotconnect: 0,
-    customernotonseat: 0,
-    customerrefuseddelivery: 0,
-
-    deliveryboymissed: 100,
-    restroclosed: 100,
-
-    trainlate: 0,
-    traindivert: 0,
-
-    itemissue: 100,
-    restrorefusedwithoutreason: 100,
-
-    other: 0,
-    loworder: 0,
-    lowandorder: 0,
-    naturalcalamity: 0,
-  };
-
-  if (key in penaltyBySubStatus) {
-    return penaltyBySubStatus[key];
-  }
-
-  return null;
-}
-
-function normalizeKey(value: any) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
+function normalizeNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function roundMoney(value: number) {
-  return Math.round(value * 100) / 100;
+  return Math.round((Number(value) || 0) * 100) / 100;
 }
 
-function calculateFinalIGST(
-  existing: any,
-  newStatus: string,
-  subStatus: string | null,
-  orderPenalty: number
-) {
-  const statusKey = normalizeKey(newStatus);
+function normalizeStatus(value: unknown) {
+  const key = normalizeKey(value);
+
+  const map: Record<string, string> = {
+    booked: "Booked",
+    verification: "In Verification",
+    inverification: "In Verification",
+    neworder: "New Order",
+    inkitchen: "In Kitchen",
+    outfordelivery: "Out for Delivery",
+    delivered: "Delivered",
+    cancelled: "Cancelled",
+    canceled: "Cancelled",
+    notdelivered: "Not Delivered",
+    baddelivery: "Bad Delivery",
+    cancellationrequest: "Cancellation Request",
+  };
+
+  return map[key] || cleanText(value);
+}
+
+const ORDER_PENALTY_RULES: Record<string, number> = {
+  partialdelivery: 0,
+  baddelivery: 50,
+
+  customerplanchange: 0,
+  customercallnotconnect: 0,
+  customernotonseat: 0,
+  customerrefuseddelivery: 0,
+
+  deliveryboymissed: 100,
+  restroclosed: 100,
+  trainlate: 0,
+  traindivert: 0,
+  itemissue: 100,
+  restrorefusedwithoutreason: 100,
+  other: 0,
+  loworder: 0,
+  lowandorder: 0,
+  naturalcalamity: 0,
+};
+
+function readOrderPenalty(body: AnyRow, status: string, subStatus: string) {
+  const explicit =
+    body.OrderPenalty ??
+    body.orderPenalty ??
+    body.penalty ??
+    body.vendorPenalty ??
+    body.VendorPenalty;
+
+  if (explicit !== undefined && explicit !== null && explicit !== "") {
+    return roundMoney(normalizeNumber(explicit));
+  }
+
+  const statusKey = normalizeKey(status);
   const subStatusKey = normalizeKey(subStatus);
 
-  const commission = Math.max(
-    0,
-    normalizeNumber(
-      existing?.Commission ??
-        existing?.commission,
-      0
-    ) || 0
-  );
-
-  const penalty = Math.max(
-    0,
-    normalizeNumber(orderPenalty, 0) || 0
-  );
-
-  /*
-   * Cancelled / Not Delivered:
-   * IGST sirf OrderPenalty ke 18% par lagega.
-   * Commission include nahi hogi.
-   */
-  const isCancelled =
-    statusKey === "cancelled" ||
-    statusKey === "canceled";
-
-  const isNotDelivered =
-    statusKey === "notdelivered";
-
-  if (isCancelled || isNotDelivered) {
-    return roundMoney(
-      penalty * 0.18
-    );
-  }
-
-  /*
-   * Delivered / Bad Delivery / Partial Delivery:
-   * IGST = (Commission + OrderPenalty) × 18%
-   *
-   * Current admin flow me Bad Delivery aur
-   * Partial Delivery aksar:
-   *
-   * Status = Delivered
-   * SubStatus = Bad Delivery / Partial Delivery
-   *
-   * ke form me save hote hain.
-   */
-  const isDelivered =
-    statusKey === "delivered";
-
-  const isBadDelivery =
-    statusKey === "baddelivery" ||
-    subStatusKey === "baddelivery";
-
-  const isPartialDelivery =
-    statusKey === "partialdelivery" ||
-    subStatusKey === "partialdelivery";
-
   if (
-    isDelivered ||
-    isBadDelivery ||
-    isPartialDelivery
+    statusKey === "inkitchen" ||
+    statusKey === "outfordelivery" ||
+    statusKey === "delivered" ||
+    statusKey === "notdelivered" ||
+    statusKey === "baddelivery"
   ) {
-    return roundMoney(
-      (commission + penalty) * 0.18
-    );
+    return roundMoney(ORDER_PENALTY_RULES[subStatusKey] ?? 0);
   }
 
-  /*
-   * Booked, In Verification, Cancellation Request,
-   * New Order, In Kitchen, Out for Delivery:
-   * IGST update nahi hoga.
-   */
-  return null;
+  return 0;
 }
 
-function pickStatusColumn(row: any) {
-  const candidates = [
-    "OrderStatus",
-    "Status",
-    "CurrentStatus",
-    "OrderCurrentStatus",
-    "orderStatus",
-    "status",
-  ];
+function pickValue(row: AnyRow, keys: string[], fallback: any = "") {
+  for (const key of keys) {
+    if (row && row[key] !== undefined && row[key] !== null && row[key] !== "") {
+      return row[key];
+    }
+  }
 
-  return (
-    candidates.find(
-      (key) =>
-        row &&
-        row[key] !== undefined
-    ) || "Status"
-  );
+  return fallback;
 }
 
-function missingColumnName(
-  message: string
-) {
+function pickMoney(row: AnyRow, keys: string[]) {
+  for (const key of keys) {
+    const value = row?.[key];
+
+    if (value !== undefined && value !== null && value !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return roundMoney(parsed);
+    }
+  }
+
+  return 0;
+}
+
+function missingColumnName(error: any) {
+  const message = String(error?.message || error?.details || "");
+
   const patterns = [
     /Could not find the '([^']+)' column/i,
-    /column "([^"]+)" of relation/i,
     /column "([^"]+)" does not exist/i,
     /record "new" has no field "([^"]+)"/i,
+    /schema cache.*'([^']+)'/i,
   ];
 
   for (const pattern of patterns) {
     const match = message.match(pattern);
+    if (match?.[1]) return match[1];
+  }
 
-    if (match?.[1]) {
-      return match[1];
+  return "";
+}
+
+async function safeUpdate(
+  supabase: SupabaseClient,
+  tableName: string,
+  matchColumn: string,
+  matchValue: any,
+  payload: AnyRow,
+) {
+  let currentPayload: AnyRow = { ...payload };
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .update(currentPayload)
+      .eq(matchColumn, matchValue)
+      .select("*")
+      .maybeSingle();
+
+    if (!error) {
+      return { data, error: null };
+    }
+
+    const column = missingColumnName(error);
+
+    if (column && Object.prototype.hasOwnProperty.call(currentPayload, column)) {
+      const nextPayload: AnyRow = {};
+
+      Object.keys(currentPayload).forEach((key) => {
+        if (key !== column) nextPayload[key] = currentPayload[key];
+      });
+
+      currentPayload = nextPayload;
+      continue;
+    }
+
+    return { data: null, error };
+  }
+
+  return {
+    data: null,
+    error: new Error("Unable to update order after removing unsupported columns"),
+  };
+}
+
+async function safeInsert(
+  supabase: SupabaseClient,
+  tableName: string,
+  payload: AnyRow,
+) {
+  let currentPayload: AnyRow = { ...payload };
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .insert(currentPayload)
+      .select("*")
+      .maybeSingle();
+
+    if (!error) {
+      return { data, error: null };
+    }
+
+    const column = missingColumnName(error);
+
+    if (column && Object.prototype.hasOwnProperty.call(currentPayload, column)) {
+      const nextPayload: AnyRow = {};
+
+      Object.keys(currentPayload).forEach((key) => {
+        if (key !== column) nextPayload[key] = currentPayload[key];
+      });
+
+      currentPayload = nextPayload;
+      continue;
+    }
+
+    return { data: null, error };
+  }
+
+  return {
+    data: null,
+    error: new Error("Unable to insert after removing unsupported columns"),
+  };
+}
+
+async function safeUpsertRestroRDS(
+  supabase: SupabaseClient,
+  payload: AnyRow,
+) {
+  let currentPayload: AnyRow = { ...payload };
+
+  for (let attempt = 0; attempt < 35; attempt += 1) {
+    const { data, error } = await supabase
+      .from("RestroRDS")
+      .upsert(currentPayload, { onConflict: "OrderId" })
+      .select("*")
+      .maybeSingle();
+
+    if (!error) {
+      return { data, error: null };
+    }
+
+    const column = missingColumnName(error);
+
+    if (column && Object.prototype.hasOwnProperty.call(currentPayload, column)) {
+      const nextPayload: AnyRow = {};
+
+      Object.keys(currentPayload).forEach((key) => {
+        if (key !== column) nextPayload[key] = currentPayload[key];
+      });
+
+      currentPayload = nextPayload;
+      continue;
+    }
+
+    return { data: null, error };
+  }
+
+  return {
+    data: null,
+    error: new Error("Unable to sync RestroRDS after removing unsupported columns"),
+  };
+}
+
+async function findOrder(supabase: SupabaseClient, orderId: string) {
+  const decodedOrderId = decodeURIComponent(orderId);
+  const tableNames = ["Orders", "orders"];
+  const searchColumns = ["OrderId", "order_id", "order_number", "id"];
+
+  for (const tableName of tableNames) {
+    for (const column of searchColumns) {
+      if (column === "id" && Number.isNaN(Number(decodedOrderId))) continue;
+
+      const matchValue = column === "id" ? Number(decodedOrderId) : decodedOrderId;
+
+      const { data, error } = await supabase
+        .from(tableName)
+        .select("*")
+        .eq(column, matchValue)
+        .maybeSingle();
+
+      if (data && !error) {
+        return {
+          tableName,
+          matchColumn: column,
+          matchValue,
+          order: data as AnyRow,
+        };
+      }
     }
   }
 
   return null;
 }
 
-async function findOrder(
-  supabase: any,
-  orderId: string
-) {
-  const idColumns = [
-    "OrderId",
-    "id",
-    "orderId",
-    "order_id",
-  ];
+function shouldSyncRestroRDS(status: string, subStatus: string) {
+  const statusKey = normalizeKey(status);
+  const subStatusKey = normalizeKey(subStatus);
 
-  for (const column of idColumns) {
-    const { data, error } =
-      await supabase
-        .from("Orders")
-        .select("*")
-        .eq(column, orderId)
-        .maybeSingle();
-
-    if (data) {
-      return {
-        row: data,
-        idColumn: column,
-        error: null,
-      };
-    }
-
-    if (error) {
-      const missing =
-        missingColumnName(
-          error.message || ""
-        );
-
-      if (missing === column) {
-        continue;
-      }
-
-      return {
-        row: null,
-        idColumn: column,
-        error,
-      };
-    }
-  }
-
-  return {
-    row: null,
-    idColumn: "OrderId",
-    error: null,
-  };
+  return (
+    statusKey === "delivered" ||
+    statusKey === "cancelled" ||
+    statusKey === "canceled" ||
+    statusKey === "notdelivered" ||
+    statusKey === "baddelivery" ||
+    subStatusKey === "baddelivery" ||
+    subStatusKey === "partialdelivery"
+  );
 }
 
-async function updateOrderStatus(
-  supabase: any,
-  idColumn: string,
+async function getPreviousRestroBalance(
+  supabase: SupabaseClient,
+  restroCode: string,
   orderId: string,
-  existing: any,
-  newStatus: string,
-  subStatus: string | null,
-  changedAt: string,
-  orderPenalty: number,
-  finalIGST: number | null
 ) {
-  const statusColumn =
-    pickStatusColumn(existing);
+  if (!restroCode) return 0;
 
-  const payload: Record<string, any> = {
-    [statusColumn]: newStatus,
-  };
+  const { data, error } = await supabase
+    .from("RestroRDS")
+    .select("ClosingBal")
+    .eq("RestroCode", restroCode)
+    .neq("OrderId", orderId)
+    .order("RDSId", { ascending: false })
+    .limit(1);
 
-  if (
-    existing.SubStatus !== undefined
-  ) {
-    payload.SubStatus = subStatus;
+  if (error || !Array.isArray(data) || data.length === 0) {
+    return 0;
   }
 
-  if (
-    existing.subStatus !== undefined
-  ) {
-    payload.subStatus = subStatus;
-  }
-
-  if (
-    existing.OrderSubStatus !== undefined
-  ) {
-    payload.OrderSubStatus =
-      subStatus;
-  }
-
-  if (
-    existing.UpdatedAt !== undefined
-  ) {
-    payload.UpdatedAt = changedAt;
-  }
-
-  if (
-    existing.updated_at !== undefined
-  ) {
-    payload.updated_at = changedAt;
-  }
-
-  if (
-    existing.LastModified !== undefined
-  ) {
-    payload.LastModified =
-      changedAt;
-  }
-
-  /*
-   * Penalty ka exact Orders table column:
-   * OrderPenalty
-   */
-  payload.OrderPenalty =
-    orderPenalty;
-
-  /*
-   * IGST sirf final result mark hone par
-   * calculate/update hoga.
-   *
-   * Intermediate stages me existing IGST
-   * ko touch nahi kiya jayega.
-   */
-  if (finalIGST !== null) {
-    payload.IGST = finalIGST;
-  }
-
-  return supabase
-    .from("Orders")
-    .update(payload)
-    .eq(idColumn, orderId)
-    .select("*");
+  return roundMoney(normalizeNumber(data[0]?.ClosingBal));
 }
 
-async function insertHistoryBestEffort(
-  supabase: any,
-  payload: Record<string, any>
+function calculateSettlement(
+  row: AnyRow,
+  status: string,
+  subStatus: string,
+  orderPenalty: number,
+  previousBal: number,
 ) {
-  let attempt = { ...payload };
+  const statusKey = normalizeKey(status);
+  const subStatusKey = normalizeKey(subStatus);
 
-  for (
-    let i = 0;
-    i < 16;
-    i += 1
+  const basePrice = pickMoney(row, [
+    "BasePrice",
+    "base_price",
+    "Subtotal",
+    "subtotal",
+    "SubTotal",
+    "ItemTotal",
+    "item_total",
+  ]);
+
+  const restroPrice =
+    pickMoney(row, ["RestroPrice", "restro_price"]) ||
+    basePrice ||
+    pickMoney(row, ["TotalAmount", "total_amount", "FinalTotal", "final_total"]);
+
+  const couponDiscount = pickMoney(row, [
+    "CouponDiscount",
+    "coupon_discount",
+    "DiscountAmount",
+    "discount_amount",
+  ]);
+
+  const restroDiscount = pickMoney(row, [
+    "RestroDiscount",
+    "restro_discount",
+  ]);
+
+  const reDiscount = pickMoney(row, [
+    "REDiscount",
+    "re_discount",
+  ]);
+
+  const gstAmount = pickMoney(row, [
+    "GST",
+    "GstAmount",
+    "gst_amount",
+    "TaxAmount",
+    "tax_amount",
+  ]);
+
+  const convenienceFee = pickMoney(row, [
+    "ConvenienceFee",
+    "convenience_fee",
+    "PlatformFee",
+    "platform_fee",
+  ]);
+
+  let settlementAmount = 0;
+
+  if (
+    statusKey === "delivered" ||
+    subStatusKey === "baddelivery" ||
+    subStatusKey === "partialdelivery"
   ) {
-    const { data, error } =
-      await supabase
-        .from("OrderStatusHistory")
-        .insert(attempt)
-        .select("*")
-        .maybeSingle();
+    settlementAmount = restroPrice - restroDiscount - orderPenalty;
+  } else if (
+    statusKey === "cancelled" ||
+    statusKey === "canceled" ||
+    statusKey === "notdelivered" ||
+    statusKey === "baddelivery"
+  ) {
+    settlementAmount = 0 - orderPenalty;
+  }
 
-    if (!error) {
-      return {
-        data,
-        error: null,
-      };
-    }
+  settlementAmount = roundMoney(settlementAmount);
+  const closingBal = roundMoney(previousBal + settlementAmount);
 
-    const missing =
-      missingColumnName(
-        error.message || ""
-      );
+  return {
+    basePrice: roundMoney(basePrice),
+    restroPrice: roundMoney(restroPrice),
+    couponDiscount: roundMoney(couponDiscount),
+    restroDiscount: roundMoney(restroDiscount),
+    reDiscount: roundMoney(reDiscount),
+    gstAmount: roundMoney(gstAmount),
+    convenienceFee: roundMoney(convenienceFee),
+    settlementAmount,
+    closingBal,
+  };
+}
 
-    if (
-      !missing ||
-      !(missing in attempt)
-    ) {
-      return {
-        data: null,
-        error,
-      };
-    }
+async function syncRestroRDS(
+  supabase: SupabaseClient,
+  order: AnyRow,
+  status: string,
+  subStatus: string,
+  remarks: string,
+  orderPenalty: number,
+) {
+  if (!shouldSyncRestroRDS(status, subStatus)) {
+    return { ok: true, skipped: true, reason: "status_not_settlement_stage" };
+  }
 
-    const nextAttempt = {
-      ...attempt,
+  const orderId = cleanText(
+    pickValue(order, ["OrderId", "order_id", "order_number", "id"]),
+  );
+
+  const restroCode = cleanText(
+    pickValue(order, ["RestroCode", "restro_code", "OutletId", "outlet_id"]),
+  );
+
+  if (!orderId || !restroCode) {
+    return { ok: true, skipped: true, reason: "missing_order_or_restro_code" };
+  }
+
+  const previousBal = await getPreviousRestroBalance(
+    supabase,
+    restroCode,
+    orderId,
+  );
+
+  const financials = calculateSettlement(
+    order,
+    status,
+    subStatus,
+    orderPenalty,
+    previousBal,
+  );
+
+  const now = new Date().toISOString();
+
+  const payload: AnyRow = {
+    RestroCode: restroCode,
+    OrderId: orderId,
+    RestroName: cleanText(
+      pickValue(order, ["RestroName", "restro_name", "OutletName", "outlet_name"]),
+    ),
+    StationCode: cleanText(pickValue(order, ["StationCode", "station_code"])),
+    StationName: cleanText(pickValue(order, ["StationName", "station_name"])),
+    Status: normalizeStatus(status),
+    SubStatus: cleanText(subStatus),
+    Remarks: cleanText(remarks),
+    DeliveryDate: pickValue(order, [
+      "DeliveryDate",
+      "delivery_date",
+      "ArrivalDate",
+      "arrival_date",
+    ]),
+    DeliveryTime: pickValue(order, [
+      "DeliveryTime",
+      "delivery_time",
+      "ArrivalTime",
+      "arrival_time",
+    ]),
+    PaymentMode: cleanText(pickValue(order, ["PaymentMode", "payment_mode"])),
+    PaymentStatus: cleanText(pickValue(order, ["PaymentStatus", "payment_status"])),
+    OrderAmount: roundMoney(
+      pickMoney(order, [
+        "FinalTotal",
+        "final_total",
+        "TotalAmount",
+        "total_amount",
+        "OrderAmount",
+        "order_amount",
+      ]),
+    ),
+    BasePrice: financials.basePrice,
+    RestroPrice: financials.restroPrice,
+    CouponDiscount: financials.couponDiscount,
+    RestroDiscount: financials.restroDiscount,
+    REDiscount: financials.reDiscount,
+    GstAmount: financials.gstAmount,
+    ConvenienceFee: financials.convenienceFee,
+    OrderPenalty: roundMoney(orderPenalty),
+    PreviousBal: previousBal,
+    SettlementAmount: financials.settlementAmount,
+    ClosingBal: financials.closingBal,
+    CreatedAt: pickValue(order, ["CreatedAt", "created_at"], now),
+    UpdatedAt: now,
+  };
+
+  const result = await safeUpsertRestroRDS(supabase, payload);
+
+  if (result.error) {
+    console.error("RESTRO RDS SYNC ERROR:", result.error);
+    return {
+      ok: false,
+      skipped: false,
+      error: result.error instanceof Error ? result.error.message : String(result.error),
     };
-
-    delete nextAttempt[missing];
-    attempt = nextAttempt;
   }
 
   return {
-    data: null,
-    error: {
-      message:
-        "Unable to insert status history with available columns",
-    },
+    ok: true,
+    skipped: false,
+    data: result.data,
   };
+}
+
+async function insertStatusHistory(
+  supabase: SupabaseClient,
+  orderId: string,
+  body: AnyRow,
+  status: string,
+  subStatus: string,
+  remarks: string,
+  orderPenalty: number,
+) {
+  const actionBy =
+    cleanText(body.actionBy) ||
+    cleanText(body.ActionBy) ||
+    cleanText(body.userName) ||
+    cleanText(body.UserName) ||
+    "System";
+
+  const actionType =
+    cleanText(body.actionType) ||
+    cleanText(body.ActionType) ||
+    cleanText(body.userType) ||
+    cleanText(body.UserType) ||
+    "Manual";
+
+  const payload: AnyRow = {
+    OrderId: orderId,
+    Status: normalizeStatus(status),
+    SubStatus: cleanText(subStatus),
+    Remarks: cleanText(remarks),
+    ActionBy: actionBy,
+    ActionType: actionType,
+    OrderPenalty: roundMoney(orderPenalty),
+    CreatedAt: new Date().toISOString(),
+  };
+
+  const result = await safeInsert(supabase, "OrderStatusHistory", payload);
+
+  if (result.error) {
+    console.error("ORDER STATUS HISTORY INSERT ERROR:", result.error);
+  }
 }
 
 export async function PATCH(
   req: NextRequest,
-  {
-    params,
-  }: {
-    params: {
-      orderId?: string;
-      id?: string;
-    };
-  }
+  context: { params: { orderId: string } },
 ) {
   try {
-    const orderId =
-      decodeURIComponent(
-        String(
-          params.orderId ??
-            params.id ??
-            ""
-        )
-      ).trim();
+    const supabase = supabaseServer();
+    const orderId = decodeURIComponent(context.params.orderId || "");
+    const body = (await req.json().catch(() => ({}))) as AnyRow;
 
     if (!orderId) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Order id is required",
-        },
-        { status: 400 }
+        { ok: false, success: false, error: "missing_order_id" },
+        { status: 400 },
       );
     }
 
-    const body = await req
-      .json()
-      .catch(() => ({}));
+    const found = await findOrder(supabase, orderId);
 
-    const newStatus =
-      normalizeStatus(
-        body.newStatus ??
-          body.NewStatus ??
-          body.status ??
-          body.Status ??
-          body.orderStatus ??
-          body.OrderStatus
-      );
-
-    if (!newStatus) {
+    if (!found?.order) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "New status is required",
-        },
-        { status: 400 }
+        { ok: false, success: false, error: "order_not_found" },
+        { status: 404 },
       );
     }
 
-    const supabase =
-      supabaseServer();
+    const requestedStatus =
+      cleanText(body.status) ||
+      cleanText(body.Status) ||
+      cleanText(body.order_status) ||
+      cleanText(body.OrderStatus) ||
+      cleanText(body.nextStatus) ||
+      cleanText(body.NextStatus);
 
-    const {
-      row: existing,
-      idColumn,
-      error: findError,
-    } = await findOrder(
-      supabase,
-      orderId
-    );
-
-    if (findError) {
+    if (!requestedStatus) {
       return NextResponse.json(
-        {
-          ok: false,
-          error:
-            findError.message ||
-            "Failed to load order",
-        },
-        { status: 500 }
+        { ok: false, success: false, error: "missing_status" },
+        { status: 400 },
       );
     }
 
-    if (!existing) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            `Order not found: ${orderId}`,
-        },
-        { status: 404 }
-      );
-    }
-
-    const changedAt =
-      new Date().toISOString();
-
-    const statusColumn =
-      pickStatusColumn(existing);
-
-    const oldStatus =
-      cleanText(
-        existing[statusColumn]
-      );
+    const status = normalizeStatus(requestedStatus);
 
     const subStatus =
-      cleanText(
-        body.subStatus ??
-          body.SubStatus
-      );
+      cleanText(body.subStatus) ||
+      cleanText(body.SubStatus) ||
+      cleanText(body.sub_status) ||
+      cleanText(body.reason) ||
+      cleanText(body.Reason) ||
+      cleanText(body.outcomeStatus) ||
+      cleanText(body.OutcomeStatus);
 
     const remarks =
-      cleanText(
-        body.remarks ??
-          body.Remarks
-      );
+      cleanText(body.remarks) ||
+      cleanText(body.Remarks) ||
+      cleanText(body.comment) ||
+      cleanText(body.Comment) ||
+      cleanText(body.notes) ||
+      cleanText(body.Notes);
 
-    const note =
-      cleanText(
-        body.note ??
-          body.Note ??
-          remarks ??
-          subStatus
-      );
+    const orderPenalty = readOrderPenalty(body, status, subStatus);
 
-    const userType =
-      cleanText(
-        body.userType ??
-          body.UserType
-      ) || "Admin";
+    const previousOrder = found.order;
+    const now = new Date().toISOString();
 
-    const userName =
-      cleanText(
-        body.userName ??
-          body.UserName ??
-          body.changedBy ??
-          body.ChangedBy
-      ) || "Admin";
+    const statusColumn =
+      ["Status", "OrderStatus", "order_status", "status"].find(
+        (key) => previousOrder[key] !== undefined,
+      ) || "Status";
 
-    const actionSource =
-      cleanText(
-        body.actionSource ??
-          body.ActionSource
-      ) || userType;
-
-    /*
-     * Frontend se penalty aaye to wahi use hogi.
-     * Frontend penalty na bheje to existing
-     * Orders.OrderPenalty preserve/use hogi.
-     */
-    const requestedPenalty =
-      readOrderPenalty(body);
-
-    const existingPenalty =
-      normalizePenalty(
-        existing.OrderPenalty
-      );
-
-    const orderPenalty =
-      requestedPenalty !== null
-        ? requestedPenalty
-        : existingPenalty !== null
-        ? existingPenalty
-        : 0;
-
-    /*
-     * IGST rules:
-     *
-     * Delivered / Bad Delivery / Partial Delivery:
-     * (Commission + OrderPenalty) × 18%
-     *
-     * Cancelled / Not Delivered:
-     * OrderPenalty × 18%
-     *
-     * Other stages:
-     * IGST update nahi hoga.
-     */
-    const finalIGST =
-      calculateFinalIGST(
-        existing,
-        newStatus,
-        subStatus,
-        orderPenalty
-      );
-
-    const {
-      data: updatedRows,
-      error: updateError,
-    } = await updateOrderStatus(
-      supabase,
-      idColumn,
-      orderId,
-      existing,
-      newStatus,
-      subStatus,
-      changedAt,
-      orderPenalty,
-      finalIGST
-    );
-
-    if (updateError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            updateError.message ||
-            "Failed to update order",
-        },
-        { status: 500 }
-      );
-    }
-
-    if (
-      !updatedRows ||
-      updatedRows.length === 0
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "No order row updated",
-        },
-        { status: 400 }
-      );
-    }
-
-    const historyPayload: Record<
-      string,
-      any
-    > = {
-      OrderId: orderId,
-
-      OldStatus: oldStatus,
-      PreviousStatus: oldStatus,
-
-      NewStatus: newStatus,
-      Status: newStatus,
-
+    const updatePayload: AnyRow = {
+      [statusColumn]: status,
+      Status: status,
+      OrderStatus: status,
       SubStatus: subStatus,
-
+      sub_status: subStatus,
       Remarks: remarks,
-      Note: note,
-
-      ChangedBy: userName,
-      UserType: userType,
-      UserName: userName,
-      ActionSource: actionSource,
-
+      remarks,
       OrderPenalty: orderPenalty,
-
-      ChangedAt: changedAt,
-      CreatedAt: changedAt,
+      UpdatedAt: now,
+      updated_at: now,
     };
 
-    /*
-     * History table me IGST column ho to save hoga.
-     * Column nahi hua to insertHistoryBestEffort
-     * IGST field remove karke history save kar dega.
-     */
-    if (finalIGST !== null) {
-      historyPayload.IGST =
-        finalIGST;
+    const updateResult = await safeUpdate(
+      supabase,
+      found.tableName,
+      found.matchColumn,
+      found.matchValue,
+      updatePayload,
+    );
+
+    if (updateResult.error) {
+      console.error("ORDER STATUS UPDATE ERROR:", updateResult.error);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          success: false,
+          error: "db_update_failed",
+          details:
+            updateResult.error instanceof Error
+              ? updateResult.error.message
+              : String(updateResult.error),
+        },
+        { status: 500 },
+      );
     }
 
-    const {
-      data: historyRow,
-      error: historyError,
-    } =
-      await insertHistoryBestEffort(
-        supabase,
-        historyPayload
-      );
+    const updatedOrder: AnyRow = {
+      ...previousOrder,
+      ...(updateResult.data || {}),
+      [statusColumn]: status,
+      Status: status,
+      OrderStatus: status,
+      SubStatus: subStatus,
+      Remarks: remarks,
+      OrderPenalty: orderPenalty,
+      UpdatedAt: now,
+    };
+
+    await insertStatusHistory(
+      supabase,
+      cleanText(pickValue(updatedOrder, ["OrderId", "order_id", "order_number", "id"], orderId)),
+      body,
+      status,
+      subStatus,
+      remarks,
+      orderPenalty,
+    );
+
+    const restroRDS = await syncRestroRDS(
+      supabase,
+      updatedOrder,
+      status,
+      subStatus,
+      remarks,
+      orderPenalty,
+    );
 
     return NextResponse.json({
       ok: true,
-
-      row: updatedRows[0],
-
-      orderPenalty,
-
-      igst:
-        finalIGST !== null
-          ? finalIGST
-          : updatedRows[0]?.IGST ??
-            null,
-
-      igstCalculated:
-        finalIGST !== null,
-
-      history: historyRow,
-
-      historyWarning:
-        historyError?.message ||
-        null,
+      success: true,
+      order: updatedOrder,
+      data: updatedOrder,
+      restroRDS,
     });
-  } catch (error: any) {
+  } catch (error) {
+    console.error("ORDER STATUS API ERROR:", error);
+
     return NextResponse.json(
       {
         ok: false,
-        error:
-          error?.message ||
-          "Internal server error",
+        success: false,
+        error: "server_error",
+        details: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
