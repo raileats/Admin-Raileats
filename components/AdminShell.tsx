@@ -15,6 +15,7 @@ import {
   Utensils,
   WalletCards,
   X,
+  ReceiptText,
 } from "lucide-react";
 import AuthGuard from "@/components/admin/AuthGuard";
 
@@ -42,6 +43,7 @@ type Props = {
 const adminNavItems = [
   { href: "/admin/home", label: "Dashboard", icon: Home },
   { href: "/admin/orders", label: "Orders", icon: ListOrdered },
+  { href: "/admin/restro-rds", label: "Restro RDS", icon: ReceiptText },
   { href: "/admin/restros", label: "Restro Master", icon: Utensils },
   { href: "/admin/menu", label: "Menu", icon: WalletCards },
   { href: "/admin/trains", label: "Trains", icon: Train },
