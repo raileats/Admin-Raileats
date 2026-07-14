@@ -58,8 +58,7 @@ type Props = {
 /* =========================================================
    SIDEBAR ITEMS
 
-   Existing icons only use kiye gaye hain taaki
-   old lucide-react version me build error na aaye.
+   Sirf already-supported Lucide icons use kiye hain.
    ========================================================= */
 
 const adminNavItems = [
@@ -69,10 +68,6 @@ const adminNavItems = [
     icon: Home,
     iconColor: "text-blue-600",
     iconBg: "bg-blue-50",
-    activeBg:
-      "bg-gradient-to-r from-blue-600 to-blue-500",
-    activeShadow:
-      "shadow-[0_8px_20px_rgba(37,99,235,0.24)]",
   },
   {
     href: "/admin/orders",
@@ -80,10 +75,6 @@ const adminNavItems = [
     icon: ListOrdered,
     iconColor: "text-orange-600",
     iconBg: "bg-orange-50",
-    activeBg:
-      "bg-gradient-to-r from-orange-500 to-amber-500",
-    activeShadow:
-      "shadow-[0_8px_20px_rgba(249,115,22,0.24)]",
   },
   {
     href: "/admin/restro-rds",
@@ -91,10 +82,6 @@ const adminNavItems = [
     icon: WalletCards,
     iconColor: "text-emerald-600",
     iconBg: "bg-emerald-50",
-    activeBg:
-      "bg-gradient-to-r from-emerald-600 to-green-500",
-    activeShadow:
-      "shadow-[0_8px_20px_rgba(5,150,105,0.24)]",
   },
   {
     href: "/admin/restros",
@@ -102,10 +89,6 @@ const adminNavItems = [
     icon: Utensils,
     iconColor: "text-rose-600",
     iconBg: "bg-rose-50",
-    activeBg:
-      "bg-gradient-to-r from-rose-600 to-pink-500",
-    activeShadow:
-      "shadow-[0_8px_20px_rgba(225,29,72,0.24)]",
   },
   {
     href: "/admin/menu",
@@ -113,10 +96,6 @@ const adminNavItems = [
     icon: WalletCards,
     iconColor: "text-amber-600",
     iconBg: "bg-amber-50",
-    activeBg:
-      "bg-gradient-to-r from-amber-500 to-yellow-500",
-    activeShadow:
-      "shadow-[0_8px_20px_rgba(245,158,11,0.24)]",
   },
   {
     href: "/admin/trains",
@@ -124,21 +103,13 @@ const adminNavItems = [
     icon: Train,
     iconColor: "text-violet-600",
     iconBg: "bg-violet-50",
-    activeBg:
-      "bg-gradient-to-r from-violet-600 to-purple-500",
-    activeShadow:
-      "shadow-[0_8px_20px_rgba(124,58,237,0.24)]",
   },
   {
     href: "/admin/stations",
     label: "Stations",
     icon: MapPin,
-    iconColor: "text-red-500",
+    iconColor: "text-red-600",
     iconBg: "bg-red-50",
-    activeBg:
-      "bg-gradient-to-r from-red-500 to-orange-500",
-    activeShadow:
-      "shadow-[0_8px_20px_rgba(239,68,68,0.24)]",
   },
   {
     href: "/admin/users",
@@ -146,10 +117,6 @@ const adminNavItems = [
     icon: Users,
     iconColor: "text-cyan-600",
     iconBg: "bg-cyan-50",
-    activeBg:
-      "bg-gradient-to-r from-cyan-600 to-sky-500",
-    activeShadow:
-      "shadow-[0_8px_20px_rgba(8,145,178,0.24)]",
   },
   {
     href: "/admin/customers",
@@ -157,10 +124,6 @@ const adminNavItems = [
     icon: Users,
     iconColor: "text-indigo-600",
     iconBg: "bg-indigo-50",
-    activeBg:
-      "bg-gradient-to-r from-indigo-600 to-blue-500",
-    activeShadow:
-      "shadow-[0_8px_20px_rgba(79,70,229,0.24)]",
   },
   {
     href: "/admin/website/hero-slider",
@@ -168,10 +131,6 @@ const adminNavItems = [
     icon: WalletCards,
     iconColor: "text-pink-600",
     iconBg: "bg-pink-50",
-    activeBg:
-      "bg-gradient-to-r from-pink-600 to-fuchsia-500",
-    activeShadow:
-      "shadow-[0_8px_20px_rgba(219,39,119,0.24)]",
   },
 ] as const;
 
@@ -180,7 +139,9 @@ const adminNavItems = [
    ========================================================= */
 
 function userLabel(user?: User) {
-  if (!user) return "Admin";
+  if (!user) {
+    return "Admin";
+  }
 
   return (
     user.name ||
@@ -203,7 +164,9 @@ function isActivePath(
 
   return (
     pathname === href ||
-    pathname.startsWith(`${href}/`)
+    pathname.startsWith(
+      `${href}/`
+    )
   );
 }
 
@@ -236,7 +199,7 @@ export default function AdminShell({
     );
 
   /* =======================================================
-     GLOBAL NEW ORDER SOUND
+     GLOBAL ORDER SOUND
      ======================================================= */
 
   const playGlobalNewOrderSound =
@@ -300,10 +263,12 @@ export default function AdminShell({
           ctx.currentTime
         );
 
-        gain.gain.exponentialRampToValueAtTime(
-          0.01,
-          ctx.currentTime + 0.8
-        );
+        gain.gain
+          .exponentialRampToValueAtTime(
+            0.01,
+            ctx.currentTime +
+              0.8
+          );
 
         oscillator.connect(gain);
         gain.connect(
@@ -313,7 +278,8 @@ export default function AdminShell({
         oscillator.start();
 
         oscillator.stop(
-          ctx.currentTime + 0.8
+          ctx.currentTime +
+            0.8
         );
       } catch (e) {
         console.log(
@@ -328,7 +294,9 @@ export default function AdminShell({
      ======================================================= */
 
   useEffect(() => {
-    if (hideChrome) return;
+    if (hideChrome) {
+      return;
+    }
 
     audioRef.current =
       new Audio(
@@ -399,7 +367,8 @@ export default function AdminShell({
     );
 
     if (
-      "Notification" in window &&
+      "Notification" in
+        window &&
       Notification.permission ===
         "default"
     ) {
@@ -427,11 +396,13 @@ export default function AdminShell({
   }, [hideChrome]);
 
   /* =======================================================
-     SUPABASE REALTIME NOTIFICATION
+     SUPABASE REALTIME
      ======================================================= */
 
   useEffect(() => {
-    if (hideChrome) return;
+    if (hideChrome) {
+      return;
+    }
 
     const channel =
       supabaseNotify
@@ -475,7 +446,12 @@ export default function AdminShell({
                   }
                 );
               }
-            } catch (e) {}
+            } catch (e) {
+              console.log(
+                "Browser notification failed",
+                e
+              );
+            }
           }
         )
         .subscribe(
@@ -488,9 +464,10 @@ export default function AdminShell({
         );
 
     return () => {
-      supabaseNotify.removeChannel(
-        channel
-      );
+      supabaseNotify
+        .removeChannel(
+          channel
+        );
     };
   }, [hideChrome]);
 
@@ -539,5 +516,265 @@ export default function AdminShell({
     mobile?: boolean;
   }) => (
     <>
-      {/* LOGO AREA */}
-      <div className="relative flex h-24 items-center gap-3 overflow-hidden border-b border
+      {/* Logo Header */}
+
+      <div className="flex h-24 shrink-0 items-center gap-3 border-b border-slate-200 bg-gradient-to-r from-white via-blue-50/40 to-white px-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-200 bg-gradient-to-br from-yellow-100 to-orange-50 shadow-sm">
+          <img
+            src="/logo.png"
+            alt="RailEats"
+            className="h-10 w-10 rounded-xl object-contain"
+          />
+        </div>
+
+        <div className="min-w-0 whitespace-nowrap">
+          <div className="truncate text-[17px] font-extrabold leading-tight tracking-tight text-slate-950">
+            RailEats Admin
+          </div>
+
+          <div className="mt-0.5 text-xs font-semibold tracking-wide text-slate-500">
+            Operations
+          </div>
+        </div>
+
+        {mobile && (
+          <button
+            type="button"
+            onClick={() =>
+              setMobileOpen(
+                false
+              )
+            }
+            className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
+            aria-label="Close navigation"
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* Navigation */}
+
+      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-5">
+        {adminNavItems.map(
+          (item) => {
+            const Icon =
+              item.icon;
+
+            const active =
+              isActivePath(
+                pathname,
+                item.href
+              );
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={item.label}
+                onClick={() =>
+                  mobile &&
+                  setMobileOpen(
+                    false
+                  )
+                }
+                className={[
+                  "group/navitem relative flex h-12 items-center gap-3 overflow-hidden rounded-xl px-3 text-sm font-bold transition-all duration-200",
+                  active
+                    ? "bg-gradient-to-r from-slate-100 to-blue-50 text-slate-950 shadow-sm ring-1 ring-slate-200"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
+                ].join(" ")}
+              >
+                {active && (
+                  <span className="absolute bottom-2 left-0 top-2 w-1 rounded-r-full bg-blue-600" />
+                )}
+
+                <span
+                  className={[
+                    "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover/navitem:scale-105",
+                    item.iconBg,
+                    active
+                      ? "shadow-sm ring-1 ring-white"
+                      : "",
+                  ].join(" ")}
+                >
+                  <Icon
+                    size={20}
+                    strokeWidth={2.2}
+                    className={[
+                      "shrink-0",
+                      item.iconColor,
+                    ].join(" ")}
+                  />
+                </span>
+
+                <span className="min-w-0 flex-1 truncate whitespace-nowrap">
+                  {item.label}
+                </span>
+
+                {active && (
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-blue-600 shadow-[0_0_0_4px_rgba(37,99,235,0.10)]" />
+                )}
+              </Link>
+            );
+          }
+        )}
+      </nav>
+
+      {/* Logout */}
+
+      <div className="shrink-0 border-t border-slate-200 bg-slate-50/70 p-3">
+        <button
+          type="button"
+          onClick={
+            handleLogout
+          }
+          title="Logout"
+          className="group/logout flex h-12 w-full items-center gap-3 rounded-xl border border-red-100 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 transition group-hover/logout:bg-red-100">
+            <LogOut
+              size={20}
+              strokeWidth={2.2}
+            />
+          </span>
+
+          <span className="whitespace-nowrap">
+            Logout
+          </span>
+        </button>
+      </div>
+    </>
+  );
+
+  /* =======================================================
+     SHELL
+     ======================================================= */
+
+  const shell = (
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      {/* Mobile Overlay */}
+
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[2px] lg:hidden"
+          onClick={() =>
+            setMobileOpen(false)
+          }
+        />
+      )}
+
+      {/* Mobile Sidebar */}
+
+      <aside
+        className={[
+          "fixed left-0 top-0 z-50 flex h-screen w-72 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-2xl transition-transform duration-300 lg:hidden",
+          mobileOpen
+            ? "translate-x-0"
+            : "-translate-x-full",
+        ].join(" ")}
+      >
+        <SidebarContent mobile />
+      </aside>
+
+      <div className="flex min-h-screen">
+        {/* Desktop Sidebar — screenshot jaisa always expanded */}
+
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-[4px_0_20px_rgba(15,23,42,0.035)] lg:flex">
+          <SidebarContent />
+        </aside>
+
+        {/* Right Side */}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Header */}
+
+          <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200 bg-white/95 px-4 shadow-[0_1px_8px_rgba(15,23,42,0.035)] backdrop-blur-xl lg:px-7">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setMobileOpen(
+                    true
+                  )
+                }
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 lg:hidden"
+                aria-label="Open navigation"
+              >
+                <Menu size={20} />
+              </button>
+
+              <div>
+                <div className="text-lg font-extrabold leading-tight tracking-tight text-slate-950">
+                  Admin Panel
+                </div>
+
+                <div className="hidden text-xs font-semibold text-slate-500 sm:block">
+                  RailEats operations
+                  console
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden text-right sm:block">
+                <div className="text-sm font-bold text-slate-900">
+                  {userLabel(
+                    currentUser
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={
+                    handleLogout
+                  }
+                  className="text-xs font-semibold text-blue-600 underline decoration-blue-200 underline-offset-2 hover:text-blue-700"
+                >
+                  Logout
+                </button>
+              </div>
+
+              {currentUser
+                ?.photo_url ? (
+                <div className="rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-pink-500 p-[2px] shadow-md">
+                  <img
+                    src={
+                      currentUser.photo_url
+                    }
+                    alt="Admin"
+                    className="h-10 w-10 rounded-full border-2 border-white object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-pink-500 p-[2px] shadow-md">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-blue-50 text-blue-700">
+                    <Users
+                      size={20}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </header>
+
+          {/* Page Content */}
+
+          <main className="flex-1 px-4 py-6 lg:px-7">
+            <div className="mx-auto w-full max-w-[1560px]">
+              {children}
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+
+  return requireAuth ? (
+    <AuthGuard>
+      {shell}
+    </AuthGuard>
+  ) : (
+    shell
+  );
+}
