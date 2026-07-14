@@ -1,9 +1,25 @@
+// app/api/orders/[orderId]/status/route.ts
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { syncRestroRdsForFinalOrder } from "@/lib/restroRds";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
+import {
+  createClient,
+} from "@supabase/supabase-js";
+
+import {
+  checkRestroRdsOrderLocked,
+  syncRestroRdsForFinalOrder,
+} from "@/lib/restroRds";
+
+/* =========================================================
+   SUPABASE SERVER CLIENT
+   ========================================================= */
 
 function supabaseServer() {
   const url =
@@ -16,44 +32,81 @@ function supabaseServer() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     "";
 
-  return createClient(url, key, {
-    auth: { persistSession: false },
-  });
+  return createClient(
+    url,
+    key,
+    {
+      auth: {
+        persistSession: false,
+      },
+    }
+  );
 }
 
+/* =========================================================
+   BASIC HELPERS
+   ========================================================= */
+
 function cleanText(value: any) {
-  const text = String(value ?? "").trim();
+  const text =
+    String(value ?? "").trim();
+
   return text || null;
 }
 
 function normalizeStatus(value: any) {
-  const raw = cleanText(value);
-  if (!raw) return null;
+  const raw =
+    cleanText(value);
+
+  if (!raw) {
+    return null;
+  }
 
   const key = raw
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 
-  const aliases: Record<string, string> = {
+  const aliases: Record<
+    string,
+    string
+  > = {
     booked: "Booked",
 
-    verification: "In Verification",
-    inverification: "In Verification",
+    verification:
+      "In Verification",
 
-    cancellationrequest: "Cancellation Request",
+    inverification:
+      "In Verification",
 
-    neworder: "New Order",
-    inkitchen: "In Kitchen",
-    outfordelivery: "Out for Delivery",
+    cancellationrequest:
+      "Cancellation Request",
 
-    delivered: "Delivered",
+    neworder:
+      "New Order",
 
-    cancelled: "Cancelled",
-    canceled: "Cancelled",
+    inkitchen:
+      "In Kitchen",
 
-    notdelivered: "Not Delivered",
-    baddelivery: "Bad Delivery",
-    partialdelivery: "Partial Delivery",
+    outfordelivery:
+      "Out for Delivery",
+
+    delivered:
+      "Delivered",
+
+    cancelled:
+      "Cancelled",
+
+    canceled:
+      "Cancelled",
+
+    notdelivered:
+      "Not Delivered",
+
+    baddelivery:
+      "Bad Delivery",
+
+    partialdelivery:
+      "Partial Delivery",
   };
 
   return aliases[key] || raw;
@@ -71,32 +124,76 @@ function normalizeNumber(
     return fallback;
   }
 
-  const numericValue = Number(
-    String(value).replace(/[^\d.-]/g, "")
-  );
+  const numericValue =
+    Number(
+      String(value)
+        .replace(/[^\d.-]/g, "")
+    );
 
-  if (!Number.isFinite(numericValue)) {
+  if (
+    !Number.isFinite(
+      numericValue
+    )
+  ) {
     return fallback;
   }
 
   return numericValue;
 }
 
-function normalizePenalty(value: any) {
-  const numericValue = normalizeNumber(value, null);
+function normalizePenalty(
+  value: any
+) {
+  const numericValue =
+    normalizeNumber(
+      value,
+      null
+    );
 
-  if (numericValue === null) {
+  if (
+    numericValue === null
+  ) {
     return null;
   }
 
-  if (numericValue < 0) {
+  if (
+    numericValue < 0
+  ) {
     return 0;
   }
 
   return numericValue;
 }
 
-function readOrderPenalty(body: any) {
+function normalizeKey(
+  value: any
+) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(
+      /[^a-z0-9]/g,
+      ""
+    );
+}
+
+function roundMoney(
+  value: number
+) {
+  return (
+    Math.round(
+      value * 100
+    ) / 100
+  );
+}
+
+/* =========================================================
+   PENALTY
+   ========================================================= */
+
+function readOrderPenalty(
+  body: any
+) {
   const directValue =
     body.OrderPenalty ??
     body.orderPenalty ??
@@ -108,66 +205,69 @@ function readOrderPenalty(body: any) {
     body.Penalty;
 
   const parsedDirectValue =
-    normalizePenalty(directValue);
+    normalizePenalty(
+      directValue
+    );
 
-  if (parsedDirectValue !== null) {
+  if (
+    parsedDirectValue !== null
+  ) {
     return parsedDirectValue;
   }
 
   const subStatus =
     cleanText(
       body.subStatus ??
-        body.SubStatus
+      body.SubStatus
     ) || "";
 
   const key = subStatus
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
+    .replace(
+      /[^a-z0-9]/g,
+      ""
+    );
 
-  const penaltyBySubStatus: Record<
-    string,
-    number
-  > = {
-    partialdelivery: 0,
-    baddelivery: 50,
+  const penaltyBySubStatus:
+    Record<string, number> = {
+      partialdelivery: 0,
+      baddelivery: 50,
 
-    customerplanchange: 0,
-    customercallnotconnect: 0,
-    customernotonseat: 0,
-    customerrefuseddelivery: 0,
+      customerplanchange: 0,
+      customercallnotconnect: 0,
+      customernotonseat: 0,
+      customerrefuseddelivery: 0,
 
-    deliveryboymissed: 100,
-    restroclosed: 100,
+      deliveryboymissed: 100,
+      restroclosed: 100,
 
-    trainlate: 0,
-    traindivert: 0,
+      trainlate: 0,
+      traindivert: 0,
 
-    itemissue: 100,
-    restrorefusedwithoutreason: 100,
+      itemissue: 100,
+      restrorefusedwithoutreason:
+        100,
 
-    other: 0,
-    loworder: 0,
-    lowandorder: 0,
-    naturalcalamity: 0,
-  };
+      other: 0,
+      loworder: 0,
+      lowandorder: 0,
+      naturalcalamity: 0,
+    };
 
-  if (key in penaltyBySubStatus) {
-    return penaltyBySubStatus[key];
+  if (
+    key in penaltyBySubStatus
+  ) {
+    return (
+      penaltyBySubStatus[key]
+    );
   }
 
   return null;
 }
 
-function normalizeKey(value: any) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
-
-function roundMoney(value: number) {
-  return Math.round(value * 100) / 100;
-}
+/* =========================================================
+   IGST CALCULATION
+   ========================================================= */
 
 function calculateFinalIGST(
   existing: any,
@@ -175,63 +275,82 @@ function calculateFinalIGST(
   subStatus: string | null,
   orderPenalty: number
 ) {
-  const statusKey = normalizeKey(newStatus);
-  const subStatusKey = normalizeKey(subStatus);
+  const statusKey =
+    normalizeKey(
+      newStatus
+    );
 
-  const commission = Math.max(
-    0,
-    normalizeNumber(
-      existing?.Commission ??
+  const subStatusKey =
+    normalizeKey(
+      subStatus
+    );
+
+  const commission =
+    Math.max(
+      0,
+      normalizeNumber(
+        existing?.Commission ??
         existing?.commission,
-      0
-    ) || 0
-  );
+        0
+      ) || 0
+    );
 
-  const penalty = Math.max(
-    0,
-    normalizeNumber(orderPenalty, 0) || 0
-  );
+  const penalty =
+    Math.max(
+      0,
+      normalizeNumber(
+        orderPenalty,
+        0
+      ) || 0
+    );
 
   /*
    * Cancelled / Not Delivered:
-   * IGST sirf OrderPenalty ke 18% par lagega.
-   * Commission include nahi hogi.
+   *
+   * IGST =
+   * OrderPenalty × 18%
    */
   const isCancelled =
-    statusKey === "cancelled" ||
-    statusKey === "canceled";
+    statusKey ===
+      "cancelled" ||
+    statusKey ===
+      "canceled";
 
   const isNotDelivered =
-    statusKey === "notdelivered";
+    statusKey ===
+      "notdelivered";
 
-  if (isCancelled || isNotDelivered) {
+  if (
+    isCancelled ||
+    isNotDelivered
+  ) {
     return roundMoney(
       penalty * 0.18
     );
   }
 
   /*
-   * Delivered / Bad Delivery / Partial Delivery:
-   * IGST = (Commission + OrderPenalty) × 18%
+   * Delivered / Bad Delivery /
+   * Partial Delivery:
    *
-   * Current admin flow me Bad Delivery aur
-   * Partial Delivery aksar:
-   *
-   * Status = Delivered
-   * SubStatus = Bad Delivery / Partial Delivery
-   *
-   * ke form me save hote hain.
+   * IGST =
+   * (Commission + Penalty) × 18%
    */
   const isDelivered =
-    statusKey === "delivered";
+    statusKey ===
+      "delivered";
 
   const isBadDelivery =
-    statusKey === "baddelivery" ||
-    subStatusKey === "baddelivery";
+    statusKey ===
+      "baddelivery" ||
+    subStatusKey ===
+      "baddelivery";
 
   const isPartialDelivery =
-    statusKey === "partialdelivery" ||
-    subStatusKey === "partialdelivery";
+    statusKey ===
+      "partialdelivery" ||
+    subStatusKey ===
+      "partialdelivery";
 
   if (
     isDelivered ||
@@ -239,19 +358,27 @@ function calculateFinalIGST(
     isPartialDelivery
   ) {
     return roundMoney(
-      (commission + penalty) * 0.18
+      (
+        commission +
+        penalty
+      ) * 0.18
     );
   }
 
   /*
-   * Booked, In Verification, Cancellation Request,
-   * New Order, In Kitchen, Out for Delivery:
+   * Intermediate status:
    * IGST update nahi hoga.
    */
   return null;
 }
 
-function pickStatusColumn(row: any) {
+/* =========================================================
+   ORDER COLUMN HELPERS
+   ========================================================= */
+
+function pickStatusColumn(
+  row: any
+) {
   const candidates = [
     "OrderStatus",
     "Status",
@@ -275,21 +402,35 @@ function missingColumnName(
 ) {
   const patterns = [
     /Could not find the '([^']+)' column/i,
+
     /column "([^"]+)" of relation/i,
+
     /column "([^"]+)" does not exist/i,
+
     /record "new" has no field "([^"]+)"/i,
   ];
 
-  for (const pattern of patterns) {
-    const match = message.match(pattern);
+  for (
+    const pattern of patterns
+  ) {
+    const match =
+      message.match(
+        pattern
+      );
 
-    if (match?.[1]) {
+    if (
+      match?.[1]
+    ) {
       return match[1];
     }
   }
 
   return null;
 }
+
+/* =========================================================
+   FIND ORDER
+   ========================================================= */
 
 async function findOrder(
   supabase: any,
@@ -302,18 +443,27 @@ async function findOrder(
     "order_id",
   ];
 
-  for (const column of idColumns) {
-    const { data, error } =
+  for (
+    const column of idColumns
+  ) {
+    const {
+      data,
+      error,
+    } =
       await supabase
         .from("Orders")
         .select("*")
-        .eq(column, orderId)
+        .eq(
+          column,
+          orderId
+        )
         .maybeSingle();
 
     if (data) {
       return {
         row: data,
-        idColumn: column,
+        idColumn:
+          column,
         error: null,
       };
     }
@@ -324,13 +474,16 @@ async function findOrder(
           error.message || ""
         );
 
-      if (missing === column) {
+      if (
+        missing === column
+      ) {
         continue;
       }
 
       return {
         row: null,
-        idColumn: column,
+        idColumn:
+          column,
         error,
       };
     }
@@ -338,10 +491,15 @@ async function findOrder(
 
   return {
     row: null,
-    idColumn: "OrderId",
+    idColumn:
+      "OrderId",
     error: null,
   };
 }
+
+/* =========================================================
+   UPDATE ORDER STATUS
+   ========================================================= */
 
 async function updateOrderStatus(
   supabase: any,
@@ -355,89 +513,117 @@ async function updateOrderStatus(
   finalIGST: number | null
 ) {
   const statusColumn =
-    pickStatusColumn(existing);
+    pickStatusColumn(
+      existing
+    );
 
-  const payload: Record<string, any> = {
-    [statusColumn]: newStatus,
-  };
+  const payload:
+    Record<string, any> = {
+      [statusColumn]:
+        newStatus,
+    };
 
   if (
-    existing.SubStatus !== undefined
+    existing.SubStatus !==
+    undefined
   ) {
-    payload.SubStatus = subStatus;
+    payload.SubStatus =
+      subStatus;
   }
 
   if (
-    existing.subStatus !== undefined
+    existing.subStatus !==
+    undefined
   ) {
-    payload.subStatus = subStatus;
+    payload.subStatus =
+      subStatus;
   }
 
   if (
-    existing.OrderSubStatus !== undefined
+    existing.OrderSubStatus !==
+    undefined
   ) {
     payload.OrderSubStatus =
       subStatus;
   }
 
   if (
-    existing.UpdatedAt !== undefined
+    existing.UpdatedAt !==
+    undefined
   ) {
-    payload.UpdatedAt = changedAt;
+    payload.UpdatedAt =
+      changedAt;
   }
 
   if (
-    existing.updated_at !== undefined
+    existing.updated_at !==
+    undefined
   ) {
-    payload.updated_at = changedAt;
+    payload.updated_at =
+      changedAt;
   }
 
   if (
-    existing.LastModified !== undefined
+    existing.LastModified !==
+    undefined
   ) {
     payload.LastModified =
       changedAt;
   }
 
   /*
-   * Penalty ka exact Orders table column:
-   * OrderPenalty
+   * Exact Orders penalty column.
    */
   payload.OrderPenalty =
     orderPenalty;
 
   /*
-   * IGST sirf final result mark hone par
-   * calculate/update hoga.
-   *
-   * Intermediate stages me existing IGST
-   * ko touch nahi kiya jayega.
+   * Final marking par hi
+   * IGST update hoga.
    */
-  if (finalIGST !== null) {
-    payload.IGST = finalIGST;
+  if (
+    finalIGST !== null
+  ) {
+    payload.IGST =
+      finalIGST;
   }
 
   return supabase
     .from("Orders")
     .update(payload)
-    .eq(idColumn, orderId)
+    .eq(
+      idColumn,
+      orderId
+    )
     .select("*");
 }
 
+/* =========================================================
+   STATUS HISTORY
+   ========================================================= */
+
 async function insertHistoryBestEffort(
   supabase: any,
-  payload: Record<string, any>
+  payload:
+    Record<string, any>
 ) {
-  let attempt = { ...payload };
+  let attempt = {
+    ...payload,
+  };
 
   for (
     let i = 0;
     i < 16;
     i += 1
   ) {
-    const { data, error } =
+    const {
+      data,
+      error,
+    } =
       await supabase
-        .from("OrderStatusHistory")
+        .from(
+          "OrderStatusHistory"
+        )
         .insert(attempt)
         .select("*")
         .maybeSingle();
@@ -468,8 +654,12 @@ async function insertHistoryBestEffort(
       ...attempt,
     };
 
-    delete nextAttempt[missing];
-    attempt = nextAttempt;
+    delete nextAttempt[
+      missing
+    ];
+
+    attempt =
+      nextAttempt;
   }
 
   return {
@@ -480,6 +670,10 @@ async function insertHistoryBestEffort(
     },
   };
 }
+
+/* =========================================================
+   PATCH
+   ========================================================= */
 
 export async function PATCH(
   req: NextRequest,
@@ -493,12 +687,16 @@ export async function PATCH(
   }
 ) {
   try {
+    /* =====================================================
+       ORDER ID
+       ===================================================== */
+
     const orderId =
       decodeURIComponent(
         String(
           params.orderId ??
-            params.id ??
-            ""
+          params.id ??
+          ""
         )
       ).trim();
 
@@ -509,22 +707,31 @@ export async function PATCH(
           error:
             "Order id is required",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
-    const body = await req
-      .json()
-      .catch(() => ({}));
+    /* =====================================================
+       REQUEST BODY
+       ===================================================== */
+
+    const body =
+      await req
+        .json()
+        .catch(
+          () => ({})
+        );
 
     const newStatus =
       normalizeStatus(
         body.newStatus ??
-          body.NewStatus ??
-          body.status ??
-          body.Status ??
-          body.orderStatus ??
-          body.OrderStatus
+        body.NewStatus ??
+        body.status ??
+        body.Status ??
+        body.orderStatus ??
+        body.OrderStatus
       );
 
     if (!newStatus) {
@@ -534,21 +741,28 @@ export async function PATCH(
           error:
             "New status is required",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
     const supabase =
       supabaseServer();
 
+    /* =====================================================
+       LOAD ORDER
+       ===================================================== */
+
     const {
       row: existing,
       idColumn,
       error: findError,
-    } = await findOrder(
-      supabase,
-      orderId
-    );
+    } =
+      await findOrder(
+        supabase,
+        orderId
+      );
 
     if (findError) {
       return NextResponse.json(
@@ -558,7 +772,9 @@ export async function PATCH(
             findError.message ||
             "Failed to load order",
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       );
     }
 
@@ -569,68 +785,180 @@ export async function PATCH(
           error:
             `Order not found: ${orderId}`,
         },
-        { status: 404 }
+        {
+          status: 404,
+        }
       );
     }
 
+    /* =====================================================
+       RESTRO RDS HARD LOCK CHECK
+       ===================================================== */
+
+    /*
+     * Bahut important:
+     *
+     * Ye check Orders table update hone se
+     * pehle ho raha hai.
+     *
+     * Agar RestroRDS me same OrderId mil gaya:
+     *
+     * - Status update nahi hoga
+     * - SubStatus update nahi hoga
+     * - Penalty update nahi hogi
+     * - IGST update nahi hoga
+     * - History insert nahi hogi
+     * - RDS update nahi hogi
+     */
+    const rdsLock =
+      await checkRestroRdsOrderLocked({
+        orderId,
+      });
+
+    if (
+      rdsLock.error
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+
+          error:
+            "Unable to verify RestroRDS lock",
+
+          details:
+            rdsLock.error,
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    if (
+      rdsLock.locked
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          locked: true,
+
+          error:
+            "Unable to mark order. Order already marked.",
+
+          message:
+            "Unable to mark order. Order already marked.",
+
+          rds: {
+            rdsId:
+              rdsLock.row
+                ?.RDSId ??
+              null,
+
+            orderId:
+              rdsLock.row
+                ?.OrderId ??
+              orderId,
+
+            restroCode:
+              rdsLock.row
+                ?.RestroCode ??
+              null,
+
+            status:
+              rdsLock.row
+                ?.Status ??
+              null,
+
+            subStatus:
+              rdsLock.row
+                ?.SubStatus ??
+              null,
+
+            settlementAmount:
+              rdsLock.row
+                ?.SettlementAmount ??
+              null,
+
+            markedAt:
+              rdsLock.row
+                ?.CreatedAt ??
+              null,
+          },
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    /* =====================================================
+       STATUS DATA
+       ===================================================== */
+
     const changedAt =
-      new Date().toISOString();
+      new Date()
+        .toISOString();
 
     const statusColumn =
-      pickStatusColumn(existing);
+      pickStatusColumn(
+        existing
+      );
 
     const oldStatus =
       cleanText(
-        existing[statusColumn]
+        existing[
+          statusColumn
+        ]
       );
 
     const subStatus =
       cleanText(
         body.subStatus ??
-          body.SubStatus
+        body.SubStatus
       );
 
     const remarks =
       cleanText(
         body.remarks ??
-          body.Remarks
+        body.Remarks
       );
 
     const note =
       cleanText(
         body.note ??
-          body.Note ??
-          remarks ??
-          subStatus
+        body.Note ??
+        remarks ??
+        subStatus
       );
 
     const userType =
       cleanText(
         body.userType ??
-          body.UserType
+        body.UserType
       ) || "Admin";
 
     const userName =
       cleanText(
         body.userName ??
-          body.UserName ??
-          body.changedBy ??
-          body.ChangedBy
+        body.UserName ??
+        body.changedBy ??
+        body.ChangedBy
       ) || "Admin";
 
     const actionSource =
       cleanText(
         body.actionSource ??
-          body.ActionSource
+        body.ActionSource
       ) || userType;
 
-    /*
-     * Frontend se penalty aaye to wahi use hogi.
-     * Frontend penalty na bheje to existing
-     * Orders.OrderPenalty preserve/use hogi.
-     */
+    /* =====================================================
+       PENALTY
+       ===================================================== */
+
     const requestedPenalty =
-      readOrderPenalty(body);
+      readOrderPenalty(
+        body
+      );
 
     const existingPenalty =
       normalizePenalty(
@@ -644,18 +972,10 @@ export async function PATCH(
         ? existingPenalty
         : 0;
 
-    /*
-     * IGST rules:
-     *
-     * Delivered / Bad Delivery / Partial Delivery:
-     * (Commission + OrderPenalty) × 18%
-     *
-     * Cancelled / Not Delivered:
-     * OrderPenalty × 18%
-     *
-     * Other stages:
-     * IGST update nahi hoga.
-     */
+    /* =====================================================
+       IGST
+       ===================================================== */
+
     const finalIGST =
       calculateFinalIGST(
         existing,
@@ -664,30 +984,38 @@ export async function PATCH(
         orderPenalty
       );
 
+    /* =====================================================
+       UPDATE ORDERS
+       ===================================================== */
+
     const {
       data: updatedRows,
       error: updateError,
-    } = await updateOrderStatus(
-      supabase,
-      idColumn,
-      orderId,
-      existing,
-      newStatus,
-      subStatus,
-      changedAt,
-      orderPenalty,
-      finalIGST
-    );
+    } =
+      await updateOrderStatus(
+        supabase,
+        idColumn,
+        orderId,
+        existing,
+        newStatus,
+        subStatus,
+        changedAt,
+        orderPenalty,
+        finalIGST
+      );
 
     if (updateError) {
       return NextResponse.json(
         {
           ok: false,
+
           error:
             updateError.message ||
             "Failed to update order",
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       );
     }
 
@@ -701,47 +1029,74 @@ export async function PATCH(
           error:
             "No order row updated",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
-    const historyPayload: Record<
-      string,
-      any
-    > = {
-      OrderId: orderId,
+    /* =====================================================
+       HISTORY PAYLOAD
+       ===================================================== */
 
-      OldStatus: oldStatus,
-      PreviousStatus: oldStatus,
+    const historyPayload:
+      Record<string, any> = {
+        OrderId:
+          orderId,
 
-      NewStatus: newStatus,
-      Status: newStatus,
+        OldStatus:
+          oldStatus,
 
-      SubStatus: subStatus,
+        PreviousStatus:
+          oldStatus,
 
-      Remarks: remarks,
-      Note: note,
+        NewStatus:
+          newStatus,
 
-      ChangedBy: userName,
-      UserType: userType,
-      UserName: userName,
-      ActionSource: actionSource,
+        Status:
+          newStatus,
 
-      OrderPenalty: orderPenalty,
+        SubStatus:
+          subStatus,
 
-      ChangedAt: changedAt,
-      CreatedAt: changedAt,
-    };
+        Remarks:
+          remarks,
 
-    /*
-     * History table me IGST column ho to save hoga.
-     * Column nahi hua to insertHistoryBestEffort
-     * IGST field remove karke history save kar dega.
-     */
-    if (finalIGST !== null) {
+        Note:
+          note,
+
+        ChangedBy:
+          userName,
+
+        UserType:
+          userType,
+
+        UserName:
+          userName,
+
+        ActionSource:
+          actionSource,
+
+        OrderPenalty:
+          orderPenalty,
+
+        ChangedAt:
+          changedAt,
+
+        CreatedAt:
+          changedAt,
+      };
+
+    if (
+      finalIGST !== null
+    ) {
       historyPayload.IGST =
         finalIGST;
     }
+
+    /* =====================================================
+       INSERT HISTORY
+       ===================================================== */
 
     const {
       data: historyRow,
@@ -751,68 +1106,117 @@ export async function PATCH(
         supabase,
         historyPayload
       );
-        /*
-     * RestroRDS sync:
-     *
-     * Sirf final marking par RPC row create/update karega.
-     * Intermediate status par function skipped=true return karega.
-     *
-     * RDS me error aane par main order status update fail nahi hoga.
-     * Warning API response me mil jayegi.
-     */
+
+    /* =====================================================
+       CREATE RESTRO RDS
+       ===================================================== */
+
     const restroRdsResult =
       await syncRestroRdsForFinalOrder({
         supabase,
         orderId,
+
         remarks:
           remarks ??
           note ??
           subStatus,
       });
 
-        return NextResponse.json({
+    /*
+     * Database hard-lock ne same OrderId reject kiya
+     * to response me locked status return hoga.
+     *
+     * Normal situation me pre-check pehle hi
+     * duplicate order ko rok dega.
+     */
+    if (
+      restroRdsResult.locked
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          locked: true,
+
+          error:
+            "Unable to mark order. Order already marked.",
+
+          message:
+            "Unable to mark order. Order already marked.",
+
+          restroRds:
+            restroRdsResult.data ??
+            null,
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    /* =====================================================
+       SUCCESS RESPONSE
+       ===================================================== */
+
+    return NextResponse.json({
       ok: true,
 
-      row: updatedRows[0],
+      row:
+        updatedRows[0],
 
       orderPenalty,
 
       igst:
         finalIGST !== null
           ? finalIGST
-          : updatedRows[0]?.IGST ??
+          : updatedRows[0]
+              ?.IGST ??
             null,
 
       igstCalculated:
         finalIGST !== null,
 
-      history: historyRow,
+      history:
+        historyRow,
 
       historyWarning:
-        historyError?.message ||
+        historyError
+          ?.message ||
         null,
 
       restroRds:
-        restroRdsResult.data ??
+        restroRdsResult
+          .data ??
         null,
 
       restroRdsSkipped:
-        restroRdsResult.skipped ??
+        restroRdsResult
+          .skipped ??
+        false,
+
+      restroRdsLocked:
+        restroRdsResult
+          .locked ??
         false,
 
       restroRdsWarning:
-        restroRdsResult.warning ??
+        restroRdsResult
+          .warning ??
         null,
     });
-  } catch (error: any) {
+  } catch (
+    error: any
+  ) {
     return NextResponse.json(
       {
         ok: false,
+
         error:
           error?.message ||
           "Internal server error",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
