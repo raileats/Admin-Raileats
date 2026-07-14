@@ -98,7 +98,7 @@ const adminNavItems = [
   {
     href: "/admin/restro-rds",
     label: "Restro RDS",
-    icon: WalletCards,
+    icon: BadgeIndianRupee,
     color: "text-emerald-500",
   },
   {
