@@ -1,16 +1,10 @@
 // components/AdminShell.tsx
 "use client";
 
-import React, {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-
 import {
   Home,
   ListOrdered,
@@ -23,21 +17,12 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-
 import AuthGuard from "@/components/admin/AuthGuard";
-
-/* =========================================================
-   SUPABASE REALTIME CLIENT
-   ========================================================= */
 
 const supabaseNotify = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
-
-/* =========================================================
-   TYPES
-   ========================================================= */
 
 type User = {
   id?: string;
@@ -55,93 +40,71 @@ type Props = {
   requireAuth?: boolean;
 };
 
-/* =========================================================
-   SIDEBAR ITEMS
-
-   Sirf already-supported Lucide icons use kiye hain.
-   ========================================================= */
-
 const adminNavItems = [
   {
     href: "/admin/home",
     label: "Dashboard",
     icon: Home,
-    iconColor: "text-blue-600",
-    iconBg: "bg-blue-50",
+    iconClassName: "text-blue-600",
   },
   {
     href: "/admin/orders",
     label: "Orders",
     icon: ListOrdered,
-    iconColor: "text-orange-600",
-    iconBg: "bg-orange-50",
+    iconClassName: "text-orange-500",
   },
   {
     href: "/admin/restro-rds",
     label: "Restro RDS",
     icon: WalletCards,
-    iconColor: "text-emerald-600",
-    iconBg: "bg-emerald-50",
+    iconClassName: "text-emerald-500",
   },
   {
     href: "/admin/restros",
     label: "Restro Master",
     icon: Utensils,
-    iconColor: "text-rose-600",
-    iconBg: "bg-rose-50",
+    iconClassName: "text-rose-500",
   },
   {
     href: "/admin/menu",
     label: "Menu",
     icon: WalletCards,
-    iconColor: "text-amber-600",
-    iconBg: "bg-amber-50",
+    iconClassName: "text-amber-500",
   },
   {
     href: "/admin/trains",
     label: "Trains",
     icon: Train,
-    iconColor: "text-violet-600",
-    iconBg: "bg-violet-50",
+    iconClassName: "text-violet-500",
   },
   {
     href: "/admin/stations",
     label: "Stations",
     icon: MapPin,
-    iconColor: "text-red-600",
-    iconBg: "bg-red-50",
+    iconClassName: "text-red-500",
   },
   {
     href: "/admin/users",
     label: "Users",
     icon: Users,
-    iconColor: "text-cyan-600",
-    iconBg: "bg-cyan-50",
+    iconClassName: "text-cyan-600",
   },
   {
     href: "/admin/customers",
     label: "Customers",
     icon: Users,
-    iconColor: "text-indigo-600",
-    iconBg: "bg-indigo-50",
+    iconClassName: "text-indigo-500",
   },
   {
     href: "/admin/website/hero-slider",
     label: "Hero Sliders",
     icon: WalletCards,
-    iconColor: "text-pink-600",
-    iconBg: "bg-pink-50",
+    iconClassName: "text-pink-500",
   },
 ] as const;
 
-/* =========================================================
-   HELPERS
-   ========================================================= */
-
 function userLabel(user?: User) {
-  if (!user) {
-    return "Admin";
-  }
+  if (!user) return "Admin";
 
   return (
     user.name ||
@@ -164,68 +127,44 @@ function isActivePath(
 
   return (
     pathname === href ||
-    pathname.startsWith(
-      `${href}/`
-    )
+    pathname.startsWith(`${href}/`)
   );
 }
-
-/* =========================================================
-   COMPONENT
-   ========================================================= */
 
 export default function AdminShell({
   children,
   currentUser,
   requireAuth = true,
 }: Props) {
-  const pathname =
-    usePathname() || "";
+  const pathname = usePathname() || "";
 
-  const [
-    mobileOpen,
-    setMobileOpen,
-  ] = useState(false);
+  const [mobileOpen, setMobileOpen] =
+    useState(false);
 
   const audioRef =
-    useRef<HTMLAudioElement | null>(
-      null
-    );
+    useRef<HTMLAudioElement | null>(null);
 
   const hideChrome =
     pathname === "/admin/login" ||
-    pathname.startsWith(
-      "/admin/login/"
-    );
-
-  /* =======================================================
-     GLOBAL ORDER SOUND
-     ======================================================= */
+    pathname.startsWith("/admin/login/");
 
   const playGlobalNewOrderSound =
     async () => {
       try {
         if (!audioRef.current) {
-          audioRef.current =
-            new Audio(
-              "/sounds/new-order.mp3"
-            );
+          audioRef.current = new Audio(
+            "/sounds/new-order.mp3"
+          );
 
           audioRef.current.preload =
             "auto";
 
-          audioRef.current.volume =
-            1;
+          audioRef.current.volume = 1;
         }
 
-        audioRef.current.muted =
-          false;
-
-        audioRef.current.volume =
-          1;
-
-        audioRef.current.currentTime =
-          0;
+        audioRef.current.muted = false;
+        audioRef.current.volume = 1;
+        audioRef.current.currentTime = 0;
 
         await audioRef.current.play();
       } catch (e) {
@@ -252,9 +191,7 @@ export default function AdminShell({
         const gain =
           ctx.createGain();
 
-        oscillator.type =
-          "sine";
-
+        oscillator.type = "sine";
         oscillator.frequency.value =
           880;
 
@@ -266,20 +203,16 @@ export default function AdminShell({
         gain.gain
           .exponentialRampToValueAtTime(
             0.01,
-            ctx.currentTime +
-              0.8
+            ctx.currentTime + 0.8
           );
 
         oscillator.connect(gain);
-        gain.connect(
-          ctx.destination
-        );
+        gain.connect(ctx.destination);
 
         oscillator.start();
 
         oscillator.stop(
-          ctx.currentTime +
-            0.8
+          ctx.currentTime + 0.8
         );
       } catch (e) {
         console.log(
@@ -289,14 +222,8 @@ export default function AdminShell({
       }
     };
 
-  /* =======================================================
-     AUDIO UNLOCK
-     ======================================================= */
-
   useEffect(() => {
-    if (hideChrome) {
-      return;
-    }
+    if (hideChrome) return;
 
     audioRef.current =
       new Audio(
@@ -306,15 +233,12 @@ export default function AdminShell({
     audioRef.current.preload =
       "auto";
 
-    audioRef.current.volume =
-      1;
+    audioRef.current.volume = 1;
 
     const unlockAudio =
       async () => {
         try {
-          if (
-            !audioRef.current
-          ) {
+          if (!audioRef.current) {
             return;
           }
 
@@ -345,30 +269,23 @@ export default function AdminShell({
     window.addEventListener(
       "click",
       unlockAudio,
-      {
-        once: true,
-      }
+      { once: true }
     );
 
     window.addEventListener(
       "touchstart",
       unlockAudio,
-      {
-        once: true,
-      }
+      { once: true }
     );
 
     window.addEventListener(
       "keydown",
       unlockAudio,
-      {
-        once: true,
-      }
+      { once: true }
     );
 
     if (
-      "Notification" in
-        window &&
+      "Notification" in window &&
       Notification.permission ===
         "default"
     ) {
@@ -395,14 +312,8 @@ export default function AdminShell({
     };
   }, [hideChrome]);
 
-  /* =======================================================
-     SUPABASE REALTIME
-     ======================================================= */
-
   useEffect(() => {
-    if (hideChrome) {
-      return;
-    }
+    if (hideChrome) return;
 
     const channel =
       supabaseNotify
@@ -446,69 +357,51 @@ export default function AdminShell({
                   }
                 );
               }
-            } catch (e) {
-              console.log(
-                "Browser notification failed",
-                e
-              );
-            }
+            } catch (e) {}
           }
         )
-        .subscribe(
-          (status) => {
-            console.log(
-              "Global order notification status:",
-              status
-            );
-          }
-        );
+        .subscribe((status) => {
+          console.log(
+            "Global order notification status:",
+            status
+          );
+        });
 
     return () => {
-      supabaseNotify
-        .removeChannel(
-          channel
-        );
+      supabaseNotify.removeChannel(
+        channel
+      );
     };
   }, [hideChrome]);
 
-  /* =======================================================
-     LOGOUT
-     ======================================================= */
+  const handleLogout = async (
+    e?: React.MouseEvent
+  ) => {
+    e?.preventDefault();
 
-  const handleLogout =
-    async (
-      e?: React.MouseEvent
-    ) => {
-      e?.preventDefault();
-
-      try {
-        await fetch(
-          "/api/auth/logout",
-          {
-            method: "POST",
-            credentials:
-              "include",
-          }
-        );
-      } catch (err) {
-        console.error(
-          "Logout failed",
-          err
-        );
-      } finally {
-        window.location.replace(
-          "/admin/login"
-        );
-      }
-    };
+    try {
+      await fetch(
+        "/api/auth/logout",
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+    } catch (err) {
+      console.error(
+        "Logout failed",
+        err
+      );
+    } finally {
+      window.location.replace(
+        "/admin/login"
+      );
+    }
+  };
 
   if (hideChrome) {
     return <>{children}</>;
   }
-
-  /* =======================================================
-     SIDEBAR CONTENT
-     ======================================================= */
 
   const SidebarContent = ({
     mobile = false,
@@ -516,23 +409,25 @@ export default function AdminShell({
     mobile?: boolean;
   }) => (
     <>
-      {/* Logo Header */}
+      <div className="flex h-20 items-center gap-3 border-b border-slate-200 px-4">
+        <img
+          src="/logo.png"
+          alt="RailEats"
+          className="h-10 w-10 shrink-0 rounded-md object-contain"
+        />
 
-      <div className="flex h-24 shrink-0 items-center gap-3 border-b border-slate-200 bg-gradient-to-r from-white via-blue-50/40 to-white px-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-200 bg-gradient-to-br from-yellow-100 to-orange-50 shadow-sm">
-          <img
-            src="/logo.png"
-            alt="RailEats"
-            className="h-10 w-10 rounded-xl object-contain"
-          />
-        </div>
-
-        <div className="min-w-0 whitespace-nowrap">
-          <div className="truncate text-[17px] font-extrabold leading-tight tracking-tight text-slate-950">
+        <div
+          className={
+            mobile
+              ? "whitespace-nowrap"
+              : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
+          }
+        >
+          <div className="text-base font-bold leading-tight">
             RailEats Admin
           </div>
 
-          <div className="mt-0.5 text-xs font-semibold tracking-wide text-slate-500">
+          <div className="text-xs font-medium text-slate-500">
             Operations
           </div>
         </div>
@@ -541,11 +436,9 @@ export default function AdminShell({
           <button
             type="button"
             onClick={() =>
-              setMobileOpen(
-                false
-              )
+              setMobileOpen(false)
             }
-            className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"
             aria-label="Close navigation"
           >
             <X size={18} />
@@ -553,9 +446,7 @@ export default function AdminShell({
         )}
       </div>
 
-      {/* Navigation */}
-
-      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-5">
+      <nav className="flex-1 space-y-1 px-3 py-5">
         {adminNavItems.map(
           (item) => {
             const Icon =
@@ -574,72 +465,61 @@ export default function AdminShell({
                 title={item.label}
                 onClick={() =>
                   mobile &&
-                  setMobileOpen(
-                    false
-                  )
+                  setMobileOpen(false)
                 }
                 className={[
-                  "group/navitem relative flex h-12 items-center gap-3 overflow-hidden rounded-xl px-3 text-sm font-bold transition-all duration-200",
+                  "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
                   active
-                    ? "bg-gradient-to-r from-slate-100 to-blue-50 text-slate-950 shadow-sm ring-1 ring-slate-200"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
+                    ? "bg-slate-100 text-slate-950"
+                    : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
                 ].join(" ")}
               >
-                {active && (
-                  <span className="absolute bottom-2 left-0 top-2 w-1 rounded-r-full bg-blue-600" />
-                )}
-
-                <span
+                <Icon
+                  size={20}
+                  strokeWidth={2.1}
                   className={[
-                    "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 group-hover/navitem:scale-105",
-                    item.iconBg,
+                    "shrink-0 transition-transform duration-200",
+                    item.iconClassName,
                     active
-                      ? "shadow-sm ring-1 ring-white"
+                      ? "scale-105"
                       : "",
                   ].join(" ")}
-                >
-                  <Icon
-                    size={20}
-                    strokeWidth={2.2}
-                    className={[
-                      "shrink-0",
-                      item.iconColor,
-                    ].join(" ")}
-                  />
-                </span>
+                />
 
-                <span className="min-w-0 flex-1 truncate whitespace-nowrap">
+                <span
+                  className={
+                    mobile
+                      ? "whitespace-nowrap"
+                      : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
+                  }
+                >
                   {item.label}
                 </span>
-
-                {active && (
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-blue-600 shadow-[0_0_0_4px_rgba(37,99,235,0.10)]" />
-                )}
               </Link>
             );
           }
         )}
       </nav>
 
-      {/* Logout */}
-
-      <div className="shrink-0 border-t border-slate-200 bg-slate-50/70 p-3">
+      <div className="border-t border-slate-200 p-3">
         <button
           type="button"
-          onClick={
-            handleLogout
-          }
+          onClick={handleLogout}
           title="Logout"
-          className="group/logout flex h-12 w-full items-center gap-3 rounded-xl border border-red-100 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+          className="flex h-11 w-full items-center gap-3 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-red-50 hover:text-red-700"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 transition group-hover/logout:bg-red-100">
-            <LogOut
-              size={20}
-              strokeWidth={2.2}
-            />
-          </span>
+          <LogOut
+            size={20}
+            className="shrink-0 text-red-500"
+          />
 
-          <span className="whitespace-nowrap">
+          <span
+            className={
+              mobile
+                ? "whitespace-nowrap"
+                : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
+            }
+          >
             Logout
           </span>
         </button>
@@ -647,28 +527,20 @@ export default function AdminShell({
     </>
   );
 
-  /* =======================================================
-     SHELL
-     ======================================================= */
-
   const shell = (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      {/* Mobile Overlay */}
-
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[2px] lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
           onClick={() =>
             setMobileOpen(false)
           }
         />
       )}
 
-      {/* Mobile Sidebar */}
-
       <aside
         className={[
-          "fixed left-0 top-0 z-50 flex h-screen w-72 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-2xl transition-transform duration-300 lg:hidden",
+          "fixed left-0 top-0 z-50 flex h-screen w-72 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 lg:hidden",
           mobileOpen
             ? "translate-x-0"
             : "-translate-x-full",
@@ -678,38 +550,30 @@ export default function AdminShell({
       </aside>
 
       <div className="flex min-h-screen">
-        {/* Desktop Sidebar — screenshot jaisa always expanded */}
-
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-[4px_0_20px_rgba(15,23,42,0.035)] lg:flex">
+        <aside className="group/sidebar hidden w-20 shrink-0 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 hover:w-56 lg:flex lg:flex-col">
           <SidebarContent />
         </aside>
 
-        {/* Right Side */}
-
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Header */}
-
-          <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200 bg-white/95 px-4 shadow-[0_1px_8px_rgba(15,23,42,0.035)] backdrop-blur-xl lg:px-7">
+          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-7">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() =>
-                  setMobileOpen(
-                    true
-                  )
+                  setMobileOpen(true)
                 }
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 lg:hidden"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 lg:hidden"
                 aria-label="Open navigation"
               >
                 <Menu size={20} />
               </button>
 
               <div>
-                <div className="text-lg font-extrabold leading-tight tracking-tight text-slate-950">
+                <div className="text-lg font-bold leading-tight">
                   Admin Panel
                 </div>
 
-                <div className="hidden text-xs font-semibold text-slate-500 sm:block">
+                <div className="hidden text-xs font-medium text-slate-500 sm:block">
                   RailEats operations
                   console
                 </div>
@@ -718,7 +582,7 @@ export default function AdminShell({
 
             <div className="flex items-center gap-3">
               <div className="hidden text-right sm:block">
-                <div className="text-sm font-bold text-slate-900">
+                <div className="text-sm font-semibold">
                   {userLabel(
                     currentUser
                   )}
@@ -726,10 +590,8 @@ export default function AdminShell({
 
                 <button
                   type="button"
-                  onClick={
-                    handleLogout
-                  }
-                  className="text-xs font-semibold text-blue-600 underline decoration-blue-200 underline-offset-2 hover:text-blue-700"
+                  onClick={handleLogout}
+                  className="text-xs font-semibold text-blue-600 underline"
                 >
                   Logout
                 </button>
@@ -737,28 +599,20 @@ export default function AdminShell({
 
               {currentUser
                 ?.photo_url ? (
-                <div className="rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-pink-500 p-[2px] shadow-md">
-                  <img
-                    src={
-                      currentUser.photo_url
-                    }
-                    alt="Admin"
-                    className="h-10 w-10 rounded-full border-2 border-white object-cover"
-                  />
-                </div>
+                <img
+                  src={
+                    currentUser.photo_url
+                  }
+                  alt="Admin"
+                  className="h-10 w-10 rounded-full border border-slate-200 object-cover"
+                />
               ) : (
-                <div className="rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-pink-500 p-[2px] shadow-md">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-blue-50 text-blue-700">
-                    <Users
-                      size={20}
-                    />
-                  </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-700">
+                  <Users size={20} />
                 </div>
               )}
             </div>
           </header>
-
-          {/* Page Content */}
 
           <main className="flex-1 px-4 py-6 lg:px-7">
             <div className="mx-auto w-full max-w-[1560px]">
