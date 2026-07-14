@@ -19,8 +19,23 @@ type SyncRestroRdsInput = {
 export type RestroRdsSyncResult = {
   ok: boolean;
   skipped: boolean;
+  locked: boolean;
   warning: string | null;
   data: any;
+};
+
+export type RestroRdsLockResult = {
+  locked: boolean;
+  row: {
+    RDSId?: number | string | null;
+    OrderId?: string | null;
+    RestroCode?: number | string | null;
+    Status?: string | null;
+    SubStatus?: string | null;
+    SettlementAmount?: number | string | null;
+    CreatedAt?: string | null;
+  } | null;
+  error: string | null;
 };
 
 function cleanText(value: any) {
@@ -62,6 +77,128 @@ function getRestroRdsSupabase() {
   );
 }
 
+/*
+ * Status route me order update se pehle ye function call hoga.
+ *
+ * Agar RestroRDS me same OrderId already present hai,
+ * to order permanently marked/locked maana jayega.
+ */
+export async function checkRestroRdsOrderLocked({
+  orderId,
+}: {
+  orderId: string;
+}): Promise<RestroRdsLockResult> {
+  const normalizedOrderId =
+    cleanText(orderId);
+
+  if (!normalizedOrderId) {
+    return {
+      locked: false,
+      row: null,
+      error:
+        "RestroRDS lock check failed: OrderId missing",
+    };
+  }
+
+  try {
+    const supabase =
+      getRestroRdsSupabase();
+
+    const { data, error } =
+      await supabase
+        .from("RestroRDS")
+        .select(
+          `
+          RDSId,
+          OrderId,
+          RestroCode,
+          Status,
+          SubStatus,
+          SettlementAmount,
+          CreatedAt
+          `
+        )
+        .eq(
+          "OrderId",
+          normalizedOrderId
+        )
+        .maybeSingle();
+
+    if (error) {
+      const fullError = [
+        error.message,
+        error.details,
+        error.hint,
+        error.code,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
+      console.error(
+        "[RestroRDS] Lock check database error:",
+        {
+          orderId:
+            normalizedOrderId,
+          error: fullError,
+        }
+      );
+
+      return {
+        locked: false,
+        row: null,
+        error:
+          fullError ||
+          "RestroRDS lock check failed",
+      };
+    }
+
+    if (data) {
+      console.warn(
+        `[RestroRDS] Order already locked: ${normalizedOrderId}`
+      );
+
+      return {
+        locked: true,
+        row: data,
+        error: null,
+      };
+    }
+
+    return {
+      locked: false,
+      row: null,
+      error: null,
+    };
+  } catch (error: any) {
+    const message =
+      error?.message ||
+      "Unexpected RestroRDS lock check error";
+
+    console.error(
+      "[RestroRDS] Lock check unexpected error:",
+      {
+        orderId:
+          normalizedOrderId,
+        message,
+        stack:
+          error?.stack || null,
+      }
+    );
+
+    return {
+      locked: false,
+      row: null,
+      error: message,
+    };
+  }
+}
+
+/*
+ * Final status mark hone ke baad Supabase RPC call karta hai.
+ *
+ * Database function me bhi hard lock hona chahiye:
+ * same OrderId already RestroRDS me ho to update/insert nahi hoga.
+ */
 export async function syncRestroRdsForFinalOrder({
   orderId,
   remarks = null,
@@ -73,6 +210,7 @@ export async function syncRestroRdsForFinalOrder({
     return {
       ok: false,
       skipped: true,
+      locked: false,
       warning:
         "RestroRDS sync skipped: OrderId missing",
       data: null,
@@ -121,6 +259,7 @@ export async function syncRestroRdsForFinalOrder({
       return {
         ok: false,
         skipped: false,
+        locked: false,
         warning:
           fullError ||
           "RestroRDS RPC failed",
@@ -137,9 +276,33 @@ export async function syncRestroRdsForFinalOrder({
       return {
         ok: false,
         skipped: false,
+        locked: false,
         warning:
           "RestroRDS RPC returned empty response",
         data: null,
+      };
+    }
+
+    const isLocked =
+      Boolean(data?.locked);
+
+    if (isLocked) {
+      const warning =
+        cleanText(data?.error) ||
+        cleanText(data?.message) ||
+        "Unable to mark order. Order already marked.";
+
+      console.warn(
+        "[RestroRDS] RPC order locked:",
+        data
+      );
+
+      return {
+        ok: false,
+        skipped: true,
+        locked: true,
+        warning,
+        data,
       };
     }
 
@@ -153,6 +316,7 @@ export async function syncRestroRdsForFinalOrder({
         ok: false,
         skipped:
           Boolean(data?.skipped),
+        locked: false,
 
         warning:
           cleanText(data?.error) ||
@@ -172,6 +336,7 @@ export async function syncRestroRdsForFinalOrder({
       ok: true,
       skipped:
         Boolean(data?.skipped),
+      locked: false,
       warning: null,
       data,
     };
@@ -194,6 +359,7 @@ export async function syncRestroRdsForFinalOrder({
     return {
       ok: false,
       skipped: false,
+      locked: false,
       warning: message,
       data: null,
     };
