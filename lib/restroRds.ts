@@ -1,18 +1,26 @@
 // lib/restroRds.ts
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 
 type SyncRestroRdsInput = {
-  supabase: SupabaseClient<any, any, any>;
+  /*
+   * Existing route compatibility ke liye optional rakha hai.
+   * RestroRDS sync apna secure service-role client use karega.
+   */
+  supabase?: SupabaseClient<any, any, any>;
+
   orderId: string;
   remarks?: string | null;
 };
 
 export type RestroRdsSyncResult = {
   ok: boolean;
-  skipped?: boolean;
-  warning?: string | null;
-  data?: any;
+  skipped: boolean;
+  warning: string | null;
+  data: any;
 };
 
 function cleanText(value: any) {
@@ -20,51 +28,93 @@ function cleanText(value: any) {
   return text || null;
 }
 
-/**
- * Final order marking ke baad RestroRDS ko sync karta hai.
- *
- * Main calculation aur balance handling Supabase ke
- * sync_restro_rds RPC function me hoti hai taaki:
- *
- * 1. Same OrderId duplicate na ho.
- * 2. Same restaurant ke concurrent orders me balance clash na ho.
- * 3. First order PreviousBal = 0 ho.
- * 4. Next order ka PreviousBal previous CurrentBal ho.
- * 5. Old order correction ke baad subsequent balances recalculate hon.
- */
+function getRestroRdsSupabase() {
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    "";
+
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    "";
+
+  if (!url) {
+    throw new Error(
+      "RestroRDS: Supabase URL environment variable missing"
+    );
+  }
+
+  if (!serviceRoleKey) {
+    throw new Error(
+      "RestroRDS: SUPABASE_SERVICE_ROLE_KEY missing in Vercel"
+    );
+  }
+
+  return createClient(
+    url,
+    serviceRoleKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  );
+}
+
 export async function syncRestroRdsForFinalOrder({
-  supabase,
   orderId,
   remarks = null,
 }: SyncRestroRdsInput): Promise<RestroRdsSyncResult> {
+  const normalizedOrderId =
+    cleanText(orderId);
+
+  if (!normalizedOrderId) {
+    return {
+      ok: false,
+      skipped: true,
+      warning:
+        "RestroRDS sync skipped: OrderId missing",
+      data: null,
+    };
+  }
+
   try {
-    const normalizedOrderId = cleanText(orderId);
+    const supabase =
+      getRestroRdsSupabase();
 
-    if (!normalizedOrderId) {
-      return {
-        ok: false,
-        skipped: true,
-        warning: "RestroRDS sync skipped: OrderId missing",
-      };
-    }
-
-    const { data, error } = await supabase.rpc(
-      "sync_restro_rds",
-      {
-        p_order_id: normalizedOrderId,
-        p_remarks: cleanText(remarks),
-      }
+    console.log(
+      `[RestroRDS] Starting sync for order ${normalizedOrderId}`
     );
 
-    if (error) {
-      console.error(
-        "[RestroRDS] RPC error:",
+    const { data, error } =
+      await supabase.rpc(
+        "sync_restro_rds",
         {
-          orderId: normalizedOrderId,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
+          p_order_id:
+            normalizedOrderId,
+
+          p_remarks:
+            cleanText(remarks),
+        }
+      );
+
+    if (error) {
+      const fullError = [
+        error.message,
+        error.details,
+        error.hint,
+        error.code,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
+      console.error(
+        "[RestroRDS] RPC database error:",
+        {
+          orderId:
+            normalizedOrderId,
+          error: fullError,
         }
       );
 
@@ -72,45 +122,80 @@ export async function syncRestroRdsForFinalOrder({
         ok: false,
         skipped: false,
         warning:
-          error.message ||
-          "Failed to sync RestroRDS",
+          fullError ||
+          "RestroRDS RPC failed",
+        data: null,
+      };
+    }
+
+    if (!data) {
+      console.error(
+        "[RestroRDS] RPC returned empty data:",
+        normalizedOrderId
+      );
+
+      return {
+        ok: false,
+        skipped: false,
+        warning:
+          "RestroRDS RPC returned empty response",
+        data: null,
       };
     }
 
     if (data?.ok === false) {
       console.error(
-        "[RestroRDS] Sync failed:",
+        "[RestroRDS] Function returned failure:",
         data
       );
 
       return {
         ok: false,
-        skipped: Boolean(data?.skipped),
+        skipped:
+          Boolean(data?.skipped),
+
         warning:
           cleanText(data?.error) ||
-          "RestroRDS sync failed",
+          cleanText(data?.reason) ||
+          "RestroRDS function failed",
+
         data,
       };
     }
 
+    console.log(
+      "[RestroRDS] Sync completed:",
+      data
+    );
+
     return {
       ok: true,
-      skipped: Boolean(data?.skipped),
+      skipped:
+        Boolean(data?.skipped),
       warning: null,
       data,
     };
   } catch (error: any) {
+    const message =
+      error?.message ||
+      "Unexpected RestroRDS sync error";
+
     console.error(
       "[RestroRDS] Unexpected error:",
-      error
+      {
+        orderId:
+          normalizedOrderId,
+        message,
+        stack:
+          error?.stack || null,
+      }
     );
 
     return {
       ok: false,
       skipped: false,
-      warning:
-        error?.message ||
-        "Unexpected RestroRDS sync error",
+      warning: message,
+      data: null,
     };
   }
 }
