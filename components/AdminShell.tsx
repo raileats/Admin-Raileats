@@ -1,30 +1,43 @@
+// components/AdminShell.tsx
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+
 import {
-  LayoutDashboard,
+  Home,
   ListOrdered,
-  WalletCards,
-  UtensilsCrossed,
-  ChefHat,
-  TrainFront,
-  MapPin,
-  Users,
-  UserCog,
-  LayoutTemplate,
   LogOut,
+  MapPin,
   Menu,
+  Train,
+  Users,
+  Utensils,
+  WalletCards,
   X,
 } from "lucide-react";
+
 import AuthGuard from "@/components/admin/AuthGuard";
+
+/* =========================================================
+   SUPABASE REALTIME CLIENT
+   ========================================================= */
 
 const supabaseNotify = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+/* =========================================================
+   TYPES
+   ========================================================= */
 
 type User = {
   id?: string;
@@ -42,138 +55,489 @@ type Props = {
   requireAuth?: boolean;
 };
 
+/* =========================================================
+   SIDEBAR ITEMS
+
+   Existing icons only use kiye gaye hain taaki
+   old lucide-react version me build error na aaye.
+   ========================================================= */
+
 const adminNavItems = [
-  { href: "/admin/home", label: "Dashboard", icon: LayoutDashboard, color: "text-blue-500" },
-  { href: "/admin/orders", label: "Orders", icon: ListOrdered, color: "text-orange-500" },
-  { href: "/admin/restro-rds", label: "Restro RDS", icon: WalletCards, color: "text-emerald-500" },
-  { href: "/admin/restros", label: "Restro Master", icon: UtensilsCrossed, color: "text-rose-500" },
-  { href: "/admin/menu", label: "Menu", icon: ChefHat, color: "text-amber-500" },
-  { href: "/admin/trains", label: "Trains", icon: TrainFront, color: "text-purple-500" },
-  { href: "/admin/stations", label: "Stations", icon: MapPin, color: "text-red-500" },
-  { href: "/admin/users", label: "Users", icon: UserCog, color: "text-cyan-600" },
-  { href: "/admin/customers", label: "Customers", icon: Users, color: "text-indigo-500" },
-  { href: "/admin/website/hero-slider", label: "Hero Sliders", icon: LayoutTemplate, color: "text-pink-500" },
+  {
+    href: "/admin/home",
+    label: "Dashboard",
+    icon: Home,
+    iconColor: "text-blue-600",
+    iconBg: "bg-blue-50",
+    activeBg:
+      "bg-gradient-to-r from-blue-600 to-blue-500",
+    activeShadow:
+      "shadow-[0_8px_20px_rgba(37,99,235,0.24)]",
+  },
+  {
+    href: "/admin/orders",
+    label: "Orders",
+    icon: ListOrdered,
+    iconColor: "text-orange-600",
+    iconBg: "bg-orange-50",
+    activeBg:
+      "bg-gradient-to-r from-orange-500 to-amber-500",
+    activeShadow:
+      "shadow-[0_8px_20px_rgba(249,115,22,0.24)]",
+  },
+  {
+    href: "/admin/restro-rds",
+    label: "Restro RDS",
+    icon: WalletCards,
+    iconColor: "text-emerald-600",
+    iconBg: "bg-emerald-50",
+    activeBg:
+      "bg-gradient-to-r from-emerald-600 to-green-500",
+    activeShadow:
+      "shadow-[0_8px_20px_rgba(5,150,105,0.24)]",
+  },
+  {
+    href: "/admin/restros",
+    label: "Restro Master",
+    icon: Utensils,
+    iconColor: "text-rose-600",
+    iconBg: "bg-rose-50",
+    activeBg:
+      "bg-gradient-to-r from-rose-600 to-pink-500",
+    activeShadow:
+      "shadow-[0_8px_20px_rgba(225,29,72,0.24)]",
+  },
+  {
+    href: "/admin/menu",
+    label: "Menu",
+    icon: WalletCards,
+    iconColor: "text-amber-600",
+    iconBg: "bg-amber-50",
+    activeBg:
+      "bg-gradient-to-r from-amber-500 to-yellow-500",
+    activeShadow:
+      "shadow-[0_8px_20px_rgba(245,158,11,0.24)]",
+  },
+  {
+    href: "/admin/trains",
+    label: "Trains",
+    icon: Train,
+    iconColor: "text-violet-600",
+    iconBg: "bg-violet-50",
+    activeBg:
+      "bg-gradient-to-r from-violet-600 to-purple-500",
+    activeShadow:
+      "shadow-[0_8px_20px_rgba(124,58,237,0.24)]",
+  },
+  {
+    href: "/admin/stations",
+    label: "Stations",
+    icon: MapPin,
+    iconColor: "text-red-500",
+    iconBg: "bg-red-50",
+    activeBg:
+      "bg-gradient-to-r from-red-500 to-orange-500",
+    activeShadow:
+      "shadow-[0_8px_20px_rgba(239,68,68,0.24)]",
+  },
+  {
+    href: "/admin/users",
+    label: "Users",
+    icon: Users,
+    iconColor: "text-cyan-600",
+    iconBg: "bg-cyan-50",
+    activeBg:
+      "bg-gradient-to-r from-cyan-600 to-sky-500",
+    activeShadow:
+      "shadow-[0_8px_20px_rgba(8,145,178,0.24)]",
+  },
+  {
+    href: "/admin/customers",
+    label: "Customers",
+    icon: Users,
+    iconColor: "text-indigo-600",
+    iconBg: "bg-indigo-50",
+    activeBg:
+      "bg-gradient-to-r from-indigo-600 to-blue-500",
+    activeShadow:
+      "shadow-[0_8px_20px_rgba(79,70,229,0.24)]",
+  },
+  {
+    href: "/admin/website/hero-slider",
+    label: "Hero Sliders",
+    icon: WalletCards,
+    iconColor: "text-pink-600",
+    iconBg: "bg-pink-50",
+    activeBg:
+      "bg-gradient-to-r from-pink-600 to-fuchsia-500",
+    activeShadow:
+      "shadow-[0_8px_20px_rgba(219,39,119,0.24)]",
+  },
 ] as const;
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
 
 function userLabel(user?: User) {
   if (!user) return "Admin";
-  return user.name || user.mobile || user.email || "Admin";
+
+  return (
+    user.name ||
+    user.mobile ||
+    user.email ||
+    "Admin"
+  );
 }
 
-function isActivePath(pathname: string, href: string) {
+function isActivePath(
+  pathname: string,
+  href: string
+) {
   if (href === "/admin/home") {
-    return pathname === "/admin" || pathname === "/admin/home";
+    return (
+      pathname === "/admin" ||
+      pathname === "/admin/home"
+    );
   }
-  return pathname === href || pathname.startsWith(`${href}/`);
+
+  return (
+    pathname === href ||
+    pathname.startsWith(`${href}/`)
+  );
 }
+
+/* =========================================================
+   COMPONENT
+   ========================================================= */
 
 export default function AdminShell({
   children,
   currentUser,
   requireAuth = true,
 }: Props) {
-  const pathname = usePathname() || "";
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const pathname =
+    usePathname() || "";
+
+  const [
+    mobileOpen,
+    setMobileOpen,
+  ] = useState(false);
+
+  const audioRef =
+    useRef<HTMLAudioElement | null>(
+      null
+    );
 
   const hideChrome =
-    pathname === "/admin/login" || pathname.startsWith("/admin/login/");
+    pathname === "/admin/login" ||
+    pathname.startsWith(
+      "/admin/login/"
+    );
 
-  // ... (Audio and Notification logic remains same as your original)
-  const playGlobalNewOrderSound = async () => { /* ... existing logic ... */ };
+  /* =======================================================
+     GLOBAL NEW ORDER SOUND
+     ======================================================= */
+
+  const playGlobalNewOrderSound =
+    async () => {
+      try {
+        if (!audioRef.current) {
+          audioRef.current =
+            new Audio(
+              "/sounds/new-order.mp3"
+            );
+
+          audioRef.current.preload =
+            "auto";
+
+          audioRef.current.volume =
+            1;
+        }
+
+        audioRef.current.muted =
+          false;
+
+        audioRef.current.volume =
+          1;
+
+        audioRef.current.currentTime =
+          0;
+
+        await audioRef.current.play();
+      } catch (e) {
+        console.log(
+          "Global MP3 failed",
+          e
+        );
+      }
+
+      try {
+        const AudioContextClass =
+          window.AudioContext ||
+          (window as any)
+            .webkitAudioContext;
+
+        const ctx =
+          new AudioContextClass();
+
+        await ctx.resume();
+
+        const oscillator =
+          ctx.createOscillator();
+
+        const gain =
+          ctx.createGain();
+
+        oscillator.type =
+          "sine";
+
+        oscillator.frequency.value =
+          880;
+
+        gain.gain.setValueAtTime(
+          0.8,
+          ctx.currentTime
+        );
+
+        gain.gain.exponentialRampToValueAtTime(
+          0.01,
+          ctx.currentTime + 0.8
+        );
+
+        oscillator.connect(gain);
+        gain.connect(
+          ctx.destination
+        );
+
+        oscillator.start();
+
+        oscillator.stop(
+          ctx.currentTime + 0.8
+        );
+      } catch (e) {
+        console.log(
+          "Global fallback beep failed",
+          e
+        );
+      }
+    };
+
+  /* =======================================================
+     AUDIO UNLOCK
+     ======================================================= */
 
   useEffect(() => {
     if (hideChrome) return;
-    // ... existing audio unlock logic ...
-  }, [hideChrome]);
 
-  useEffect(() => {
-    if (hideChrome) return;
-    // ... existing supabase subscription logic ...
-  }, [hideChrome]);
+    audioRef.current =
+      new Audio(
+        "/sounds/new-order.mp3"
+      );
 
-  const handleLogout = async (e?: React.MouseEvent) => {
-    e?.preventDefault();
-    try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    } catch (err) {
-      console.error("Logout failed", err);
-    } finally {
-      window.location.replace("/admin/login");
-    }
-  };
+    audioRef.current.preload =
+      "auto";
 
-  if (hideChrome) return <>{children}</>;
+    audioRef.current.volume =
+      1;
 
-  const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
-    <>
-      <div className="flex h-20 items-center gap-3 border-b border-slate-200 px-4">
-        <img src="/logo.png" alt="RailEats" className="h-10 w-10 shrink-0 rounded-md object-contain" />
-        <div className={mobile ? "whitespace-nowrap" : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"}>
-          <div className="text-base font-bold leading-tight">RailEats Admin</div>
-          <div className="text-xs font-medium text-slate-500">Operations</div>
-        </div>
-        {mobile && (
-          <button type="button" onClick={() => setMobileOpen(false)} className="ml-auto h-9 w-9 flex items-center justify-center rounded-md border border-slate-200 text-slate-700">
-            <X size={18} />
-          </button>
-        )}
-      </div>
+    const unlockAudio =
+      async () => {
+        try {
+          if (
+            !audioRef.current
+          ) {
+            return;
+          }
 
-      <nav className="flex-1 space-y-1 px-3 py-5">
-        {adminNavItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActivePath(pathname, item.href);
+          audioRef.current.muted =
+            true;
 
-          return (
-            <Link key={item.href} href={item.href} onClick={() => mobile && setMobileOpen(false)}
-              className={`flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition ${
-                active ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <Icon size={20} className={`shrink-0 ${item.color}`} />
-              <span className={mobile ? "whitespace-nowrap" : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"}>
-                {item.label}
-              </span>
-            </Link>
+          await audioRef.current.play();
+
+          audioRef.current.pause();
+
+          audioRef.current.currentTime =
+            0;
+
+          audioRef.current.muted =
+            false;
+
+          console.log(
+            "Admin audio unlocked"
           );
-        })}
-      </nav>
+        } catch (e) {
+          console.log(
+            "Audio unlock failed",
+            e
+          );
+        }
+      };
 
-      <div className="border-t border-slate-200 p-3">
-        <button type="button" onClick={handleLogout} className="flex h-11 w-full items-center gap-3 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-          <LogOut size={20} className="shrink-0 text-red-500" />
-          <span className={mobile ? "whitespace-nowrap" : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"}>Logout</span>
-        </button>
-      </div>
-    </>
-  );
+    window.addEventListener(
+      "click",
+      unlockAudio,
+      {
+        once: true,
+      }
+    );
 
-  const shell = (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      {mobileOpen && <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setMobileOpen(false)} />}
-      <aside className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 lg:hidden ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <SidebarContent mobile />
-      </aside>
-      <div className="flex min-h-screen">
-        <aside className="group/sidebar hidden w-20 shrink-0 overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 hover:w-56 lg:flex lg:flex-col">
-          <SidebarContent />
-        </aside>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-7">
-            <button type="button" onClick={() => setMobileOpen(true)} className="lg:hidden p-2 rounded-md hover:bg-slate-100"><Menu size={20} /></button>
-            <div className="flex items-center gap-3 ml-auto">
-              <div className="text-right hidden sm:block">
-                <div className="text-sm font-semibold">{userLabel(currentUser)}</div>
-              </div>
-              {currentUser?.photo_url ? <img src={currentUser.photo_url} className="h-10 w-10 rounded-full border border-slate-200" /> : <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600"><Users size={20}/></div>}
-            </div>
-          </header>
-          <main className="flex-1 px-4 py-6 lg:px-7"><div className="mx-auto w-full max-w-[1560px]">{children}</div></main>
-        </div>
-      </div>
-    </div>
-  );
+    window.addEventListener(
+      "touchstart",
+      unlockAudio,
+      {
+        once: true,
+      }
+    );
 
-  return requireAuth ? <AuthGuard>{shell}</AuthGuard> : shell;
-}
+    window.addEventListener(
+      "keydown",
+      unlockAudio,
+      {
+        once: true,
+      }
+    );
+
+    if (
+      "Notification" in window &&
+      Notification.permission ===
+        "default"
+    ) {
+      Notification
+        .requestPermission()
+        .catch(() => {});
+    }
+
+    return () => {
+      window.removeEventListener(
+        "click",
+        unlockAudio
+      );
+
+      window.removeEventListener(
+        "touchstart",
+        unlockAudio
+      );
+
+      window.removeEventListener(
+        "keydown",
+        unlockAudio
+      );
+    };
+  }, [hideChrome]);
+
+  /* =======================================================
+     SUPABASE REALTIME NOTIFICATION
+     ======================================================= */
+
+  useEffect(() => {
+    if (hideChrome) return;
+
+    const channel =
+      supabaseNotify
+        .channel(
+          "admin-global-new-order-notification"
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "Orders",
+          },
+          async (payload) => {
+            console.log(
+              "GLOBAL NEW ORDER:",
+              payload
+            );
+
+            await playGlobalNewOrderSound();
+
+            try {
+              if (
+                "Notification" in
+                  window &&
+                Notification.permission ===
+                  "granted"
+              ) {
+                new Notification(
+                  "🚆 New RailEats Order",
+                  {
+                    body: `${
+                      payload.new
+                        ?.customerName ||
+                      "Customer"
+                    } • ${
+                      payload.new
+                        ?.stationName ||
+                      ""
+                    }`,
+                  }
+                );
+              }
+            } catch (e) {}
+          }
+        )
+        .subscribe(
+          (status) => {
+            console.log(
+              "Global order notification status:",
+              status
+            );
+          }
+        );
+
+    return () => {
+      supabaseNotify.removeChannel(
+        channel
+      );
+    };
+  }, [hideChrome]);
+
+  /* =======================================================
+     LOGOUT
+     ======================================================= */
+
+  const handleLogout =
+    async (
+      e?: React.MouseEvent
+    ) => {
+      e?.preventDefault();
+
+      try {
+        await fetch(
+          "/api/auth/logout",
+          {
+            method: "POST",
+            credentials:
+              "include",
+          }
+        );
+      } catch (err) {
+        console.error(
+          "Logout failed",
+          err
+        );
+      } finally {
+        window.location.replace(
+          "/admin/login"
+        );
+      }
+    };
+
+  if (hideChrome) {
+    return <>{children}</>;
+  }
+
+  /* =======================================================
+     SIDEBAR CONTENT
+     ======================================================= */
+
+  const SidebarContent = ({
+    mobile = false,
+  }: {
+    mobile?: boolean;
+  }) => (
+    <>
+      {/* LOGO AREA */}
+      <div className="relative flex h-24 items-center gap-3 overflow-hidden border-b border
