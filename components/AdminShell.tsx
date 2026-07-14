@@ -20,11 +20,6 @@ const ListOrdered =
   (LucideIcons as any).ListOrdered ||
   (LucideIcons as any).List;
 
-const WalletCards =
-  (LucideIcons as any).WalletCards ||
-  (LucideIcons as any).Wallet ||
-  (LucideIcons as any).CreditCard;
-
 const UtensilsCrossed =
   (LucideIcons as any).UtensilsCrossed ||
   (LucideIcons as any).Utensils;
@@ -50,7 +45,8 @@ const UserCog =
 const LayoutTemplate =
   (LucideIcons as any).LayoutTemplate ||
   (LucideIcons as any).Layout ||
-  (LucideIcons as any).WalletCards;
+  (LucideIcons as any).WalletCards ||
+  (LucideIcons as any).CreditCard;
 
 const LogOut =
   (LucideIcons as any).LogOut;
@@ -60,6 +56,79 @@ const Menu =
 
 const X =
   (LucideIcons as any).X;
+
+/* =========================================================
+   CUSTOM INDIAN RUPEE BADGE ICON
+
+   Lucide package version par depend nahi karta.
+   Isliye Next 13.4 + old lucide-react me bhi work karega.
+   ========================================================= */
+
+type NavIconProps = {
+  size?: number;
+  strokeWidth?: number;
+  className?: string;
+};
+
+function IndianRupeeBadgeIcon({
+  size = 20,
+  strokeWidth = 2,
+  className = "",
+}: NavIconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+      />
+
+      <path
+        d="M8 7H16"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+
+      <path
+        d="M8 10H16"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+
+      <path
+        d="M8 7H11.2C13.3 7 14.5 8.1 14.5 9.8C14.5 11.5 13.2 12.6 11.1 12.6H8.5"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      <path
+        d="M9.3 12.6L14.8 18"
+        stroke="currentColor"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/* =========================================================
+   SUPABASE REALTIME CLIENT
+   ========================================================= */
 
 const supabaseNotify = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -82,6 +151,10 @@ type Props = {
   requireAuth?: boolean;
 };
 
+/* =========================================================
+   ADMIN NAVIGATION
+   ========================================================= */
+
 const adminNavItems = [
   {
     href: "/admin/home",
@@ -98,8 +171,8 @@ const adminNavItems = [
   {
     href: "/admin/restro-rds",
     label: "Restro RDS",
-    icon: BadgeIndianRupee,
-    color: "text-emerald-500",
+    icon: IndianRupeeBadgeIcon,
+    color: "text-emerald-600",
   },
   {
     href: "/admin/restros",
@@ -147,15 +220,30 @@ const adminNavItems = [
 
 function userLabel(user?: User) {
   if (!user) return "Admin";
-  return user.name || user.mobile || user.email || "Admin";
+
+  return (
+    user.name ||
+    user.mobile ||
+    user.email ||
+    "Admin"
+  );
 }
 
-function isActivePath(pathname: string, href: string) {
+function isActivePath(
+  pathname: string,
+  href: string
+) {
   if (href === "/admin/home") {
-    return pathname === "/admin" || pathname === "/admin/home";
+    return (
+      pathname === "/admin" ||
+      pathname === "/admin/home"
+    );
   }
 
-  return pathname === href || pathname.startsWith(`${href}/`);
+  return (
+    pathname === href ||
+    pathname.startsWith(`${href}/`)
+  );
 }
 
 export default function AdminShell({
@@ -164,17 +252,28 @@ export default function AdminShell({
   requireAuth = true,
 }: Props) {
   const pathname = usePathname() || "";
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const [mobileOpen, setMobileOpen] =
+    useState(false);
+
+  const audioRef =
+    useRef<HTMLAudioElement | null>(null);
 
   const hideChrome =
     pathname === "/admin/login" ||
     pathname.startsWith("/admin/login/");
 
+  /* =======================================================
+     GLOBAL ORDER SOUND
+     ======================================================= */
+
   const playGlobalNewOrderSound = async () => {
     try {
       if (!audioRef.current) {
-        audioRef.current = new Audio("/sounds/new-order.mp3");
+        audioRef.current = new Audio(
+          "/sounds/new-order.mp3"
+        );
+
         audioRef.current.preload = "auto";
         audioRef.current.volume = 1;
       }
@@ -194,15 +293,22 @@ export default function AdminShell({
         (window as any).webkitAudioContext;
 
       const ctx = new AudioContextClass();
+
       await ctx.resume();
 
-      const oscillator = ctx.createOscillator();
+      const oscillator =
+        ctx.createOscillator();
+
       const gain = ctx.createGain();
 
       oscillator.type = "sine";
       oscillator.frequency.value = 880;
 
-      gain.gain.setValueAtTime(0.8, ctx.currentTime);
+      gain.gain.setValueAtTime(
+        0.8,
+        ctx.currentTime
+      );
+
       gain.gain.exponentialRampToValueAtTime(
         0.01,
         ctx.currentTime + 0.8
@@ -212,16 +318,29 @@ export default function AdminShell({
       gain.connect(ctx.destination);
 
       oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.8);
+
+      oscillator.stop(
+        ctx.currentTime + 0.8
+      );
     } catch (e) {
-      console.log("Global fallback beep failed", e);
+      console.log(
+        "Global fallback beep failed",
+        e
+      );
     }
   };
+
+  /* =======================================================
+     AUDIO UNLOCK
+     ======================================================= */
 
   useEffect(() => {
     if (hideChrome) return;
 
-    audioRef.current = new Audio("/sounds/new-order.mp3");
+    audioRef.current = new Audio(
+      "/sounds/new-order.mp3"
+    );
+
     audioRef.current.preload = "auto";
     audioRef.current.volume = 1;
 
@@ -239,33 +358,69 @@ export default function AdminShell({
 
         console.log("Admin audio unlocked");
       } catch (e) {
-        console.log("Audio unlock failed", e);
+        console.log(
+          "Audio unlock failed",
+          e
+        );
       }
     };
 
-    window.addEventListener("click", unlockAudio, { once: true });
-    window.addEventListener("touchstart", unlockAudio, { once: true });
-    window.addEventListener("keydown", unlockAudio, { once: true });
+    window.addEventListener(
+      "click",
+      unlockAudio,
+      { once: true }
+    );
+
+    window.addEventListener(
+      "touchstart",
+      unlockAudio,
+      { once: true }
+    );
+
+    window.addEventListener(
+      "keydown",
+      unlockAudio,
+      { once: true }
+    );
 
     if (
       "Notification" in window &&
       Notification.permission === "default"
     ) {
-      Notification.requestPermission().catch(() => {});
+      Notification.requestPermission().catch(
+        () => {}
+      );
     }
 
     return () => {
-      window.removeEventListener("click", unlockAudio);
-      window.removeEventListener("touchstart", unlockAudio);
-      window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener(
+        "click",
+        unlockAudio
+      );
+
+      window.removeEventListener(
+        "touchstart",
+        unlockAudio
+      );
+
+      window.removeEventListener(
+        "keydown",
+        unlockAudio
+      );
     };
   }, [hideChrome]);
+
+  /* =======================================================
+     SUPABASE REALTIME
+     ======================================================= */
 
   useEffect(() => {
     if (hideChrome) return;
 
     const channel = supabaseNotify
-      .channel("admin-global-new-order-notification")
+      .channel(
+        "admin-global-new-order-notification"
+      )
       .on(
         "postgres_changes",
         {
@@ -274,20 +429,33 @@ export default function AdminShell({
           table: "Orders",
         },
         async (payload) => {
-          console.log("GLOBAL NEW ORDER:", payload);
+          console.log(
+            "GLOBAL NEW ORDER:",
+            payload
+          );
 
           await playGlobalNewOrderSound();
 
           try {
             if (
               "Notification" in window &&
-              Notification.permission === "granted"
+              Notification.permission ===
+                "granted"
             ) {
-              new Notification("🚆 New RailEats Order", {
-                body: `${
-                  payload.new?.customerName || "Customer"
-                } • ${payload.new?.stationName || ""}`,
-              });
+              new Notification(
+                "🚆 New RailEats Order",
+                {
+                  body: `${
+                    payload.new
+                      ?.customerName ||
+                    "Customer"
+                  } • ${
+                    payload.new
+                      ?.stationName ||
+                    ""
+                  }`,
+                }
+              );
             }
           } catch (e) {}
         }
@@ -304,7 +472,13 @@ export default function AdminShell({
     };
   }, [hideChrome]);
 
-  const handleLogout = async (e?: React.MouseEvent) => {
+  /* =======================================================
+     LOGOUT
+     ======================================================= */
+
+  const handleLogout = async (
+    e?: React.MouseEvent
+  ) => {
     e?.preventDefault();
 
     try {
@@ -313,13 +487,24 @@ export default function AdminShell({
         credentials: "include",
       });
     } catch (err) {
-      console.error("Logout failed", err);
+      console.error(
+        "Logout failed",
+        err
+      );
     } finally {
-      window.location.replace("/admin/login");
+      window.location.replace(
+        "/admin/login"
+      );
     }
   };
 
-  if (hideChrome) return <>{children}</>;
+  if (hideChrome) {
+    return <>{children}</>;
+  }
+
+  /* =======================================================
+     SIDEBAR
+     ======================================================= */
 
   const SidebarContent = ({
     mobile = false,
@@ -353,7 +538,9 @@ export default function AdminShell({
         {mobile && (
           <button
             type="button"
-            onClick={() => setMobileOpen(false)}
+            onClick={() =>
+              setMobileOpen(false)
+            }
             className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"
             aria-label="Close navigation"
           >
@@ -365,14 +552,21 @@ export default function AdminShell({
       <nav className="flex-1 space-y-1 px-3 py-5">
         {adminNavItems.map((item) => {
           const Icon = item.icon;
-          const active = isActivePath(pathname, item.href);
+
+          const active = isActivePath(
+            pathname,
+            item.href
+          );
 
           return (
             <Link
               key={item.href}
               href={item.href}
               title={item.label}
-              onClick={() => mobile && setMobileOpen(false)}
+              onClick={() =>
+                mobile &&
+                setMobileOpen(false)
+              }
               className={[
                 "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
                 active
@@ -430,19 +624,27 @@ export default function AdminShell({
     </>
   );
 
+  /* =======================================================
+     MAIN SHELL
+     ======================================================= */
+
   const shell = (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
+          onClick={() =>
+            setMobileOpen(false)
+          }
         />
       )}
 
       <aside
         className={[
           "fixed left-0 top-0 z-50 flex h-screen w-72 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 lg:hidden",
-          mobileOpen ? "translate-x-0" : "-translate-x-full",
+          mobileOpen
+            ? "translate-x-0"
+            : "-translate-x-full",
         ].join(" ")}
       >
         <SidebarContent mobile />
@@ -458,7 +660,9 @@ export default function AdminShell({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setMobileOpen(true)}
+                onClick={() =>
+                  setMobileOpen(true)
+                }
                 className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 lg:hidden"
                 aria-label="Open navigation"
               >
