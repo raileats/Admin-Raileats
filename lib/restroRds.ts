@@ -1,226 +1,212 @@
 import { serviceClient } from "./supabaseServer";
 
-type AnyRow = Record<string, any>;
+type AnyOrder = Record<string, any>;
 
-function pick(row: AnyRow | null | undefined, keys: string[]) {
-  if (!row) return null;
+type RdsResult =
+  | { ok: true; data: any }
+  | { ok: false; error: string; details?: any };
 
-  for (const key of keys) {
-    const value = row[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      return value;
-    }
-  }
-
-  return null;
+function num(value: unknown, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-function toNumber(value: any, fallback = 0) {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) ? numericValue : fallback;
+function money(value: unknown, fallback = 0) {
+  return Math.round(num(value, fallback) * 100) / 100;
 }
 
-function round2(value: number) {
-  return Math.round(value * 100) / 100;
-}
-
-function cleanText(value: any) {
+function text(value: unknown) {
   return String(value ?? "").trim();
 }
 
-function cleanSubStatus(value: any) {
-  return cleanText(value).replace(/\s*\(Delivered\)\s*$/i, "").trim();
+function upper(value: unknown) {
+  return text(value).toUpperCase();
 }
 
-function normalizeStatus(value: any) {
-  const raw = cleanText(value);
-  const key = raw.toLowerCase().replace(/[\s_-]+/g, "");
+function normalizeDate(value: unknown) {
+  const raw = text(value);
+  if (!raw) return null;
 
-  if (key === "notdelivered") return "Not Delivered";
-  if (key === "baddelivery") return "Bad Delivery";
-  if (key === "partialdelivery") return "Delivered";
-  if (key === "delivered") return "Delivered";
-  if (key === "cancelled" || key === "canceled") return "Cancelled";
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
 
-  return raw;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toISOString().slice(0, 10);
 }
 
-function shouldCreateRds(order: AnyRow) {
-  const status = normalizeStatus(pick(order, ["Status", "status"]));
-  const subStatus = cleanSubStatus(pick(order, ["SubStatus", "sub_status"]));
+function normalizeTime(value: unknown) {
+  const raw = text(value);
+  if (!raw) return null;
 
+  const match = raw.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return null;
+
+  const hh = match[1].padStart(2, "0");
+  const mm = match[2].padStart(2, "0");
+  const ss = (match[3] || "00").padStart(2, "0");
+
+  return `${hh}:${mm}:${ss}`;
+}
+
+function isPrepaid(paymentMode: unknown) {
+  const mode = upper(paymentMode);
   return (
-    status === "Delivered" ||
-    status === "Cancelled" ||
-    status === "Not Delivered" ||
-    status === "Bad Delivery" ||
-    subStatus === "Bad Delivery" ||
-    subStatus === "Partial Delivery"
+    mode === "PPD" ||
+    mode === "PREPAID" ||
+    mode === "ONLINE" ||
+    mode === "PAID" ||
+    mode === "RAZORPAY" ||
+    mode === "UPI"
   );
 }
 
-function computeSettlementAmount(order: AnyRow) {
-  const status = normalizeStatus(pick(order, ["Status", "status"]));
-  const subStatus = cleanSubStatus(pick(order, ["SubStatus", "sub_status"]));
-
-  const restroPrice = toNumber(
-    pick(order, ["RestroPrice", "restro_price", "OutletPrice", "RestaurantPrice"]),
-    0
-  );
-
-  const restroDiscount = toNumber(
-    pick(order, ["RestroDiscount", "restro_discount"]),
-    0
-  );
-
-  const orderPenalty = toNumber(
-    pick(order, ["OrderPenalty", "order_penalty", "VendorPenalty"]),
-    0
-  );
-
-  if (
-    status === "Delivered" ||
-    subStatus === "Bad Delivery" ||
-    subStatus === "Partial Delivery"
-  ) {
-    return round2(restroPrice - restroDiscount - orderPenalty);
-  }
-
-  if (status === "Cancelled" || status === "Not Delivered") {
-    return round2(0 - orderPenalty);
-  }
-
-  return 0;
+function isCancelledLike(status: unknown) {
+  const value = upper(status).replace(/[_-]/g, " ");
+  return value === "CANCELLED" || value === "CANCELED" || value === "NOT DELIVERED";
 }
 
-function buildRdsPayload(orderId: string, order: AnyRow) {
-  const status = normalizeStatus(pick(order, ["Status", "status"]));
-  const subStatus = cleanSubStatus(pick(order, ["SubStatus", "sub_status"]));
-  const settlementAmount = computeSettlementAmount(order);
+function getOrderId(order: AnyOrder) {
+  return text(order.OrderId || order.order_id || order.id);
+}
+
+function getRestroCode(order: AnyOrder) {
+  return num(order.RestroCode || order.restro_code || order.OutletId || order.outlet_id, 0);
+}
+
+async function getPreviousBalance(restroCode: number, orderId: string) {
+  const query: any = serviceClient
+    .from("RestroRDS")
+    .select("CurrentBal")
+    .eq("RestroCode", restroCode)
+    .neq("OrderId", orderId)
+    .order("UpdatedAt", { ascending: false })
+    .order("RDSId", { ascending: false })
+    .limit(1);
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return money(data?.[0]?.CurrentBal || 0);
+}
+
+function buildAmounts(order: AnyOrder, previousBal: number) {
+  const status = text(order.Status || order.order_status);
+  const paymentMode = text(order.PaymentMode || order.payment_mode);
+
+  const restroPrice = money(
+    order.RestroPrice ?? order.restro_price ?? order.TotalAmount ?? order.total_amount
+  );
+
+  const basePrice = money(order.BasePrice ?? order.base_price ?? restroPrice);
+
+  const restroDiscount = money(order.RestroDiscount ?? order.restro_discount);
+  const reDiscount = money(order.REDiscount ?? order.re_discount);
+  const orderPenalty = money(order.OrderPenalty ?? order.order_penalty);
+
+  const discountedBasePrice = money(
+    order.DiscountedBasePrice ??
+      order.discounted_base_price ??
+      Math.max(basePrice - restroDiscount, 0)
+  );
+
+  const reComm = money(order.REComm ?? order.re_comm);
+  const gstAmount = money(order.GSTAmount ?? order.gst_amount);
+  const platformCharge = money(order.PlatformCharge ?? order.platform_charge);
+  const totalAmount = money(order.TotalAmount ?? order.total_amount ?? restroPrice);
+
+  const igst = money(order.IGST ?? order.igst ?? reComm * 0.18);
+
+  let orderCharges = 0;
+  let settlementAmount = 0;
+
+  if (isCancelledLike(status)) {
+    orderCharges = orderPenalty;
+    settlementAmount = -orderPenalty;
+  } else if (isPrepaid(paymentMode)) {
+    orderCharges = money(reComm + igst + platformCharge + reDiscount + orderPenalty);
+    settlementAmount = money(restroPrice - restroDiscount - orderCharges);
+  } else {
+    orderCharges = money(reComm + igst + platformCharge + reDiscount + orderPenalty);
+    settlementAmount = money(0 - orderCharges);
+  }
+
+  const currentBal = money(previousBal + settlementAmount);
 
   return {
-    RestroCode: pick(order, ["RestroCode", "restro_code", "OutletCode"]),
-    OrderId: orderId,
-    RestroName: pick(order, ["RestroName", "restro_name", "OutletName"]),
-    StationCode: pick(order, ["StationCode", "station_code"]),
-    Status: status,
-    SubStatus: subStatus || null,
-    Remarks: pick(order, ["Remarks", "remarks", "AdminRemarks"]),
-
-    DeliveryDate: pick(order, ["DeliveryDate", "delivery_date", "ArrivalDate"]),
-    DeliveryTime: pick(order, ["DeliveryTime", "delivery_time", "ArrivalTime"]),
-    CustomerName: pick(order, ["CustomerName", "customer_name"]),
-    CustomerMobile: pick(order, ["CustomerMobile", "customer_mobile"]),
-    TrainNumber: pick(order, ["TrainNumber", "train_number"]),
-
-    BasePrice: toNumber(pick(order, ["BasePrice", "base_price"]), 0),
-    RestroPrice: toNumber(pick(order, ["RestroPrice", "restro_price"]), 0),
-    TotalAmount: toNumber(pick(order, ["TotalAmount", "total_amount"]), 0),
-    FinalTotal: toNumber(pick(order, ["FinalTotal", "final_total"]), 0),
-
-    CouponCode: pick(order, ["CouponCode", "coupon_code"]),
-    CouponDiscount: toNumber(pick(order, ["CouponDiscount", "coupon_discount"]), 0),
-    RestroDiscount: toNumber(pick(order, ["RestroDiscount", "restro_discount"]), 0),
-    REDiscount: toNumber(pick(order, ["REDiscount", "re_discount"]), 0),
-
-    OrderPenalty: toNumber(pick(order, ["OrderPenalty", "order_penalty"]), 0),
-    PaymentMode: pick(order, ["PaymentMode", "payment_mode"]),
-    PaymentStatus: pick(order, ["PaymentStatus", "payment_status"]),
-
-    PreviousBal: 0,
+    RestroPrice: restroPrice,
+    BasePrice: basePrice,
+    DiscountedBasePrice: discountedBasePrice,
+    REComm: reComm,
+    GSTAmount: gstAmount,
+    PlatformCharge: platformCharge,
+    RestroDiscount: restroDiscount,
+    REDiscount: reDiscount,
+    TotalAmount: totalAmount,
+    OrderPenalty: orderPenalty,
+    IGST: igst,
+    OrderCharges: orderCharges,
     SettlementAmount: settlementAmount,
-    ClosingBal: settlementAmount,
-
-    CreatedAt: pick(order, ["CreatedAt", "created_at"]) || new Date().toISOString(),
-    UpdatedAt: new Date().toISOString(),
+    PreviousBal: previousBal,
+    CurrentBal: currentBal,
   };
 }
 
-async function tryUpsert(payload: AnyRow) {
-  return serviceClient
-    .from("RestroRDS")
-    .upsert(payload, { onConflict: "OrderId" })
-    .select("RDSId")
-    .maybeSingle();
-}
-
-export async function syncRestroRDSForOrder(orderId: string, providedOrder?: AnyRow) {
+export async function syncRestroRdsForOrder(order: AnyOrder): Promise<RdsResult> {
   try {
-    let order = providedOrder;
+    const orderId = getOrderId(order);
+    const restroCode = getRestroCode(order);
 
-    if (!order) {
-      const { data, error } = await serviceClient
-        .from("Orders")
-        .select("*")
-        .eq("OrderId", orderId)
-        .maybeSingle();
-
-      if (error || !data) {
-        return {
-          ok: false,
-          skipped: true,
-          error: error?.message || "Order not found for RDS sync",
-        };
-      }
-
-      order = data as AnyRow;
+    if (!orderId) {
+      return { ok: false, error: "OrderId missing for RestroRDS sync" };
     }
 
-    if (!shouldCreateRds(order)) {
-      return { ok: true, skipped: true };
+    if (!restroCode) {
+      return { ok: false, error: "RestroCode missing for RestroRDS sync" };
     }
 
-    const fullPayload = buildRdsPayload(orderId, order);
+    const previousBal = await getPreviousBalance(restroCode, orderId);
+    const amounts = buildAmounts(order, previousBal);
 
-    const attempts: AnyRow[] = [
-      fullPayload,
-      {
-        ...fullPayload,
-        ClosingBal: undefined,
-      },
-      {
-        ...fullPayload,
-        ClosingBal: undefined,
-        SettlementAmount: undefined,
-      },
-      {
-        RestroCode: fullPayload.RestroCode,
-        OrderId: fullPayload.OrderId,
-        RestroName: fullPayload.RestroName,
-        StationCode: fullPayload.StationCode,
-        Status: fullPayload.Status,
-        SubStatus: fullPayload.SubStatus,
-        Remarks: fullPayload.Remarks,
-        OrderPenalty: fullPayload.OrderPenalty,
-        UpdatedAt: fullPayload.UpdatedAt,
-      },
-    ];
+    const payload = {
+      RestroCode: restroCode,
+      OrderId: orderId,
+      RestroName: text(order.RestroName || order.restro_name),
+      StationCode: text(order.StationCode || order.station_code),
+      Status: text(order.Status || order.order_status),
+      SubStatus: text(order.SubStatus || order.sub_status),
+      Remarks: text(order.Remarks || order.remarks),
+      DeliveryDate: normalizeDate(order.DeliveryDate || order.arrival_date),
+      DeliveryTime: normalizeTime(order.DeliveryTime || order.arrival_time),
+      PaymentMode: text(order.PaymentMode || order.payment_mode),
+      CouponCode: text(order.CouponCode || order.coupon_code) || null,
+      ...amounts,
+      UpdatedAt: new Date().toISOString(),
+    };
 
-    let lastError = "";
+    const { data, error } = await serviceClient
+      .from("RestroRDS")
+      .upsert(payload, { onConflict: "OrderId" })
+      .select("*")
+      .single();
 
-    for (let index = 0; index < attempts.length; index += 1) {
-      const cleanPayload: AnyRow = {};
-
-      Object.keys(attempts[index]).forEach((key) => {
-        if (attempts[index][key] !== undefined) {
-          cleanPayload[key] = attempts[index][key];
-        }
-      });
-
-      const { data, error } = await tryUpsert(cleanPayload);
-
-      if (!error) {
-        return { ok: true, data };
-      }
-
-      lastError = error.message;
+    if (error) {
+      return {
+        ok: false,
+        error: "RestroRDS save failed",
+        details: error,
+      };
     }
 
-    return { ok: false, error: lastError || "RDS upsert failed" };
+    return { ok: true, data };
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "RDS sync failed",
+      error: "RestroRDS unexpected error",
+      details: error instanceof Error ? error.message : error,
     };
   }
 }
