@@ -15,7 +15,6 @@ import {
   Utensils,
   WalletCards,
   X,
-  ReceiptText,
 } from "lucide-react";
 import AuthGuard from "@/components/admin/AuthGuard";
 
