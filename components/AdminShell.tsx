@@ -43,14 +43,18 @@ type Props = {
 const adminNavItems = [
   { href: "/admin/home", label: "Dashboard", icon: Home },
   { href: "/admin/orders", label: "Orders", icon: ListOrdered },
-  { href: "/admin/restro-rds", label: "Restro RDS", icon: ReceiptText },
+  { href: "/admin/restro-rds", label: "Restro RDS", icon: WalletCards },
   { href: "/admin/restros", label: "Restro Master", icon: Utensils },
   { href: "/admin/menu", label: "Menu", icon: WalletCards },
   { href: "/admin/trains", label: "Trains", icon: Train },
   { href: "/admin/stations", label: "Stations", icon: MapPin },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/customers", label: "Customers", icon: Users },
-  { href: "/admin/website/hero-slider", label: "Hero Sliders", icon: WalletCards },
+  {
+    href: "/admin/website/hero-slider",
+    label: "Hero Sliders",
+    icon: WalletCards,
+  },
 ] as const;
 
 function userLabel(user?: User) {
