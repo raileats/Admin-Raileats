@@ -5,19 +5,61 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import {
-  Home,
-  ListOrdered,
-  LogOut,
-  MapPin,
-  Menu,
-  Train,
-  Users,
-  Utensils,
-  WalletCards,
-  X,
-} from "lucide-react";
+import * as LucideIcons from "lucide-react";
 import AuthGuard from "@/components/admin/AuthGuard";
+
+/*
+ * Namespace import use kiya hai taaki purane lucide-react version me
+ * koi requested icon missing ho to build fail na ho.
+ */
+const LayoutDashboard =
+  (LucideIcons as any).LayoutDashboard ||
+  (LucideIcons as any).Home;
+
+const ListOrdered =
+  (LucideIcons as any).ListOrdered ||
+  (LucideIcons as any).List;
+
+const WalletCards =
+  (LucideIcons as any).WalletCards ||
+  (LucideIcons as any).Wallet ||
+  (LucideIcons as any).CreditCard;
+
+const UtensilsCrossed =
+  (LucideIcons as any).UtensilsCrossed ||
+  (LucideIcons as any).Utensils;
+
+const ChefHat =
+  (LucideIcons as any).ChefHat ||
+  (LucideIcons as any).Utensils;
+
+const TrainFront =
+  (LucideIcons as any).TrainFront ||
+  (LucideIcons as any).Train;
+
+const MapPin =
+  (LucideIcons as any).MapPin;
+
+const Users =
+  (LucideIcons as any).Users;
+
+const UserCog =
+  (LucideIcons as any).UserCog ||
+  (LucideIcons as any).Users;
+
+const LayoutTemplate =
+  (LucideIcons as any).LayoutTemplate ||
+  (LucideIcons as any).Layout ||
+  (LucideIcons as any).WalletCards;
+
+const LogOut =
+  (LucideIcons as any).LogOut;
+
+const Menu =
+  (LucideIcons as any).Menu;
+
+const X =
+  (LucideIcons as any).X;
 
 const supabaseNotify = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,91 +86,76 @@ const adminNavItems = [
   {
     href: "/admin/home",
     label: "Dashboard",
-    icon: Home,
-    iconClassName: "text-blue-600",
+    icon: LayoutDashboard,
+    color: "text-blue-500",
   },
   {
     href: "/admin/orders",
     label: "Orders",
     icon: ListOrdered,
-    iconClassName: "text-orange-500",
+    color: "text-orange-500",
   },
   {
     href: "/admin/restro-rds",
     label: "Restro RDS",
     icon: WalletCards,
-    iconClassName: "text-emerald-500",
+    color: "text-emerald-500",
   },
   {
     href: "/admin/restros",
     label: "Restro Master",
-    icon: Utensils,
-    iconClassName: "text-rose-500",
+    icon: UtensilsCrossed,
+    color: "text-rose-500",
   },
   {
     href: "/admin/menu",
     label: "Menu",
-    icon: WalletCards,
-    iconClassName: "text-amber-500",
+    icon: ChefHat,
+    color: "text-amber-500",
   },
   {
     href: "/admin/trains",
     label: "Trains",
-    icon: Train,
-    iconClassName: "text-violet-500",
+    icon: TrainFront,
+    color: "text-purple-500",
   },
   {
     href: "/admin/stations",
     label: "Stations",
     icon: MapPin,
-    iconClassName: "text-red-500",
+    color: "text-red-500",
   },
   {
     href: "/admin/users",
     label: "Users",
-    icon: Users,
-    iconClassName: "text-cyan-600",
+    icon: UserCog,
+    color: "text-cyan-600",
   },
   {
     href: "/admin/customers",
     label: "Customers",
     icon: Users,
-    iconClassName: "text-indigo-500",
+    color: "text-indigo-500",
   },
   {
     href: "/admin/website/hero-slider",
     label: "Hero Sliders",
-    icon: WalletCards,
-    iconClassName: "text-pink-500",
+    icon: LayoutTemplate,
+    color: "text-pink-500",
   },
 ] as const;
 
 function userLabel(user?: User) {
   if (!user) return "Admin";
-
-  return (
-    user.name ||
-    user.mobile ||
-    user.email ||
-    "Admin"
-  );
+  return user.name || user.mobile || user.email || "Admin";
 }
 
-function isActivePath(
-  pathname: string,
-  href: string
-) {
+function isActivePath(pathname: string, href: string) {
   if (href === "/admin/home") {
-    return (
-      pathname === "/admin" ||
-      pathname === "/admin/home"
-    );
+    return pathname === "/admin" || pathname === "/admin/home";
   }
 
-  return (
-    pathname === href ||
-    pathname.startsWith(`${href}/`)
-  );
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export default function AdminShell({
@@ -137,271 +164,162 @@ export default function AdminShell({
   requireAuth = true,
 }: Props) {
   const pathname = usePathname() || "";
-
-  const [mobileOpen, setMobileOpen] =
-    useState(false);
-
-  const audioRef =
-    useRef<HTMLAudioElement | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const hideChrome =
     pathname === "/admin/login" ||
     pathname.startsWith("/admin/login/");
 
-  const playGlobalNewOrderSound =
-    async () => {
-      try {
-        if (!audioRef.current) {
-          audioRef.current = new Audio(
-            "/sounds/new-order.mp3"
-          );
-
-          audioRef.current.preload =
-            "auto";
-
-          audioRef.current.volume = 1;
-        }
-
-        audioRef.current.muted = false;
+  const playGlobalNewOrderSound = async () => {
+    try {
+      if (!audioRef.current) {
+        audioRef.current = new Audio("/sounds/new-order.mp3");
+        audioRef.current.preload = "auto";
         audioRef.current.volume = 1;
-        audioRef.current.currentTime = 0;
-
-        await audioRef.current.play();
-      } catch (e) {
-        console.log(
-          "Global MP3 failed",
-          e
-        );
       }
 
-      try {
-        const AudioContextClass =
-          window.AudioContext ||
-          (window as any)
-            .webkitAudioContext;
+      audioRef.current.muted = false;
+      audioRef.current.volume = 1;
+      audioRef.current.currentTime = 0;
 
-        const ctx =
-          new AudioContextClass();
-
-        await ctx.resume();
-
-        const oscillator =
-          ctx.createOscillator();
-
-        const gain =
-          ctx.createGain();
-
-        oscillator.type = "sine";
-        oscillator.frequency.value =
-          880;
-
-        gain.gain.setValueAtTime(
-          0.8,
-          ctx.currentTime
-        );
-
-        gain.gain
-          .exponentialRampToValueAtTime(
-            0.01,
-            ctx.currentTime + 0.8
-          );
-
-        oscillator.connect(gain);
-        gain.connect(ctx.destination);
-
-        oscillator.start();
-
-        oscillator.stop(
-          ctx.currentTime + 0.8
-        );
-      } catch (e) {
-        console.log(
-          "Global fallback beep failed",
-          e
-        );
-      }
-    };
-
-  useEffect(() => {
-    if (hideChrome) return;
-
-    audioRef.current =
-      new Audio(
-        "/sounds/new-order.mp3"
-      );
-
-    audioRef.current.preload =
-      "auto";
-
-    audioRef.current.volume = 1;
-
-    const unlockAudio =
-      async () => {
-        try {
-          if (!audioRef.current) {
-            return;
-          }
-
-          audioRef.current.muted =
-            true;
-
-          await audioRef.current.play();
-
-          audioRef.current.pause();
-
-          audioRef.current.currentTime =
-            0;
-
-          audioRef.current.muted =
-            false;
-
-          console.log(
-            "Admin audio unlocked"
-          );
-        } catch (e) {
-          console.log(
-            "Audio unlock failed",
-            e
-          );
-        }
-      };
-
-    window.addEventListener(
-      "click",
-      unlockAudio,
-      { once: true }
-    );
-
-    window.addEventListener(
-      "touchstart",
-      unlockAudio,
-      { once: true }
-    );
-
-    window.addEventListener(
-      "keydown",
-      unlockAudio,
-      { once: true }
-    );
-
-    if (
-      "Notification" in window &&
-      Notification.permission ===
-        "default"
-    ) {
-      Notification
-        .requestPermission()
-        .catch(() => {});
+      await audioRef.current.play();
+    } catch (e) {
+      console.log("Global MP3 failed", e);
     }
 
-    return () => {
-      window.removeEventListener(
-        "click",
-        unlockAudio
-      );
-
-      window.removeEventListener(
-        "touchstart",
-        unlockAudio
-      );
-
-      window.removeEventListener(
-        "keydown",
-        unlockAudio
-      );
-    };
-  }, [hideChrome]);
-
-  useEffect(() => {
-    if (hideChrome) return;
-
-    const channel =
-      supabaseNotify
-        .channel(
-          "admin-global-new-order-notification"
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "Orders",
-          },
-          async (payload) => {
-            console.log(
-              "GLOBAL NEW ORDER:",
-              payload
-            );
-
-            await playGlobalNewOrderSound();
-
-            try {
-              if (
-                "Notification" in
-                  window &&
-                Notification.permission ===
-                  "granted"
-              ) {
-                new Notification(
-                  "🚆 New RailEats Order",
-                  {
-                    body: `${
-                      payload.new
-                        ?.customerName ||
-                      "Customer"
-                    } • ${
-                      payload.new
-                        ?.stationName ||
-                      ""
-                    }`,
-                  }
-                );
-              }
-            } catch (e) {}
-          }
-        )
-        .subscribe((status) => {
-          console.log(
-            "Global order notification status:",
-            status
-          );
-        });
-
-    return () => {
-      supabaseNotify.removeChannel(
-        channel
-      );
-    };
-  }, [hideChrome]);
-
-  const handleLogout = async (
-    e?: React.MouseEvent
-  ) => {
-    e?.preventDefault();
-
     try {
-      await fetch(
-        "/api/auth/logout",
-        {
-          method: "POST",
-          credentials: "include",
-        }
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as any).webkitAudioContext;
+
+      const ctx = new AudioContextClass();
+      await ctx.resume();
+
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.value = 880;
+
+      gain.gain.setValueAtTime(0.8, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(
+        0.01,
+        ctx.currentTime + 0.8
       );
-    } catch (err) {
-      console.error(
-        "Logout failed",
-        err
-      );
-    } finally {
-      window.location.replace(
-        "/admin/login"
-      );
+
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.8);
+    } catch (e) {
+      console.log("Global fallback beep failed", e);
     }
   };
 
-  if (hideChrome) {
-    return <>{children}</>;
-  }
+  useEffect(() => {
+    if (hideChrome) return;
+
+    audioRef.current = new Audio("/sounds/new-order.mp3");
+    audioRef.current.preload = "auto";
+    audioRef.current.volume = 1;
+
+    const unlockAudio = async () => {
+      try {
+        if (!audioRef.current) return;
+
+        audioRef.current.muted = true;
+
+        await audioRef.current.play();
+
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.muted = false;
+
+        console.log("Admin audio unlocked");
+      } catch (e) {
+        console.log("Audio unlock failed", e);
+      }
+    };
+
+    window.addEventListener("click", unlockAudio, { once: true });
+    window.addEventListener("touchstart", unlockAudio, { once: true });
+    window.addEventListener("keydown", unlockAudio, { once: true });
+
+    if (
+      "Notification" in window &&
+      Notification.permission === "default"
+    ) {
+      Notification.requestPermission().catch(() => {});
+    }
+
+    return () => {
+      window.removeEventListener("click", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+  }, [hideChrome]);
+
+  useEffect(() => {
+    if (hideChrome) return;
+
+    const channel = supabaseNotify
+      .channel("admin-global-new-order-notification")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "Orders",
+        },
+        async (payload) => {
+          console.log("GLOBAL NEW ORDER:", payload);
+
+          await playGlobalNewOrderSound();
+
+          try {
+            if (
+              "Notification" in window &&
+              Notification.permission === "granted"
+            ) {
+              new Notification("🚆 New RailEats Order", {
+                body: `${
+                  payload.new?.customerName || "Customer"
+                } • ${payload.new?.stationName || ""}`,
+              });
+            }
+          } catch (e) {}
+        }
+      )
+      .subscribe((status) => {
+        console.log(
+          "Global order notification status:",
+          status
+        );
+      });
+
+    return () => {
+      supabaseNotify.removeChannel(channel);
+    };
+  }, [hideChrome]);
+
+  const handleLogout = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (err) {
+      console.error("Logout failed", err);
+    } finally {
+      window.location.replace("/admin/login");
+    }
+  };
+
+  if (hideChrome) return <>{children}</>;
 
   const SidebarContent = ({
     mobile = false,
@@ -435,9 +353,7 @@ export default function AdminShell({
         {mobile && (
           <button
             type="button"
-            onClick={() =>
-              setMobileOpen(false)
-            }
+            onClick={() => setMobileOpen(false)}
             className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700"
             aria-label="Close navigation"
           >
@@ -447,58 +363,45 @@ export default function AdminShell({
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-5">
-        {adminNavItems.map(
-          (item) => {
-            const Icon =
-              item.icon;
+        {adminNavItems.map((item) => {
+          const Icon = item.icon;
+          const active = isActivePath(pathname, item.href);
 
-            const active =
-              isActivePath(
-                pathname,
-                item.href
-              );
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={item.label}
-                onClick={() =>
-                  mobile &&
-                  setMobileOpen(false)
-                }
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={item.label}
+              onClick={() => mobile && setMobileOpen(false)}
+              className={[
+                "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
+                active
+                  ? "bg-slate-100 text-slate-950"
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+              ].join(" ")}
+            >
+              <Icon
+                size={20}
+                strokeWidth={2}
                 className={[
-                  "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition",
-                  active
-                    ? "bg-slate-100 text-slate-950"
-                    : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+                  "shrink-0 transition-transform duration-200",
+                  item.color,
+                  active ? "scale-105" : "",
                 ].join(" ")}
-              >
-                <Icon
-                  size={20}
-                  strokeWidth={2.1}
-                  className={[
-                    "shrink-0 transition-transform duration-200",
-                    item.iconClassName,
-                    active
-                      ? "scale-105"
-                      : "",
-                  ].join(" ")}
-                />
+              />
 
-                <span
-                  className={
-                    mobile
-                      ? "whitespace-nowrap"
-                      : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
-                  }
-                >
-                  {item.label}
-                </span>
-              </Link>
-            );
-          }
-        )}
+              <span
+                className={
+                  mobile
+                    ? "whitespace-nowrap"
+                    : "whitespace-nowrap opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100"
+                }
+              >
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="border-t border-slate-200 p-3">
@@ -532,18 +435,14 @@ export default function AdminShell({
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-          onClick={() =>
-            setMobileOpen(false)
-          }
+          onClick={() => setMobileOpen(false)}
         />
       )}
 
       <aside
         className={[
           "fixed left-0 top-0 z-50 flex h-screen w-72 flex-col overflow-hidden border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 lg:hidden",
-          mobileOpen
-            ? "translate-x-0"
-            : "-translate-x-full",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
         <SidebarContent mobile />
@@ -559,9 +458,7 @@ export default function AdminShell({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() =>
-                  setMobileOpen(true)
-                }
+                onClick={() => setMobileOpen(true)}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 lg:hidden"
                 aria-label="Open navigation"
               >
@@ -574,8 +471,7 @@ export default function AdminShell({
                 </div>
 
                 <div className="hidden text-xs font-medium text-slate-500 sm:block">
-                  RailEats operations
-                  console
+                  RailEats operations console
                 </div>
               </div>
             </div>
@@ -583,9 +479,7 @@ export default function AdminShell({
             <div className="flex items-center gap-3">
               <div className="hidden text-right sm:block">
                 <div className="text-sm font-semibold">
-                  {userLabel(
-                    currentUser
-                  )}
+                  {userLabel(currentUser)}
                 </div>
 
                 <button
@@ -597,12 +491,9 @@ export default function AdminShell({
                 </button>
               </div>
 
-              {currentUser
-                ?.photo_url ? (
+              {currentUser?.photo_url ? (
                 <img
-                  src={
-                    currentUser.photo_url
-                  }
+                  src={currentUser.photo_url}
                   alt="Admin"
                   className="h-10 w-10 rounded-full border border-slate-200 object-cover"
                 />
@@ -625,9 +516,7 @@ export default function AdminShell({
   );
 
   return requireAuth ? (
-    <AuthGuard>
-      {shell}
-    </AuthGuard>
+    <AuthGuard>{shell}</AuthGuard>
   ) : (
     shell
   );
