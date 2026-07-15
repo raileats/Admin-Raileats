@@ -1,4 +1,4 @@
-// app/api/admin/re-rds/route.ts
+// app/api/admin/re-rds/export/route.ts
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,18 +9,13 @@ import {
   NextResponse,
 } from "next/server";
 
+import * as XLSX from "xlsx";
+
 import {
   serviceClient,
 } from "@/lib/supabaseServer";
 
-const ALLOWED_PAGE_SIZES = [
-  20,
-  50,
-  100,
-  500,
-] as const;
-
-const RE_RDS_COLUMNS = `
+const RE_RDS_EXPORT_COLUMNS = `
   RERDSId,
   RestroRDSId,
   OrderId,
@@ -56,75 +51,60 @@ const RE_RDS_COLUMNS = `
   CreatedAt
 `;
 
-function cleanText(value: unknown) {
-  return String(value ?? "").trim();
-}
+const EXPORT_BATCH_SIZE = 1000;
 
-function cleanRestroCode(value: unknown) {
-  return cleanText(value).replace(/[^\d]/g, "");
-}
-
-function cleanOrderId(value: unknown) {
-  return cleanText(value)
-    .replace(/[%_,]/g, "")
-    .slice(0, 100);
-}
-
-function positiveInteger(
-  value: unknown,
-  fallback: number
-) {
-  const parsed = Number.parseInt(
-    String(value ?? ""),
-    10
-  );
-
-  return Number.isFinite(parsed) &&
-    parsed > 0
-    ? parsed
-    : fallback;
-}
-
-function normalizePageSize(
+function cleanText(
   value: unknown
 ) {
-  const parsed = positiveInteger(
-    value,
-    20
-  );
-
-  return ALLOWED_PAGE_SIZES.includes(
-    parsed as any
-  )
-    ? parsed
-    : 20;
+  return String(
+    value ?? ""
+  ).trim();
 }
 
-/*
- * datetime-local value ko hamesha India local time maana jayega.
- *
- * Example:
- * 2026-07-16T02:20
- *
- * From:
- * 2026-07-16T02:20:00+05:30
- *
- * To:
- * 2026-07-16T02:20:59.999+05:30
- */
+function cleanRestroCode(
+  value: unknown
+) {
+  return cleanText(
+    value
+  ).replace(
+    /[^\d]/g,
+    ""
+  );
+}
+
+function cleanOrderId(
+  value: unknown
+) {
+  return cleanText(
+    value
+  )
+    .replace(
+      /[%_,]/g,
+      ""
+    )
+    .slice(
+      0,
+      100
+    );
+}
+
 function normalizeDateTimeFilter(
   value: unknown,
   isEnd = false
 ) {
-  const text = cleanText(value);
+  const text =
+    cleanText(
+      value
+    );
 
   if (!text) {
     return null;
   }
 
-  const match = text.match(
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
-  );
+  const match =
+    text.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
+    );
 
   if (!match) {
     return null;
@@ -139,9 +119,10 @@ function normalizeDateTimeFilter(
     minute,
   ] = match;
 
-  const suffix = isEnd
-    ? ":59.999+05:30"
-    : ":00.000+05:30";
+  const suffix =
+    isEnd
+      ? ":59.999+05:30"
+      : ":00.000+05:30";
 
   return (
     `${year}-${month}-${day}` +
@@ -153,27 +134,44 @@ function normalizeDateTimeFilter(
 function roundMoney(
   value: unknown
 ) {
-  const number = Number(value);
+  const parsed =
+    Number(value);
 
-  if (!Number.isFinite(number)) {
+  if (
+    !Number.isFinite(
+      parsed
+    )
+  ) {
     return 0;
   }
 
-  return Math.round(number * 100) / 100;
+  return (
+    Math.round(
+      parsed * 100
+    ) / 100
+  );
 }
 
 function formatIndiaDateTime(
   value: unknown
 ) {
-  const text = cleanText(value);
+  const text =
+    cleanText(
+      value
+    );
 
   if (!text) {
     return "";
   }
 
-  const date = new Date(text);
+  const date =
+    new Date(text);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
     return text;
   }
 
@@ -193,117 +191,68 @@ function formatIndiaDateTime(
           "2-digit",
         minute:
           "2-digit",
+        second:
+          "2-digit",
         hour12:
           false,
       }
-    ).formatToParts(date);
+    ).formatToParts(
+      date
+    );
 
   const map:
-    Record<string, string> = {};
+    Record<
+      string,
+      string
+    > = {};
 
-  for (const part of parts) {
-    map[part.type] =
+  for (
+    const part of parts
+  ) {
+    map[
+      part.type
+    ] =
       part.value;
   }
 
   return (
     `${map.day}-${map.month}-${map.year} ` +
-    `${map.hour}:${map.minute}`
+    `${map.hour}:${map.minute}:${map.second}`
   );
 }
 
 function formatDeliveryDate(
   value: unknown
 ) {
-  const text = cleanText(value);
+  const text =
+    cleanText(
+      value
+    );
 
-  if (!text) {
-    return "";
-  }
+  const match =
+    text.match(
+      /^(\d{4})-(\d{2})-(\d{2})$/
+    );
 
-  const match = text.match(
-    /^(\d{4})-(\d{2})-(\d{2})$/
-  );
-
-  if (!match) {
-    return text;
-  }
-
-  return `${match[3]}-${match[2]}-${match[1]}`;
+  return match
+    ? `${match[3]}-${match[2]}-${match[1]}`
+    : text;
 }
 
 function formatDeliveryTime(
   value: unknown
 ) {
-  const text = cleanText(value);
-  return text
-    ? text.slice(0, 8)
-    : "";
-}
-
-function getIndiaTodayRange() {
-  const now = new Date();
-
-  const indiaDateText =
-    new Intl.DateTimeFormat(
-      "en-CA",
-      {
-        timeZone:
-          "Asia/Kolkata",
-        year:
-          "numeric",
-        month:
-          "2-digit",
-        day:
-          "2-digit",
-      }
-    ).format(now);
-
-  return {
-    start:
-      `${indiaDateText}T00:00:00.000+05:30`,
-    end:
-      `${indiaDateText}T23:59:59.999+05:30`,
-  };
-}
-
-async function getStationName(
-  stationCode: unknown
-) {
-  const code =
+  const text =
     cleanText(
-      stationCode
-    ).toUpperCase();
+      value
+    );
 
-  if (!code) {
-    return "";
-  }
-
-  const {
-    data,
-    error,
-  } =
-    await serviceClient
-      .from("Stations")
-      .select(
-        "StationCode, StationName"
+  return text
+    ? text.slice(
+        0,
+        8
       )
-      .eq(
-        "StationCode",
-        code
-      )
-      .maybeSingle();
-
-  if (
-    error ||
-    !data
-  ) {
-    return "";
-  }
-
-  return cleanText(
-    data.StationName
-  );
+    : "";
 }
 
 function applyFilters(
@@ -317,26 +266,40 @@ function applyFilters(
     fromDateTime,
     toDateTime,
   }: {
-    restroCode: string;
-    orderId: string;
-    entrySource: string;
-    paymentMode: string;
-    status: string;
-    fromDateTime: string | null;
-    toDateTime: string | null;
+    restroCode:
+      string;
+    orderId:
+      string;
+    entrySource:
+      string;
+    paymentMode:
+      string;
+    status:
+      string;
+    fromDateTime:
+      string | null;
+    toDateTime:
+      string | null;
   }
 ) {
-  let nextQuery = query;
+  let nextQuery =
+    query;
 
-  if (restroCode) {
+  if (
+    restroCode
+  ) {
     nextQuery =
       nextQuery.eq(
         "RestroCode",
-        Number(restroCode)
+        Number(
+          restroCode
+        )
       );
   }
 
-  if (orderId) {
+  if (
+    orderId
+  ) {
     nextQuery =
       nextQuery.ilike(
         "OrderId",
@@ -344,7 +307,9 @@ function applyFilters(
       );
   }
 
-  if (entrySource) {
+  if (
+    entrySource
+  ) {
     nextQuery =
       nextQuery.eq(
         "EntrySource",
@@ -352,7 +317,9 @@ function applyFilters(
       );
   }
 
-  if (paymentMode) {
+  if (
+    paymentMode
+  ) {
     nextQuery =
       nextQuery.eq(
         "PaymentMode",
@@ -360,7 +327,9 @@ function applyFilters(
       );
   }
 
-  if (status) {
+  if (
+    status
+  ) {
     nextQuery =
       nextQuery.ilike(
         "Status",
@@ -368,7 +337,9 @@ function applyFilters(
       );
   }
 
-  if (fromDateTime) {
+  if (
+    fromDateTime
+  ) {
     nextQuery =
       nextQuery.gte(
         "CreatedAt",
@@ -376,7 +347,9 @@ function applyFilters(
       );
   }
 
-  if (toDateTime) {
+  if (
+    toDateTime
+  ) {
     nextQuery =
       nextQuery.lte(
         "CreatedAt",
@@ -387,78 +360,236 @@ function applyFilters(
   return nextQuery;
 }
 
+async function fetchAllRows(
+  filters: {
+    restroCode:
+      string;
+    orderId:
+      string;
+    entrySource:
+      string;
+    paymentMode:
+      string;
+    status:
+      string;
+    fromDateTime:
+      string | null;
+    toDateTime:
+      string | null;
+  }
+) {
+  const allRows:
+    any[] = [];
+
+  let fromIndex =
+    0;
+
+  while (true) {
+    let query =
+      serviceClient
+        .from(
+          "RERDS"
+        )
+        .select(
+          RE_RDS_EXPORT_COLUMNS
+        );
+
+    query =
+      applyFilters(
+        query,
+        filters
+      );
+
+    const {
+      data,
+      error,
+    } =
+      await query
+        .order(
+          "CreatedAt",
+          {
+            ascending:
+              true,
+          }
+        )
+        .order(
+          "RERDSId",
+          {
+            ascending:
+              true,
+          }
+        )
+        .range(
+          fromIndex,
+          fromIndex +
+            EXPORT_BATCH_SIZE -
+            1
+        );
+
+    if (error) {
+      throw new Error(
+        error.message ||
+        "Unable to export RE RDS"
+      );
+    }
+
+    const batch =
+      Array.isArray(
+        data
+      )
+        ? data
+        : [];
+
+    allRows.push(
+      ...batch
+    );
+
+    if (
+      batch.length <
+      EXPORT_BATCH_SIZE
+    ) {
+      break;
+    }
+
+    fromIndex +=
+      EXPORT_BATCH_SIZE;
+  }
+
+  return allRows;
+}
+
+function buildSafeFileName(
+  restroCode:
+    string,
+  fromRaw:
+    string,
+  toRaw:
+    string
+) {
+  const datePart =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone:
+          "Asia/Kolkata",
+        year:
+          "numeric",
+        month:
+          "2-digit",
+        day:
+          "2-digit",
+      }
+    )
+      .format(
+        new Date()
+      )
+      .replace(
+        /-/g,
+        ""
+      );
+
+  const filterPart =
+    [
+      restroCode
+        ? `Restro-${restroCode}`
+        : "All-Restros",
+      fromRaw
+        ? `From-${fromRaw.replace(/[:T]/g, "-")}`
+        : "",
+      toRaw
+        ? `To-${toRaw.replace(/[:T]/g, "-")}`
+        : "",
+    ]
+      .filter(
+        Boolean
+      )
+      .join(
+        "_"
+      );
+
+  return (
+    `RE-RDS_${filterPart}_${datePart}.xlsx`
+  );
+}
+
 export async function GET(
   req: NextRequest
 ) {
   try {
-    const searchParams =
-      req.nextUrl.searchParams;
-
-    const page =
-      positiveInteger(
-        searchParams.get("page"),
-        1
-      );
-
-    const pageSize =
-      normalizePageSize(
-        searchParams.get(
-          "pageSize"
-        )
-      );
+    const params =
+      req.nextUrl
+        .searchParams;
 
     const restroCode =
       cleanRestroCode(
-        searchParams.get(
+        params.get(
           "restroCode"
         )
       );
 
     const orderId =
       cleanOrderId(
-        searchParams.get(
+        params.get(
           "orderId"
         )
       );
 
     const entrySource =
       cleanText(
-        searchParams.get(
+        params.get(
           "entrySource"
         )
       );
 
     const paymentMode =
       cleanText(
-        searchParams.get(
+        params.get(
           "paymentMode"
         )
       );
 
     const status =
       cleanText(
-        searchParams.get(
+        params.get(
           "status"
+        )
+      );
+
+    const fromRaw =
+      cleanText(
+        params.get(
+          "from"
+        )
+      );
+
+    const toRaw =
+      cleanText(
+        params.get(
+          "to"
         )
       );
 
     const fromDateTime =
       normalizeDateTimeFilter(
-        searchParams.get("from"),
+        fromRaw,
         false
       );
 
     const toDateTime =
       normalizeDateTimeFilter(
-        searchParams.get("to"),
+        toRaw,
         true
       );
 
     if (
       fromDateTime &&
       toDateTime &&
-      new Date(fromDateTime) >
-        new Date(toDateTime)
+      new Date(
+        fromDateTime
+      ) >
+        new Date(
+          toDateTime
+        )
     ) {
       return NextResponse.json(
         {
@@ -467,12 +598,13 @@ export async function GET(
             "From Date-Time cannot be greater than To Date-Time",
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
 
-    const filterValues = {
+    const filters = {
       restroCode,
       orderId,
       entrySource,
@@ -482,177 +614,31 @@ export async function GET(
       toDateTime,
     };
 
-    const fromIndex =
-      (page - 1) *
-      pageSize;
-
-    const toIndex =
-      fromIndex +
-      pageSize -
-      1;
-
-    let mainQuery =
-      serviceClient
-        .from("RERDS")
-        .select(
-          RE_RDS_COLUMNS,
-          {
-            count: "exact",
-          }
-        );
-
-    mainQuery =
-      applyFilters(
-        mainQuery,
-        filterValues
-      );
-
-    const {
-      data,
-      error,
-      count,
-    } =
-      await mainQuery
-        .order(
-          "CreatedAt",
-          {
-            ascending: false,
-          }
-        )
-        .order(
-          "RERDSId",
-          {
-            ascending: false,
-          }
-        )
-        .range(
-          fromIndex,
-          toIndex
-        );
-
-    if (error) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            error.message ||
-            "Unable to load RE RDS",
-          details:
-            error.details ??
-            null,
-          hint:
-            error.hint ??
-            null,
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-
-    const rawRows =
-      Array.isArray(data)
-        ? data
-        : [];
-
     const rows =
-      rawRows.map(
-        (row: any) => ({
-          ...row,
-          DeliveryDate:
-            formatDeliveryDate(
-              row.DeliveryDate
-            ),
-          DeliveryTime:
-            formatDeliveryTime(
-              row.DeliveryTime
-            ),
-          CreatedAtRaw:
-            row.CreatedAt,
-          CreatedAt:
-            formatIndiaDateTime(
-              row.CreatedAt
-            ),
-        })
+      await fetchAllRows(
+        filters
       );
 
-    const total =
-      Number(count ?? 0);
+    let totalReceivable =
+      0;
 
-    const totalPages =
-      Math.max(
-        1,
-        Math.ceil(
-          total /
-          pageSize
-        )
-      );
+    let totalPayable =
+      0;
 
-    const {
-      data:
-        latestBalanceRow,
-    } =
-      await serviceClient
-        .from("RERDS")
-        .select(
-          `
-            RERDSId,
-            PreviousBal,
-            CurrentBal,
-            CreatedAt
-          `
-        )
-        .order(
-          "RERDSId",
-          {
-            ascending: false,
-          }
-        )
-        .limit(1)
-        .maybeSingle();
+    let netMovement =
+      0;
 
-    const universalBalance =
-      roundMoney(
-        latestBalanceRow
-          ?.CurrentBal
-      );
+    let orderCount =
+      0;
 
-    let totalsQuery =
-      serviceClient
-        .from("RERDS")
-        .select(
-          `
-            EntrySource,
-            RESettlementAmount
-          `
-        );
+    let creditNoteCount =
+      0;
 
-    totalsQuery =
-      applyFilters(
-        totalsQuery,
-        filterValues
-      );
-
-    const {
-      data:
-        totalsRows,
-    } =
-      await totalsQuery;
-
-    let totalReceivable = 0;
-    let totalPayable = 0;
-    let netMovement = 0;
-
-    let orderCount = 0;
-    let creditNoteCount = 0;
-    let debitNoteCount = 0;
-    let manualCount = 0;
+    let debitNoteCount =
+      0;
 
     for (
-      const row of
-      Array.isArray(totalsRows)
-        ? totalsRows
-        : []
+      const row of rows
     ) {
       const amount =
         roundMoney(
@@ -663,14 +649,20 @@ export async function GET(
       netMovement +=
         amount;
 
-      if (amount > 0) {
+      if (
+        amount > 0
+      ) {
         totalReceivable +=
           amount;
       }
 
-      if (amount < 0) {
+      if (
+        amount < 0
+      ) {
         totalPayable +=
-          Math.abs(amount);
+          Math.abs(
+            amount
+          );
       }
 
       const source =
@@ -683,147 +675,41 @@ export async function GET(
             ""
           );
 
-      if (source === "order") {
-        orderCount += 1;
+      if (
+        source ===
+        "order"
+      ) {
+        orderCount +=
+          1;
       } else if (
         source ===
         "creditnote"
       ) {
-        creditNoteCount += 1;
+        creditNoteCount +=
+          1;
       } else if (
         source ===
         "debitnote"
       ) {
-        debitNoteCount += 1;
-      } else if (
-        source ===
-        "manual"
-      ) {
-        manualCount += 1;
+        debitNoteCount +=
+          1;
       }
     }
 
-    totalReceivable =
-      roundMoney(
-        totalReceivable
-      );
+    let openingBalance =
+      0;
 
-    totalPayable =
-      roundMoney(
-        totalPayable
-      );
-
-    netMovement =
-      roundMoney(
-        netMovement
-      );
-
-    const todayRange =
-      getIndiaTodayRange();
-
-    const {
-      data:
-        todayRows,
-    } =
-      await serviceClient
-        .from("RERDS")
-        .select(
-          `
-            EntrySource,
-            RESettlementAmount
-          `
-        )
-        .gte(
-          "CreatedAt",
-          todayRange.start
-        )
-        .lte(
-          "CreatedAt",
-          todayRange.end
-        );
-
-    let todayReceivable = 0;
-    let todayPayable = 0;
-    let todayNetMovement = 0;
-    let todayCreditNote = 0;
-    let todayDebitNote = 0;
-    let todayOrderCount = 0;
-
-    for (
-      const row of
-      Array.isArray(todayRows)
-        ? todayRows
-        : []
+    if (
+      fromDateTime
     ) {
-      const amount =
-        roundMoney(
-          row
-            .RESettlementAmount
-        );
-
-      todayNetMovement +=
-        amount;
-
-      if (amount > 0) {
-        todayReceivable +=
-          amount;
-      }
-
-      if (amount < 0) {
-        todayPayable +=
-          Math.abs(amount);
-      }
-
-      const source =
-        cleanText(
-          row.EntrySource
-        )
-          .toLowerCase()
-          .replace(
-            /[^a-z]/g,
-            ""
-          );
-
-      if (source === "order") {
-        todayOrderCount += 1;
-      }
-
-      if (
-        source ===
-        "creditnote"
-      ) {
-        todayCreditNote +=
-          Math.abs(amount);
-      }
-
-      if (
-        source ===
-        "debitnote"
-      ) {
-        todayDebitNote +=
-          Math.abs(amount);
-      }
-    }
-
-    /*
-     * BANK STATEMENT SUMMARY
-     *
-     * Opening Balance:
-     * From time se just pehle wali latest entry ka CurrentBal.
-     *
-     * Closing Balance:
-     * Opening Balance + selected filtered Net Movement.
-     *
-     * Agar From Date nahi diya gaya to opening 0 maana jayega.
-     */
-    let openingBalance = 0;
-
-    if (fromDateTime) {
       let openingQuery =
         serviceClient
-          .from("RERDS")
+          .from(
+            "RERDS"
+          )
           .select(
             `
+              RERDSId,
               CurrentBal,
               CreatedAt
             `
@@ -833,33 +719,51 @@ export async function GET(
             fromDateTime
           );
 
-      if (restroCode) {
+      if (
+        restroCode
+      ) {
         openingQuery =
           openingQuery.eq(
             "RestroCode",
-            Number(restroCode)
+            Number(
+              restroCode
+            )
           );
       }
 
       const {
         data:
           openingRow,
+        error:
+          openingError,
       } =
         await openingQuery
           .order(
             "CreatedAt",
             {
-              ascending: false,
+              ascending:
+                false,
             }
           )
           .order(
             "RERDSId",
             {
-              ascending: false,
+              ascending:
+                false,
             }
           )
-          .limit(1)
+          .limit(
+            1
+          )
           .maybeSingle();
+
+      if (
+        openingError
+      ) {
+        throw new Error(
+          openingError.message
+        );
+      }
 
       openingBalance =
         roundMoney(
@@ -874,221 +778,470 @@ export async function GET(
         netMovement
       );
 
-    let selectedRestro:
-      | {
-          RestroCode:
-            number | string;
-          RestroName:
-            string;
-          StationCode:
-            string;
-          StationName:
-            string;
+    const exportRows =
+      rows.map(
+        (
+          row: any
+        ) => ({
+          "RE RDS ID":
+            row.RERDSId,
+          "Restro RDS ID":
+            row.RestroRDSId,
+          "Order / Reference":
+            row.OrderId,
+          "Entry Source":
+            row.EntrySource,
+          "Restro Code":
+            row.RestroCode,
+          "Restro Name":
+            row.RestroName,
+          "Station Code":
+            row.StationCode,
+          Status:
+            row.Status,
+          "Sub Status":
+            row.SubStatus,
+          Remarks:
+            row.Remarks,
+          "Delivery Date":
+            formatDeliveryDate(
+              row.DeliveryDate
+            ),
+          "Delivery Time":
+            formatDeliveryTime(
+              row.DeliveryTime
+            ),
+          "Payment Mode":
+            row.PaymentMode,
+          "Coupon Code":
+            row.CouponCode,
+          "Restro Price":
+            roundMoney(
+              row.RestroPrice
+            ),
+          "Base Price":
+            roundMoney(
+              row.BasePrice
+            ),
+          "Discounted Base Price":
+            roundMoney(
+              row.DiscountedBasePrice
+            ),
+          Commission:
+            roundMoney(
+              row.Commission
+            ),
+          GST:
+            roundMoney(
+              row.GSTAmount
+            ),
+          "Platform Charge":
+            roundMoney(
+              row.PlatformCharge
+            ),
+          "Restro Discount":
+            roundMoney(
+              row.RestroDiscount
+            ),
+          "RE Discount":
+            roundMoney(
+              row.REDiscount
+            ),
+          "Total Amount":
+            roundMoney(
+              row.TotalAmount
+            ),
+          "COD Amount":
+            roundMoney(
+              row.CODAmount
+            ),
+          "PPD Amount":
+            roundMoney(
+              row.PPDAmount
+            ),
+          Penalty:
+            roundMoney(
+              row.OrderPenalty
+            ),
+          IGST:
+            roundMoney(
+              row.IGST
+            ),
+          "Order Charges":
+            roundMoney(
+              row.OrderCharges
+            ),
+          "Restro Settlement":
+            roundMoney(
+              row.RestroSettlementAmount
+            ),
+          "RE Settlement":
+            roundMoney(
+              row.RESettlementAmount
+            ),
+          "Previous Balance":
+            roundMoney(
+              row.PreviousBal
+            ),
+          "Current Balance":
+            roundMoney(
+              row.CurrentBal
+            ),
+          "Created At":
+            formatIndiaDateTime(
+              row.CreatedAt
+            ),
+        })
+      );
+
+    const workbook =
+      XLSX.utils
+        .book_new();
+
+    const statementSheet =
+      XLSX.utils
+        .json_to_sheet(
+          exportRows
+        );
+
+    statementSheet[
+      "!freeze"
+    ] = {
+      xSplit: 0,
+      ySplit: 1,
+    } as any;
+
+    statementSheet[
+      "!autofilter"
+    ] = {
+      ref:
+        statementSheet[
+          "!ref"
+        ] ||
+        "A1:A1",
+    };
+
+    statementSheet[
+      "!cols"
+    ] = [
+      { wch: 10 },
+      { wch: 13 },
+      { wch: 24 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 28 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 18 },
+      { wch: 28 },
+      { wch: 13 },
+      { wch: 13 },
+      { wch: 13 },
+      { wch: 16 },
+      { wch: 13 },
+      { wch: 13 },
+      { wch: 19 },
+      { wch: 13 },
+      { wch: 12 },
+      { wch: 15 },
+      { wch: 16 },
+      { wch: 13 },
+      { wch: 14 },
+      { wch: 13 },
+      { wch: 13 },
+      { wch: 13 },
+      { wch: 13 },
+      { wch: 15 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 17 },
+      { wch: 17 },
+      { wch: 20 },
+    ];
+
+    const moneyHeaders =
+      new Set([
+        "Restro Price",
+        "Base Price",
+        "Discounted Base Price",
+        "Commission",
+        "GST",
+        "Platform Charge",
+        "Restro Discount",
+        "RE Discount",
+        "Total Amount",
+        "COD Amount",
+        "PPD Amount",
+        "Penalty",
+        "IGST",
+        "Order Charges",
+        "Restro Settlement",
+        "RE Settlement",
+        "Previous Balance",
+        "Current Balance",
+      ]);
+
+    const range =
+      XLSX.utils
+        .decode_range(
+          statementSheet[
+            "!ref"
+          ] ||
+          "A1:A1"
+        );
+
+    for (
+      let col =
+        range.s.c;
+      col <=
+        range.e.c;
+      col +=
+        1
+    ) {
+      const headerCell =
+        statementSheet[
+          XLSX.utils
+            .encode_cell({
+              r: 0,
+              c: col,
+            })
+        ];
+
+      const header =
+        cleanText(
+          headerCell
+            ?.v
+        );
+
+      if (
+        !moneyHeaders
+          .has(
+            header
+          )
+      ) {
+        continue;
+      }
+
+      for (
+        let rowIndex =
+          1;
+        rowIndex <=
+          range.e.r;
+        rowIndex +=
+          1
+      ) {
+        const address =
+          XLSX.utils
+            .encode_cell({
+              r:
+                rowIndex,
+              c:
+                col,
+            });
+
+        const cell =
+          statementSheet[
+            address
+          ];
+
+        if (
+          cell &&
+          typeof cell.v ===
+            "number"
+        ) {
+          cell.z =
+            '₹#,##0.00;[Red]-₹#,##0.00';
         }
-      | null = null;
-
-    if (
-      restroCode &&
-      rawRows.length > 0
-    ) {
-      const firstRow =
-        rawRows[0];
-
-      selectedRestro = {
-        RestroCode:
-          firstRow.RestroCode,
-        RestroName:
-          cleanText(
-            firstRow.RestroName
-          ),
-        StationCode:
-          cleanText(
-            firstRow.StationCode
-          ),
-        StationName:
-          await getStationName(
-            firstRow.StationCode
-          ),
-      };
-    }
-
-    if (
-      restroCode &&
-      !selectedRestro
-    ) {
-      const {
-        data:
-          summaryRow,
-      } =
-        await serviceClient
-          .from("RERDS")
-          .select(
-            `
-              RestroCode,
-              RestroName,
-              StationCode
-            `
-          )
-          .eq(
-            "RestroCode",
-            Number(restroCode)
-          )
-          .order(
-            "CreatedAt",
-            {
-              ascending: false,
-            }
-          )
-          .order(
-            "RERDSId",
-            {
-              ascending: false,
-            }
-          )
-          .limit(1)
-          .maybeSingle();
-
-      if (summaryRow) {
-        selectedRestro = {
-          RestroCode:
-            summaryRow
-              .RestroCode,
-          RestroName:
-            cleanText(
-              summaryRow
-                .RestroName
-            ),
-          StationCode:
-            cleanText(
-              summaryRow
-                .StationCode
-            ),
-          StationName:
-            await getStationName(
-              summaryRow
-                .StationCode
-            ),
-        };
       }
     }
 
-    return NextResponse.json(
-      {
-        ok: true,
-        rows,
-        total,
-        page,
-        pageSize,
-        totalPages,
-        hasPreviousPage:
-          page > 1,
-        hasNextPage:
-          page <
-          totalPages,
+    XLSX.utils
+      .book_append_sheet(
+        workbook,
+        statementSheet,
+        "RE RDS Statement"
+      );
 
-        summary: {
-          universalBalance,
-          totalReceivable,
-          totalPayable,
-          netMovement,
-          totalEntries:
-            total,
-          orderCount,
-          creditNoteCount,
-          debitNoteCount,
-          manualCount,
-
+    const summaryRows:
+      Array<
+        [string, any]
+      > = [
+        [
+          "Report",
+          "RailEats RE RDS Statement",
+        ],
+        [
+          "Generated At",
+          formatIndiaDateTime(
+            new Date()
+          ),
+        ],
+        [
+          "Restro Code",
+          restroCode ||
+            "All Restaurants",
+        ],
+        [
+          "Order / Reference",
+          orderId ||
+            "All",
+        ],
+        [
+          "Entry Source",
+          entrySource ||
+            "All",
+        ],
+        [
+          "Payment Mode",
+          paymentMode ||
+            "All",
+        ],
+        [
+          "Status",
+          status ||
+            "All",
+        ],
+        [
+          "From",
+          fromRaw ||
+            "Beginning",
+        ],
+        [
+          "To",
+          toRaw ||
+            "Latest",
+        ],
+        [
+          "",
+          "",
+        ],
+        [
+          "Opening Balance",
           openingBalance,
+        ],
+        [
+          "Total Receivable",
+          roundMoney(
+            totalReceivable
+          ),
+        ],
+        [
+          "Total Payable",
+          roundMoney(
+            totalPayable
+          ),
+        ],
+        [
+          "Net Movement",
+          roundMoney(
+            netMovement
+          ),
+        ],
+        [
+          "Closing Balance",
           closingBalance,
-          transactionCount:
-            total,
+        ],
+        [
+          "Total Transactions",
+          rows.length,
+        ],
+        [
+          "Orders",
+          orderCount,
+        ],
+        [
+          "Credit Notes",
+          creditNoteCount,
+        ],
+        [
+          "Debit Notes",
+          debitNoteCount,
+        ],
+      ];
 
-          lastEntryAt:
-            latestBalanceRow
-              ?.CreatedAt
-              ? formatIndiaDateTime(
-                  latestBalanceRow
-                    .CreatedAt
-                )
-              : null,
+    const summarySheet =
+      XLSX.utils
+        .aoa_to_sheet(
+          summaryRows
+        );
 
-          today: {
-            receivable:
-              roundMoney(
-                todayReceivable
-              ),
-            payable:
-              roundMoney(
-                todayPayable
-              ),
-            netMovement:
-              roundMoney(
-                todayNetMovement
-              ),
-            creditNote:
-              roundMoney(
-                todayCreditNote
-              ),
-            debitNote:
-              roundMoney(
-                todayDebitNote
-              ),
-            orderCount:
-              todayOrderCount,
-          },
-        },
-
-        filters: {
-          restroCode:
-            restroCode ||
-            null,
-          orderId:
-            orderId ||
-            null,
-          entrySource:
-            entrySource ||
-            null,
-          paymentMode:
-            paymentMode ||
-            null,
-          status:
-            status ||
-            null,
-          from:
-            searchParams.get(
-              "from"
-            ) || null,
-          to:
-            searchParams.get(
-              "to"
-            ) || null,
-        },
-
-        selectedRestro,
-
-        defaultView:
-          !restroCode &&
-          !orderId &&
-          !entrySource &&
-          !paymentMode &&
-          !status &&
-          !fromDateTime &&
-          !toDateTime,
-
-        sort: {
-          primary:
-            "CreatedAt",
-          primaryDirection:
-            "DESC",
-          secondary:
-            "RERDSId",
-          secondaryDirection:
-            "DESC",
-        },
+    summarySheet[
+      "!cols"
+    ] = [
+      {
+        wch:
+          24,
       },
       {
-        status: 200,
+        wch:
+          30,
+      },
+    ];
+
+    for (
+      const rowIndex of [
+        10,
+        11,
+        12,
+        13,
+        14,
+      ]
+    ) {
+      const cell =
+        summarySheet[
+          `B${
+            rowIndex +
+            1
+          }`
+        ];
+
+      if (
+        cell &&
+        typeof cell.v ===
+          "number"
+      ) {
+        cell.z =
+          '₹#,##0.00;[Red]-₹#,##0.00';
+      }
+    }
+
+    XLSX.utils
+      .book_append_sheet(
+        workbook,
+        summarySheet,
+        "Summary"
+      );
+
+    const output =
+      XLSX.write(
+        workbook,
+        {
+          type:
+            "buffer",
+          bookType:
+            "xlsx",
+          compression:
+            true,
+        }
+      );
+
+    const fileName =
+      buildSafeFileName(
+        restroCode,
+        fromRaw,
+        toRaw
+      );
+
+    return new NextResponse(
+      output,
+      {
+        status:
+          200,
         headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition":
+            `attachment; filename="${fileName}"`,
           "Cache-Control":
             "no-store, no-cache, must-revalidate",
           Pragma:
@@ -1102,7 +1255,7 @@ export async function GET(
     error: any
   ) {
     console.error(
-      "RE RDS API CRITICAL ERROR =>",
+      "RE RDS EXPORT ERROR =>",
       error
     );
 
@@ -1111,14 +1264,11 @@ export async function GET(
         ok: false,
         error:
           error?.message ||
-          "Internal server error",
+          "Unable to export RE RDS",
       },
       {
-        status: 500,
-        headers: {
-          "Cache-Control":
-            "no-store",
-        },
+        status:
+          500,
       }
     );
   }
