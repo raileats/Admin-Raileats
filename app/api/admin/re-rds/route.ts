@@ -524,18 +524,16 @@ export async function GET(
       );
 
     const fromDateTime =
-      normalizeDateTimeFilter(
-        searchParams.get(
-          "from"
-        )
-      );
+  normalizeDateTimeFilter(
+    searchParams.get("from"),
+    false
+  );
 
-    const toDateTime =
-      normalizeDateTimeFilter(
-        searchParams.get(
-          "to"
-        )
-      );
+const toDateTime =
+  normalizeDateTimeFilter(
+    searchParams.get("to"),
+    true
+  );
 
     if (
       fromDateTime &&
