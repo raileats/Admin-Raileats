@@ -20,7 +20,6 @@ type RestroRdsRow = {
   RestroName: string | null;
   StationCode: string | null;
   Status: string | null;
-  EntrySource: string | null;
   SubStatus: string | null;
   EntrySource: string | null;
   DeliveryDate: string | null;
