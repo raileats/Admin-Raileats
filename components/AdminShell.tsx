@@ -169,6 +169,12 @@ const adminNavItems = [
     color: "text-orange-500",
   },
   {
+  href: "/admin/re-rds",
+  label: "RE RDS",
+  icon: IndianRupeeBadgeIcon,
+  color: "text-emerald-600",
+},
+  {
     href: "/admin/restro-rds",
     label: "Restro RDS",
     icon: IndianRupeeBadgeIcon,
