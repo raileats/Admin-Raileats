@@ -36,6 +36,7 @@ const RESTRO_RDS_COLUMNS = `
   StationCode,
   Status,
   SubStatus,
+  EntrySource,
   DeliveryDate,
   DeliveryTime,
   PaymentMode,
