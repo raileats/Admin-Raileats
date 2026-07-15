@@ -2,7 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Bell, Clock, Eye, MapPin, ShieldCheck, ShoppingBag, Smartphone, X } from "lucide-react";
+import {
+  Bell,
+  Clock,
+  Eye,
+  MapPin,
+  ShieldCheck,
+  ShoppingBag,
+  Smartphone,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 
 type TabKey =
@@ -18,8 +27,12 @@ type TabKey =
   | "baddelivery"
   | "all";
 
-
-type OrderHistoryItem = { at: string; by: string; note?: string; status: TabKey };
+type OrderHistoryItem = {
+  at: string;
+  by: string;
+  note?: string;
+  status: TabKey;
+};
 type Order = {
   id: string;
   status: TabKey;
@@ -34,7 +47,7 @@ type Order = {
   coach?: string;
   seat?: string;
   customerName: string;
-  customerMobile: string; 
+  customerMobile: string;
   paymentMode?: string;
   total?: string;
   history: OrderHistoryItem[];
@@ -78,10 +91,7 @@ const NOT_DELIVERED_REASONS = [
   "Technical Issue",
 ];
 
-const DELIVERED_REASONS = [
-  "Delivered",
-  "Bad Delivery",
-];
+const DELIVERED_REASONS = ["Delivered", "Bad Delivery"];
 
 const ORDER_PENALTY_BY_SUB_STATUS: Record<string, number> = {
   "Customer Plan Change": 0,
@@ -94,7 +104,7 @@ const ORDER_PENALTY_BY_SUB_STATUS: Record<string, number> = {
   "Train Divert": 0,
   "Item Issue": 100,
   "Restro Refused without Reason": 100,
-  "Other": 0,
+  Other: 0,
   "Low & Order": 0,
   "Natural Calamity": 0,
   "Bad Delivery": 50,
@@ -153,7 +163,7 @@ const OUT_FOR_DELIVERY_OUTCOME_OPTIONS: OutcomeOption[] = [
     targetTab: "notdelivered",
     vendorPenalty: 0,
   },
-    {
+  {
     key: "Delivery Boy Missed",
     label: "Delivery Boy Missed",
     dbValue: "Not Delivered",
@@ -218,9 +228,10 @@ const OUT_FOR_DELIVERY_OUTCOME_OPTIONS: OutcomeOption[] = [
   },
 ];
 
-const OUT_FOR_DELIVERY_NOT_DELIVERED_REASONS = OUT_FOR_DELIVERY_OUTCOME_OPTIONS
-  .filter((option) => option.dbValue === "Not Delivered")
-  .map((option) => option.label);
+const OUT_FOR_DELIVERY_NOT_DELIVERED_REASONS =
+  OUT_FOR_DELIVERY_OUTCOME_OPTIONS.filter(
+    (option) => option.dbValue === "Not Delivered",
+  ).map((option) => option.label);
 
 const NEXT_MAP: Record<
   TabKey,
@@ -305,7 +316,7 @@ const FINAL_MARK_OPTIONS = [
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
 type SearchType =
@@ -334,7 +345,8 @@ const normalizeRouteValue = (value: unknown) => String(value ?? "").trim();
 const getRouteField = (row: TrainRouteRow, ...keys: string[]) => {
   for (const key of keys) {
     const value = row[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+    if (value !== undefined && value !== null && String(value).trim() !== "")
+      return value;
   }
   return "";
 };
@@ -342,7 +354,12 @@ const getRouteField = (row: TrainRouteRow, ...keys: string[]) => {
 const rowMatchesTrain = (row: TrainRouteRow, trainNo: string) => {
   const candidates = [
     getRouteField(row, "trainNumber", "TrainNumber", "trainnumber"),
-    getRouteField(row, "trainNumber_text", "TrainNumber_text", "trainnumber_text"),
+    getRouteField(
+      row,
+      "trainNumber_text",
+      "TrainNumber_text",
+      "trainnumber_text",
+    ),
     getRouteField(row, "TrainNo", "trainNo", "train_no"),
   ];
 
@@ -359,7 +376,10 @@ const AUTO_SYNC_TABS: TabKey[] = [
   "inkitchen",
 ];
 
-const parseOrderDeliveryDateTime = (deliveryDate?: string, deliveryTime?: string) => {
+const parseOrderDeliveryDateTime = (
+  deliveryDate?: string,
+  deliveryTime?: string,
+) => {
   const rawDate = String(deliveryDate || "").trim();
   const rawTime = String(deliveryTime || "00:00").trim();
 
@@ -390,7 +410,7 @@ const parseOrderDeliveryDateTime = (deliveryDate?: string, deliveryTime?: string
     Number(hour),
     Number(minute),
     0,
-    0
+    0,
   );
 
   return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -401,7 +421,7 @@ const shouldAutoMoveBookedToVerification = (order: Order) => {
 
   const deliveryDateTime = parseOrderDeliveryDateTime(
     order.deliveryDate,
-    order.deliveryTime
+    order.deliveryTime,
   );
 
   if (!deliveryDateTime) return false;
@@ -423,78 +443,60 @@ const isPrepaidOrder = (order: Order) => {
 
   if (!mode) return false;
 
-  return [
-    "prepaid",
-    "ppd",
-    "online",
-    "paid",
-    "paytm",
-    "upi",
-  ].some((token) => mode.includes(token));
+  return ["prepaid", "ppd", "online", "paid", "paytm", "upi"].some((token) =>
+    mode.includes(token),
+  );
 };
 
-const shouldAutoMoveVerificationToNewOrder = (
-  order: Order
-) => {
+const shouldAutoMoveVerificationToNewOrder = (order: Order) => {
   if (order.status !== "verification") return false;
   if (!isPrepaidOrder(order)) return false;
 
   const deliveryDateTime = parseOrderDeliveryDateTime(
     order.deliveryDate,
-    order.deliveryTime
+    order.deliveryTime,
   );
 
   if (!deliveryDateTime) return false;
 
   const now = new Date();
   const minutesUntilDelivery =
-    (deliveryDateTime.getTime() - now.getTime()) /
-    (1000 * 60);
+    (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
 
   return (
     minutesUntilDelivery > 0 &&
-    minutesUntilDelivery <=
-      AUTO_VERIFICATION_BEFORE_MINUTES
+    minutesUntilDelivery <= AUTO_VERIFICATION_BEFORE_MINUTES
   );
 };
 
-const shouldAutoMoveKitchenToOutForDelivery = (
-  order: Order
-) => {
+const shouldAutoMoveKitchenToOutForDelivery = (order: Order) => {
   if (order.status !== "inkitchen") return false;
 
   const deliveryDateTime = parseOrderDeliveryDateTime(
     order.deliveryDate,
-    order.deliveryTime
+    order.deliveryTime,
   );
 
   if (!deliveryDateTime) return false;
 
   const now = new Date();
   const minutesUntilDelivery =
-    (deliveryDateTime.getTime() - now.getTime()) /
-    (1000 * 60);
+    (deliveryDateTime.getTime() - now.getTime()) / (1000 * 60);
 
   return (
     minutesUntilDelivery > 0 &&
-    minutesUntilDelivery <=
-      AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES
+    minutesUntilDelivery <= AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES
   );
 };
 
-const shouldAutoMoveToCancellationRequest = (
-  order: Order
-) => {
-  if (
-    order.status !== "booked" &&
-    order.status !== "verification"
-  ) {
+const shouldAutoMoveToCancellationRequest = (order: Order) => {
+  if (order.status !== "booked" && order.status !== "verification") {
     return false;
   }
 
   const deliveryDateTime = parseOrderDeliveryDateTime(
     order.deliveryDate,
-    order.deliveryTime
+    order.deliveryTime,
   );
 
   if (!deliveryDateTime) return false;
@@ -503,65 +505,38 @@ const shouldAutoMoveToCancellationRequest = (
 };
 
 const mapOrderRowToOrder = (row: any): Order => {
-  const rawStatus = String(
-    row.status ?? row.Status ?? "Booked"
-  );
+  const rawStatus = String(row.status ?? row.Status ?? "Booked");
 
   let tabStatus: TabKey = "booked";
 
-  const lowerRaw = rawStatus
-    .toLowerCase()
-    .trim();
+  const lowerRaw = rawStatus.toLowerCase().trim();
 
   if (lowerRaw === "booked") {
     tabStatus = "booked";
-  } else if (
-    lowerRaw === "verification" ||
-    lowerRaw === "in verification"
-  ) {
+  } else if (lowerRaw === "verification" || lowerRaw === "in verification") {
     tabStatus = "verification";
   } else if (
     lowerRaw === "cancellationrequest" ||
     lowerRaw === "cancellation request"
   ) {
     tabStatus = "cancellationrequest";
-  } else if (
-    lowerRaw === "neworder" ||
-    lowerRaw === "new order"
-  ) {
+  } else if (lowerRaw === "neworder" || lowerRaw === "new order") {
     tabStatus = "neworder";
-  } else if (
-    lowerRaw === "inkitchen" ||
-    lowerRaw === "in kitchen"
-  ) {
+  } else if (lowerRaw === "inkitchen" || lowerRaw === "in kitchen") {
     tabStatus = "inkitchen";
-  } else if (
-    lowerRaw === "outfordelivery" ||
-    lowerRaw === "out for delivery"
-  ) {
+  } else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") {
     tabStatus = "outfordelivery";
   } else if (lowerRaw === "delivered") {
-    const subStatus = String(
-      row.subStatus ?? row.SubStatus ?? ""
-    )
+    const subStatus = String(row.subStatus ?? row.SubStatus ?? "")
       .toLowerCase()
       .trim();
 
-    tabStatus =
-      subStatus === "bad delivery"
-        ? "baddelivery"
-        : "delivered";
+    tabStatus = subStatus === "bad delivery" ? "baddelivery" : "delivered";
   } else if (lowerRaw === "cancelled") {
     tabStatus = "cancelled";
-  } else if (
-    lowerRaw === "notdelivered" ||
-    lowerRaw === "not delivered"
-  ) {
+  } else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") {
     tabStatus = "notdelivered";
-  } else if (
-    lowerRaw === "baddelivery" ||
-    lowerRaw === "bad delivery"
-  ) {
+  } else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") {
     tabStatus = "baddelivery";
   }
 
@@ -570,81 +545,44 @@ const mapOrderRowToOrder = (row: any): Order => {
     status: tabStatus,
     dbStatus: rawStatus,
 
-    outletId: String(
-      row.restroCode ?? row.RestroCode ?? ""
-    ),
+    outletId: String(row.restroCode ?? row.RestroCode ?? ""),
 
-    outletName: String(
-      row.restroName ?? row.RestroName ?? ""
-    ),
+    outletName: String(row.restroName ?? row.RestroName ?? ""),
 
-    stationCode: String(
-      row.stationCode ?? row.StationCode ?? ""
-    ),
+    stationCode: String(row.stationCode ?? row.StationCode ?? ""),
 
-    stationName: String(
-      row.stationName ?? row.StationName ?? ""
-    ),
+    stationName: String(row.stationName ?? row.StationName ?? ""),
 
-    deliveryDate: String(
-      row.deliveryDate ?? row.DeliveryDate ?? ""
-    ),
+    deliveryDate: String(row.deliveryDate ?? row.DeliveryDate ?? ""),
 
-    deliveryTime: String(
-      row.deliveryTime ?? row.DeliveryTime ?? ""
-    ),
+    deliveryTime: String(row.deliveryTime ?? row.DeliveryTime ?? ""),
 
-    trainNo:
-      row.trainNumber ??
-      row.TrainNumber ??
-      "",
+    trainNo: row.trainNumber ?? row.TrainNumber ?? "",
 
-    coach:
-      row.coach ??
-      row.Coach ??
-      "",
+    coach: row.coach ?? row.Coach ?? "",
 
-    seat:
-      row.seat ??
-      row.Seat ??
-      "",
+    seat: row.seat ?? row.Seat ?? "",
 
-    customerName: String(
-      row.customerName ?? row.CustomerName ?? ""
-    ),
+    customerName: String(row.customerName ?? row.CustomerName ?? ""),
 
-    customerMobile: String(
-      row.customerMobile ??
-        row.CustomerMobile ??
-        ""
-    ),
+    customerMobile: String(row.customerMobile ?? row.CustomerMobile ?? ""),
 
     total:
       row.totalAmount != null
         ? String(row.totalAmount)
         : row.TotalAmount != null
-        ? String(row.TotalAmount)
-        : undefined,
+          ? String(row.TotalAmount)
+          : undefined,
 
-    paymentMode:
-      row.paymentMode ??
-      row.PaymentMode ??
-      "COD",
+    paymentMode: row.paymentMode ?? row.PaymentMode ?? "COD",
 
-    history: Array.isArray(row.history)
-      ? row.history
-      : [],
+    history: Array.isArray(row.history) ? row.history : [],
 
-    rawCreatedAt:
-      row.CreatedAt ??
-      row.createdAt ??
-      row.created_at ??
-      "",
+    rawCreatedAt: row.CreatedAt ?? row.createdAt ?? row.created_at ?? "",
 
     raw: row,
   };
 };
-
 
 const valueFrom = (source: any, ...keys: string[]) => {
   if (!source) return "";
@@ -715,16 +653,19 @@ function PaymentLine({
   textValue?: any;
   negative?: boolean;
 }) {
-  const shown = textValue !== undefined
-    ? String(textValue)
-    : value === null || value === undefined
-    ? "N/A"
-    : `${negative && value > 0 ? "- " : ""}₹${moneyNumber(value)}`;
+  const shown =
+    textValue !== undefined
+      ? String(textValue)
+      : value === null || value === undefined
+        ? "N/A"
+        : `${negative && value > 0 ? "- " : ""}₹${moneyNumber(value)}`;
 
   return (
     <div className="payment-line">
       <span>{label}</span>
-      <strong style={{ color: negative && value ? "#dc2626" : "#0f172a" }}>{shown}</strong>
+      <strong style={{ color: negative && value ? "#dc2626" : "#0f172a" }}>
+        {shown}
+      </strong>
     </div>
   );
 }
@@ -737,66 +678,77 @@ export default function AdminOrdersPage() {
     return "booked";
   });
 
-  const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>({} as Record<TabKey, Order[]>);
+  const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>(
+    {} as Record<TabKey, Order[]>,
+  );
 
-const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-const [refreshTick, setRefreshTick] = useState(0);
+  const [refreshTick, setRefreshTick] = useState(0);
 
-const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
 
-const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
-const [actionType, setActionType] = useState("");
+  const [actionType, setActionType] = useState("");
 
-const [subStatus, setSubStatus] = useState("");
+  const [subStatus, setSubStatus] = useState("");
 
-const [remarks, setRemarks] = useState("");
+  const [remarks, setRemarks] = useState("");
 
-const [vendorPenaltyAmount, setVendorPenaltyAmount] = useState("");
+  const [vendorPenaltyAmount, setVendorPenaltyAmount] = useState("");
 
-  const [marking, setMarking] = useState<Record<string, { status: string; remarks: string }>>({});
+  const [marking, setMarking] = useState<
+    Record<string, { status: string; remarks: string }>
+  >({});
 
-const [searchOrderId, setSearchOrderId] = useState("");
-const [searchCustomerMobile, setSearchCustomerMobile] = useState("");
-const [searchOutlet, setSearchOutlet] = useState("");
-const [searchStation, setSearchStation] = useState("");
-    const [searchTrainNo, setSearchTrainNo] = useState("");
-const nowIndia = new Date(
-  new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-);
+  const [searchOrderId, setSearchOrderId] = useState("");
+  const [searchCustomerMobile, setSearchCustomerMobile] = useState("");
+  const [searchOutlet, setSearchOutlet] = useState("");
+  const [searchStation, setSearchStation] = useState("");
+  const [searchTrainNo, setSearchTrainNo] = useState("");
+  const nowIndia = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+  );
 
-const todayDate =
-  nowIndia.getFullYear() +
-  "-" +
-  String(nowIndia.getMonth() + 1).padStart(2, "0") +
-  "-" +
-  String(nowIndia.getDate()).padStart(2, "0");
+  const todayDate =
+    nowIndia.getFullYear() +
+    "-" +
+    String(nowIndia.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(nowIndia.getDate()).padStart(2, "0");
 
-const [searchDeliveryFrom, setSearchDeliveryFrom] = useState("");
-const [searchDeliveryTo, setSearchDeliveryTo] = useState("");
+  const [searchDeliveryFrom, setSearchDeliveryFrom] = useState("");
+  const [searchDeliveryTo, setSearchDeliveryTo] = useState("");
 
-const [draftDeliveryFrom, setDraftDeliveryFrom] = useState(`${todayDate}T00:00`);
-const [draftDeliveryTo, setDraftDeliveryTo] = useState(`${todayDate}T23:59`);
+  const [draftDeliveryFrom, setDraftDeliveryFrom] = useState(
+    `${todayDate}T00:00`,
+  );
+  const [draftDeliveryTo, setDraftDeliveryTo] = useState(`${todayDate}T23:59`);
 
-const [draftOrderId, setDraftOrderId] = useState("");
-const [draftCustomerMobile, setDraftCustomerMobile] = useState("");
-const [draftOutlet, setDraftOutlet] = useState("");
-const [draftStation, setDraftStation] = useState("");
-const [draftDate, setDraftDate] = useState("");
-const [draftTrainNo, setDraftTrainNo] = useState("");
-    const [dateSearchType, setDateSearchType] = useState<"delivery" | "booking">("delivery");
-const [draftDateSearchType, setDraftDateSearchType] = useState<"delivery" | "booking">("delivery");
-   
+  const [draftOrderId, setDraftOrderId] = useState("");
+  const [draftCustomerMobile, setDraftCustomerMobile] = useState("");
+  const [draftOutlet, setDraftOutlet] = useState("");
+  const [draftStation, setDraftStation] = useState("");
+  const [draftDate, setDraftDate] = useState("");
+  const [draftTrainNo, setDraftTrainNo] = useState("");
+  const [dateSearchType, setDateSearchType] = useState<"delivery" | "booking">(
+    "delivery",
+  );
+  const [draftDateSearchType, setDraftDateSearchType] = useState<
+    "delivery" | "booking"
+  >("delivery");
 
-const [searchBookingFrom, setSearchBookingFrom] = useState("");
-const [searchBookingTo, setSearchBookingTo] = useState("");
-const [bookingDateFilterOn, setBookingDateFilterOn] = useState(false);
+  const [searchBookingFrom, setSearchBookingFrom] = useState("");
+  const [searchBookingTo, setSearchBookingTo] = useState("");
+  const [bookingDateFilterOn, setBookingDateFilterOn] = useState(false);
 
-const [draftBookingFrom, setDraftBookingFrom] = useState(`${todayDate}T00:00`);
-const [draftBookingTo, setDraftBookingTo] = useState(`${todayDate}T23:59`);
+  const [draftBookingFrom, setDraftBookingFrom] = useState(
+    `${todayDate}T00:00`,
+  );
+  const [draftBookingTo, setDraftBookingTo] = useState(`${todayDate}T23:59`);
 
-const [newOrderCount, setNewOrderCount] = useState<number>(() => {
+  const [newOrderCount, setNewOrderCount] = useState<number>(() => {
     if (typeof window !== "undefined") {
       return Number(localStorage.getItem("raileats_new_orders") || 0);
     }
@@ -805,12 +757,14 @@ const [newOrderCount, setNewOrderCount] = useState<number>(() => {
 
   const [viewDrawerOpen, setViewDrawerOpen] = useState(false);
   const [detailedOrder, setDetailedOrder] = useState<any>(null);
-  const [activeDrawerSection, setActiveDrawerSection] = useState<"details" | "logs">("details");
+  const [activeDrawerSection, setActiveDrawerSection] = useState<
+    "details" | "logs"
+  >("details");
 
   const [fetchedItems, setFetchedItems] = useState<any[]>([]);
   const [fetchedRestro, setFetchedRestro] = useState<any>(null);
   const [orderLogs, setOrderLogs] = useState<any[]>([]);
-  
+
   const [loadingItems, setLoadingItems] = useState(false);
   const [loadingRestro, setLoadingRestro] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
@@ -824,20 +778,17 @@ const [newOrderCount, setNewOrderCount] = useState<number>(() => {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-const hasLoadedTabRef =
-  useRef<Partial<Record<TabKey, boolean>>>({});
+  const hasLoadedTabRef = useRef<Partial<Record<TabKey, boolean>>>({});
 
-const autoVerificationInFlightRef =
-  useRef<Record<string, boolean>>({});
+  const autoVerificationInFlightRef = useRef<Record<string, boolean>>({});
 
-const autoNewOrderInFlightRef =
-  useRef<Record<string, boolean>>({});
+  const autoNewOrderInFlightRef = useRef<Record<string, boolean>>({});
 
-const autoOutForDeliveryInFlightRef =
-  useRef<Record<string, boolean>>({});
+  const autoOutForDeliveryInFlightRef = useRef<Record<string, boolean>>({});
 
-const autoCancellationRequestInFlightRef =
-  useRef<Record<string, boolean>>({});
+  const autoCancellationRequestInFlightRef = useRef<Record<string, boolean>>(
+    {},
+  );
 
   const getAdminActor = () => {
     if (typeof window === "undefined") {
@@ -858,543 +809,231 @@ const autoCancellationRequestInFlightRef =
   };
 
   /* ================= SOUND HELPERS ================= */
-const playNewOrderSound = async () => {
-  try {
-    if (!audioRef.current) {
-      audioRef.current = new Audio("/sounds/new-order.mp3");
-      audioRef.current.preload = "auto";
-      audioRef.current.volume = 1;
-    }
-
-    audioRef.current.pause();
-    audioRef.current.currentTime = 0;
-    await audioRef.current.play();
-  } catch (err) {
-    console.log("New order sound blocked:", err);
-  }
-};
-
-/* ================= INIT SOUND ================= */
-useEffect(() => {
-  audioRef.current = new Audio("/sounds/new-order.mp3");
-  audioRef.current.preload = "auto";
-  audioRef.current.volume = 1;
-
-  const unlockAudio = async () => {
+  const playNewOrderSound = async () => {
     try {
-      if (!audioRef.current) return;
+      if (!audioRef.current) {
+        audioRef.current = new Audio("/sounds/new-order.mp3");
+        audioRef.current.preload = "auto";
+        audioRef.current.volume = 1;
+      }
 
-      audioRef.current.muted = true;
-      await audioRef.current.play();
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
-      audioRef.current.muted = false;
-
-      console.log("Audio unlocked successfully");
-    } catch (e) {
-      console.log("Audio unlock failed", e);
+      await audioRef.current.play();
+    } catch (err) {
+      console.log("New order sound blocked:", err);
     }
   };
 
-  window.addEventListener("click", unlockAudio, { once: true });
-  window.addEventListener("touchstart", unlockAudio, { once: true });
-  window.addEventListener("keydown", unlockAudio, { once: true });
+  /* ================= INIT SOUND ================= */
+  useEffect(() => {
+    audioRef.current = new Audio("/sounds/new-order.mp3");
+    audioRef.current.preload = "auto";
+    audioRef.current.volume = 1;
 
-  if ("Notification" in window && Notification.permission === "default") {
-    Notification.requestPermission().catch(() => {});
-  }
+    const unlockAudio = async () => {
+      try {
+        if (!audioRef.current) return;
 
-  return () => {
-    window.removeEventListener("click", unlockAudio);
-    window.removeEventListener("touchstart", unlockAudio);
-    window.removeEventListener("keydown", unlockAudio);
-  };
-}, []);
+        audioRef.current.muted = true;
+        await audioRef.current.play();
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.muted = false;
 
+        console.log("Audio unlocked successfully");
+      } catch (e) {
+        console.log("Audio unlock failed", e);
+      }
+    };
+
+    window.addEventListener("click", unlockAudio, { once: true });
+    window.addEventListener("touchstart", unlockAudio, { once: true });
+    window.addEventListener("keydown", unlockAudio, { once: true });
+
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+
+    return () => {
+      window.removeEventListener("click", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+  }, []);
 
   /* ================= SMART AUTO REFRESH ================= */
 
-useEffect(() => {
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshTick((prev) => prev + 1);
+    }, 30000);
 
-  const interval = setInterval(() => {
-
-    setRefreshTick(
-      (prev) => prev + 1
-    );
-
-  }, 30000);
-
-  return () => {
-
-    clearInterval(interval);
-
-  };
-
-}, []);
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
 
   /* ================= LOAD ORDERS ================= */
-useEffect(() => {
-  const load = async () => {
-    const shouldShowLoader =
-      !hasLoadedTabRef.current[activeTab];
+  useEffect(() => {
+    const load = async () => {
+      const shouldShowLoader = !hasLoadedTabRef.current[activeTab];
 
-    try {
-      if (shouldShowLoader) {
-        setLoading(true);
-      }
-
-      const params = new URLSearchParams();
-
-      if (activeTab !== "all") {
-        params.set("status", activeTab);
-      }
-
-      const res = await fetch(
-        activeTab === "all"
-          ? "/api/orders"
-          : `/api/orders?${params.toString()}`,
-        {
-          cache: "no-store",
+      try {
+        if (shouldShowLoader) {
+          setLoading(true);
         }
-      );
 
-      const json = await res
-        .json()
-        .catch(() => ({} as any));
+        const params = new URLSearchParams();
 
-      if (!res.ok || !json?.ok) {
-        console.error(
-          "orders fetch failed",
-          json
+        if (activeTab !== "all") {
+          params.set("status", activeTab);
+        }
+
+        const res = await fetch(
+          activeTab === "all"
+            ? "/api/orders"
+            : `/api/orders?${params.toString()}`,
+          {
+            cache: "no-store",
+          },
         );
+
+        const json = await res.json().catch(() => ({}) as any);
+
+        if (!res.ok || !json?.ok) {
+          console.error("orders fetch failed", json);
+
+          setAllOrders((prev) => ({
+            ...prev,
+            [activeTab]: [],
+          }));
+
+          return;
+        }
+
+        const mapped: Order[] = (json.orders || []).map(mapOrderRowToOrder);
+
+        setAllOrders((prev) => ({
+          ...prev,
+          [activeTab]: mapped,
+        }));
+      } catch (error) {
+        console.error("orders fetch error", error);
 
         setAllOrders((prev) => ({
           ...prev,
           [activeTab]: [],
         }));
+      } finally {
+        hasLoadedTabRef.current[activeTab] = true;
 
-        return;
+        if (shouldShowLoader) {
+          setLoading(false);
+        }
       }
+    };
 
-      const mapped: Order[] = (
-        json.orders || []
-      ).map(mapOrderRowToOrder);
+    load();
+  }, [activeTab, refreshTick]);
 
-      setAllOrders((prev) => ({
-        ...prev,
-        [activeTab]: mapped,
-      }));
-    } catch (error) {
-      console.error(
-        "orders fetch error",
-        error
-      );
+  /* ================= AUTO STATUS TABS SYNC ================= */
+  useEffect(() => {
+    let cancelled = false;
 
-      setAllOrders((prev) => ({
-        ...prev,
-        [activeTab]: [],
-      }));
-    } finally {
-      hasLoadedTabRef.current[activeTab] = true;
+    const syncAutoMoveTabs = async () => {
+      try {
+        const results = await Promise.all(
+          AUTO_SYNC_TABS.map(async (tab) => {
+            const params = new URLSearchParams();
 
-      if (shouldShowLoader) {
-        setLoading(false);
-      }
-    }
-  };
+            params.set("status", tab);
 
-  load();
-}, [activeTab, refreshTick]);
-
-/* ================= AUTO STATUS TABS SYNC ================= */
-useEffect(() => {
-  let cancelled = false;
-
-  const syncAutoMoveTabs = async () => {
-    try {
-      const results = await Promise.all(
-        AUTO_SYNC_TABS.map(async (tab) => {
-          const params = new URLSearchParams();
-
-          params.set("status", tab);
-
-          const res = await fetch(
-            `/api/orders?${params.toString()}`,
-            {
+            const res = await fetch(`/api/orders?${params.toString()}`, {
               cache: "no-store",
+            });
+
+            const json = await res.json().catch(() => ({}) as any);
+
+            if (!res.ok || !json?.ok) {
+              console.error("auto orders sync failed", tab, json);
+
+              return [tab, null] as const;
             }
-          );
 
-          const json = await res
-            .json()
-            .catch(() => ({} as any));
+            const mapped: Order[] = (json.orders || []).map(mapOrderRowToOrder);
 
-          if (!res.ok || !json?.ok) {
-            console.error(
-              "auto orders sync failed",
-              tab,
-              json
-            );
+            return [tab, mapped] as const;
+          }),
+        );
 
-            return [tab, null] as const;
-          }
+        if (cancelled) return;
 
-          const mapped: Order[] = (
-            json.orders || []
-          ).map(mapOrderRowToOrder);
+        setAllOrders((prev) => {
+          const copy = { ...prev };
 
-          return [tab, mapped] as const;
-        })
-      );
+          results.forEach(([tab, mapped]) => {
+            if (mapped) {
+              copy[tab] = mapped;
+            }
+          });
 
-      if (cancelled) return;
-
-      setAllOrders((prev) => {
-        const copy = { ...prev };
-
-        results.forEach(([tab, mapped]) => {
-          if (mapped) {
-            copy[tab] = mapped;
-          }
+          return copy;
         });
+      } catch (error) {
+        console.error("auto orders sync network error", error);
+      }
+    };
 
-        return copy;
-      });
-    } catch (error) {
-      console.error(
-        "auto orders sync network error",
-        error
-      );
+    syncAutoMoveTabs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
+
+  const orders = useMemo(
+    () => allOrders[activeTab] ?? [],
+    [allOrders, activeTab],
+  );
+
+  /* ================= AUTO BOOKED TO VERIFICATION ================= */
+  useEffect(() => {
+    const bookedOrders = allOrders.booked ?? [];
+
+    const dueForVerification = bookedOrders.filter((order) => {
+      if (autoVerificationInFlightRef.current[order.id]) {
+        return false;
+      }
+
+      return shouldAutoMoveBookedToVerification(order);
+    });
+
+    if (dueForVerification.length === 0) {
+      return;
     }
-  };
 
-  syncAutoMoveTabs();
+    const actor = SYSTEM_AUTO_ACTOR;
 
-  return () => {
-    cancelled = true;
-  };
-}, [refreshTick]);
-
-const orders = useMemo(
-  () => allOrders[activeTab] ?? [],
-  [allOrders, activeTab]
-);
-
-/* ================= AUTO BOOKED TO VERIFICATION ================= */
-useEffect(() => {
-  const bookedOrders =
-    allOrders.booked ?? [];
-
-  const dueForVerification =
-    bookedOrders.filter((order) => {
-      if (
-        autoVerificationInFlightRef.current[
-          order.id
-        ]
-      ) {
-        return false;
-      }
-
-      return shouldAutoMoveBookedToVerification(
-        order
-      );
-    });
-
-  if (dueForVerification.length === 0) {
-    return;
-  }
-
-  const actor = SYSTEM_AUTO_ACTOR;
-
-  dueForVerification.forEach((order) => {
-    autoVerificationInFlightRef.current[
-      order.id
-    ] = true;
-
-    (async () => {
-      const nextStatus: TabKey =
-        "verification";
-
-      const targetDbValue =
-        "In Verification";
-
-      const actionNote =
-        `Auto moved to In Verification before ` +
-        `${AUTO_VERIFICATION_BEFORE_MINUTES} minutes of delivery time`;
-
-      try {
-        const res = await fetch(
-          `/api/orders/${encodeURIComponent(
-            order.id
-          )}/status`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              newStatus: targetDbValue,
-              subStatus: null,
-              remarks: actionNote,
-              note: actionNote,
-              changedBy: actor.userName,
-              userType: actor.userType,
-              userName: actor.userName,
-              actionSource: "Auto",
-            }),
-          }
-        );
-
-        const json = await res
-          .json()
-          .catch(() => ({}));
-
-        if (!res.ok || !json?.ok) {
-          autoVerificationInFlightRef.current[
-            order.id
-          ] = false;
-
-          console.error(
-            "Auto verification move failed",
-            order.id,
-            json
-          );
-
-          return;
-        }
-
-        const updated: Order = {
-          ...order,
-          status: nextStatus,
-          dbStatus: targetDbValue,
-          history: [
-            ...order.history,
-            {
-              at: new Date().toISOString(),
-              by: actor.userName,
-              note: actionNote,
-              status: nextStatus,
-            },
-          ],
-        };
-
-        setAllOrders((prev) => {
-          const copy = { ...prev };
-
-          copy.booked = (
-            copy.booked ?? []
-          ).filter(
-            (existingOrder) =>
-              existingOrder.id !== order.id
-          );
-
-          copy.verification = [
-            updated,
-            ...(copy.verification ?? []),
-          ];
-
-          return copy;
-        });
-      } catch (error) {
-        autoVerificationInFlightRef.current[
-          order.id
-        ] = false;
-
-        console.error(
-          "Auto verification move network error",
-          error
-        );
-      }
-    })();
-  });
-}, [allOrders.booked]);
-
-/* ================= AUTO VERIFICATION TO NEW ORDER ================= */
-useEffect(() => {
-  const verificationOrders =
-    allOrders.verification ?? [];
-
-  const dueForNewOrder =
-    verificationOrders.filter((order) => {
-      if (
-        autoNewOrderInFlightRef.current[
-          order.id
-        ]
-      ) {
-        return false;
-      }
-
-      return shouldAutoMoveVerificationToNewOrder(
-        order
-      );
-    });
-
-  if (dueForNewOrder.length === 0) {
-    return;
-  }
-
-  const actor = SYSTEM_AUTO_ACTOR;
-
-  dueForNewOrder.forEach((order) => {
-    autoNewOrderInFlightRef.current[
-      order.id
-    ] = true;
-
-    (async () => {
-      const nextStatus: TabKey =
-        "neworder";
-
-      const targetDbValue =
-        "New Order";
-
-      const actionNote =
-        `Auto moved prepaid order to New Order before ` +
-        `${AUTO_VERIFICATION_BEFORE_MINUTES} minutes of delivery time`;
-
-      try {
-        const res = await fetch(
-          `/api/orders/${encodeURIComponent(
-            order.id
-          )}/status`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              newStatus: targetDbValue,
-              subStatus: null,
-              remarks: actionNote,
-              note: actionNote,
-              changedBy: actor.userName,
-              userType: actor.userType,
-              userName: actor.userName,
-              actionSource: "Auto",
-            }),
-          }
-        );
-
-        const json = await res
-          .json()
-          .catch(() => ({}));
-
-        if (!res.ok || !json?.ok) {
-          autoNewOrderInFlightRef.current[
-            order.id
-          ] = false;
-
-          console.error(
-            "Auto new order move failed",
-            order.id,
-            json
-          );
-
-          return;
-        }
-
-        const updated: Order = {
-          ...order,
-          status: nextStatus,
-          dbStatus: targetDbValue,
-          history: [
-            ...order.history,
-            {
-              at: new Date().toISOString(),
-              by: actor.userName,
-              note: actionNote,
-              status: nextStatus,
-            },
-          ],
-        };
-
-        setAllOrders((prev) => {
-          const copy = { ...prev };
-
-          copy.verification = (
-            copy.verification ?? []
-          ).filter(
-            (existingOrder) =>
-              existingOrder.id !== order.id
-          );
-
-          copy.neworder = [
-            updated,
-            ...(copy.neworder ?? []),
-          ];
-
-          return copy;
-        });
-      } catch (error) {
-        autoNewOrderInFlightRef.current[
-          order.id
-        ] = false;
-
-        console.error(
-          "Auto new order move network error",
-          error
-        );
-      }
-    })();
-  });
-}, [allOrders.verification]);
-
-/* ================= AUTO KITCHEN TO OUT FOR DELIVERY ================= */
-useEffect(() => {
-  const kitchenOrders =
-    allOrders.inkitchen ?? [];
-
-  const dueForOutForDelivery =
-    kitchenOrders.filter((order) => {
-      if (
-        autoOutForDeliveryInFlightRef.current[
-          order.id
-        ]
-      ) {
-        return false;
-      }
-
-      return shouldAutoMoveKitchenToOutForDelivery(
-        order
-      );
-    });
-
-  if (
-    dueForOutForDelivery.length === 0
-  ) {
-    return;
-  }
-
-  const actor = SYSTEM_AUTO_ACTOR;
-
-  dueForOutForDelivery.forEach(
-    (order) => {
-      autoOutForDeliveryInFlightRef.current[
-        order.id
-      ] = true;
+    dueForVerification.forEach((order) => {
+      autoVerificationInFlightRef.current[order.id] = true;
 
       (async () => {
-        const nextStatus: TabKey =
-          "outfordelivery";
+        const nextStatus: TabKey = "verification";
 
-        const targetDbValue =
-          "Out for Delivery";
+        const targetDbValue = "In Verification";
 
         const actionNote =
-          `Auto moved to Out for Delivery before ` +
-          `${AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES} minutes of delivery time`;
+          `Auto moved to In Verification before ` +
+          `${AUTO_VERIFICATION_BEFORE_MINUTES} minutes of delivery time`;
 
         try {
           const res = await fetch(
-            `/api/orders/${encodeURIComponent(
-              order.id
-            )}/status`,
+            `/api/orders/${encodeURIComponent(order.id)}/status`,
             {
               method: "PATCH",
               headers: {
-                "Content-Type":
-                  "application/json",
+                "Content-Type": "application/json",
               },
               body: JSON.stringify({
                 newStatus: targetDbValue,
@@ -1406,23 +1045,15 @@ useEffect(() => {
                 userName: actor.userName,
                 actionSource: "Auto",
               }),
-            }
+            },
           );
 
-          const json = await res
-            .json()
-            .catch(() => ({}));
+          const json = await res.json().catch(() => ({}));
 
           if (!res.ok || !json?.ok) {
-            autoOutForDeliveryInFlightRef.current[
-              order.id
-            ] = false;
+            autoVerificationInFlightRef.current[order.id] = false;
 
-            console.error(
-              "Auto out for delivery move failed",
-              order.id,
-              json
-            );
+            console.error("Auto verification move failed", order.id, json);
 
             return;
           }
@@ -1434,8 +1065,7 @@ useEffect(() => {
             history: [
               ...order.history,
               {
-                at:
-                  new Date().toISOString(),
+                at: new Date().toISOString(),
                 by: actor.userName,
                 note: actionNote,
                 status: nextStatus,
@@ -1446,221 +1076,356 @@ useEffect(() => {
           setAllOrders((prev) => {
             const copy = { ...prev };
 
-            copy.inkitchen = (
-              copy.inkitchen ?? []
-            ).filter(
-              (existingOrder) =>
-                existingOrder.id !== order.id
+            copy.booked = (copy.booked ?? []).filter(
+              (existingOrder) => existingOrder.id !== order.id,
             );
 
-            copy.outfordelivery = [
+            copy.verification = [updated, ...(copy.verification ?? [])];
+
+            return copy;
+          });
+        } catch (error) {
+          autoVerificationInFlightRef.current[order.id] = false;
+
+          console.error("Auto verification move network error", error);
+        }
+      })();
+    });
+  }, [allOrders.booked]);
+
+  /* ================= AUTO VERIFICATION TO NEW ORDER ================= */
+  useEffect(() => {
+    const verificationOrders = allOrders.verification ?? [];
+
+    const dueForNewOrder = verificationOrders.filter((order) => {
+      if (autoNewOrderInFlightRef.current[order.id]) {
+        return false;
+      }
+
+      return shouldAutoMoveVerificationToNewOrder(order);
+    });
+
+    if (dueForNewOrder.length === 0) {
+      return;
+    }
+
+    const actor = SYSTEM_AUTO_ACTOR;
+
+    dueForNewOrder.forEach((order) => {
+      autoNewOrderInFlightRef.current[order.id] = true;
+
+      (async () => {
+        const nextStatus: TabKey = "neworder";
+
+        const targetDbValue = "New Order";
+
+        const actionNote =
+          `Auto moved prepaid order to New Order before ` +
+          `${AUTO_VERIFICATION_BEFORE_MINUTES} minutes of delivery time`;
+
+        try {
+          const res = await fetch(
+            `/api/orders/${encodeURIComponent(order.id)}/status`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                newStatus: targetDbValue,
+                subStatus: null,
+                remarks: actionNote,
+                note: actionNote,
+                changedBy: actor.userName,
+                userType: actor.userType,
+                userName: actor.userName,
+                actionSource: "Auto",
+              }),
+            },
+          );
+
+          const json = await res.json().catch(() => ({}));
+
+          if (!res.ok || !json?.ok) {
+            autoNewOrderInFlightRef.current[order.id] = false;
+
+            console.error("Auto new order move failed", order.id, json);
+
+            return;
+          }
+
+          const updated: Order = {
+            ...order,
+            status: nextStatus,
+            dbStatus: targetDbValue,
+            history: [
+              ...order.history,
+              {
+                at: new Date().toISOString(),
+                by: actor.userName,
+                note: actionNote,
+                status: nextStatus,
+              },
+            ],
+          };
+
+          setAllOrders((prev) => {
+            const copy = { ...prev };
+
+            copy.verification = (copy.verification ?? []).filter(
+              (existingOrder) => existingOrder.id !== order.id,
+            );
+
+            copy.neworder = [updated, ...(copy.neworder ?? [])];
+
+            return copy;
+          });
+        } catch (error) {
+          autoNewOrderInFlightRef.current[order.id] = false;
+
+          console.error("Auto new order move network error", error);
+        }
+      })();
+    });
+  }, [allOrders.verification]);
+
+  /* ================= AUTO KITCHEN TO OUT FOR DELIVERY ================= */
+  useEffect(() => {
+    const kitchenOrders = allOrders.inkitchen ?? [];
+
+    const dueForOutForDelivery = kitchenOrders.filter((order) => {
+      if (autoOutForDeliveryInFlightRef.current[order.id]) {
+        return false;
+      }
+
+      return shouldAutoMoveKitchenToOutForDelivery(order);
+    });
+
+    if (dueForOutForDelivery.length === 0) {
+      return;
+    }
+
+    const actor = SYSTEM_AUTO_ACTOR;
+
+    dueForOutForDelivery.forEach((order) => {
+      autoOutForDeliveryInFlightRef.current[order.id] = true;
+
+      (async () => {
+        const nextStatus: TabKey = "outfordelivery";
+
+        const targetDbValue = "Out for Delivery";
+
+        const actionNote =
+          `Auto moved to Out for Delivery before ` +
+          `${AUTO_OUT_FOR_DELIVERY_BEFORE_MINUTES} minutes of delivery time`;
+
+        try {
+          const res = await fetch(
+            `/api/orders/${encodeURIComponent(order.id)}/status`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                newStatus: targetDbValue,
+                subStatus: null,
+                remarks: actionNote,
+                note: actionNote,
+                changedBy: actor.userName,
+                userType: actor.userType,
+                userName: actor.userName,
+                actionSource: "Auto",
+              }),
+            },
+          );
+
+          const json = await res.json().catch(() => ({}));
+
+          if (!res.ok || !json?.ok) {
+            autoOutForDeliveryInFlightRef.current[order.id] = false;
+
+            console.error("Auto out for delivery move failed", order.id, json);
+
+            return;
+          }
+
+          const updated: Order = {
+            ...order,
+            status: nextStatus,
+            dbStatus: targetDbValue,
+            history: [
+              ...order.history,
+              {
+                at: new Date().toISOString(),
+                by: actor.userName,
+                note: actionNote,
+                status: nextStatus,
+              },
+            ],
+          };
+
+          setAllOrders((prev) => {
+            const copy = { ...prev };
+
+            copy.inkitchen = (copy.inkitchen ?? []).filter(
+              (existingOrder) => existingOrder.id !== order.id,
+            );
+
+            copy.outfordelivery = [updated, ...(copy.outfordelivery ?? [])];
+
+            return copy;
+          });
+        } catch (error) {
+          autoOutForDeliveryInFlightRef.current[order.id] = false;
+
+          console.error("Auto out for delivery move network error", error);
+        }
+      })();
+    });
+  }, [allOrders.inkitchen]);
+
+  /* ================= AUTO EXPIRED ORDERS TO CANCELLATION REQUEST ================= */
+  useEffect(() => {
+    const bookedOrders = allOrders.booked ?? [];
+
+    const verificationOrders = allOrders.verification ?? [];
+
+    const expiredOrders = [...bookedOrders, ...verificationOrders].filter(
+      (order) => {
+        if (autoCancellationRequestInFlightRef.current[order.id]) {
+          return false;
+        }
+
+        return shouldAutoMoveToCancellationRequest(order);
+      },
+    );
+
+    if (expiredOrders.length === 0) {
+      return;
+    }
+
+    const actor = SYSTEM_AUTO_ACTOR;
+
+    expiredOrders.forEach((order) => {
+      autoCancellationRequestInFlightRef.current[order.id] = true;
+
+      (async () => {
+        const nextStatus: TabKey = "cancellationrequest";
+
+        const targetDbValue = "Cancellation Request";
+
+        const previousStage =
+          order.status === "verification" ? "In Verification" : "Booked";
+
+        const actionNote =
+          `Delivery date and time passed while order was in ${previousStage}. ` +
+          `Automatically moved to Cancellation Request.`;
+
+        try {
+          const res = await fetch(
+            `/api/orders/${encodeURIComponent(order.id)}/status`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                newStatus: targetDbValue,
+
+                // Purana Status SubStatus me preserve hoga
+                subStatus: previousStage,
+
+                remarks: actionNote,
+                note: actionNote,
+                changedBy: actor.userName,
+                userType: actor.userType,
+                userName: actor.userName,
+                actionSource: "Auto",
+              }),
+            },
+          );
+
+          const json = await res.json().catch(() => ({}));
+
+          if (!res.ok || !json?.ok) {
+            autoCancellationRequestInFlightRef.current[order.id] = false;
+
+            console.error("Auto Cancellation Request failed", order.id, json);
+
+            return;
+          }
+
+          const updated: Order = {
+            ...order,
+            status: nextStatus,
+            dbStatus: targetDbValue,
+            history: [
+              ...order.history,
+              {
+                at: new Date().toISOString(),
+                by: actor.userName,
+                note: actionNote,
+                status: nextStatus,
+              },
+            ],
+          };
+
+          setAllOrders((prev) => {
+            const copy = { ...prev };
+
+            copy.booked = (copy.booked ?? []).filter(
+              (existingOrder) => existingOrder.id !== order.id,
+            );
+
+            copy.verification = (copy.verification ?? []).filter(
+              (existingOrder) => existingOrder.id !== order.id,
+            );
+
+            copy.cancellationrequest = [
               updated,
-              ...(copy.outfordelivery ?? []),
+              ...(copy.cancellationrequest ?? []),
             ];
 
             return copy;
           });
         } catch (error) {
-          autoOutForDeliveryInFlightRef.current[
-            order.id
-          ] = false;
+          autoCancellationRequestInFlightRef.current[order.id] = false;
 
           console.error(
-            "Auto out for delivery move network error",
-            error
+            "Auto Cancellation Request network error",
+            order.id,
+            error,
           );
         }
       })();
-    }
-  );
-}, [allOrders.inkitchen]);
+    });
+  }, [allOrders.booked, allOrders.verification]);
 
-/* ================= AUTO EXPIRED ORDERS TO CANCELLATION REQUEST ================= */
-useEffect(() => {
-  const bookedOrders =
-    allOrders.booked ?? [];
+  /* ================= KEEP DRAWER ORDER UPDATED ================= */
+  useEffect(() => {
+    if (!detailedOrder) return;
 
-  const verificationOrders =
-    allOrders.verification ?? [];
+    const liveFlatArray = Object.values(allOrders).flat();
 
-  const expiredOrders = [
-    ...bookedOrders,
-    ...verificationOrders,
-  ].filter((order) => {
-    if (
-      autoCancellationRequestInFlightRef.current[
-        order.id
-      ]
-    ) {
-      return false;
-    }
-
-    return shouldAutoMoveToCancellationRequest(
-      order
+    const matchUpdate = liveFlatArray.find(
+      (order) => order.id === detailedOrder.id,
     );
-  });
 
-  if (expiredOrders.length === 0) {
-    return;
-  }
-
-  const actor = SYSTEM_AUTO_ACTOR;
-
-  expiredOrders.forEach((order) => {
-    autoCancellationRequestInFlightRef.current[
-      order.id
-    ] = true;
-
-    (async () => {
-      const nextStatus: TabKey =
-        "cancellationrequest";
-
-      const targetDbValue =
-        "Cancellation Request";
-
-      const previousStage =
-        order.status === "verification"
-          ? "In Verification"
-          : "Booked";
-
-      const actionNote =
-        `Delivery date and time passed while order was in ${previousStage}. ` +
-        `Automatically moved to Cancellation Request.`;
-
-      try {
-        const res = await fetch(
-          `/api/orders/${encodeURIComponent(
-            order.id
-          )}/status`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              newStatus: targetDbValue,
-
-              // Purana Status SubStatus me preserve hoga
-              subStatus: previousStage,
-
-              remarks: actionNote,
-              note: actionNote,
-              changedBy: actor.userName,
-              userType: actor.userType,
-              userName: actor.userName,
-              actionSource: "Auto",
-            }),
-          }
-        );
-
-        const json = await res
-          .json()
-          .catch(() => ({}));
-
-        if (!res.ok || !json?.ok) {
-          autoCancellationRequestInFlightRef.current[
-            order.id
-          ] = false;
-
-          console.error(
-            "Auto Cancellation Request failed",
-            order.id,
-            json
-          );
-
-          return;
-        }
-
-        const updated: Order = {
-          ...order,
-          status: nextStatus,
-          dbStatus: targetDbValue,
-          history: [
-            ...order.history,
-            {
-              at: new Date().toISOString(),
-              by: actor.userName,
-              note: actionNote,
-              status: nextStatus,
-            },
-          ],
-        };
-
-        setAllOrders((prev) => {
-          const copy = { ...prev };
-
-          copy.booked = (
-            copy.booked ?? []
-          ).filter(
-            (existingOrder) =>
-              existingOrder.id !== order.id
-          );
-
-          copy.verification = (
-            copy.verification ?? []
-          ).filter(
-            (existingOrder) =>
-              existingOrder.id !== order.id
-          );
-
-          copy.cancellationrequest = [
-            updated,
-            ...(copy.cancellationrequest ?? []),
-          ];
-
-          return copy;
-        });
-      } catch (error) {
-        autoCancellationRequestInFlightRef.current[
-          order.id
-        ] = false;
-
-        console.error(
-          "Auto Cancellation Request network error",
-          order.id,
-          error
-        );
-      }
-    })();
-  });
-}, [
-  allOrders.booked,
-  allOrders.verification,
-]);
-
-/* ================= KEEP DRAWER ORDER UPDATED ================= */
-useEffect(() => {
-  if (!detailedOrder) return;
-
-  const liveFlatArray =
-    Object.values(allOrders).flat();
-
-  const matchUpdate = liveFlatArray.find(
-    (order) => order.id === detailedOrder.id
-  );
-
-  if (
-    matchUpdate &&
-    (
-      matchUpdate.status !== detailedOrder.status ||
-      matchUpdate.dbStatus !== detailedOrder.dbStatus
-    )
-  ) {
-    setDetailedOrder((current: any) => ({
-      ...matchUpdate,
-      raw: {
-        ...(current?.raw || {}),
-        ...(matchUpdate.raw || {}),
-      },
-    }));
-  }
-}, [allOrders]);
+    if (
+      matchUpdate &&
+      (matchUpdate.status !== detailedOrder.status ||
+        matchUpdate.dbStatus !== detailedOrder.dbStatus)
+    ) {
+      setDetailedOrder(matchUpdate);
+    }
+  }, [allOrders]);
 
   /* ================= TRAIN ROUTE MODAL ================= */
   const openRouteModal = async (trainNo?: string, stationCode?: string) => {
     const normalizedTrainNo = normalizeRouteValue(trainNo);
-    const normalizedStationCode = normalizeRouteValue(stationCode).toUpperCase();
+    const normalizedStationCode =
+      normalizeRouteValue(stationCode).toUpperCase();
 
     if (!normalizedTrainNo) {
       alert("Train number not available for this order");
@@ -1690,7 +1455,8 @@ useEffect(() => {
 
     const numericTrainNo = Number(normalizedTrainNo);
     const filters = [`trainNumber_text.eq.${normalizedTrainNo}`];
-    if (Number.isFinite(numericTrainNo)) filters.push(`trainNumber.eq.${numericTrainNo}`);
+    if (Number.isFinite(numericTrainNo))
+      filters.push(`trainNumber.eq.${numericTrainNo}`);
 
     const { data, error } = await supabase
       .from("TrainRoute")
@@ -1711,9 +1477,10 @@ useEffect(() => {
     }
 
     const routeRows = data || [];
-    const message = routeRows.length === 0
-      ? `Supabase returned 0 TrainRoute rows for train ${normalizedTrainNo}. If rows exist in table editor, enable SELECT policy/RLS access for anon/authenticated users.`
-      : "";
+    const message =
+      routeRows.length === 0
+        ? `Supabase returned 0 TrainRoute rows for train ${normalizedTrainNo}. If rows exist in table editor, enable SELECT policy/RLS access for anon/authenticated users.`
+        : "";
 
     console.log("TrainRoute query result", {
       trainNo: normalizedTrainNo,
@@ -1739,7 +1506,7 @@ useEffect(() => {
   /* ================= DIAGNOSTICS LAUNCH PANEL ================= */
   const handleOpenDiagnosticsDrawer = async (
     order: Order,
-    preferredSection: "details" | "logs" = "details"
+    preferredSection: "details" | "logs" = "details",
   ) => {
     setDetailedOrder(order);
     setActiveDrawerSection(preferredSection);
@@ -1748,57 +1515,27 @@ useEffect(() => {
     const targetOrderId = order.id;
     const targetRestroCode = order.outletId;
 
-    /*
-      API list response kabhi-kabhi sirf table ke required columns bhejta hai.
-      Popup khulte hi Orders table ki complete row dobara load ki jaati hai,
-      jisse PNR, BookingSource, BookedBy aur payment breakup mil sake.
-    */
+    // Fetch the complete Orders row so every payment and booking field comes
+    // directly from Supabase instead of depending only on the compact list API.
     if (targetOrderId) {
       try {
-        let fullOrderRow: any = null;
-
-        const byId = await supabase
+        const { data: fullOrderRow, error: fullOrderError } = await supabase
           .from("Orders")
           .select("*")
-          .eq("id", targetOrderId)
+          .eq("OrderId", targetOrderId)
           .maybeSingle();
 
-        if (!byId.error && byId.data) {
-          fullOrderRow = byId.data;
-        } else {
-          const byOrderId = await supabase
-            .from("Orders")
-            .select("*")
-            .eq("OrderId", targetOrderId)
-            .maybeSingle();
-
-          if (!byOrderId.error && byOrderId.data) {
-            fullOrderRow = byOrderId.data;
-          } else if (byId.error && byOrderId.error) {
-            console.error("Complete Orders row could not be loaded", {
-              idError: byId.error,
-              orderIdError: byOrderId.error,
-            });
-          }
-        }
-
-        if (fullOrderRow) {
-          const mappedFullOrder = mapOrderRowToOrder(fullOrderRow);
-
-          setDetailedOrder((current: any) => ({
-            ...(current || order),
-            ...mappedFullOrder,
-            status: current?.status || order.status,
-            dbStatus:
-              valueFrom(fullOrderRow, "Status", "status") ||
-              current?.dbStatus ||
-              order.dbStatus,
-            raw: {
-              ...(order.raw || {}),
-              ...(current?.raw || {}),
-              ...fullOrderRow,
-            },
-          }));
+        if (!fullOrderError && fullOrderRow) {
+          const completeOrder = mapOrderRowToOrder(fullOrderRow);
+          setDetailedOrder({
+            ...order,
+            ...completeOrder,
+            status: order.status,
+            dbStatus: completeOrder.dbStatus || order.dbStatus,
+            raw: { ...(order.raw || {}), ...fullOrderRow },
+          });
+        } else if (fullOrderError) {
+          console.error("Complete Orders row fetch failed:", fullOrderError);
         }
       } catch (e) {
         console.error("Error loading complete Orders row:", e);
@@ -1813,12 +1550,7 @@ useEffect(() => {
           .from("OrderItems")
           .select("*")
           .eq("OrderId", targetOrderId);
-
-        if (!error && data) {
-          setFetchedItems(data);
-        } else if (error) {
-          console.error("OrderItems loading failed:", error);
-        }
+        if (!error && data) setFetchedItems(data);
       } catch (e) {
         console.error("Error connecting OrderItems database links:", e);
       } finally {
@@ -1835,12 +1567,7 @@ useEffect(() => {
           .select("*")
           .eq("RestroCode", targetRestroCode)
           .maybeSingle();
-
-        if (!error && data) {
-          setFetchedRestro(data);
-        } else if (error) {
-          console.error("RestroMaster loading failed:", error);
-        }
+        if (!error && data) setFetchedRestro(data);
       } catch (e) {
         console.error("Error connecting RestroMaster database links:", e);
       } finally {
@@ -1857,12 +1584,7 @@ useEffect(() => {
           .select("*")
           .eq("OrderId", targetOrderId)
           .order("ChangedAt", { ascending: true });
-
-        if (!error && data) {
-          setOrderLogs(data);
-        } else if (error) {
-          console.error("OrderStatusHistory loading failed:", error);
-        }
+        if (!error && data) setOrderLogs(data);
       } catch (e) {
         console.error("Error connecting OrderStatusHistory database links:", e);
       } finally {
@@ -1883,26 +1605,29 @@ useEffect(() => {
     }
 
     const nextStatus = mapping.next;
-    const targetDbValue = mapping.dbValue; 
+    const targetDbValue = mapping.dbValue;
 
     (async () => {
       try {
         const actor = getAdminActor();
         const actionNote = mapping.actionLabel;
-        const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            newStatus: targetDbValue,
-            subStatus: null,
-            remarks: actionNote,
-            note: actionNote,
-            changedBy: actor.userName,
-            userType: actor.userType,
-            userName: actor.userName,
-            actionSource: actor.userType || "Admin",
-          }),
-        });
+        const res = await fetch(
+          `/api/orders/${encodeURIComponent(order.id)}/status`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              newStatus: targetDbValue,
+              subStatus: null,
+              remarks: actionNote,
+              note: actionNote,
+              changedBy: actor.userName,
+              userType: actor.userType,
+              userName: actor.userName,
+              actionSource: actor.userType || "Admin",
+            }),
+          },
+        );
         const json = await res.json().catch(() => ({}));
         if (!res.ok || !json?.ok) {
           alert("Failed to change status");
@@ -1926,7 +1651,9 @@ useEffect(() => {
 
         setAllOrders((prev) => {
           const copy = { ...prev };
-          copy[activeTab] = (copy[activeTab] ?? []).filter((o) => o.id !== orderId);
+          copy[activeTab] = (copy[activeTab] ?? []).filter(
+            (o) => o.id !== orderId,
+          );
           copy[nextStatus] = [updated, ...(copy[nextStatus] ?? [])];
           return copy;
         });
@@ -1939,7 +1666,9 @@ useEffect(() => {
               .eq("OrderId", orderId)
               .order("ChangedAt", { ascending: true });
             if (logReload) setOrderLogs(logReload);
-          } catch (err) { console.error(err); }
+          } catch (err) {
+            console.error(err);
+          }
         }
       } catch (e) {
         alert("Failed to change status (network error)");
@@ -1954,24 +1683,25 @@ useEffect(() => {
       return;
     }
 
-      try {
+    try {
       const outForDeliveryOption =
         selectedOrder.status === "inkitchen" ||
         selectedOrder.status === "outfordelivery"
-          ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find((option) => option.key === subStatus)
+          ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find(
+              (option) => option.key === subStatus,
+            )
           : null;
       const shouldApplyOrderPenalty =
         actionType === "mark" &&
         (selectedOrder.status === "inkitchen" ||
           selectedOrder.status === "outfordelivery");
-      const selectedVendorPenalty =
-        !shouldApplyOrderPenalty
-          ? 0
-          : outForDeliveryOption?.manualPenalty
+      const selectedVendorPenalty = !shouldApplyOrderPenalty
+        ? 0
+        : outForDeliveryOption?.manualPenalty
           ? Number(vendorPenaltyAmount || 0)
-          : outForDeliveryOption?.vendorPenalty ??
+          : (outForDeliveryOption?.vendorPenalty ??
             ORDER_PENALTY_BY_SUB_STATUS[subStatus] ??
-            0;
+            0);
 
       if (
         shouldApplyOrderPenalty &&
@@ -2009,24 +1739,27 @@ useEffect(() => {
       const actor = getAdminActor();
       const cleanRemarks = remarks.trim();
 
-      const res = await fetch(`/api/orders/${encodeURIComponent(selectedOrder.id)}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          newStatus: computedMainStatus,
-          subStatus,
-          remarks: cleanRemarks,
-          note: cleanRemarks,
-          changedBy: actor.userName,
-          userType: actor.userType,
-          userName: actor.userName,
-          actionSource: actor.userType || "Admin",
-          OrderPenalty: selectedVendorPenalty,
-          vendorPenalty: selectedVendorPenalty,
-          vendorPenaltyAmount: selectedVendorPenalty,
-          VendorPenalty: selectedVendorPenalty,
-        }),
-      });
+      const res = await fetch(
+        `/api/orders/${encodeURIComponent(selectedOrder.id)}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            newStatus: computedMainStatus,
+            subStatus,
+            remarks: cleanRemarks,
+            note: cleanRemarks,
+            changedBy: actor.userName,
+            userType: actor.userType,
+            userName: actor.userName,
+            actionSource: actor.userType || "Admin",
+            OrderPenalty: selectedVendorPenalty,
+            vendorPenalty: selectedVendorPenalty,
+            vendorPenaltyAmount: selectedVendorPenalty,
+            VendorPenalty: selectedVendorPenalty,
+          }),
+        },
+      );
 
       const json = await res.json();
       if (!res.ok || !json?.ok) {
@@ -2037,8 +1770,8 @@ useEffect(() => {
       const targetKey: TabKey = outForDeliveryOption
         ? outForDeliveryOption.targetTab
         : subStatus === "Bad Delivery"
-        ? "baddelivery"
-        : (computedMainStatus.toLowerCase().replace(/\s/g, "")) as TabKey;
+          ? "baddelivery"
+          : (computedMainStatus.toLowerCase().replace(/\s/g, "") as TabKey);
 
       const updatedOrder = {
         ...selectedOrder,
@@ -2064,7 +1797,11 @@ useEffect(() => {
         return copy;
       });
 
-      if (viewDrawerOpen && detailedOrder && detailedOrder.id === selectedOrder.id) {
+      if (
+        viewDrawerOpen &&
+        detailedOrder &&
+        detailedOrder.id === selectedOrder.id
+      ) {
         try {
           const { data: logReload } = await supabase
             .from("OrderStatusHistory")
@@ -2072,7 +1809,9 @@ useEffect(() => {
             .eq("OrderId", selectedOrder.id)
             .order("ChangedAt", { ascending: true });
           if (logReload) setOrderLogs(logReload);
-        } catch (err) { console.error(err); }
+        } catch (err) {
+          console.error(err);
+        }
       }
 
       setStatusModalOpen(false);
@@ -2094,26 +1833,29 @@ useEffect(() => {
       return;
     }
     const targetKey = selection.status as TabKey;
-    const matchedOption = FINAL_MARK_OPTIONS.find(o => o.key === targetKey);
+    const matchedOption = FINAL_MARK_OPTIONS.find((o) => o.key === targetKey);
     const targetDbValue = matchedOption ? matchedOption.dbValue : targetKey;
     const currentRemarks = selection.remarks || `Marked ${targetKey}`;
 
     try {
       const actor = getAdminActor();
-      const res = await fetch(`/api/orders/${encodeURIComponent(order.id)}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          newStatus: targetDbValue,
-          subStatus: matchedOption?.label || targetDbValue,
-          remarks: currentRemarks,
-          note: currentRemarks,
-          changedBy: actor.userName,
-          userType: actor.userType,
-          userName: actor.userName,
-          actionSource: actor.userType || "Admin",
-        }),
-      });
+      const res = await fetch(
+        `/api/orders/${encodeURIComponent(order.id)}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            newStatus: targetDbValue,
+            subStatus: matchedOption?.label || targetDbValue,
+            remarks: currentRemarks,
+            note: currentRemarks,
+            changedBy: actor.userName,
+            userType: actor.userType,
+            userName: actor.userName,
+            actionSource: actor.userType || "Admin",
+          }),
+        },
+      );
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) {
         alert("Failed to change status");
@@ -2158,7 +1900,9 @@ useEffect(() => {
             .eq("OrderId", order.id)
             .order("ChangedAt", { ascending: true });
           if (logReload) setOrderLogs(logReload);
-        } catch (err) { console.error(err); }
+        } catch (err) {
+          console.error(err);
+        }
       }
 
       setActiveTab(targetKey);
@@ -2167,150 +1911,156 @@ useEffect(() => {
     }
   }
 
+  // 1. Applying Search Filters
+  const applyFiltersAndSorting = (list: Order[]) => {
+    let filtered = list.slice();
 
-    // 1. Applying Search Filters
-const applyFiltersAndSorting = (list: Order[]) => {
-  let filtered = list.slice();
-
-  if (searchOrderId.trim()) {
-    const q = searchOrderId.trim().toLowerCase();
-    filtered = filtered.filter((o) => o.id.toLowerCase().includes(q));
-  }
-
-  if (searchCustomerMobile.trim()) {
-    const q = searchCustomerMobile.trim().toLowerCase();
-    filtered = filtered.filter((o) =>
-      o.customerMobile.toLowerCase().includes(q)
-    );
-  }
-
-  if (searchOutlet.trim()) {
-    const q = searchOutlet.trim().toLowerCase();
-    filtered = filtered.filter(
-      (o) =>
-        o.outletId.toLowerCase().includes(q) ||
-        o.outletName.toLowerCase().includes(q)
-    );
-  }
-
-  if (searchStation.trim()) {
-    const q = searchStation.trim().toLowerCase();
-    filtered = filtered.filter(
-      (o) =>
-        o.stationCode.toLowerCase().includes(q) ||
-        o.stationName.toLowerCase().includes(q)
-    );
-  }
-
-  if (searchTrainNo.trim()) {
-    const q = searchTrainNo.trim().toLowerCase();
-    filtered = filtered.filter((o) =>
-      (o.trainNo || "").toLowerCase().includes(q)
-    );
-  }
-
-  if (dateSearchType === "delivery" && (searchDeliveryFrom || searchDeliveryTo)) {
-  const fromTime = searchDeliveryFrom ? new Date(searchDeliveryFrom).getTime() : 0;
-  const toTime = searchDeliveryTo ? new Date(searchDeliveryTo).getTime() : Number.MAX_SAFE_INTEGER;
-
-  filtered = filtered.filter((o) => {
-    if (!o.deliveryDate) return false;
-
-    const deliveryDateTime = `${o.deliveryDate}T${o.deliveryTime || "00:00:00"}`;
-    const deliveryTime = new Date(deliveryDateTime).getTime();
-
-    return deliveryTime >= fromTime && deliveryTime <= toTime;
-  });
-}
-
-  if (
-    dateSearchType === "booking" &&
-    bookingDateFilterOn &&
-    (searchBookingFrom || searchBookingTo)
-  ) {
-    const fromTime = searchBookingFrom
-      ? new Date(searchBookingFrom).getTime()
-      : 0;
-
-    const toTime = searchBookingTo
-      ? new Date(searchBookingTo).getTime()
-      : Number.MAX_SAFE_INTEGER;
-
-    filtered = filtered.filter((o) => {
-      if (!o.rawCreatedAt) return false;
-      const bookedTime = new Date(o.rawCreatedAt).getTime();
-      return bookedTime >= fromTime && bookedTime <= toTime;
-    });
-  }
-
-  filtered.sort((a, b) => {
-    const dateTimeA = new Date(
-      `${a.deliveryDate}T${a.deliveryTime || "00:00:00"}`
-    ).getTime();
-
-    const dateTimeB = new Date(
-      `${b.deliveryDate}T${b.deliveryTime || "00:00:00"}`
-    ).getTime();
-
-    if (dateTimeA !== dateTimeB) return dateTimeA - dateTimeB;
-
-    const bookedTimeA = a.rawCreatedAt
-      ? new Date(a.rawCreatedAt).getTime()
-      : 0;
-
-    const bookedTimeB = b.rawCreatedAt
-      ? new Date(b.rawCreatedAt).getTime()
-      : 0;
-
-    return bookedTimeB - bookedTimeA;
-  });
-
-  return filtered;
-};
-
-const tabCounts = useMemo(() => {
-  const counts: Record<string, number> = {
-  booked: 0,
-  verification: 0,
-  cancellationrequest: 0,
-  neworder: 0,
-  inkitchen: 0,
-  outfordelivery: 0,
-  delivered: 0,
-  cancelled: 0,
-  notdelivered: 0,
-  baddelivery: 0,
-  all: 0,
-};
-  const flatOrders = Object.values(allOrders).flat();
-
-  counts.all = flatOrders.length;
-
-  flatOrders.forEach((o) => {
-    if (counts[o.status] !== undefined) {
-      counts[o.status]++;
+    if (searchOrderId.trim()) {
+      const q = searchOrderId.trim().toLowerCase();
+      filtered = filtered.filter((o) => o.id.toLowerCase().includes(q));
     }
-  });
 
-  return counts;
-}, [allOrders]);
+    if (searchCustomerMobile.trim()) {
+      const q = searchCustomerMobile.trim().toLowerCase();
+      filtered = filtered.filter((o) =>
+        o.customerMobile.toLowerCase().includes(q),
+      );
+    }
+
+    if (searchOutlet.trim()) {
+      const q = searchOutlet.trim().toLowerCase();
+      filtered = filtered.filter(
+        (o) =>
+          o.outletId.toLowerCase().includes(q) ||
+          o.outletName.toLowerCase().includes(q),
+      );
+    }
+
+    if (searchStation.trim()) {
+      const q = searchStation.trim().toLowerCase();
+      filtered = filtered.filter(
+        (o) =>
+          o.stationCode.toLowerCase().includes(q) ||
+          o.stationName.toLowerCase().includes(q),
+      );
+    }
+
+    if (searchTrainNo.trim()) {
+      const q = searchTrainNo.trim().toLowerCase();
+      filtered = filtered.filter((o) =>
+        (o.trainNo || "").toLowerCase().includes(q),
+      );
+    }
+
+    if (
+      dateSearchType === "delivery" &&
+      (searchDeliveryFrom || searchDeliveryTo)
+    ) {
+      const fromTime = searchDeliveryFrom
+        ? new Date(searchDeliveryFrom).getTime()
+        : 0;
+      const toTime = searchDeliveryTo
+        ? new Date(searchDeliveryTo).getTime()
+        : Number.MAX_SAFE_INTEGER;
+
+      filtered = filtered.filter((o) => {
+        if (!o.deliveryDate) return false;
+
+        const deliveryDateTime = `${o.deliveryDate}T${o.deliveryTime || "00:00:00"}`;
+        const deliveryTime = new Date(deliveryDateTime).getTime();
+
+        return deliveryTime >= fromTime && deliveryTime <= toTime;
+      });
+    }
+
+    if (
+      dateSearchType === "booking" &&
+      bookingDateFilterOn &&
+      (searchBookingFrom || searchBookingTo)
+    ) {
+      const fromTime = searchBookingFrom
+        ? new Date(searchBookingFrom).getTime()
+        : 0;
+
+      const toTime = searchBookingTo
+        ? new Date(searchBookingTo).getTime()
+        : Number.MAX_SAFE_INTEGER;
+
+      filtered = filtered.filter((o) => {
+        if (!o.rawCreatedAt) return false;
+        const bookedTime = new Date(o.rawCreatedAt).getTime();
+        return bookedTime >= fromTime && bookedTime <= toTime;
+      });
+    }
+
+    filtered.sort((a, b) => {
+      const dateTimeA = new Date(
+        `${a.deliveryDate}T${a.deliveryTime || "00:00:00"}`,
+      ).getTime();
+
+      const dateTimeB = new Date(
+        `${b.deliveryDate}T${b.deliveryTime || "00:00:00"}`,
+      ).getTime();
+
+      if (dateTimeA !== dateTimeB) return dateTimeA - dateTimeB;
+
+      const bookedTimeA = a.rawCreatedAt
+        ? new Date(a.rawCreatedAt).getTime()
+        : 0;
+
+      const bookedTimeB = b.rawCreatedAt
+        ? new Date(b.rawCreatedAt).getTime()
+        : 0;
+
+      return bookedTimeB - bookedTimeA;
+    });
+
+    return filtered;
+  };
+
+  const tabCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      booked: 0,
+      verification: 0,
+      cancellationrequest: 0,
+      neworder: 0,
+      inkitchen: 0,
+      outfordelivery: 0,
+      delivered: 0,
+      cancelled: 0,
+      notdelivered: 0,
+      baddelivery: 0,
+      all: 0,
+    };
+    const flatOrders = Object.values(allOrders).flat();
+
+    counts.all = flatOrders.length;
+
+    flatOrders.forEach((o) => {
+      if (counts[o.status] !== undefined) {
+        counts[o.status]++;
+      }
+    });
+
+    return counts;
+  }, [allOrders]);
   const visibleOrders = useMemo(
-  () => applyFiltersAndSorting(orders),
-  [
-    orders,
-    searchOrderId,
-    searchCustomerMobile,
-    searchOutlet,
-    searchStation,
-    searchDeliveryFrom,
-searchDeliveryTo,
-    searchTrainNo,
-    searchBookingFrom,
-    searchBookingTo,
-    bookingDateFilterOn,
-    dateSearchType,
-  ]
-);
+    () => applyFiltersAndSorting(orders),
+    [
+      orders,
+      searchOrderId,
+      searchCustomerMobile,
+      searchOutlet,
+      searchStation,
+      searchDeliveryFrom,
+      searchDeliveryTo,
+      searchTrainNo,
+      searchBookingFrom,
+      searchBookingTo,
+      bookingDateFilterOn,
+      dateSearchType,
+    ],
+  );
 
   function csvEscape(value: any) {
     const text = String(value ?? "");
@@ -2318,20 +2068,27 @@ searchDeliveryTo,
   }
 
   function downloadOrdersReport() {
-  if (!visibleOrders.length) {
-    alert("No data found to download");
-    return;
+    if (!visibleOrders.length) {
+      alert("No data found to download");
+      return;
+    }
+
+    const params = new URLSearchParams();
+
+    params.set("status", activeTab);
+    params.set("orderIds", visibleOrders.map((o) => o.id).join(","));
+
+    window.open(`/api/admin/orders-report?${params.toString()}`, "_blank");
   }
-
-  const params = new URLSearchParams();
-
-  params.set("status", activeTab);
-  params.set("orderIds", visibleOrders.map((o) => o.id).join(","));
-
-  window.open(`/api/admin/orders-report?${params.toString()}`, "_blank");
-}
   return (
-    <section style={{ padding: 12, minHeight: "100vh", background: "#f8fafc", fontFamily: "sans-serif" }}>
+    <section
+      style={{
+        padding: 12,
+        minHeight: "100vh",
+        background: "#f8fafc",
+        fontFamily: "sans-serif",
+      }}
+    >
       <header
         style={{
           display: "flex",
@@ -2342,12 +2099,31 @@ searchDeliveryTo,
           background: "#fff",
           padding: 16,
           borderRadius: 12,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
+          boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
         }}
       >
         <div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#0f172a" }}>Orders Dashboard</h1>
-          <p style={{ margin: 0, color: "#6b7280", fontSize: 13, fontWeight: 500 }}>Real-time dynamic monitoring console ordered by delivery schedule urgency</p>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 28,
+              fontWeight: 800,
+              color: "#0f172a",
+            }}
+          >
+            Orders Dashboard
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              color: "#6b7280",
+              fontSize: 13,
+              fontWeight: 500,
+            }}
+          >
+            Real-time dynamic monitoring console ordered by delivery schedule
+            urgency
+          </p>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -2391,14 +2167,25 @@ searchDeliveryTo,
           </Link>
 
           <div style={{ color: "#6b7280", fontSize: 13, fontWeight: 600 }}>
-            Active Stage: <strong style={{ color: "#2563eb" }}>{TABS.find((t) => t.key === activeTab)?.label}</strong>
+            Active Stage:{" "}
+            <strong style={{ color: "#2563eb" }}>
+              {TABS.find((t) => t.key === activeTab)?.label}
+            </strong>
             {loading ? " • Syncing..." : ""}
           </div>
         </div>
       </header>
 
       {/* TABS VIEW */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, marginBottom: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          marginTop: 12,
+          marginBottom: 12,
+        }}
+      >
         {TABS.map((tab) => {
           const active = tab.key === activeTab;
           return (
@@ -2415,11 +2202,13 @@ searchDeliveryTo,
                 background: active ? "#fff" : "#f8fafc",
                 fontWeight: active ? 700 : 600,
                 cursor: "pointer",
-                transition: "all 0.2s"
+                transition: "all 0.2s",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ color: active ? "#0f172a" : "#475569" }}>{tab.label}</span>
+                <span style={{ color: active ? "#0f172a" : "#475569" }}>
+                  {tab.label}
+                </span>
                 <span
                   style={{
                     background: active ? "#2563eb" : "#e2e8f0",
@@ -2444,182 +2233,285 @@ searchDeliveryTo,
       </div>
 
       {/* FILTER CONTROLS */}
-<div
-  style={{
-    display: "flex",
-    gap: 8,
-    alignItems: "center",
-    marginBottom: 12,
-    flexWrap: "wrap",
-    background: "#fff",
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid #e2e8f0",
-  }}
->
-  <input placeholder="Order ID" value={draftOrderId} onChange={(e) => setDraftOrderId(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }} />
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          marginBottom: 12,
+          flexWrap: "wrap",
+          background: "#fff",
+          padding: 12,
+          borderRadius: 10,
+          border: "1px solid #e2e8f0",
+        }}
+      >
+        <input
+          placeholder="Order ID"
+          value={draftOrderId}
+          onChange={(e) => setDraftOrderId(e.target.value)}
+          style={{
+            padding: 8,
+            borderRadius: 6,
+            border: "1px solid #cbd5e1",
+            width: 150,
+            fontSize: 13,
+          }}
+        />
 
-  <input placeholder="Customer Mobile" value={draftCustomerMobile} onChange={(e) => setDraftCustomerMobile(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 150, fontSize: 13 }} />
+        <input
+          placeholder="Customer Mobile"
+          value={draftCustomerMobile}
+          onChange={(e) => setDraftCustomerMobile(e.target.value)}
+          style={{
+            padding: 8,
+            borderRadius: 6,
+            border: "1px solid #cbd5e1",
+            width: 150,
+            fontSize: 13,
+          }}
+        />
 
-  <input placeholder="Outlet ID / Name" value={draftOutlet} onChange={(e) => setDraftOutlet(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 160, fontSize: 13 }} />
+        <input
+          placeholder="Outlet ID / Name"
+          value={draftOutlet}
+          onChange={(e) => setDraftOutlet(e.target.value)}
+          style={{
+            padding: 8,
+            borderRadius: 6,
+            border: "1px solid #cbd5e1",
+            width: 160,
+            fontSize: 13,
+          }}
+        />
 
-  <input placeholder="Station Code / Name" value={draftStation} onChange={(e) => setDraftStation(e.target.value)} style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 170, fontSize: 13 }} />
+        <input
+          placeholder="Station Code / Name"
+          value={draftStation}
+          onChange={(e) => setDraftStation(e.target.value)}
+          style={{
+            padding: 8,
+            borderRadius: 6,
+            border: "1px solid #cbd5e1",
+            width: 170,
+            fontSize: 13,
+          }}
+        />
 
+        <input
+          placeholder="Train No."
+          value={draftTrainNo}
+          onChange={(e) => setDraftTrainNo(e.target.value)}
+          style={{
+            padding: 8,
+            borderRadius: 6,
+            border: "1px solid #cbd5e1",
+            width: 120,
+            fontSize: 13,
+          }}
+        />
 
-  <input
-  placeholder="Train No."
-  value={draftTrainNo}
-  onChange={(e) => setDraftTrainNo(e.target.value)}
-  style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 120, fontSize: 13 }}
-/>
+        <select
+          value={draftDateSearchType}
+          onChange={(e) =>
+            setDraftDateSearchType(e.target.value as "delivery" | "booking")
+          }
+          style={{
+            padding: 8,
+            borderRadius: 6,
+            border: "1px solid #cbd5e1",
+            width: 160,
+            fontSize: 13,
+          }}
+        >
+          <option value="delivery">By Delivery Date</option>
+          <option value="booking">By Booking Date</option>
+        </select>
 
-<select
-  value={draftDateSearchType}
-  onChange={(e) => setDraftDateSearchType(e.target.value as "delivery" | "booking")}
-  style={{ padding: 8, borderRadius: 6, border: "1px solid #cbd5e1", width: 160, fontSize: 13 }}
->
-  <option value="delivery">By Delivery Date</option>
-  <option value="booking">By Booking Date</option>
-</select>
+        {draftDateSearchType === "delivery" && (
+          <>
+            <input
+              type="datetime-local"
+              value={draftDeliveryFrom}
+              onChange={(e) => setDraftDeliveryFrom(e.target.value)}
+              title="Delivery From"
+              style={{
+                padding: 7,
+                borderRadius: 6,
+                border: "1px solid #cbd5e1",
+                width: 190,
+                fontSize: 13,
+              }}
+            />
 
-{draftDateSearchType === "delivery" && (
-  <>
-    <input
-      type="datetime-local"
-      value={draftDeliveryFrom}
-      onChange={(e) => setDraftDeliveryFrom(e.target.value)}
-      title="Delivery From"
-      style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }}
-    />
+            <input
+              type="datetime-local"
+              value={draftDeliveryTo}
+              onChange={(e) => setDraftDeliveryTo(e.target.value)}
+              title="Delivery To"
+              style={{
+                padding: 7,
+                borderRadius: 6,
+                border: "1px solid #cbd5e1",
+                width: 190,
+                fontSize: 13,
+              }}
+            />
+          </>
+        )}
 
-    <input
-      type="datetime-local"
-      value={draftDeliveryTo}
-      onChange={(e) => setDraftDeliveryTo(e.target.value)}
-      title="Delivery To"
-      style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }}
-    />
-  </>
-)}
+        {draftDateSearchType === "booking" && (
+          <>
+            <input
+              type="datetime-local"
+              value={draftBookingFrom}
+              onChange={(e) => setDraftBookingFrom(e.target.value)}
+              title="Booking From"
+              style={{
+                padding: 7,
+                borderRadius: 6,
+                border: "1px solid #cbd5e1",
+                width: 190,
+                fontSize: 13,
+              }}
+            />
 
-{draftDateSearchType === "booking" && (
-  <>
-    <input
-      type="datetime-local"
-      value={draftBookingFrom}
-      onChange={(e) => setDraftBookingFrom(e.target.value)}
-      title="Booking From"
-      style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }}
-    />
+            <input
+              type="datetime-local"
+              value={draftBookingTo}
+              onChange={(e) => setDraftBookingTo(e.target.value)}
+              title="Booking To"
+              style={{
+                padding: 7,
+                borderRadius: 6,
+                border: "1px solid #cbd5e1",
+                width: 190,
+                fontSize: 13,
+              }}
+            />
+          </>
+        )}
 
-    <input
-      type="datetime-local"
-      value={draftBookingTo}
-      onChange={(e) => setDraftBookingTo(e.target.value)}
-      title="Booking To"
-      style={{ padding: 7, borderRadius: 6, border: "1px solid #cbd5e1", width: 190, fontSize: 13 }}
-    />
-  </>
-)}
+        <button
+          onClick={() => {
+            setSearchOrderId(draftOrderId);
+            setSearchCustomerMobile(draftCustomerMobile);
+            setSearchOutlet(draftOutlet);
+            setSearchStation(draftStation);
+            setSearchTrainNo(draftTrainNo);
+            setDateSearchType(draftDateSearchType);
 
-<button
-  onClick={() => {
-    setSearchOrderId(draftOrderId);
-    setSearchCustomerMobile(draftCustomerMobile);
-    setSearchOutlet(draftOutlet);
-    setSearchStation(draftStation);
-    setSearchTrainNo(draftTrainNo);
-    setDateSearchType(draftDateSearchType);
+            if (draftDateSearchType === "delivery") {
+              setSearchDeliveryFrom(draftDeliveryFrom);
+              setSearchDeliveryTo(draftDeliveryTo);
+              setSearchBookingFrom("");
+              setSearchBookingTo("");
+              setBookingDateFilterOn(false);
+            } else {
+              setSearchDeliveryFrom("");
+              setSearchDeliveryTo("");
+              setSearchBookingFrom(draftBookingFrom);
+              setSearchBookingTo(draftBookingTo);
+              setBookingDateFilterOn(true);
+            }
+          }}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 6,
+            border: "none",
+            background: "#2563eb",
+            color: "#fff",
+            cursor: "pointer",
+            fontWeight: 700,
+            fontSize: 13,
+          }}
+        >
+          Search
+        </button>
 
-    if (draftDateSearchType === "delivery") {
-      setSearchDeliveryFrom(draftDeliveryFrom);
-      setSearchDeliveryTo(draftDeliveryTo);
-      setSearchBookingFrom("");
-      setSearchBookingTo("");
-      setBookingDateFilterOn(false);
-    } else {
-      setSearchDeliveryFrom("");
-      setSearchDeliveryTo("");
-      setSearchBookingFrom(draftBookingFrom);
-      setSearchBookingTo(draftBookingTo);
-      setBookingDateFilterOn(true);
-    }
-  }}
-  style={{
-    padding: "8px 14px",
-    borderRadius: 6,
-    border: "none",
-    background: "#2563eb",
-    color: "#fff",
-    cursor: "pointer",
-    fontWeight: 700,
-    fontSize: 13,
-  }}
->
-  Search
-</button>
+        <button
+          onClick={() => {
+            setDraftOrderId("");
+            setDraftCustomerMobile("");
+            setDraftOutlet("");
+            setDraftStation("");
+            setDraftTrainNo("");
 
-<button
-  onClick={() => {
-    setDraftOrderId("");
-    setDraftCustomerMobile("");
-    setDraftOutlet("");
-    setDraftStation("");
-    setDraftTrainNo("");
+            setDraftDateSearchType("delivery");
+            setDraftDeliveryFrom(`${todayDate}T00:00`);
+            setDraftDeliveryTo(`${todayDate}T23:59`);
+            setDraftBookingFrom(`${todayDate}T00:00`);
+            setDraftBookingTo(`${todayDate}T23:59`);
 
-    setDraftDateSearchType("delivery");
-    setDraftDeliveryFrom(`${todayDate}T00:00`);
-setDraftDeliveryTo(`${todayDate}T23:59`);
-    setDraftBookingFrom(`${todayDate}T00:00`);
-    setDraftBookingTo(`${todayDate}T23:59`);
+            setSearchOrderId("");
+            setSearchCustomerMobile("");
+            setSearchOutlet("");
+            setSearchStation("");
+            setSearchTrainNo("");
 
-    setSearchOrderId("");
-    setSearchCustomerMobile("");
-    setSearchOutlet("");
-    setSearchStation("");
-    setSearchTrainNo("");
+            setDateSearchType("delivery");
+            setSearchDeliveryFrom("");
+            setSearchDeliveryTo("");
+            setSearchBookingFrom("");
+            setSearchBookingTo("");
+            setBookingDateFilterOn(false);
+          }}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 6,
+            border: "1px solid #cbd5e1",
+            background: "#f1f5f9",
+            cursor: "pointer",
+            fontWeight: 600,
+            fontSize: 13,
+          }}
+        >
+          Reset Filters
+        </button>
 
-    setDateSearchType("delivery");
-    setSearchDeliveryFrom("");
-    setSearchDeliveryTo("");
-    setSearchBookingFrom("");
-    setSearchBookingTo("");
-    setBookingDateFilterOn(false);
-  }}
-  style={{
-    padding: "8px 14px",
-    borderRadius: 6,
-    border: "1px solid #cbd5e1",
-    background: "#f1f5f9",
-    cursor: "pointer",
-    fontWeight: 600,
-    fontSize: 13,
-  }}
->
-  Reset Filters
-</button>
-
-<button
-  onClick={downloadOrdersReport}
-  style={{
-    padding: "8px 14px",
-    borderRadius: 6,
-    border: "none",
-    background: "#16a34a",
-    color: "#fff",
-    cursor: "pointer",
-    fontWeight: 700,
-    fontSize: 13,
-  }}
->
-  Download Report
-</button>
-</div>
+        <button
+          onClick={downloadOrdersReport}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 6,
+            border: "none",
+            background: "#16a34a",
+            color: "#fff",
+            cursor: "pointer",
+            fontWeight: 700,
+            fontSize: 13,
+          }}
+        >
+          Download Report
+        </button>
+      </div>
       {/* TABLE VIEW */}
-      <div style={{ background: "#fff", borderRadius: 8, padding: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.03)", border: "1px solid #e2e8f0" }}>
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 8,
+          padding: 12,
+          boxShadow: "0 1px 6px rgba(0,0,0,0.03)",
+          border: "1px solid #e2e8f0",
+        }}
+      >
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1300 }}>
-            <thead style={{ textAlign: "left", borderBottom: "2px solid #edf2f7", background: "#f8fafc", fontSize: 13, color: "#475569" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              minWidth: 1300,
+            }}
+          >
+            <thead
+              style={{
+                textAlign: "left",
+                borderBottom: "2px solid #edf2f7",
+                background: "#f8fafc",
+                fontSize: 13,
+                color: "#475569",
+              }}
+            >
               <tr>
                 <th style={{ padding: 12 }}>Order ID</th>
                 <th style={{ padding: 12 }}>Outlet ID</th>
@@ -2641,8 +2533,11 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
 
             <tbody style={{ fontSize: 13, color: "#334155" }}>
               {visibleOrders.map((o) => (
-                <tr key={o.id} style={{ borderBottom: "1px solid #f1f5f9" }} className="table-row-hover">
-                  
+                <tr
+                  key={o.id}
+                  style={{ borderBottom: "1px solid #f1f5f9" }}
+                  className="table-row-hover"
+                >
                   {/* MODIFIED: Clickable Order ID triggers detailed information view */}
                   <td style={{ padding: 12 }}>
                     <button
@@ -2658,7 +2553,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                         color: "#2563eb",
                         cursor: "pointer",
                         textDecoration: "underline",
-                        textAlign: "left"
+                        textAlign: "left",
                       }}
                     >
                       #{o.id}
@@ -2666,31 +2561,60 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                   </td>
 
                   <td style={{ padding: 12 }}>
-  {o.outletId ? (
-    <Link
-      href={`/admin/restros/${encodeURIComponent(o.outletId)}/edit`}
-      title={`Open restro ${o.outletId} edit page`}
-      style={{
-        background: "#f1f5f9",
-        color: "#0f172a",
-        padding: "3px 6px",
-        borderRadius: 4,
-        fontWeight: 700,
-        textDecoration: "underline",
-        display: "inline-block",
-      }}
-    >
-      {o.outletId}
-    </Link>
-  ) : (
-    <span style={{ background: "#f1f5f9", padding: "3px 6px", borderRadius: 4, fontWeight: 600 }}>-</span>
-  )}
-</td>
-                  <td style={{ padding: 12, fontWeight: 600 }}>{o.outletName}</td>
-                  <td style={{ padding: 12 }}><span style={{ background: "#eff6ff", color: "#2563eb", padding: "3px 6px", borderRadius: 4, fontWeight: 600 }}>{o.stationCode}</span></td>
+                    {o.outletId ? (
+                      <Link
+                        href={`/admin/restros/${encodeURIComponent(o.outletId)}/edit`}
+                        title={`Open restro ${o.outletId} edit page`}
+                        style={{
+                          background: "#f1f5f9",
+                          color: "#0f172a",
+                          padding: "3px 6px",
+                          borderRadius: 4,
+                          fontWeight: 700,
+                          textDecoration: "underline",
+                          display: "inline-block",
+                        }}
+                      >
+                        {o.outletId}
+                      </Link>
+                    ) : (
+                      <span
+                        style={{
+                          background: "#f1f5f9",
+                          padding: "3px 6px",
+                          borderRadius: 4,
+                          fontWeight: 600,
+                        }}
+                      >
+                        -
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: 12, fontWeight: 600 }}>
+                    {o.outletName}
+                  </td>
+                  <td style={{ padding: 12 }}>
+                    <span
+                      style={{
+                        background: "#eff6ff",
+                        color: "#2563eb",
+                        padding: "3px 6px",
+                        borderRadius: 4,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {o.stationCode}
+                    </span>
+                  </td>
                   <td style={{ padding: 12 }}>{o.stationName}</td>
-                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>{o.deliveryDate}</td>
-                  <td style={{ padding: 12, fontWeight: 600, color: "#0284c7" }}>{o.deliveryTime}</td>
+                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>
+                    {o.deliveryDate}
+                  </td>
+                  <td
+                    style={{ padding: 12, fontWeight: 600, color: "#0284c7" }}
+                  >
+                    {o.deliveryTime}
+                  </td>
                   <td style={{ padding: 12 }}>
                     {o.trainNo ? (
                       <button
@@ -2719,83 +2643,104 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                   </td>
                   <td style={{ padding: 12 }}>{o.coach || "-"}</td>
                   <td style={{ padding: 12 }}>{o.seat || "-"}</td>
-                  <td style={{ padding: 12, fontWeight: 600 }}>{o.customerName}</td>
-                  <td style={{ padding: 12, fontFamily: "monospace" }}>{o.customerMobile}</td>
-                <td style={{ padding: 12 }}>
-                  <span style={{
-                    padding:"4px 10px",
-                    borderRadius:999,
-                    fontWeight:700,
-                    fontSize:12,
-                    background:(o.paymentMode==="ONLINE"?"#dcfce7":"#fee2e2"),
-                    color:(o.paymentMode==="ONLINE"?"#166534":"#991b1b")
-                  }}>
-                    {o.paymentMode==="ONLINE"?"PPD":"COD"}
-                  </span>
-                </td>
+                  <td style={{ padding: 12, fontWeight: 600 }}>
+                    {o.customerName}
+                  </td>
+                  <td style={{ padding: 12, fontFamily: "monospace" }}>
+                    {o.customerMobile}
+                  </td>
+                  <td style={{ padding: 12 }}>
+                    <span
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 999,
+                        fontWeight: 700,
+                        fontSize: 12,
+                        background:
+                          o.paymentMode === "ONLINE" ? "#dcfce7" : "#fee2e2",
+                        color:
+                          o.paymentMode === "ONLINE" ? "#166534" : "#991b1b",
+                      }}
+                    >
+                      {o.paymentMode === "ONLINE" ? "PPD" : "COD"}
+                    </span>
+                  </td>
 
                   {/* Order process log opens the centered log view */}
                   <td style={{ padding: 12 }}>
                     <button
                       onClick={() => handleOpenDiagnosticsDrawer(o, "logs")}
                       style={{
-  background: "#eff6ff",
-  color: "#2563eb",
-  border: "1px solid #bfdbfe",
-  width: 38,
-  height: 34,
-  borderRadius: 8,
-  fontWeight: 700,
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-}}
+                        background: "#eff6ff",
+                        color: "#2563eb",
+                        border: "1px solid #bfdbfe",
+                        width: 38,
+                        height: 34,
+                        borderRadius: 8,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                     >
                       <Eye size={18} />
                     </button>
                   </td>
 
                   <td style={{ padding: 12, verticalAlign: "middle" }}>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
-                      
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 6,
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                      }}
+                    >
                       {/* INLINE BUTTON CONTROLLERS */}
                       {o.status === "cancellationrequest" ? (
-  <button
-    type="button"
-    onClick={() => {
-      setSelectedOrder(o);
-      setActionType("cancel");
-      setSubStatus("");
-      setRemarks("");
-      setVendorPenaltyAmount("");
-      setStatusModalOpen(true);
-    }}
-    style={{
-      padding: "6px 10px",
-      borderRadius: 6,
-      background: "#dc2626",
-      color: "#fff",
-      border: "none",
-      cursor: "pointer",
-      fontWeight: "bold",
-      fontSize: 11,
-      whiteSpace: "nowrap",
-    }}
-  >
-    Review & Cancel
-  </button>
-) : [
-  "booked",
-  "verification",
-  "neworder",
-  "inkitchen",
-  "outfordelivery",
-].includes(o.status) ? (
-                        <div style={{ display: "flex", gap: 6, flexWrap: "nowrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedOrder(o);
+                            setActionType("cancel");
+                            setSubStatus("");
+                            setRemarks("");
+                            setVendorPenaltyAmount("");
+                            setStatusModalOpen(true);
+                          }}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: 6,
+                            background: "#dc2626",
+                            color: "#fff",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                            fontSize: 11,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Review & Cancel
+                        </button>
+                      ) : [
+                          "booked",
+                          "verification",
+                          "neworder",
+                          "inkitchen",
+                          "outfordelivery",
+                        ].includes(o.status) ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 6,
+                            flexWrap: "nowrap",
+                          }}
+                        >
                           <button
                             onClick={() => {
-                              if (!confirm(`Move ${o.id} to next status?`)) return;
+                              if (!confirm(`Move ${o.id} to next status?`))
+                                return;
                               moveOrderToNext(o.id);
                             }}
                             style={{
@@ -2807,13 +2752,15 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                               cursor: "pointer",
                               fontWeight: "bold",
                               fontSize: 11,
-                              whiteSpace: "nowrap"
+                              whiteSpace: "nowrap",
                             }}
                           >
                             {NEXT_MAP[o.status]?.actionLabel}
                           </button>
 
-                          {(o.status === "booked" || o.status === "verification" || o.status === "neworder") && (
+                          {(o.status === "booked" ||
+                            o.status === "verification" ||
+                            o.status === "neworder") && (
                             <button
                               onClick={() => {
                                 setSelectedOrder(o);
@@ -2832,14 +2779,15 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                                 border: "none",
                                 cursor: "pointer",
                                 fontWeight: "bold",
-                                fontSize: 11
+                                fontSize: 11,
                               }}
                             >
                               Cancel
                             </button>
                           )}
 
-                          {(o.status === "inkitchen" || o.status === "outfordelivery") && (
+                          {(o.status === "inkitchen" ||
+                            o.status === "outfordelivery") && (
                             <button
                               onClick={() => {
                                 setSelectedOrder(o);
@@ -2858,7 +2806,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                                 cursor: "pointer",
                                 fontWeight: "bold",
                                 fontSize: 11,
-                                whiteSpace: "nowrap"
+                                whiteSpace: "nowrap",
                               }}
                             >
                               Mark Status
@@ -2866,7 +2814,13 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                           )}
                         </div>
                       ) : (
-                        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 4,
+                            alignItems: "center",
+                          }}
+                        >
                           <select
                             value={marking[o.id]?.status || ""}
                             onChange={(e) =>
@@ -2878,11 +2832,18 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                                 },
                               }))
                             }
-                            style={{ padding: 5, borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 11 }}
+                            style={{
+                              padding: 5,
+                              borderRadius: 6,
+                              border: "1px solid #cbd5e1",
+                              fontSize: 11,
+                            }}
                           >
                             <option value="">Select status</option>
                             {FINAL_MARK_OPTIONS.map((opt) => (
-                              <option key={opt.key} value={opt.key}>{opt.label}</option>
+                              <option key={opt.key} value={opt.key}>
+                                {opt.label}
+                              </option>
                             ))}
                           </select>
 
@@ -2898,7 +2859,13 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                                 },
                               }))
                             }
-                            style={{ padding: 5, borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 11, width: 100 }}
+                            style={{
+                              padding: 5,
+                              borderRadius: 6,
+                              border: "1px solid #cbd5e1",
+                              fontSize: 11,
+                              width: 100,
+                            }}
                           />
 
                           <button
@@ -2911,7 +2878,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                               cursor: "pointer",
                               border: "none",
                               fontSize: 11,
-                              fontWeight: "bold"
+                              fontWeight: "bold",
                             }}
                           >
                             Go
@@ -2931,7 +2898,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                                 border: "1px solid #cbd5e1",
                                 background: "#fff",
                                 cursor: "pointer",
-                                fontSize: 11
+                                fontSize: 11,
                               }}
                             >
                               ✕
@@ -2946,20 +2913,39 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
 
               {!loading && visibleOrders.length === 0 && (
                 <tr>
-                  <td colSpan={14} style={{ padding: 30, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>No active track records inside this tab scope constraints.</td>
+                  <td
+                    colSpan={14}
+                    style={{
+                      padding: 30,
+                      textAlign: "center",
+                      color: "#94a3b8",
+                      fontWeight: 600,
+                    }}
+                  >
+                    No active track records inside this tab scope constraints.
+                  </td>
                 </tr>
               )}
 
               {loading && (
                 <tr>
-                  <td colSpan={14} style={{ padding: 30, textAlign: "center", color: "#64748b", fontWeight: 600 }}>Syncing structural updates with live engine stream...</td>
+                  <td
+                    colSpan={14}
+                    style={{
+                      padding: 30,
+                      textAlign: "center",
+                      color: "#64748b",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Syncing structural updates with live engine stream...
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
-
 
       {/* TRAIN ROUTE MODAL */}
       {routeModal.open && (
@@ -2988,55 +2974,157 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
               overflow: "hidden",
             }}
           >
-            <div style={{ padding: 16, borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                padding: 16,
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: 8 }}>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: "#0f172a",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
                   <MapPin size={18} /> Route Map: {routeModal.trainNo}
                   {routeModal.data[0]?.trainName ? (
-                    <span style={{ color: "#2563eb" }}>- {routeModal.data[0].trainName}</span>
+                    <span style={{ color: "#2563eb" }}>
+                      - {routeModal.data[0].trainName}
+                    </span>
                   ) : null}
                 </h3>
                 {routeModal.data[0] && (
-                  <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
-                    {routeModal.data[0].stationFrom || "-"} to {routeModal.data[0].stationTo || "-"} · {routeModal.data.length} stations · {routeModal.data[0].runningDays || "Running days N/A"}
+                  <div
+                    style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}
+                  >
+                    {routeModal.data[0].stationFrom || "-"} to{" "}
+                    {routeModal.data[0].stationTo || "-"} ·{" "}
+                    {routeModal.data.length} stations ·{" "}
+                    {routeModal.data[0].runningDays || "Running days N/A"}
                   </div>
                 )}
               </div>
               <button
-                onClick={() => setRouteModal((prev) => ({ ...prev, open: false, message: "" }))}
+                onClick={() =>
+                  setRouteModal((prev) => ({
+                    ...prev,
+                    open: false,
+                    message: "",
+                  }))
+                }
                 title="Close route map"
-                style={{ width: 34, height: 34, borderRadius: "50%", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  border: "1px solid #cbd5e1",
+                  background: "#fff",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
                 <X size={18} />
               </button>
             </div>
 
             <div style={{ overflow: "auto", padding: 16 }}>
-              <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", fontSize: 13 }}>
+              <table
+                style={{
+                  width: "100%",
+                  minWidth: 820,
+                  borderCollapse: "collapse",
+                  fontSize: 13,
+                }}
+              >
                 <thead>
-                  <tr style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 1, borderBottom: "1px solid #e2e8f0", color: "#64748b", textAlign: "left" }}>
+                  <tr
+                    style={{
+                      position: "sticky",
+                      top: 0,
+                      background: "#f8fafc",
+                      zIndex: 1,
+                      borderBottom: "1px solid #e2e8f0",
+                      color: "#64748b",
+                      textAlign: "left",
+                    }}
+                  >
                     <th style={{ padding: "9px 8px", width: 56 }}>No.</th>
                     <th style={{ padding: "9px 8px" }}>Station</th>
-                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Arrives</th>
-                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Departs</th>
-                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Stop</th>
-                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Distance</th>
-                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Platform</th>
-                    <th style={{ padding: "9px 8px", textAlign: "right" }}>Day</th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>
+                      Arrives
+                    </th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>
+                      Departs
+                    </th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>
+                      Stop
+                    </th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>
+                      Distance
+                    </th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>
+                      Platform
+                    </th>
+                    <th style={{ padding: "9px 8px", textAlign: "right" }}>
+                      Day
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {routeModal.data.length > 0 ? (
                     routeModal.data.map((r, idx) => {
-                      const stationCode = normalizeRouteValue(getRouteField(r, "StationCode", "stationCode", "stationcode")).toUpperCase();
-                      const stationName = normalizeRouteValue(getRouteField(r, "StationName", "stationName", "stationname"));
-                      const stnNumber = getRouteField(r, "StnNumber", "stnNumber", "stnnumber");
-                      const arrives = normalizeRouteValue(getRouteField(r, "Arrives", "arrives"));
-                      const departs = normalizeRouteValue(getRouteField(r, "Departs", "departs"));
-                      const stopTime = normalizeRouteValue(getRouteField(r, "Stoptime", "stoptime", "StopTime"));
-                      const distance = normalizeRouteValue(getRouteField(r, "Distance", "distance"));
-                      const platform = normalizeRouteValue(getRouteField(r, "Platform", "platform"));
-                      const day = normalizeRouteValue(getRouteField(r, "Day", "day"));
+                      const stationCode = normalizeRouteValue(
+                        getRouteField(
+                          r,
+                          "StationCode",
+                          "stationCode",
+                          "stationcode",
+                        ),
+                      ).toUpperCase();
+                      const stationName = normalizeRouteValue(
+                        getRouteField(
+                          r,
+                          "StationName",
+                          "stationName",
+                          "stationname",
+                        ),
+                      );
+                      const stnNumber = getRouteField(
+                        r,
+                        "StnNumber",
+                        "stnNumber",
+                        "stnnumber",
+                      );
+                      const arrives = normalizeRouteValue(
+                        getRouteField(r, "Arrives", "arrives"),
+                      );
+                      const departs = normalizeRouteValue(
+                        getRouteField(r, "Departs", "departs"),
+                      );
+                      const stopTime = normalizeRouteValue(
+                        getRouteField(r, "Stoptime", "stoptime", "StopTime"),
+                      );
+                      const distance = normalizeRouteValue(
+                        getRouteField(r, "Distance", "distance"),
+                      );
+                      const platform = normalizeRouteValue(
+                        getRouteField(r, "Platform", "platform"),
+                      );
+                      const day = normalizeRouteValue(
+                        getRouteField(r, "Day", "day"),
+                      );
                       const isTarget = stationCode === routeModal.stationCode;
                       return (
                         <tr
@@ -3048,26 +3136,80 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                             borderBottom: "1px solid #f1f5f9",
                           }}
                         >
-                          <td style={{ padding: "10px 8px", width: 52, color: "#94a3b8", fontWeight: 800 }}>{stnNumber || idx + 1}</td>
-                          <td style={{ padding: "10px 8px", color: "#0f172a" }}>
-                            {stationName || "Unknown Station"} <span style={{ color: "#2563eb" }}>({stationCode || "-"})</span>
+                          <td
+                            style={{
+                              padding: "10px 8px",
+                              width: 52,
+                              color: "#94a3b8",
+                              fontWeight: 800,
+                            }}
+                          >
+                            {stnNumber || idx + 1}
                           </td>
-                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                          <td style={{ padding: "10px 8px", color: "#0f172a" }}>
+                            {stationName || "Unknown Station"}{" "}
+                            <span style={{ color: "#2563eb" }}>
+                              ({stationCode || "-"})
+                            </span>
+                          </td>
+                          <td
+                            style={{
+                              padding: "10px 8px",
+                              textAlign: "right",
+                              color: "#475569",
+                              fontFamily: "monospace",
+                            }}
+                          >
                             {arrives || "-"}
                           </td>
-                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                          <td
+                            style={{
+                              padding: "10px 8px",
+                              textAlign: "right",
+                              color: "#475569",
+                              fontFamily: "monospace",
+                            }}
+                          >
                             {departs || "-"}
                           </td>
-                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                          <td
+                            style={{
+                              padding: "10px 8px",
+                              textAlign: "right",
+                              color: "#475569",
+                              fontFamily: "monospace",
+                            }}
+                          >
                             {stopTime || "-"}
                           </td>
-                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                          <td
+                            style={{
+                              padding: "10px 8px",
+                              textAlign: "right",
+                              color: "#475569",
+                              fontFamily: "monospace",
+                            }}
+                          >
                             {distance || "-"}
                           </td>
-                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                          <td
+                            style={{
+                              padding: "10px 8px",
+                              textAlign: "right",
+                              color: "#475569",
+                              fontFamily: "monospace",
+                            }}
+                          >
                             {platform || "-"}
                           </td>
-                          <td style={{ padding: "10px 8px", textAlign: "right", color: "#475569", fontFamily: "monospace" }}>
+                          <td
+                            style={{
+                              padding: "10px 8px",
+                              textAlign: "right",
+                              color: "#475569",
+                              fontFamily: "monospace",
+                            }}
+                          >
                             {day || "-"}
                           </td>
                         </tr>
@@ -3075,8 +3217,17 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                     })
                   ) : (
                     <tr>
-                      <td colSpan={8} style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>
-                        {routeModal.message || "No route rows found for this train number in TrainRoute table."}
+                      <td
+                        colSpan={8}
+                        style={{
+                          padding: 20,
+                          textAlign: "center",
+                          color: "#94a3b8",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {routeModal.message ||
+                          "No route rows found for this train number in TrainRoute table."}
                       </td>
                     </tr>
                   )}
@@ -3126,7 +3277,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
             <div
               style={{
                 background: "#f8fafc",
-                padding: "12px 18px",
+                padding: "18px 24px",
                 borderBottom: "1px solid #e2e8f0",
                 display: "flex",
                 alignItems: "center",
@@ -3136,12 +3287,45 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
               }}
             >
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "#0f172a" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: 20,
+                      fontWeight: 900,
+                      color: "#0f172a",
+                    }}
+                  >
                     Order Details
                   </h2>
+                  <span
+                    style={{
+                      background: "#2563eb",
+                      color: "#fff",
+                      fontWeight: 800,
+                      fontSize: 11,
+                      padding: "3px 9px",
+                      borderRadius: 6,
+                    }}
+                  >
+                    #{detailedOrder.id}
+                  </span>
                 </div>
-                <p style={{ margin: "5px 0 0", fontSize: 11, color: "#64748b", fontWeight: 600 }}>
+                <p
+                  style={{
+                    margin: "5px 0 0",
+                    fontSize: 11,
+                    color: "#64748b",
+                    fontWeight: 600,
+                  }}
+                >
                   Current Status:{" "}
                   <span style={{ color: "#2563eb", fontWeight: 800 }}>
                     {detailedOrder.dbStatus || detailedOrder.status}
@@ -3178,21 +3362,22 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                 display: "flex",
                 borderBottom: "1px solid #e2e8f0",
                 background: "#fff",
-                padding: "0 18px",
+                padding: "0 24px",
                 flexShrink: 0,
               }}
             >
               <button
                 onClick={() => setActiveDrawerSection("details")}
                 style={{
-                  padding: "9px 16px",
+                  padding: "14px 20px",
                   background: "none",
                   border: "none",
                   borderBottom:
                     activeDrawerSection === "details"
                       ? "3px solid #2563eb"
                       : "3px solid transparent",
-                  color: activeDrawerSection === "details" ? "#2563eb" : "#64748b",
+                  color:
+                    activeDrawerSection === "details" ? "#2563eb" : "#64748b",
                   fontWeight: 700,
                   fontSize: 13,
                   cursor: "pointer",
@@ -3203,7 +3388,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
               <button
                 onClick={() => setActiveDrawerSection("logs")}
                 style={{
-                  padding: "9px 16px",
+                  padding: "14px 20px",
                   background: "none",
                   border: "none",
                   borderBottom:
@@ -3223,29 +3408,30 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
             <div
               style={{
                 flex: 1,
-                padding: 12,
+                padding: 22,
                 overflowY: "auto",
                 minHeight: 0,
               }}
             >
               {activeDrawerSection === "details" ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 18 }}
+                >
                   <div className="order-top-grid">
                     <div className="order-info-card">
                       <h3 className="order-card-title">
                         <Smartphone size={15} /> Journey &amp; Customer Details
                       </h3>
-                      <div className="order-field-grid compact-order-fields">
-                        <div className="order-id-field">
-                          <span className="order-field-label">Order ID</span>
-                          <span className="order-id-value">#{detailedOrder.id}</span>
-                        </div>
-
+                      <div className="order-field-grid">
                         <OrderDetailField
                           label="Customer Name"
                           value={
                             detailedOrder.customerName ||
-                            valueFrom(detailedOrder.raw, "CustomerName", "customerName") ||
+                            valueFrom(
+                              detailedOrder.raw,
+                              "CustomerName",
+                              "customerName",
+                            ) ||
                             "Guest"
                           }
                         />
@@ -3253,7 +3439,11 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                           label="Customer Mobile"
                           value={
                             detailedOrder.customerMobile ||
-                            valueFrom(detailedOrder.raw, "CustomerMobile", "customerMobile") ||
+                            valueFrom(
+                              detailedOrder.raw,
+                              "CustomerMobile",
+                              "customerMobile",
+                            ) ||
                             "N/A"
                           }
                         />
@@ -3264,30 +3454,44 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                               detailedOrder.raw,
                               "PNR",
                               "pnr",
-                              "Pnr",
                               "PnrNumber",
                               "PNRNumber",
-                              "PnrNo",
-                              "pnrNo"
                             ) || "N/A"
                           }
                         />
                         <OrderDetailField
                           label="Train Number"
-                          value={detailedOrder.trainNo ? `Train ${detailedOrder.trainNo}` : "N/A"}
+                          value={
+                            detailedOrder.trainNo
+                              ? `Train ${detailedOrder.trainNo}`
+                              : "N/A"
+                          }
                         />
                         <OrderDetailField
-                          label="Coach / Seat"
-                          value={`Coach ${detailedOrder.coach || "-"} / Seat ${detailedOrder.seat || "-"}`}
+                          label="Coach"
+                          value={detailedOrder.coach || "-"}
                         />
                         <OrderDetailField
-                          label="Delivery Date & Time"
-                          value={`${detailedOrder.deliveryDate || "N/A"} • ${detailedOrder.deliveryTime || "N/A"}`}
+                          label="Seat"
+                          value={detailedOrder.seat || "-"}
+                        />
+                        <OrderDetailField
+                          label="Delivery Date"
+                          value={detailedOrder.deliveryDate || "N/A"}
                           highlight
                         />
                         <OrderDetailField
-                          label="Station"
-                          value={`${detailedOrder.stationName || "N/A"} (${detailedOrder.stationCode || "-"})`}
+                          label="Delivery Time"
+                          value={detailedOrder.deliveryTime || "N/A"}
+                          highlight
+                        />
+                        <OrderDetailField
+                          label="Station Code"
+                          value={detailedOrder.stationCode || "N/A"}
+                        />
+                        <OrderDetailField
+                          label="Station Name"
+                          value={detailedOrder.stationName || "N/A"}
                         />
                         <OrderDetailField
                           label="Booking Source"
@@ -3296,10 +3500,8 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                               detailedOrder.raw,
                               "BookingSource",
                               "bookingSource",
-                              "Booking_Source",
-                              "booking_source",
                               "Source",
-                              "source"
+                              "source",
                             ) || "N/A"
                           }
                         />
@@ -3310,26 +3512,22 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                               detailedOrder.raw,
                               "BookedBy",
                               "bookedBy",
-                              "Booked_By",
-                              "booked_by"
                             ) || "Customer"
                           }
                         />
-                        <OrderDetailField
-                          label="Order Booked At"
-                          value={formatAdminDateTime(
-                            valueFrom(
-                              detailedOrder.raw,
-                              "CreatedAt",
-                              "createdAt",
-                              "created_at",
-                              "BookedAt",
-                              "bookedAt",
-                              "OrderDate",
-                              "orderDate"
-                            ) || detailedOrder.rawCreatedAt
-                          )}
-                        />
+                        <div className="order-field-full">
+                          <OrderDetailField
+                            label="Order Booked At"
+                            value={formatAdminDateTime(
+                              valueFrom(
+                                detailedOrder.raw,
+                                "CreatedAt",
+                                "createdAt",
+                                "created_at",
+                              ) || detailedOrder.rawCreatedAt,
+                            )}
+                          />
+                        </div>
                       </div>
                     </div>
 
@@ -3339,15 +3537,34 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                       </h3>
                       <div className="payment-summary-row">
                         <div>
-                          <span className="order-field-label">Payment Mode</span>
+                          <span className="order-field-label">
+                            Payment Mode
+                          </span>
                           <span className="payment-mode-pill">
-                            {String(detailedOrder.paymentMode || valueFrom(detailedOrder.raw, "PaymentMode", "paymentMode") || "COD").toUpperCase()}
+                            {String(
+                              detailedOrder.paymentMode ||
+                                valueFrom(
+                                  detailedOrder.raw,
+                                  "PaymentMode",
+                                  "paymentMode",
+                                ) ||
+                                "COD",
+                            ).toUpperCase()}
                           </span>
                         </div>
                         <div style={{ textAlign: "right" }}>
-                          <span className="order-field-label">Payment Status</span>
+                          <span className="order-field-label">
+                            Payment Status
+                          </span>
                           <strong style={{ color: "#166534", fontSize: 14 }}>
-                            {valueFrom(detailedOrder.raw, "PaymentStatus", "paymentStatus") || (isPrepaidOrder(detailedOrder) ? "Paid / Online" : "Pay on Delivery")}
+                            {valueFrom(
+                              detailedOrder.raw,
+                              "PaymentStatus",
+                              "paymentStatus",
+                            ) ||
+                              (isPrepaidOrder(detailedOrder)
+                                ? "Paid / Online"
+                                : "Pay on Delivery")}
                           </strong>
                         </div>
                       </div>
@@ -3355,64 +3572,114 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                       <div className="payment-lines">
                         <PaymentLine
                           label="Base Price / Subtotal"
+                          value={moneyFrom(
+                            detailedOrder.raw,
+                            "BasePrice",
+                            "basePrice",
+                            "Subtotal",
+                            "subtotal",
+                            "SubTotal",
+                          )}
+                        />
+                        <PaymentLine
+                          label="GST Amount"
+                          value={moneyFrom(
+                            detailedOrder.raw,
+                            "GSTAmount",
+                            "gstAmount",
+                            "GST",
+                            "gst",
+                            "TaxAmount",
+                            "taxAmount",
+                          )}
+                        />
+                        <PaymentLine
+                          label="Platform Charge"
+                          value={moneyFrom(
+                            detailedOrder.raw,
+                            "PlatformCharge",
+                            "platformCharge",
+                          )}
+                        />
+                        <PaymentLine
+                          label="Delivery Charge"
+                          value={moneyFrom(
+                            detailedOrder.raw,
+                            "DeliveryCharge",
+                            "deliveryCharge",
+                          )}
+                        />
+                        <PaymentLine
+                          label="Coupon Code / Discount"
+                          textValue={(() => {
+                            const couponCode = valueFrom(
+                              detailedOrder.raw,
+                              "CouponCode",
+                              "couponCode",
+                              "AppliedCoupon",
+                              "appliedCoupon",
+                            );
+                            const couponDiscount = moneyFrom(
+                              detailedOrder.raw,
+                              "CouponDiscount",
+                              "couponDiscount",
+                              "DiscountAmount",
+                              "discountAmount",
+                              "Discount",
+                            );
+
+                            if (!couponCode && !couponDiscount)
+                              return "Not Applied";
+                            if (!couponCode)
+                              return `- ₹${moneyNumber(couponDiscount || 0)}`;
+                            if (!couponDiscount) return String(couponCode);
+                            return `${couponCode}  •  - ₹${moneyNumber(couponDiscount)}`;
+                          })()}
+                        />
+                        <PaymentLine
+                          label="Order Total"
                           value={
                             moneyFrom(
                               detailedOrder.raw,
-                              "BasePrice",
-                              "basePrice",
-                              "BaseAmount",
-                              "baseAmount",
-                              "Subtotal",
-                              "subtotal",
-                              "SubTotal",
-                              "ItemTotal",
-                              "itemTotal",
-                              "ItemsTotal",
-                              "itemsTotal"
-                            ) ??
-                            (fetchedItems.length
-                              ? fetchedItems.reduce((sum: number, item: any) => {
-                                  const quantity = Number(
-                                    valueFrom(item, "Quantity", "quantity", "Qty", "qty") || 1
-                                  );
-                                  const lineTotal = Number(
-                                    valueFrom(item, "LineTotal", "lineTotal", "Total", "total")
-                                  );
-                                  const unitPrice = Number(
-                                    valueFrom(
-                                      item,
-                                      "SellingPrice",
-                                      "sellingPrice",
-                                      "UnitPrice",
-                                      "unitPrice",
-                                      "Price",
-                                      "price"
-                                    ) || 0
-                                  );
-                                  return sum + (Number.isFinite(lineTotal) && lineTotal > 0
-                                    ? lineTotal
-                                    : unitPrice * quantity);
-                                }, 0)
-                              : null)
+                              "TotalAmount",
+                              "totalAmount",
+                            ) ?? Number(detailedOrder.total || 0)
                           }
                         />
-                        <PaymentLine label="GST Amount" value={moneyFrom(detailedOrder.raw, "GSTAmount", "gstAmount", "GstAmount", "gst_amount", "GST", "gst", "TaxAmount", "taxAmount", "tax_amount")} />
-                        <PaymentLine label="Platform Charge" value={moneyFrom(detailedOrder.raw, "PlatformCharge", "platformCharge", "platform_charge", "ConvenienceFee", "convenienceFee")} />
-                        <PaymentLine label="Delivery Charge" value={moneyFrom(detailedOrder.raw, "DeliveryCharge", "deliveryCharge", "delivery_charge")} />
-                        <PaymentLine label="Coupon Code" textValue={valueFrom(detailedOrder.raw, "CouponCode", "couponCode", "AppliedCoupon", "appliedCoupon") || "Not Applied"} />
-                        <PaymentLine label="Coupon Discount" value={moneyFrom(detailedOrder.raw, "CouponDiscount", "couponDiscount", "DiscountAmount", "discountAmount", "Discount")} negative />
                       </div>
 
                       <div className="payable-box">
-                        <span>Payable Amount</span>
-                        <strong>₹{moneyNumber(valueFrom(detailedOrder.raw, "PayableAmount", "payableAmount", "TotalAmount", "totalAmount") ?? detailedOrder.total)}</strong>
+                        <span>
+                          {isPrepaidOrder(detailedOrder)
+                            ? "Amount to Collect"
+                            : "Payable Amount"}
+                        </span>
+                        <strong>
+                          ₹
+                          {moneyNumber(
+                            isPrepaidOrder(detailedOrder)
+                              ? 0
+                              : (moneyFrom(
+                                  detailedOrder.raw,
+                                  "TotalAmount",
+                                  "totalAmount",
+                                ) ?? Number(detailedOrder.total || 0)),
+                          )}
+                        </strong>
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}
+                  >
                     <h3 className="section-heading">
-                      <ShoppingBag size={15} /> Menu Items ({fetchedItems.length})
+                      <ShoppingBag size={15} /> Menu Items (
+                      {fetchedItems.length})
                     </h3>
                     <div className="items-table-wrap">
                       <table className="items-table">
@@ -3428,32 +3695,123 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                         <tbody>
                           {loadingItems ? (
                             <tr>
-                              <td colSpan={5} className="empty-cell">Loading order items...</td>
+                              <td colSpan={5} className="empty-cell">
+                                Loading order items...
+                              </td>
                             </tr>
                           ) : fetchedItems.length > 0 ? (
                             fetchedItems.map((item: any, idx: number) => {
-                              const itemName = valueFrom(item, "ItemName", "itemName", "item_name", "Name", "name") || `Item ${idx + 1}`;
-                              const description = valueFrom(item, "ItemDescription", "itemDescription", "item_description", "Description", "description");
-                              const quantity = Number(valueFrom(item, "Quantity", "quantity", "Qty", "qty") || 1);
-                              const unitPrice = Number(valueFrom(item, "SellingPrice", "sellingPrice", "UnitPrice", "unitPrice", "Price", "price") || 0);
-                              const lineTotal = Number(valueFrom(item, "LineTotal", "lineTotal", "Total", "total") || unitPrice * quantity);
-                              const menuType = valueFrom(item, "MenuType", "menuType", "menu_type", "TypeName", "typeName", "FoodType", "foodType") || "-";
+                              const itemName =
+                                valueFrom(
+                                  item,
+                                  "ItemName",
+                                  "itemName",
+                                  "item_name",
+                                  "Name",
+                                  "name",
+                                ) || `Item ${idx + 1}`;
+                              const description = valueFrom(
+                                item,
+                                "ItemDescription",
+                                "itemDescription",
+                                "item_description",
+                                "Description",
+                                "description",
+                              );
+                              const quantity = Number(
+                                valueFrom(
+                                  item,
+                                  "Quantity",
+                                  "quantity",
+                                  "Qty",
+                                  "qty",
+                                ) || 1,
+                              );
+                              const unitPrice = Number(
+                                valueFrom(
+                                  item,
+                                  "SellingPrice",
+                                  "sellingPrice",
+                                  "UnitPrice",
+                                  "unitPrice",
+                                  "Price",
+                                  "price",
+                                ) || 0,
+                              );
+                              const lineTotal = Number(
+                                valueFrom(
+                                  item,
+                                  "LineTotal",
+                                  "lineTotal",
+                                  "Total",
+                                  "total",
+                                ) || unitPrice * quantity,
+                              );
+                              const menuType =
+                                valueFrom(
+                                  item,
+                                  "MenuType",
+                                  "menuType",
+                                  "menu_type",
+                                  "TypeName",
+                                  "typeName",
+                                  "FoodType",
+                                  "foodType",
+                                ) || "-";
                               return (
-                                <tr key={valueFrom(item, "ItemId", "itemId", "id") || idx}>
+                                <tr
+                                  key={
+                                    valueFrom(item, "ItemId", "itemId", "id") ||
+                                    idx
+                                  }
+                                >
                                   <td>
-                                    <div style={{ fontWeight: 800, color: "#0f172a" }}>{itemName}</div>
-                                    <div className="item-description">{description || "No item description available"}</div>
+                                    <div
+                                      style={{
+                                        fontWeight: 800,
+                                        color: "#0f172a",
+                                      }}
+                                    >
+                                      {itemName}
+                                    </div>
+                                    <div className="item-description">
+                                      {description ||
+                                        "No item description available"}
+                                    </div>
                                   </td>
-                                  <td><span className="type-chip">{menuType}</span></td>
-                                  <td style={{ textAlign: "right" }}>₹{moneyNumber(unitPrice)}</td>
-                                  <td style={{ textAlign: "center", color: "#2563eb", fontWeight: 900 }}>× {quantity}</td>
-                                  <td style={{ textAlign: "right", fontWeight: 800 }}>₹{moneyNumber(lineTotal)}</td>
+                                  <td>
+                                    <span className="type-chip">
+                                      {menuType}
+                                    </span>
+                                  </td>
+                                  <td style={{ textAlign: "right" }}>
+                                    ₹{moneyNumber(unitPrice)}
+                                  </td>
+                                  <td
+                                    style={{
+                                      textAlign: "center",
+                                      color: "#2563eb",
+                                      fontWeight: 900,
+                                    }}
+                                  >
+                                    × {quantity}
+                                  </td>
+                                  <td
+                                    style={{
+                                      textAlign: "right",
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    ₹{moneyNumber(lineTotal)}
+                                  </td>
                                 </tr>
                               );
                             })
                           ) : (
                             <tr>
-                              <td colSpan={5} className="empty-cell">No order items found.</td>
+                              <td colSpan={5} className="empty-cell">
+                                No order items found.
+                              </td>
                             </tr>
                           )}
                         </tbody>
@@ -3466,74 +3824,287 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                       <ShieldCheck size={15} /> Restaurant / Outlet Details
                     </h3>
                     {loadingRestro ? (
-                      <p className="loading-text">Loading restaurant details...</p>
+                      <p className="loading-text">
+                        Loading restaurant details...
+                      </p>
                     ) : fetchedRestro ? (
                       <div className="restaurant-grid">
-                        <OrderDetailField label="Restro Code" value={valueFrom(fetchedRestro, "RestroCode", "restroCode") || detailedOrder.outletId || "N/A"} />
-                        <OrderDetailField label="Restro Name" value={valueFrom(fetchedRestro, "RestroName", "restroName") || detailedOrder.outletName || "N/A"} />
-                        <OrderDetailField label="Station" value={`${valueFrom(fetchedRestro, "StationName", "stationName") || detailedOrder.stationName || "N/A"} (${valueFrom(fetchedRestro, "StationCode", "stationCode") || detailedOrder.stationCode || "-"})`} />
-                        <OrderDetailField label="Outlet Mobile" value={valueFrom(fetchedRestro, "RestroPhone", "restroPhone", "OwnerPhone", "ownerPhone", "RestroLoginMobile") || "N/A"} />
-                        <OrderDetailField label="Open / Close Time" value={`${valueFrom(fetchedRestro, "open_time", "OpenTime", "openTime") || "N/A"} - ${valueFrom(fetchedRestro, "closed_time", "CloseTime", "closeTime") || "N/A"}`} />
-                        <OrderDetailField label="FSSAI Number" value={valueFrom(fetchedRestro, "FSSAINumber", "FssaiNumber", "fssaiNumber") || "N/A"} />
-                        <OrderDetailField label="FSSAI Expiry" value={valueFrom(fetchedRestro, "FSSAIExpiryDate", "fssaiExpiryDate") || "N/A"} />
-                        <OrderDetailField label="GST Number" value={valueFrom(fetchedRestro, "GSTNumber", "GstNumber", "gstNumber") || "N/A"} />
+                        <OrderDetailField
+                          label="Restro Code"
+                          value={
+                            valueFrom(
+                              fetchedRestro,
+                              "RestroCode",
+                              "restroCode",
+                            ) ||
+                            detailedOrder.outletId ||
+                            "N/A"
+                          }
+                        />
+                        <OrderDetailField
+                          label="Restro Name"
+                          value={
+                            valueFrom(
+                              fetchedRestro,
+                              "RestroName",
+                              "restroName",
+                            ) ||
+                            detailedOrder.outletName ||
+                            "N/A"
+                          }
+                        />
+                        <OrderDetailField
+                          label="Station"
+                          value={`${valueFrom(fetchedRestro, "StationName", "stationName") || detailedOrder.stationName || "N/A"} (${valueFrom(fetchedRestro, "StationCode", "stationCode") || detailedOrder.stationCode || "-"})`}
+                        />
+                        <OrderDetailField
+                          label="Outlet Mobile"
+                          value={
+                            valueFrom(
+                              fetchedRestro,
+                              "RestroPhone",
+                              "restroPhone",
+                              "OwnerPhone",
+                              "ownerPhone",
+                              "RestroLoginMobile",
+                            ) || "N/A"
+                          }
+                        />
+                        <OrderDetailField
+                          label="Open / Close Time"
+                          value={`${valueFrom(fetchedRestro, "open_time", "OpenTime", "openTime") || "N/A"} - ${valueFrom(fetchedRestro, "closed_time", "CloseTime", "closeTime") || "N/A"}`}
+                        />
+                        <OrderDetailField
+                          label="FSSAI Number"
+                          value={
+                            valueFrom(
+                              fetchedRestro,
+                              "FSSAINumber",
+                              "FssaiNumber",
+                              "fssaiNumber",
+                            ) || "N/A"
+                          }
+                        />
+                        <OrderDetailField
+                          label="FSSAI Expiry"
+                          value={
+                            valueFrom(
+                              fetchedRestro,
+                              "FSSAIExpiryDate",
+                              "fssaiExpiryDate",
+                            ) || "N/A"
+                          }
+                        />
+                        <OrderDetailField
+                          label="GST Number"
+                          value={
+                            valueFrom(
+                              fetchedRestro,
+                              "GSTNumber",
+                              "GstNumber",
+                              "gstNumber",
+                            ) || "N/A"
+                          }
+                        />
                         <div className="order-field-full">
                           <OrderDetailField
                             label="Outlet Address"
-                            value={valueFrom(fetchedRestro, "RestroAddress", "Address", "address", "FullAddress", "fullAddress") || "N/A"}
+                            value={
+                              valueFrom(
+                                fetchedRestro,
+                                "RestroAddress",
+                                "Address",
+                                "address",
+                                "FullAddress",
+                                "fullAddress",
+                              ) || "N/A"
+                            }
                           />
                         </div>
                       </div>
                     ) : (
-                      <p className="loading-text">No restaurant details found.</p>
+                      <p className="loading-text">
+                        No restaurant details found.
+                      </p>
                     )}
                   </div>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 12 }}
+                >
                   <h3 className="section-heading">
-                    <Clock size={15} /> Order Process Timeline ({orderLogs.length})
+                    <Clock size={15} /> Order Process Timeline (
+                    {orderLogs.length})
                   </h3>
 
                   {loadingLogs ? (
                     <p className="loading-text">Loading order process log...</p>
                   ) : orderLogs.length === 0 ? (
-                    <div style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e", padding: 12, borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
+                    <div
+                      style={{
+                        background: "#fef3c7",
+                        border: "1px solid #fde68a",
+                        color: "#92400e",
+                        padding: 12,
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: 600,
+                      }}
+                    >
                       No order process log found for this order.
                     </div>
                   ) : (
-                    <div style={{ position: "relative", borderLeft: "2px dashed #e2e8f0", paddingLeft: 18, marginLeft: 6, display: "flex", flexDirection: "column", gap: 14 }}>
+                    <div
+                      style={{
+                        position: "relative",
+                        borderLeft: "2px dashed #e2e8f0",
+                        paddingLeft: 18,
+                        marginLeft: 6,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 14,
+                      }}
+                    >
                       {orderLogs.map((log: any, idx: number) => {
-                        const newStatus = log.NewStatus ?? log.newStatus ?? log.Status ?? "N/A";
+                        const newStatus =
+                          log.NewStatus ?? log.newStatus ?? log.Status ?? "N/A";
                         const oldStatus = log.OldStatus ?? log.oldStatus ?? "";
-                        const subStatusText = log.SubStatus ?? log.subStatus ?? "";
+                        const subStatusText =
+                          log.SubStatus ?? log.subStatus ?? "";
                         const remarksText = log.Remarks ?? log.remarks ?? "";
                         const noteText = log.Note ?? log.note ?? "";
-                        const userType = log.UserType ?? log.userType ?? log.ActionSource ?? log.actionSource ?? "System";
-                        const userName = log.UserName ?? log.userName ?? log.ChangedBy ?? log.changedBy ?? log.Actor ?? "System";
-                        const source = log.ActionSource ?? log.actionSource ?? userType;
-                        const changedAt = log.ChangedAt ?? log.changedAt ?? log.created_at ?? log.CreatedAt;
+                        const userType =
+                          log.UserType ??
+                          log.userType ??
+                          log.ActionSource ??
+                          log.actionSource ??
+                          "System";
+                        const userName =
+                          log.UserName ??
+                          log.userName ??
+                          log.ChangedBy ??
+                          log.changedBy ??
+                          log.Actor ??
+                          "System";
+                        const source =
+                          log.ActionSource ?? log.actionSource ?? userType;
+                        const changedAt =
+                          log.ChangedAt ??
+                          log.changedAt ??
+                          log.created_at ??
+                          log.CreatedAt;
 
                         return (
-                          <div key={log.Id || log.id || idx} style={{ position: "relative" }}>
-                            <span style={{ position: "absolute", left: -24, top: 4, background: "#2563eb", width: 10, height: 10, borderRadius: "50%", border: "2px solid #fff", boxShadow: "0 0 0 2px #bfdbfe" }} />
-                            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4, fontSize: 12 }}>
-                                <span style={{ fontWeight: 800, color: "#0f172a" }}>Status: <span style={{ color: "#2563eb" }}>{newStatus}</span></span>
-                                <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700 }}>{formatAdminDateTime(changedAt)}</span>
+                          <div
+                            key={log.Id || log.id || idx}
+                            style={{ position: "relative" }}
+                          >
+                            <span
+                              style={{
+                                position: "absolute",
+                                left: -24,
+                                top: 4,
+                                background: "#2563eb",
+                                width: 10,
+                                height: 10,
+                                borderRadius: "50%",
+                                border: "2px solid #fff",
+                                boxShadow: "0 0 0 2px #bfdbfe",
+                              }}
+                            />
+                            <div
+                              style={{
+                                background: "#f8fafc",
+                                border: "1px solid #e2e8f0",
+                                borderRadius: 10,
+                                padding: "12px 14px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 8,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  flexWrap: "wrap",
+                                  gap: 4,
+                                  fontSize: 12,
+                                }}
+                              >
+                                <span
+                                  style={{ fontWeight: 800, color: "#0f172a" }}
+                                >
+                                  Status:{" "}
+                                  <span style={{ color: "#2563eb" }}>
+                                    {newStatus}
+                                  </span>
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    color: "#94a3b8",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {formatAdminDateTime(changedAt)}
+                                </span>
                               </div>
-                              {oldStatus && <div style={{ fontSize: 11, color: "#94a3b8" }}>Previous Status: <span style={{ textDecoration: "line-through" }}>{oldStatus}</span></div>}
+                              {oldStatus && (
+                                <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                                  Previous Status:{" "}
+                                  <span
+                                    style={{ textDecoration: "line-through" }}
+                                  >
+                                    {oldStatus}
+                                  </span>
+                                </div>
+                              )}
                               {(subStatusText || remarksText || noteText) && (
-                                <div style={{ background: "#fff", border: "1px solid #e2e8f0", padding: 10, borderRadius: 8, fontSize: 11, color: "#475569", display: "grid", gap: 5 }}>
-                                  {subStatusText && <div><strong style={{ color: "#e11d48" }}>Sub Status:</strong> {subStatusText}</div>}
-                                  {remarksText && <div><strong>Remarks:</strong> {remarksText}</div>}
-                                  {noteText && noteText !== remarksText && <div><strong>Note:</strong> {noteText}</div>}
+                                <div
+                                  style={{
+                                    background: "#fff",
+                                    border: "1px solid #e2e8f0",
+                                    padding: 10,
+                                    borderRadius: 8,
+                                    fontSize: 11,
+                                    color: "#475569",
+                                    display: "grid",
+                                    gap: 5,
+                                  }}
+                                >
+                                  {subStatusText && (
+                                    <div>
+                                      <strong style={{ color: "#e11d48" }}>
+                                        Sub Status:
+                                      </strong>{" "}
+                                      {subStatusText}
+                                    </div>
+                                  )}
+                                  {remarksText && (
+                                    <div>
+                                      <strong>Remarks:</strong> {remarksText}
+                                    </div>
+                                  )}
+                                  {noteText && noteText !== remarksText && (
+                                    <div>
+                                      <strong>Note:</strong> {noteText}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                               <div className="log-meta-grid">
-                                <span>User Type: <strong>{userType}</strong></span>
-                                <span>User Name: <strong>{userName}</strong></span>
-                                <span>Source: <strong>{source}</strong></span>
+                                <span>
+                                  User Type: <strong>{userType}</strong>
+                                </span>
+                                <span>
+                                  User Name: <strong>{userName}</strong>
+                                </span>
+                                <span>
+                                  Source: <strong>{source}</strong>
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -3571,10 +4142,18 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
               background: "#fff",
               borderRadius: 12,
               padding: 20,
-              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)"
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
             }}
           >
-            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: "18px", fontWeight: 800, color: "#1e293b" }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: "18px",
+                fontWeight: 800,
+                color: "#1e293b",
+              }}
+            >
               {actionType === "cancel" ? "Cancel Order" : "Mark Order Status"}
             </h2>
 
@@ -3583,10 +4162,12 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
               onChange={(e) => {
                 setSubStatus(e.target.value);
                 const option = OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find(
-                  (item) => item.key === e.target.value
+                  (item) => item.key === e.target.value,
                 );
                 setVendorPenaltyAmount(
-                  option?.manualPenalty ? "" : String(option?.vendorPenalty ?? "")
+                  option?.manualPenalty
+                    ? ""
+                    : String(option?.vendorPenalty ?? ""),
                 );
               }}
               style={{
@@ -3596,73 +4177,96 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                 border: "1px solid #cbd5e1",
                 marginBottom: 16,
                 fontSize: "13px",
-                fontWeight: 600
+                fontWeight: 600,
               }}
             >
               <option value="">
-                {actionType === "cancel" ? "-- Select Cancel Reason --" : "-- Select Outcome Status --"}
+                {actionType === "cancel"
+                  ? "-- Select Cancel Reason --"
+                  : "-- Select Outcome Status --"}
               </option>
 
               {actionType === "cancel"
                 ? CANCEL_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>{reason}</option>
-                  ))
-                : selectedOrder?.status === "inkitchen" ||
-                  selectedOrder?.status === "outfordelivery"
-                ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.map((option) => (
-                    <option key={option.key} value={option.key}>
-                      {option.manualPenalty
-                        ? `${option.label} - Manual Penalty`
-                        : `${option.label} - Rs ${option.vendorPenalty}`}
+                    <option key={reason} value={reason}>
+                      {reason}
                     </option>
                   ))
-                : DELIVERED_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>{reason}</option>
-                  ))
-              }
+                : selectedOrder?.status === "inkitchen" ||
+                    selectedOrder?.status === "outfordelivery"
+                  ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.manualPenalty
+                          ? `${option.label} - Manual Penalty`
+                          : `${option.label} - Rs ${option.vendorPenalty}`}
+                      </option>
+                    ))
+                  : DELIVERED_REASONS.map((reason) => (
+                      <option key={reason} value={reason}>
+                        {reason}
+                      </option>
+                    ))}
             </select>
 
             {actionType === "mark" &&
               (selectedOrder?.status === "inkitchen" ||
                 selectedOrder?.status === "outfordelivery") &&
               subStatus && (
-              <div
-                style={{
-                  marginTop: -6,
-                  marginBottom: 16,
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "1px solid #e2e8f0",
-                  background: "#f8fafc",
-                }}
-              >
-                {OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find((option) => option.key === subStatus)?.manualPenalty ? (
-                  <label style={{ display: "grid", gap: 6, fontSize: 12, fontWeight: 700, color: "#334155" }}>
-                    Vendor Penalty Amount (Rs)
-                    <input
-                      type="number"
-                      min="0"
-                      value={vendorPenaltyAmount}
-                      onChange={(e) => setVendorPenaltyAmount(e.target.value)}
-                      placeholder="Enter manual amount"
+                <div
+                  style={{
+                    marginTop: -6,
+                    marginBottom: 16,
+                    padding: 10,
+                    borderRadius: 8,
+                    border: "1px solid #e2e8f0",
+                    background: "#f8fafc",
+                  }}
+                >
+                  {OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find(
+                    (option) => option.key === subStatus,
+                  )?.manualPenalty ? (
+                    <label
                       style={{
-                        width: "100%",
-                        padding: 10,
-                        borderRadius: 8,
-                        border: "1px solid #cbd5e1",
-                        fontSize: 13,
+                        display: "grid",
+                        gap: 6,
+                        fontSize: 12,
                         fontWeight: 700,
+                        color: "#334155",
                       }}
-                    />
-                  </label>
-                ) : (
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#0f172a" }}>
-                    Vendor Penalty: Rs{" "}
-                    {OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find((option) => option.key === subStatus)?.vendorPenalty ?? 0}
-                  </div>
-                )}
-              </div>
-            )}
+                    >
+                      Vendor Penalty Amount (Rs)
+                      <input
+                        type="number"
+                        min="0"
+                        value={vendorPenaltyAmount}
+                        onChange={(e) => setVendorPenaltyAmount(e.target.value)}
+                        placeholder="Enter manual amount"
+                        style={{
+                          width: "100%",
+                          padding: 10,
+                          borderRadius: 8,
+                          border: "1px solid #cbd5e1",
+                          fontSize: 13,
+                          fontWeight: 700,
+                        }}
+                      />
+                    </label>
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 800,
+                        color: "#0f172a",
+                      }}
+                    >
+                      Vendor Penalty: Rs{" "}
+                      {OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find(
+                        (option) => option.key === subStatus,
+                      )?.vendorPenalty ?? 0}
+                    </div>
+                  )}
+                </div>
+              )}
 
             <textarea
               placeholder="Internal administrative remarks annotation ledger (Optional)"
@@ -3676,11 +4280,13 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                 border: "1px solid #cbd5e1",
                 marginBottom: 16,
                 resize: "vertical",
-                fontSize: "13px"
+                fontSize: "13px",
               }}
             />
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <div
+              style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}
+            >
               <button
                 onClick={() => {
                   setStatusModalOpen(false);
@@ -3696,7 +4302,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                   background: "#fff",
                   cursor: "pointer",
                   fontWeight: 600,
-                  fontSize: "13px"
+                  fontSize: "13px",
                 }}
               >
                 Close
@@ -3712,7 +4318,7 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
                   color: "#fff",
                   cursor: "pointer",
                   fontWeight: 700,
-                  fontSize: "13px"
+                  fontSize: "13px",
                 }}
               >
                 Submit Action
@@ -3722,35 +4328,33 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
         </div>
       )}
 
-      <style dangerouslySetInnerHTML={{__html: `
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
         @keyframes scaleIn { from { opacity: 0; transform: scale(0.96) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         .table-row-hover:hover { background-color: #f8fafc !important; transition: background-color 0.15s ease; }
-        .order-top-grid { display: grid; grid-template-columns: minmax(0, 1.42fr) minmax(320px, 0.58fr); gap: 12px; align-items: stretch; }
-        .order-info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 13px 14px; }
+        .order-top-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr); gap: 18px; align-items: stretch; }
+        .order-info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
         .payment-card { background: #f8fafc; }
-        .order-card-title, .section-heading { margin: 0 0 9px; font-size: 12px; font-weight: 900; color: #475569; text-transform: uppercase; letter-spacing: .55px; display: flex; align-items: center; gap: 7px; }
+        .order-card-title, .section-heading { margin: 0 0 14px; font-size: 12px; font-weight: 900; color: #475569; text-transform: uppercase; letter-spacing: .55px; display: flex; align-items: center; gap: 7px; }
         .payment-title { color: #2563eb; }
         .restaurant-title { color: #16a34a; }
         .section-heading { margin-bottom: 0; color: #64748b; }
-        .order-field-grid, .restaurant-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 14px; }
+        .order-field-grid, .restaurant-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 18px; }
         .restaurant-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .order-field, .order-field-highlight { min-width: 0; }
-        .order-field-highlight { background: #eff6ff; border: 1px solid #bfdbfe; padding: 6px 9px; border-radius: 7px; }
+        .order-field-highlight { background: #eff6ff; border: 1px solid #bfdbfe; padding: 9px 11px; border-radius: 8px; }
         .order-field-full { grid-column: 1 / -1; }
-        .order-id-field { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 8px; background: #eaf2ff; border: 1px solid #bfdbfe; }
-        .order-id-field .order-field-label { margin: 0; color: #1d4ed8; }
-        .order-id-value { color: #1d4ed8; font-size: 13px; font-weight: 900; word-break: break-all; }
-        .compact-order-fields .order-field, .compact-order-fields .order-field-highlight { align-self: start; }
-        .order-field-label { display: block; margin-bottom: 2px; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .35px; }
-        .order-field-value { display: block; color: #0f172a; font-size: 12px; font-weight: 700; line-height: 1.45; word-break: break-word; }
-        .payment-summary-row { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 10px; margin-bottom: 7px; }
+        .order-field-label { display: block; margin-bottom: 4px; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .35px; }
+        .order-field-value { display: block; color: #0f172a; font-size: 13px; font-weight: 700; line-height: 1.45; word-break: break-word; }
+        .payment-summary-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
         .payment-mode-pill { display: inline-flex; padding: 5px 10px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: 12px; font-weight: 900; }
         .payment-lines { display: flex; flex-direction: column; }
-        .payment-line { display: flex; justify-content: space-between; gap: 14px; padding: 5px 2px; border-bottom: 1px dashed #dbe3ee; color: #64748b; font-size: 12px; }
+        .payment-line { display: flex; justify-content: space-between; gap: 18px; padding: 8px 2px; border-bottom: 1px dashed #dbe3ee; color: #64748b; font-size: 12px; }
         .payment-line strong { text-align: right; word-break: break-word; }
-        .payable-box { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: #2563eb; color: #fff; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 800; }
+        .payable-box { margin-top: 14px; padding: 13px 14px; border-radius: 10px; background: #2563eb; color: #fff; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 800; }
         .payable-box strong { font-size: 20px; }
         .items-table-wrap { border: 1px solid #e2e8f0; border-radius: 14px; overflow-x: auto; }
         .items-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px; }
@@ -3774,7 +4378,9 @@ setDraftDeliveryTo(`${todayDate}T23:59`);
           .payment-summary-row { flex-direction: column; }
           .log-meta-grid { grid-template-columns: 1fr; }
         }
-      `}} />
+      `,
+        }}
+      />
     </section>
   );
 }
