@@ -17,9 +17,9 @@ const tabs = [
   { label: "Address & Documents", href: "./address-docs" },
   { label: "Contacts", href: "./contacts" },
   { label: "Bank", href: "./bank" },
-  { label: "Future Closed", href: "./future-closed" },
   { label: "Menu", href: "./menu" },
-  { label: "Restro User & Password", href: "./restro-user-password" },
+{ label: "Restro User & Password", href: "./restro-user-password" },
+{ label: "Credit / Debit Note", href: "./credit-debit-note" },
 ];
 
 export default async function RestroEditLayout({ params, children }: Props) {
