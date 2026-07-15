@@ -20,7 +20,9 @@ type RestroRdsRow = {
   RestroName: string | null;
   StationCode: string | null;
   Status: string | null;
+  EntrySource: string | null;
   SubStatus: string | null;
+  EntrySource: string | null;
   DeliveryDate: string | null;
   DeliveryTime: string | null;
   PaymentMode: string | null;
@@ -119,6 +121,12 @@ const COLUMNS: {
     title: "Status",
     width: "4.2%",
   },
+  {
+  key: "EntrySource",
+  title: "Entry Source",
+  width: "4%",
+  align: "center",
+},
   {
     key: "SubStatus",
     title: "Sub Status",
@@ -799,115 +807,145 @@ export default function RestroRdsTable() {
     }, [appliedFilters]);
 
   /* =======================================================
-     CELL RENDERER
-     ======================================================= */
+   CELL RENDERER
+   ======================================================= */
 
-  function renderCell(
-    row: RestroRdsRow,
-    column: (typeof COLUMNS)[number]
-  ) {
-    const value =
-      row[column.key];
+function renderCell(
+  row: RestroRdsRow,
+  column: (typeof COLUMNS)[number]
+) {
+  const value = row[column.key];
 
-    if (
-      column.key ===
-      "Status"
-    ) {
-      const status =
-        textValue(value) || "-";
-
-      return (
-        <span
-          title={status}
-          className={[
-            "inline-flex max-w-full items-center rounded border px-1 py-0.5 font-semibold",
-            statusClass(status),
-          ].join(" ")}
-        >
-          <span className="truncate">
-            {status}
-          </span>
-        </span>
-      );
-    }
-
-    if (
-      column.key ===
-      "PaymentMode"
-    ) {
-      const mode =
-        textValue(value) ||
-        "-";
-
-      return (
-        <span
-          className={[
-            "inline-flex rounded border px-1 py-0.5 font-bold",
-            paymentModeClass(
-              mode
-            ),
-          ].join(" ")}
-        >
-          {mode}
-        </span>
-      );
-    }
-
-    if (
-      column.type ===
-      "balance"
-    ) {
-      const amount =
-        numberValue(value);
-
-      return (
-        <span
-          className={[
-            "block text-[11px] font-extrabold leading-tight",
-            amount < 0
-              ? "text-red-700"
-              : amount > 0
-              ? "text-green-700"
-              : "text-slate-900",
-          ].join(" ")}
-        >
-          {formatMoney(amount)}
-        </span>
-      );
-    }
-
-    if (
-      column.type === "money"
-    ) {
-      const amount =
-        numberValue(value);
-
-      return (
-        <span
-          className={
-            amount < 0
-              ? "font-semibold text-red-700"
-              : ""
-          }
-        >
-          {formatMoney(amount)}
-        </span>
-      );
-    }
-
-    const text =
-      textValue(value);
+  if (column.key === "Status") {
+    const status =
+      textValue(value) || "-";
 
     return (
       <span
-        title={text}
-        className="block break-words leading-tight"
+        title={status}
+        className={[
+          "inline-flex max-w-full items-center rounded border px-1 py-0.5 font-semibold",
+          statusClass(status),
+        ].join(" ")}
       >
-        {text || "-"}
+        <span className="truncate">
+          {status}
+        </span>
       </span>
     );
   }
 
+  if (column.key === "EntrySource") {
+    const source =
+      textValue(value) || "-";
+
+    const normalizedSource =
+      source
+        .toLowerCase()
+        .replace(/[^a-z]/g, "");
+
+    const sourceClass =
+      normalizedSource === "order"
+        ? "border-blue-200 bg-blue-50 text-blue-700"
+        : normalizedSource === "creditnote"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : normalizedSource === "debitnote"
+        ? "border-red-200 bg-red-50 text-red-700"
+        : normalizedSource === "manual"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-slate-200 bg-slate-50 text-slate-700";
+
+    const sourceLabel =
+      normalizedSource === "creditnote"
+        ? "Credit Note"
+        : normalizedSource === "debitnote"
+        ? "Debit Note"
+        : normalizedSource === "order"
+        ? "Order"
+        : normalizedSource === "manual"
+        ? "Manual"
+        : source;
+
+    return (
+      <span
+        title={sourceLabel}
+        className={[
+          "inline-flex max-w-full items-center rounded border px-1 py-0.5 font-semibold",
+          sourceClass,
+        ].join(" ")}
+      >
+        <span className="truncate">
+          {sourceLabel}
+        </span>
+      </span>
+    );
+  }
+
+  if (column.key === "PaymentMode") {
+    const mode =
+      textValue(value) || "-";
+
+    return (
+      <span
+        className={[
+          "inline-flex rounded border px-1 py-0.5 font-bold",
+          paymentModeClass(mode),
+        ].join(" ")}
+      >
+        {mode}
+      </span>
+    );
+  }
+
+  if (column.type === "balance") {
+    const amount =
+      numberValue(value);
+
+    return (
+      <span
+        className={[
+          "block text-[11px] font-extrabold leading-tight",
+          amount < 0
+            ? "text-red-700"
+            : amount > 0
+            ? "text-green-700"
+            : "text-slate-900",
+        ].join(" ")}
+      >
+        {formatMoney(amount)}
+      </span>
+    );
+  }
+
+  if (column.type === "money") {
+    const amount =
+      numberValue(value);
+
+    return (
+      <span
+        className={
+          amount < 0
+            ? "font-semibold text-red-700"
+            : ""
+        }
+      >
+        {formatMoney(amount)}
+      </span>
+    );
+  }
+
+  const text =
+    textValue(value);
+
+  return (
+    <span
+      title={text}
+      className="block break-words leading-tight"
+    >
+      {text || "-"}
+    </span>
+  );
+}
   /* =======================================================
      JSX
      ======================================================= */
