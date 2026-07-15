@@ -124,7 +124,8 @@ function normalizePageSize(
  * valid ISO string banayenge.
  */
 function normalizeDateTimeFilter(
-  value: unknown
+  value: unknown,
+  isEnd = false
 ) {
   const text =
     cleanText(value);
@@ -133,18 +134,32 @@ function normalizeDateTimeFilter(
     return null;
   }
 
-  const date =
-    new Date(text);
+  const match =
+    text.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
+    );
 
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
+  if (!match) {
     return null;
   }
 
-  return date.toISOString();
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+  ] = match;
+
+  const seconds =
+    isEnd ? "59" : "00";
+
+  return (
+    `${year}-${month}-${day}` +
+    `T${hour}:${minute}:${seconds}` +
+    `+05:30`
+  );
 }
 
 /*
@@ -340,18 +355,20 @@ export async function GET(
       );
 
     const fromDateTime =
-      normalizeDateTimeFilter(
-        searchParams.get(
-          "from"
-        )
-      );
+  normalizeDateTimeFilter(
+    searchParams.get(
+      "from"
+    ),
+    false
+  );
 
-    const toDateTime =
-      normalizeDateTimeFilter(
-        searchParams.get(
-          "to"
-        )
-      );
+const toDateTime =
+  normalizeDateTimeFilter(
+    searchParams.get(
+      "to"
+    ),
+    true
+  );
 
     const fromIndex =
       (page - 1) *
