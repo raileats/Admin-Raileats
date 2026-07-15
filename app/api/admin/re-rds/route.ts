@@ -84,6 +84,14 @@ function cleanRestroCode(
     .replace(/[^\d]/g, "");
 }
 
+function cleanOrderId(
+  value: unknown
+) {
+  return cleanText(value)
+    .replace(/[%_,]/g, "")
+    .slice(0, 100);
+}
+
 function positiveInteger(
   value: unknown,
   fallback: number
@@ -144,6 +152,25 @@ function normalizeDateTimeFilter(
   return date.toISOString();
 }
 
+function roundMoney(
+  value: unknown
+) {
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(number)
+  ) {
+    return 0;
+  }
+
+  return (
+    Math.round(
+      number * 100
+    ) / 100
+  );
+}
+
 function formatIndiaDateTime(
   value: unknown
 ) {
@@ -193,7 +220,8 @@ function formatIndiaDateTime(
     ).formatToParts(date);
 
   const map:
-    Record<string, string> = {};
+    Record<string, string> =
+    {};
 
   for (
     const part of parts
@@ -247,6 +275,51 @@ function formatDeliveryTime(
   return text.slice(0, 8);
 }
 
+function getIndiaTodayRange() {
+  const now =
+    new Date();
+
+  const indiaDateText =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone:
+          "Asia/Kolkata",
+
+        year:
+          "numeric",
+
+        month:
+          "2-digit",
+
+        day:
+          "2-digit",
+      }
+    ).format(now);
+
+  /*
+   * India midnight = previous UTC day 18:30.
+   * Explicit +05:30 offset timezone-safe conversion deta hai.
+   */
+  const start =
+    new Date(
+      `${indiaDateText}T00:00:00+05:30`
+    );
+
+  const end =
+    new Date(
+      `${indiaDateText}T23:59:59.999+05:30`
+    );
+
+  return {
+    start:
+      start.toISOString(),
+
+    end:
+      end.toISOString(),
+  };
+}
+
 /* =========================================================
    STATION NAME
    ========================================================= */
@@ -291,6 +364,94 @@ async function getStationName(
 }
 
 /* =========================================================
+   COMMON FILTER APPLIER
+
+   Same filters main rows aur totals dono par lagenge.
+   ========================================================= */
+
+function applyFilters(
+  query: any,
+  {
+    restroCode,
+    orderId,
+    entrySource,
+    paymentMode,
+    status,
+    fromDateTime,
+    toDateTime,
+  }: {
+    restroCode: string;
+    orderId: string;
+    entrySource: string;
+    paymentMode: string;
+    status: string;
+    fromDateTime: string | null;
+    toDateTime: string | null;
+  }
+) {
+  let nextQuery =
+    query;
+
+  if (restroCode) {
+    nextQuery =
+      nextQuery.eq(
+        "RestroCode",
+        Number(restroCode)
+      );
+  }
+
+  if (orderId) {
+    nextQuery =
+      nextQuery.ilike(
+        "OrderId",
+        `%${orderId}%`
+      );
+  }
+
+  if (entrySource) {
+    nextQuery =
+      nextQuery.eq(
+        "EntrySource",
+        entrySource
+      );
+  }
+
+  if (paymentMode) {
+    nextQuery =
+      nextQuery.eq(
+        "PaymentMode",
+        paymentMode
+      );
+  }
+
+  if (status) {
+    nextQuery =
+      nextQuery.ilike(
+        "Status",
+        status
+      );
+  }
+
+  if (fromDateTime) {
+    nextQuery =
+      nextQuery.gte(
+        "CreatedAt",
+        fromDateTime
+      );
+  }
+
+  if (toDateTime) {
+    nextQuery =
+      nextQuery.lte(
+        "CreatedAt",
+        toDateTime
+      );
+  }
+
+  return nextQuery;
+}
+
+/* =========================================================
    GET
    ========================================================= */
 
@@ -323,6 +484,13 @@ export async function GET(
         )
       );
 
+    const orderId =
+      cleanOrderId(
+        searchParams.get(
+          "orderId"
+        )
+      );
+
     const entrySource =
       cleanText(
         searchParams.get(
@@ -334,6 +502,13 @@ export async function GET(
       cleanText(
         searchParams.get(
           "paymentMode"
+        )
+      );
+
+    const status =
+      cleanText(
+        searchParams.get(
+          "status"
         )
       );
 
@@ -350,6 +525,34 @@ export async function GET(
           "to"
         )
       );
+
+    if (
+      fromDateTime &&
+      toDateTime &&
+      new Date(fromDateTime) >
+        new Date(toDateTime)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "From Date-Time cannot be greater than To Date-Time",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const filterValues = {
+      restroCode,
+      orderId,
+      entrySource,
+      paymentMode,
+      status,
+      fromDateTime,
+      toDateTime,
+    };
 
     const fromIndex =
       (page - 1) *
@@ -371,7 +574,7 @@ export async function GET(
        - RERDSId DESC
        ===================================================== */
 
-    let query =
+    let mainQuery =
       serviceClient
         .from("RERDS")
         .select(
@@ -381,52 +584,18 @@ export async function GET(
           }
         );
 
-    if (restroCode) {
-      query =
-        query.eq(
-          "RestroCode",
-          Number(restroCode)
-        );
-    }
-
-    if (entrySource) {
-      query =
-        query.eq(
-          "EntrySource",
-          entrySource
-        );
-    }
-
-    if (paymentMode) {
-      query =
-        query.eq(
-          "PaymentMode",
-          paymentMode
-        );
-    }
-
-    if (fromDateTime) {
-      query =
-        query.gte(
-          "CreatedAt",
-          fromDateTime
-        );
-    }
-
-    if (toDateTime) {
-      query =
-        query.lte(
-          "CreatedAt",
-          toDateTime
-        );
-    }
+    mainQuery =
+      applyFilters(
+        mainQuery,
+        filterValues
+      );
 
     const {
       data,
       error,
       count,
     } =
-      await query
+      await mainQuery
         .order(
           "CreatedAt",
           {
@@ -517,8 +686,7 @@ export async function GET(
     /* =====================================================
        UNIVERSAL CURRENT BALANCE
 
-       Latest RERDS row ka CurrentBal company ka
-       current All-India running balance hai.
+       Filters se independent actual All-India latest balance.
        ===================================================== */
 
     const {
@@ -557,19 +725,13 @@ export async function GET(
     }
 
     const universalBalance =
-      Number(
+      roundMoney(
         latestBalanceRow
-          ?.CurrentBal ??
-          0
+          ?.CurrentBal
       );
 
     /* =====================================================
-       FILTERED TOTALS
-
-       Current filters ke according:
-       - Total receivable
-       - Total payable
-       - Net movement
+       FILTERED TOTALS + COUNTS
        ===================================================== */
 
     let totalsQuery =
@@ -577,49 +739,16 @@ export async function GET(
         .from("RERDS")
         .select(
           `
+            EntrySource,
             RESettlementAmount
           `
         );
 
-    if (restroCode) {
-      totalsQuery =
-        totalsQuery.eq(
-          "RestroCode",
-          Number(restroCode)
-        );
-    }
-
-    if (entrySource) {
-      totalsQuery =
-        totalsQuery.eq(
-          "EntrySource",
-          entrySource
-        );
-    }
-
-    if (paymentMode) {
-      totalsQuery =
-        totalsQuery.eq(
-          "PaymentMode",
-          paymentMode
-        );
-    }
-
-    if (fromDateTime) {
-      totalsQuery =
-        totalsQuery.gte(
-          "CreatedAt",
-          fromDateTime
-        );
-    }
-
-    if (toDateTime) {
-      totalsQuery =
-        totalsQuery.lte(
-          "CreatedAt",
-          toDateTime
-        );
-    }
+    totalsQuery =
+      applyFilters(
+        totalsQuery,
+        filterValues
+      );
 
     const {
       data:
@@ -641,6 +770,11 @@ export async function GET(
     let totalPayable = 0;
     let netMovement = 0;
 
+    let orderCount = 0;
+    let creditNoteCount = 0;
+    let debitNoteCount = 0;
+    let manualCount = 0;
+
     if (
       Array.isArray(
         totalsRows
@@ -650,19 +784,10 @@ export async function GET(
         const row of totalsRows
       ) {
         const amount =
-          Number(
+          roundMoney(
             row
-              .RESettlementAmount ??
-              0
+              .RESettlementAmount
           );
-
-        if (
-          !Number.isFinite(
-            amount
-          )
-        ) {
-          continue;
-        }
 
         netMovement +=
           amount;
@@ -678,26 +803,194 @@ export async function GET(
               amount
             );
         }
+
+        const source =
+          cleanText(
+            row.EntrySource
+          )
+            .toLowerCase()
+            .replace(
+              /[^a-z]/g,
+              ""
+            );
+
+        if (source === "order") {
+          orderCount += 1;
+        } else if (
+          source ===
+          "creditnote"
+        ) {
+          creditNoteCount += 1;
+        } else if (
+          source ===
+          "debitnote"
+        ) {
+          debitNoteCount += 1;
+        } else if (
+          source ===
+          "manual"
+        ) {
+          manualCount += 1;
+        }
       }
     }
 
     totalReceivable =
-      Math.round(
-        totalReceivable *
-          100
-      ) / 100;
+      roundMoney(
+        totalReceivable
+      );
 
     totalPayable =
-      Math.round(
-        totalPayable *
-          100
-      ) / 100;
+      roundMoney(
+        totalPayable
+      );
 
     netMovement =
-      Math.round(
-        netMovement *
-          100
-      ) / 100;
+      roundMoney(
+        netMovement
+      );
+
+    /* =====================================================
+       TODAY SUMMARY — INDIA TIME
+       ===================================================== */
+
+    const todayRange =
+      getIndiaTodayRange();
+
+    const {
+      data:
+        todayRows,
+
+      error:
+        todayError,
+    } =
+      await serviceClient
+        .from("RERDS")
+        .select(
+          `
+            EntrySource,
+            RESettlementAmount
+          `
+        )
+        .gte(
+          "CreatedAt",
+          todayRange.start
+        )
+        .lte(
+          "CreatedAt",
+          todayRange.end
+        );
+
+    if (todayError) {
+      console.error(
+        "RE RDS TODAY SUMMARY ERROR =>",
+        todayError
+      );
+    }
+
+    let todayReceivable = 0;
+    let todayPayable = 0;
+    let todayNetMovement = 0;
+    let todayCreditNote = 0;
+    let todayDebitNote = 0;
+    let todayOrderCount = 0;
+
+    if (
+      Array.isArray(
+        todayRows
+      )
+    ) {
+      for (
+        const row of todayRows
+      ) {
+        const amount =
+          roundMoney(
+            row
+              .RESettlementAmount
+          );
+
+        todayNetMovement +=
+          amount;
+
+        if (amount > 0) {
+          todayReceivable +=
+            amount;
+        }
+
+        if (amount < 0) {
+          todayPayable +=
+            Math.abs(
+              amount
+            );
+        }
+
+        const source =
+          cleanText(
+            row.EntrySource
+          )
+            .toLowerCase()
+            .replace(
+              /[^a-z]/g,
+              ""
+            );
+
+        if (
+          source === "order"
+        ) {
+          todayOrderCount += 1;
+        }
+
+        /*
+         * Company perspective:
+         * Restaurant CreditNote -> RE settlement negative.
+         * Restaurant DebitNote  -> RE settlement positive.
+         */
+        if (
+          source ===
+          "creditnote"
+        ) {
+          todayCreditNote +=
+            Math.abs(
+              amount
+            );
+        }
+
+        if (
+          source ===
+          "debitnote"
+        ) {
+          todayDebitNote +=
+            Math.abs(
+              amount
+            );
+        }
+      }
+    }
+
+    todayReceivable =
+      roundMoney(
+        todayReceivable
+      );
+
+    todayPayable =
+      roundMoney(
+        todayPayable
+      );
+
+    todayNetMovement =
+      roundMoney(
+        todayNetMovement
+      );
+
+    todayCreditNote =
+      roundMoney(
+        todayCreditNote
+      );
+
+    todayDebitNote =
+      roundMoney(
+        todayDebitNote
+      );
 
     /* =====================================================
        SELECTED RESTAURANT SUMMARY
@@ -757,6 +1050,9 @@ export async function GET(
       const {
         data:
           summaryRow,
+
+        error:
+          summaryError,
       } =
         await serviceClient
           .from("RERDS")
@@ -785,6 +1081,13 @@ export async function GET(
           )
           .limit(1)
           .maybeSingle();
+
+      if (summaryError) {
+        console.error(
+          "RE RDS RESTRO SUMMARY ERROR =>",
+          summaryError
+        );
+      }
 
       if (summaryRow) {
         const stationName =
@@ -846,6 +1149,17 @@ export async function GET(
 
           netMovement,
 
+          totalEntries:
+            total,
+
+          orderCount,
+
+          creditNoteCount,
+
+          debitNoteCount,
+
+          manualCount,
+
           lastEntryAt:
             latestBalanceRow
               ?.CreatedAt
@@ -854,11 +1168,35 @@ export async function GET(
                     .CreatedAt
                 )
               : null,
+
+          today: {
+            receivable:
+              todayReceivable,
+
+            payable:
+              todayPayable,
+
+            netMovement:
+              todayNetMovement,
+
+            creditNote:
+              todayCreditNote,
+
+            debitNote:
+              todayDebitNote,
+
+            orderCount:
+              todayOrderCount,
+          },
         },
 
         filters: {
           restroCode:
             restroCode ||
+            null,
+
+          orderId:
+            orderId ||
             null,
 
           entrySource:
@@ -867,6 +1205,10 @@ export async function GET(
 
           paymentMode:
             paymentMode ||
+            null,
+
+          status:
+            status ||
             null,
 
           from:
@@ -884,8 +1226,10 @@ export async function GET(
 
         defaultView:
           !restroCode &&
+          !orderId &&
           !entrySource &&
           !paymentMode &&
+          !status &&
           !fromDateTime &&
           !toDateTime,
 
@@ -909,6 +1253,12 @@ export async function GET(
         headers: {
           "Cache-Control":
             "no-store, no-cache, must-revalidate",
+
+          Pragma:
+            "no-cache",
+
+          Expires:
+            "0",
         },
       }
     );
@@ -930,6 +1280,11 @@ export async function GET(
       },
       {
         status: 500,
+
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
       }
     );
   }
