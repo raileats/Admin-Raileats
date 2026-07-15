@@ -129,29 +129,40 @@ function normalizePageSize(
 }
 
 function normalizeDateTimeFilter(
-  value: unknown
+  value: unknown,
+  isEnd = false
 ) {
-  const text =
-    cleanText(value);
+  const text = cleanText(value);
 
   if (!text) {
     return null;
   }
 
-  const date =
-    new Date(text);
+  const match = text.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
+  );
 
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
+  if (!match) {
     return null;
   }
 
-  return date.toISOString();
-}
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+  ] = match;
 
+  const seconds = isEnd ? "59" : "00";
+
+  /*
+   * Browser datetime-local ko
+   * India timezone (+05:30) treat karo.
+   */
+  return `${year}-${month}-${day}T${hour}:${minute}:${seconds}+05:30`;
+}
 function roundMoney(
   value: unknown
 ) {
