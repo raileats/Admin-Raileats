@@ -446,6 +446,12 @@ export default function ReRdsTable() {
     useState(true);
 
   const [
+    exporting,
+    setExporting,
+  ] =
+    useState(false);
+
+  const [
     error,
     setError,
   ] =
@@ -741,6 +747,142 @@ export default function ReRdsTable() {
       );
     };
   }, [selectedRow]);
+
+  async function handleExportExcel() {
+    if (
+      exporting
+    ) {
+      return;
+    }
+
+    setExporting(
+      true
+    );
+    setError(
+      null
+    );
+
+    try {
+      const params =
+        new URLSearchParams();
+
+      Object.entries(
+        appliedFilters
+      ).forEach(
+        ([
+          key,
+          value,
+        ]) => {
+          if (
+            value
+          ) {
+            params.set(
+              key,
+              value
+            );
+          }
+        }
+      );
+
+      const response =
+        await fetch(
+          `/api/admin/re-rds/export?${params.toString()}`,
+          {
+            method:
+              "GET",
+            cache:
+              "no-store",
+          }
+        );
+
+      if (
+        !response.ok
+      ) {
+        let message =
+          "Unable to export RE RDS";
+
+        try {
+          const errorJson =
+            await response
+              .json();
+
+          message =
+            errorJson
+              ?.error ||
+            message;
+        } catch {
+          // Keep default message.
+        }
+
+        throw new Error(
+          message
+        );
+      }
+
+      const blob =
+        await response
+          .blob();
+
+      const disposition =
+        response.headers
+          .get(
+            "content-disposition"
+          ) ||
+        "";
+
+      const fileMatch =
+        disposition
+          .match(
+            /filename="?([^"]+)"?/i
+          );
+
+      const fileName =
+        fileMatch
+          ? fileMatch[1]
+          : "RE-RDS-Statement.xlsx";
+
+      const objectUrl =
+        URL.createObjectURL(
+          blob
+        );
+
+      const anchor =
+        document.createElement(
+          "a"
+        );
+
+      anchor.href =
+        objectUrl;
+
+      anchor.download =
+        fileName;
+
+      document.body
+        .appendChild(
+          anchor
+        );
+
+      anchor.click();
+
+      anchor.remove();
+
+      URL.revokeObjectURL(
+        objectUrl
+      );
+    } catch (
+      exportError: any
+    ) {
+      setError(
+        exportError
+          ?.message ||
+        "Unable to export RE RDS"
+      );
+    } finally {
+      setExporting(
+        false
+      );
+    }
+  }
 
   function handleSearch(
     event:
@@ -1221,7 +1363,23 @@ export default function ReRdsTable() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={
+                handleExportExcel
+              }
+              disabled={
+                loading ||
+                exporting
+              }
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exporting
+                ? "Exporting..."
+                : "Export Excel"}
+            </button>
+
             <label
               htmlFor="re-rds-page-size"
               className="text-sm font-medium text-slate-600"
