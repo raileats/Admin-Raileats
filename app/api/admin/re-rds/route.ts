@@ -13,20 +13,12 @@ import {
   serviceClient,
 } from "@/lib/supabaseServer";
 
-/* =========================================================
-   ALLOWED PAGE SIZES
-   ========================================================= */
-
 const ALLOWED_PAGE_SIZES = [
   20,
   50,
   100,
   500,
 ] as const;
-
-/* =========================================================
-   EXACT RE RDS COLUMNS
-   ========================================================= */
 
 const RE_RDS_COLUMNS = `
   RERDSId,
@@ -64,29 +56,15 @@ const RE_RDS_COLUMNS = `
   CreatedAt
 `;
 
-/* =========================================================
-   HELPERS
-   ========================================================= */
-
-function cleanText(
-  value: unknown
-) {
-  const text =
-    String(value ?? "").trim();
-
-  return text || "";
+function cleanText(value: unknown) {
+  return String(value ?? "").trim();
 }
 
-function cleanRestroCode(
-  value: unknown
-) {
-  return cleanText(value)
-    .replace(/[^\d]/g, "");
+function cleanRestroCode(value: unknown) {
+  return cleanText(value).replace(/[^\d]/g, "");
 }
 
-function cleanOrderId(
-  value: unknown
-) {
+function cleanOrderId(value: unknown) {
   return cleanText(value)
     .replace(/[%_,]/g, "")
     .slice(0, 100);
@@ -96,30 +74,24 @@ function positiveInteger(
   value: unknown,
   fallback: number
 ) {
-  const parsed =
-    Number.parseInt(
-      String(value ?? ""),
-      10
-    );
+  const parsed = Number.parseInt(
+    String(value ?? ""),
+    10
+  );
 
-  if (
-    !Number.isFinite(parsed) ||
-    parsed < 1
-  ) {
-    return fallback;
-  }
-
-  return parsed;
+  return Number.isFinite(parsed) &&
+    parsed > 0
+    ? parsed
+    : fallback;
 }
 
 function normalizePageSize(
   value: unknown
 ) {
-  const parsed =
-    positiveInteger(
-      value,
-      20
-    );
+  const parsed = positiveInteger(
+    value,
+    20
+  );
 
   return ALLOWED_PAGE_SIZES.includes(
     parsed as any
@@ -128,6 +100,18 @@ function normalizePageSize(
     : 20;
 }
 
+/*
+ * datetime-local value ko hamesha India local time maana jayega.
+ *
+ * Example:
+ * 2026-07-16T02:20
+ *
+ * From:
+ * 2026-07-16T02:20:00+05:30
+ *
+ * To:
+ * 2026-07-16T02:20:59.999+05:30
+ */
 function normalizeDateTimeFilter(
   value: unknown,
   isEnd = false
@@ -155,51 +139,41 @@ function normalizeDateTimeFilter(
     minute,
   ] = match;
 
-  const seconds = isEnd ? "59" : "00";
+  const suffix = isEnd
+    ? ":59.999+05:30"
+    : ":00.000+05:30";
 
-  /*
-   * Browser datetime-local ko
-   * India timezone (+05:30) treat karo.
-   */
-  return `${year}-${month}-${day}T${hour}:${minute}:${seconds}+05:30`;
+  return (
+    `${year}-${month}-${day}` +
+    `T${hour}:${minute}` +
+    suffix
+  );
 }
+
 function roundMoney(
   value: unknown
 ) {
-  const number =
-    Number(value);
+  const number = Number(value);
 
-  if (
-    !Number.isFinite(number)
-  ) {
+  if (!Number.isFinite(number)) {
     return 0;
   }
 
-  return (
-    Math.round(
-      number * 100
-    ) / 100
-  );
+  return Math.round(number * 100) / 100;
 }
 
 function formatIndiaDateTime(
   value: unknown
 ) {
-  const text =
-    cleanText(value);
+  const text = cleanText(value);
 
   if (!text) {
     return "";
   }
 
-  const date =
-    new Date(text);
+  const date = new Date(text);
 
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return text;
   }
 
@@ -209,86 +183,66 @@ function formatIndiaDateTime(
       {
         timeZone:
           "Asia/Kolkata",
-
         day:
           "2-digit",
-
         month:
           "2-digit",
-
         year:
           "numeric",
-
         hour:
           "2-digit",
-
         minute:
           "2-digit",
-
         hour12:
           false,
       }
     ).formatToParts(date);
 
   const map:
-    Record<string, string> =
-    {};
+    Record<string, string> = {};
 
-  for (
-    const part of parts
-  ) {
+  for (const part of parts) {
     map[part.type] =
       part.value;
   }
 
-  return [
-    `${map.day}-${map.month}-${map.year}`,
-    `${map.hour}:${map.minute}`,
-  ].join(" ");
+  return (
+    `${map.day}-${map.month}-${map.year} ` +
+    `${map.hour}:${map.minute}`
+  );
 }
 
 function formatDeliveryDate(
   value: unknown
 ) {
-  const text =
-    cleanText(value);
+  const text = cleanText(value);
 
   if (!text) {
     return "";
   }
 
-  const match =
-    text.match(
-      /^(\d{4})-(\d{2})-(\d{2})$/
-    );
+  const match = text.match(
+    /^(\d{4})-(\d{2})-(\d{2})$/
+  );
 
-  if (match) {
-    return (
-      `${match[3]}-` +
-      `${match[2]}-` +
-      `${match[1]}`
-    );
+  if (!match) {
+    return text;
   }
 
-  return text;
+  return `${match[3]}-${match[2]}-${match[1]}`;
 }
 
 function formatDeliveryTime(
   value: unknown
 ) {
-  const text =
-    cleanText(value);
-
-  if (!text) {
-    return "";
-  }
-
-  return text.slice(0, 8);
+  const text = cleanText(value);
+  return text
+    ? text.slice(0, 8)
+    : "";
 }
 
 function getIndiaTodayRange() {
-  const now =
-    new Date();
+  const now = new Date();
 
   const indiaDateText =
     new Intl.DateTimeFormat(
@@ -296,44 +250,22 @@ function getIndiaTodayRange() {
       {
         timeZone:
           "Asia/Kolkata",
-
         year:
           "numeric",
-
         month:
           "2-digit",
-
         day:
           "2-digit",
       }
     ).format(now);
 
-  /*
-   * India midnight = previous UTC day 18:30.
-   * Explicit +05:30 offset timezone-safe conversion deta hai.
-   */
-  const start =
-    new Date(
-      `${indiaDateText}T00:00:00+05:30`
-    );
-
-  const end =
-    new Date(
-      `${indiaDateText}T23:59:59.999+05:30`
-    );
-
   return {
     start:
-      start.toISOString(),
-
+      `${indiaDateText}T00:00:00.000+05:30`,
     end:
-      end.toISOString(),
+      `${indiaDateText}T23:59:59.999+05:30`,
   };
 }
-
-/* =========================================================
-   STATION NAME
-   ========================================================= */
 
 async function getStationName(
   stationCode: unknown
@@ -374,12 +306,6 @@ async function getStationName(
   );
 }
 
-/* =========================================================
-   COMMON FILTER APPLIER
-
-   Same filters main rows aur totals dono par lagenge.
-   ========================================================= */
-
 function applyFilters(
   query: any,
   {
@@ -400,8 +326,7 @@ function applyFilters(
     toDateTime: string | null;
   }
 ) {
-  let nextQuery =
-    query;
+  let nextQuery = query;
 
   if (restroCode) {
     nextQuery =
@@ -462,10 +387,6 @@ function applyFilters(
   return nextQuery;
 }
 
-/* =========================================================
-   GET
-   ========================================================= */
-
 export async function GET(
   req: NextRequest
 ) {
@@ -475,9 +396,7 @@ export async function GET(
 
     const page =
       positiveInteger(
-        searchParams.get(
-          "page"
-        ),
+        searchParams.get("page"),
         1
       );
 
@@ -524,16 +443,16 @@ export async function GET(
       );
 
     const fromDateTime =
-  normalizeDateTimeFilter(
-    searchParams.get("from"),
-    false
-  );
+      normalizeDateTimeFilter(
+        searchParams.get("from"),
+        false
+      );
 
-const toDateTime =
-  normalizeDateTimeFilter(
-    searchParams.get("to"),
-    true
-  );
+    const toDateTime =
+      normalizeDateTimeFilter(
+        searchParams.get("to"),
+        true
+      );
 
     if (
       fromDateTime &&
@@ -571,17 +490,6 @@ const toDateTime =
       fromIndex +
       pageSize -
       1;
-
-    /* =====================================================
-       MAIN QUERY
-
-       Default:
-       - All India
-       - All Restaurants
-       - Latest 20
-       - CreatedAt DESC
-       - RERDSId DESC
-       ===================================================== */
 
     let mainQuery =
       serviceClient
@@ -623,23 +531,15 @@ const toDateTime =
         );
 
     if (error) {
-      console.error(
-        "RE RDS API ERROR =>",
-        error
-      );
-
       return NextResponse.json(
         {
           ok: false,
-
           error:
             error.message ||
             "Unable to load RE RDS",
-
           details:
             error.details ??
             null,
-
           hint:
             error.hint ??
             null,
@@ -659,20 +559,16 @@ const toDateTime =
       rawRows.map(
         (row: any) => ({
           ...row,
-
           DeliveryDate:
             formatDeliveryDate(
               row.DeliveryDate
             ),
-
           DeliveryTime:
             formatDeliveryTime(
               row.DeliveryTime
             ),
-
           CreatedAtRaw:
             row.CreatedAt,
-
           CreatedAt:
             formatIndiaDateTime(
               row.CreatedAt
@@ -692,18 +588,9 @@ const toDateTime =
         )
       );
 
-    /* =====================================================
-       UNIVERSAL CURRENT BALANCE
-
-       Filters se independent actual All-India latest balance.
-       ===================================================== */
-
     const {
       data:
         latestBalanceRow,
-
-      error:
-        latestBalanceError,
     } =
       await serviceClient
         .from("RERDS")
@@ -724,24 +611,11 @@ const toDateTime =
         .limit(1)
         .maybeSingle();
 
-    if (
-      latestBalanceError
-    ) {
-      console.error(
-        "RE RDS BALANCE ERROR =>",
-        latestBalanceError
-      );
-    }
-
     const universalBalance =
       roundMoney(
         latestBalanceRow
           ?.CurrentBal
       );
-
-    /* =====================================================
-       FILTERED TOTALS + COUNTS
-       ===================================================== */
 
     let totalsQuery =
       serviceClient
@@ -762,18 +636,8 @@ const toDateTime =
     const {
       data:
         totalsRows,
-
-      error:
-        totalsError,
     } =
       await totalsQuery;
-
-    if (totalsError) {
-      console.error(
-        "RE RDS TOTALS ERROR =>",
-        totalsError
-      );
-    }
 
     let totalReceivable = 0;
     let totalPayable = 0;
@@ -784,63 +648,58 @@ const toDateTime =
     let debitNoteCount = 0;
     let manualCount = 0;
 
-    if (
-      Array.isArray(
-        totalsRows
-      )
+    for (
+      const row of
+      Array.isArray(totalsRows)
+        ? totalsRows
+        : []
     ) {
-      for (
-        const row of totalsRows
-      ) {
-        const amount =
-          roundMoney(
-            row
-              .RESettlementAmount
+      const amount =
+        roundMoney(
+          row
+            .RESettlementAmount
+        );
+
+      netMovement +=
+        amount;
+
+      if (amount > 0) {
+        totalReceivable +=
+          amount;
+      }
+
+      if (amount < 0) {
+        totalPayable +=
+          Math.abs(amount);
+      }
+
+      const source =
+        cleanText(
+          row.EntrySource
+        )
+          .toLowerCase()
+          .replace(
+            /[^a-z]/g,
+            ""
           );
 
-        netMovement +=
-          amount;
-
-        if (amount > 0) {
-          totalReceivable +=
-            amount;
-        }
-
-        if (amount < 0) {
-          totalPayable +=
-            Math.abs(
-              amount
-            );
-        }
-
-        const source =
-          cleanText(
-            row.EntrySource
-          )
-            .toLowerCase()
-            .replace(
-              /[^a-z]/g,
-              ""
-            );
-
-        if (source === "order") {
-          orderCount += 1;
-        } else if (
-          source ===
-          "creditnote"
-        ) {
-          creditNoteCount += 1;
-        } else if (
-          source ===
-          "debitnote"
-        ) {
-          debitNoteCount += 1;
-        } else if (
-          source ===
-          "manual"
-        ) {
-          manualCount += 1;
-        }
+      if (source === "order") {
+        orderCount += 1;
+      } else if (
+        source ===
+        "creditnote"
+      ) {
+        creditNoteCount += 1;
+      } else if (
+        source ===
+        "debitnote"
+      ) {
+        debitNoteCount += 1;
+      } else if (
+        source ===
+        "manual"
+      ) {
+        manualCount += 1;
       }
     }
 
@@ -859,19 +718,12 @@ const toDateTime =
         netMovement
       );
 
-    /* =====================================================
-       TODAY SUMMARY — INDIA TIME
-       ===================================================== */
-
     const todayRange =
       getIndiaTodayRange();
 
     const {
       data:
         todayRows,
-
-      error:
-        todayError,
     } =
       await serviceClient
         .from("RERDS")
@@ -890,13 +742,6 @@ const toDateTime =
           todayRange.end
         );
 
-    if (todayError) {
-      console.error(
-        "RE RDS TODAY SUMMARY ERROR =>",
-        todayError
-      );
-    }
-
     let todayReceivable = 0;
     let todayPayable = 0;
     let todayNetMovement = 0;
@@ -904,118 +749,139 @@ const toDateTime =
     let todayDebitNote = 0;
     let todayOrderCount = 0;
 
-    if (
-      Array.isArray(
-        todayRows
-      )
+    for (
+      const row of
+      Array.isArray(todayRows)
+        ? todayRows
+        : []
     ) {
-      for (
-        const row of todayRows
-      ) {
-        const amount =
-          roundMoney(
-            row
-              .RESettlementAmount
+      const amount =
+        roundMoney(
+          row
+            .RESettlementAmount
+        );
+
+      todayNetMovement +=
+        amount;
+
+      if (amount > 0) {
+        todayReceivable +=
+          amount;
+      }
+
+      if (amount < 0) {
+        todayPayable +=
+          Math.abs(amount);
+      }
+
+      const source =
+        cleanText(
+          row.EntrySource
+        )
+          .toLowerCase()
+          .replace(
+            /[^a-z]/g,
+            ""
           );
 
-        todayNetMovement +=
-          amount;
+      if (source === "order") {
+        todayOrderCount += 1;
+      }
 
-        if (amount > 0) {
-          todayReceivable +=
-            amount;
-        }
+      if (
+        source ===
+        "creditnote"
+      ) {
+        todayCreditNote +=
+          Math.abs(amount);
+      }
 
-        if (amount < 0) {
-          todayPayable +=
-            Math.abs(
-              amount
-            );
-        }
-
-        const source =
-          cleanText(
-            row.EntrySource
-          )
-            .toLowerCase()
-            .replace(
-              /[^a-z]/g,
-              ""
-            );
-
-        if (
-          source === "order"
-        ) {
-          todayOrderCount += 1;
-        }
-
-        /*
-         * Company perspective:
-         * Restaurant CreditNote -> RE settlement negative.
-         * Restaurant DebitNote  -> RE settlement positive.
-         */
-        if (
-          source ===
-          "creditnote"
-        ) {
-          todayCreditNote +=
-            Math.abs(
-              amount
-            );
-        }
-
-        if (
-          source ===
-          "debitnote"
-        ) {
-          todayDebitNote +=
-            Math.abs(
-              amount
-            );
-        }
+      if (
+        source ===
+        "debitnote"
+      ) {
+        todayDebitNote +=
+          Math.abs(amount);
       }
     }
 
-    todayReceivable =
-      roundMoney(
-        todayReceivable
-      );
+    /*
+     * BANK STATEMENT SUMMARY
+     *
+     * Opening Balance:
+     * From time se just pehle wali latest entry ka CurrentBal.
+     *
+     * Closing Balance:
+     * Opening Balance + selected filtered Net Movement.
+     *
+     * Agar From Date nahi diya gaya to opening 0 maana jayega.
+     */
+    let openingBalance = 0;
 
-    todayPayable =
-      roundMoney(
-        todayPayable
-      );
+    if (fromDateTime) {
+      let openingQuery =
+        serviceClient
+          .from("RERDS")
+          .select(
+            `
+              CurrentBal,
+              CreatedAt
+            `
+          )
+          .lt(
+            "CreatedAt",
+            fromDateTime
+          );
 
-    todayNetMovement =
-      roundMoney(
-        todayNetMovement
-      );
+      if (restroCode) {
+        openingQuery =
+          openingQuery.eq(
+            "RestroCode",
+            Number(restroCode)
+          );
+      }
 
-    todayCreditNote =
-      roundMoney(
-        todayCreditNote
-      );
+      const {
+        data:
+          openingRow,
+      } =
+        await openingQuery
+          .order(
+            "CreatedAt",
+            {
+              ascending: false,
+            }
+          )
+          .order(
+            "RERDSId",
+            {
+              ascending: false,
+            }
+          )
+          .limit(1)
+          .maybeSingle();
 
-    todayDebitNote =
-      roundMoney(
-        todayDebitNote
-      );
+      openingBalance =
+        roundMoney(
+          openingRow
+            ?.CurrentBal
+        );
+    }
 
-    /* =====================================================
-       SELECTED RESTAURANT SUMMARY
-       ===================================================== */
+    const closingBalance =
+      roundMoney(
+        openingBalance +
+        netMovement
+      );
 
     let selectedRestro:
       | {
           RestroCode:
             number | string;
-
           RestroName:
             string;
-
           StationCode:
             string;
-
           StationName:
             string;
         }
@@ -1028,27 +894,21 @@ const toDateTime =
       const firstRow =
         rawRows[0];
 
-      const stationName =
-        await getStationName(
-          firstRow.StationCode
-        );
-
       selectedRestro = {
         RestroCode:
           firstRow.RestroCode,
-
         RestroName:
           cleanText(
             firstRow.RestroName
           ),
-
         StationCode:
           cleanText(
             firstRow.StationCode
           ),
-
         StationName:
-          stationName,
+          await getStationName(
+            firstRow.StationCode
+          ),
       };
     }
 
@@ -1059,9 +919,6 @@ const toDateTime =
       const {
         data:
           summaryRow,
-
-        error:
-          summaryError,
       } =
         await serviceClient
           .from("RERDS")
@@ -1091,39 +948,26 @@ const toDateTime =
           .limit(1)
           .maybeSingle();
 
-      if (summaryError) {
-        console.error(
-          "RE RDS RESTRO SUMMARY ERROR =>",
-          summaryError
-        );
-      }
-
       if (summaryRow) {
-        const stationName =
-          await getStationName(
-            summaryRow
-              .StationCode
-          );
-
         selectedRestro = {
           RestroCode:
             summaryRow
               .RestroCode,
-
           RestroName:
             cleanText(
               summaryRow
                 .RestroName
             ),
-
           StationCode:
             cleanText(
               summaryRow
                 .StationCode
             ),
-
           StationName:
-            stationName,
+            await getStationName(
+              summaryRow
+                .StationCode
+            ),
         };
       }
     }
@@ -1131,43 +975,33 @@ const toDateTime =
     return NextResponse.json(
       {
         ok: true,
-
         rows,
-
         total,
-
         page,
-
         pageSize,
-
         totalPages,
-
         hasPreviousPage:
           page > 1,
-
         hasNextPage:
           page <
           totalPages,
 
         summary: {
           universalBalance,
-
           totalReceivable,
-
           totalPayable,
-
           netMovement,
-
           totalEntries:
             total,
-
           orderCount,
-
           creditNoteCount,
-
           debitNoteCount,
-
           manualCount,
+
+          openingBalance,
+          closingBalance,
+          transactionCount:
+            total,
 
           lastEntryAt:
             latestBalanceRow
@@ -1180,20 +1014,25 @@ const toDateTime =
 
           today: {
             receivable:
-              todayReceivable,
-
+              roundMoney(
+                todayReceivable
+              ),
             payable:
-              todayPayable,
-
+              roundMoney(
+                todayPayable
+              ),
             netMovement:
-              todayNetMovement,
-
+              roundMoney(
+                todayNetMovement
+              ),
             creditNote:
-              todayCreditNote,
-
+              roundMoney(
+                todayCreditNote
+              ),
             debitNote:
-              todayDebitNote,
-
+              roundMoney(
+                todayDebitNote
+              ),
             orderCount:
               todayOrderCount,
           },
@@ -1203,28 +1042,22 @@ const toDateTime =
           restroCode:
             restroCode ||
             null,
-
           orderId:
             orderId ||
             null,
-
           entrySource:
             entrySource ||
             null,
-
           paymentMode:
             paymentMode ||
             null,
-
           status:
             status ||
             null,
-
           from:
             searchParams.get(
               "from"
             ) || null,
-
           to:
             searchParams.get(
               "to"
@@ -1245,27 +1078,21 @@ const toDateTime =
         sort: {
           primary:
             "CreatedAt",
-
           primaryDirection:
             "DESC",
-
           secondary:
             "RERDSId",
-
           secondaryDirection:
             "DESC",
         },
       },
       {
         status: 200,
-
         headers: {
           "Cache-Control":
             "no-store, no-cache, must-revalidate",
-
           Pragma:
             "no-cache",
-
           Expires:
             "0",
         },
@@ -1282,14 +1109,12 @@ const toDateTime =
     return NextResponse.json(
       {
         ok: false,
-
         error:
           error?.message ||
           "Internal server error",
       },
       {
         status: 500,
-
         headers: {
           "Cache-Control":
             "no-store",
