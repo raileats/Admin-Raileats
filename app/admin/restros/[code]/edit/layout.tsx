@@ -81,6 +81,12 @@ const tabs = [
     href:
       "../statement",
   },
+  {
+    label:
+      "Accounting",
+    href:
+      "../accounting",
+  },
 ];
 
 export default async function RestroEditLayout({
