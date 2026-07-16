@@ -401,6 +401,52 @@ export default function SettlementClient({
       ]
     );
 
+  const lastPaymentPaid =
+    useMemo(
+      () =>
+        settlements.find(
+          (
+            row
+          ) =>
+            textValue(
+              row.SettlementType
+            )
+              .toLowerCase()
+              .replace(
+                /[^a-z]/g,
+                ""
+              ) ===
+            "paymentpaid"
+        ) ||
+        null,
+      [
+        settlements,
+      ]
+    );
+
+  const lastPaymentReceived =
+    useMemo(
+      () =>
+        settlements.find(
+          (
+            row
+          ) =>
+            textValue(
+              row.SettlementType
+            )
+              .toLowerCase()
+              .replace(
+                /[^a-z]/g,
+                ""
+              ) ===
+            "paymentreceived"
+        ) ||
+        null,
+      [
+        settlements,
+      ]
+    );
+
   async function handleExportExcel() {
     if (
       exporting ||
@@ -507,6 +553,35 @@ export default function SettlementClient({
         false
       );
     }
+  }
+
+  function openReceipt(
+    settlementId: unknown
+  ) {
+    const id =
+      textValue(
+        settlementId
+      );
+
+    if (!id) {
+      setError(
+        "Settlement ID missing"
+      );
+      return;
+    }
+
+    const url =
+      `/admin/restros/${encodeURIComponent(
+        code
+      )}/edit/settlement/receipt/${encodeURIComponent(
+        id
+      )}`;
+
+    window.open(
+      url,
+      "_blank",
+      "noopener,noreferrer"
+    );
   }
 
   async function handleSubmit(
@@ -1003,7 +1078,7 @@ export default function SettlementClient({
           </div>
         </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-7">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="text-xs font-semibold text-slate-500">
               Current Outstanding
@@ -1075,10 +1150,54 @@ export default function SettlementClient({
               )}
             </div>
           </div>
+
+          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+            <div className="text-xs font-semibold text-rose-600">
+              Last Paid
+            </div>
+
+            <div className="mt-1 text-lg font-extrabold text-rose-700">
+              {lastPaymentPaid
+                ? `₹${formatMoney(
+                    lastPaymentPaid.Amount
+                  )}`
+                : "-"}
+            </div>
+
+            <div className="mt-1 text-[11px] font-medium text-slate-500">
+              {lastPaymentPaid
+                ? formatDate(
+                    lastPaymentPaid.PaymentDate
+                  )
+                : ""}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+            <div className="text-xs font-semibold text-teal-600">
+              Last Received
+            </div>
+
+            <div className="mt-1 text-lg font-extrabold text-teal-700">
+              {lastPaymentReceived
+                ? `₹${formatMoney(
+                    lastPaymentReceived.Amount
+                  )}`
+                : "-"}
+            </div>
+
+            <div className="mt-1 text-[11px] font-medium text-slate-500">
+              {lastPaymentReceived
+                ? formatDate(
+                    lastPaymentReceived.PaymentDate
+                  )
+                : ""}
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="min-w-[1100px] w-full border-collapse">
+          <table className="min-w-[1200px] w-full border-collapse">
             <thead>
               <tr className="bg-slate-100 text-left text-xs font-bold text-slate-700">
                 <th className="border-b border-r px-3 py-3">
@@ -1114,8 +1233,11 @@ export default function SettlementClient({
                 <th className="border-b border-r px-3 py-3">
                   Created At
                 </th>
-                <th className="border-b px-3 py-3">
+                <th className="border-b border-r px-3 py-3">
                   Remarks
+                </th>
+                <th className="border-b px-3 py-3 text-center">
+                  Receipt
                 </th>
               </tr>
             </thead>
@@ -1124,7 +1246,7 @@ export default function SettlementClient({
               {settlements.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={13}
                     className="px-4 py-10 text-center text-sm font-semibold text-slate-400"
                   >
                     No settlement records found
@@ -1184,6 +1306,17 @@ export default function SettlementClient({
                             : "text-red-700",
                         ].join(" ")}
                       >
+                        {textValue(
+                          row.SettlementType
+                        )
+                          .toLowerCase()
+                          .replace(
+                            /[^a-z]/g,
+                            ""
+                          ) ===
+                        "paymentreceived"
+                          ? "+"
+                          : "-"}
                         ₹{formatMoney(
                           row.Amount
                         )}
@@ -1239,13 +1372,27 @@ export default function SettlementClient({
                             row.Remarks
                           ) || "-"
                         }
-                        className="max-w-[260px] border-b px-3 py-3 text-xs font-semibold text-slate-700"
+                        className="max-w-[260px] border-b border-r px-3 py-3 text-xs font-semibold text-slate-700"
                       >
                         <span className="block truncate">
                           {textValue(
                             row.Remarks
                           ) || "-"}
                         </span>
+                      </td>
+
+                      <td className="border-b px-3 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openReceipt(
+                              row.SettlementId
+                            )
+                          }
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                        >
+                          View Receipt
+                        </button>
                       </td>
                     </tr>
                   )
