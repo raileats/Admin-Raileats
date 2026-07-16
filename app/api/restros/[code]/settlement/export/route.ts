@@ -389,19 +389,53 @@ export async function GET(
         ? settlements
         : [];
 
-    const totalAmountPaid =
-      roundMoney(
-        rows.reduce(
-          (
-            total,
-            row: any
-          ) =>
-            total +
-            numberValue(
-              row.Amount
-            ),
-          0
+    let totalAmountPaid = 0;
+    let totalAmountReceived = 0;
+
+    for (
+      const row of rows
+    ) {
+      const amount =
+        numberValue(
+          row.Amount
+        );
+
+      const typeKey =
+        cleanText(
+          row.SettlementType
         )
+          .toLowerCase()
+          .replace(
+            /[^a-z]/g,
+            ""
+          );
+
+      if (
+        typeKey ===
+        "paymentreceived"
+      ) {
+        totalAmountReceived +=
+          amount;
+      } else {
+        totalAmountPaid +=
+          amount;
+      }
+    }
+
+    totalAmountPaid =
+      roundMoney(
+        totalAmountPaid
+      );
+
+    totalAmountReceived =
+      roundMoney(
+        totalAmountReceived
+      );
+
+    const netSettlement =
+      roundMoney(
+        totalAmountReceived -
+        totalAmountPaid
       );
 
     const latestSettlement =
@@ -597,8 +631,16 @@ export async function GET(
           rows.length,
         ],
         [
-          "Total Amount Paid",
+          "Total Payment Paid",
           totalAmountPaid,
+        ],
+        [
+          "Total Payment Received",
+          totalAmountReceived,
+        ],
+        [
+          "Net Settlement",
+          netSettlement,
         ],
         [
           "Last Settlement Date",
@@ -650,7 +692,9 @@ export async function GET(
       const rowNumber of [
         7,
         9,
+        10,
         11,
+        13,
       ]
     ) {
       const cell =
