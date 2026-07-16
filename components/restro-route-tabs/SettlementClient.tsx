@@ -211,6 +211,9 @@ export default function SettlementClient({
   const [saving, setSaving] =
     useState(false);
 
+  const [exporting, setExporting] =
+    useState(false);
+
   const [error, setError] =
     useState<string | null>(null);
 
@@ -326,6 +329,133 @@ export default function SettlementClient({
       ) / 100,
     [currentBalance, enteredAmount]
   );
+
+  const totalSettlementAmount =
+    useMemo(
+      () =>
+        settlements.reduce(
+          (
+            total,
+            row
+          ) =>
+            total +
+            numberValue(
+              row.Amount
+            ),
+          0
+        ),
+      [
+        settlements,
+      ]
+    );
+
+  async function handleExportExcel() {
+    if (
+      exporting ||
+      loading
+    ) {
+      return;
+    }
+
+    setExporting(
+      true
+    );
+    setError(
+      null
+    );
+
+    try {
+      const response =
+        await fetch(
+          `/api/restros/${encodeURIComponent(
+            code
+          )}/settlement/export`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+
+      if (
+        !response.ok
+      ) {
+        let message =
+          "Unable to export settlement history";
+
+        try {
+          const errorJson =
+            await response.json();
+
+          message =
+            errorJson?.error ||
+            message;
+        } catch {
+          // Keep default error.
+        }
+
+        throw new Error(
+          message
+        );
+      }
+
+      const blob =
+        await response.blob();
+
+      const disposition =
+        response.headers.get(
+          "content-disposition"
+        ) || "";
+
+      const fileMatch =
+        disposition.match(
+          /filename="?([^"]+)"?/i
+        );
+
+      const fileName =
+        fileMatch
+          ? fileMatch[1]
+          : `Settlement-${code}.xlsx`;
+
+      const objectUrl =
+        URL.createObjectURL(
+          blob
+        );
+
+      const anchor =
+        document.createElement(
+          "a"
+        );
+
+      anchor.href =
+        objectUrl;
+
+      anchor.download =
+        fileName;
+
+      document.body.appendChild(
+        anchor
+      );
+
+      anchor.click();
+
+      anchor.remove();
+
+      URL.revokeObjectURL(
+        objectUrl
+      );
+    } catch (
+      exportError: any
+    ) {
+      setError(
+        exportError?.message ||
+        "Unable to export settlement history"
+      );
+    } finally {
+      setExporting(
+        false
+      );
+    }
+  }
 
   async function handleSubmit(
     event: FormEvent
@@ -750,14 +880,91 @@ export default function SettlementClient({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={loadData}
-            disabled={loading || saving}
-            className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={
+                handleExportExcel
+              }
+              disabled={
+                loading ||
+                saving ||
+                exporting
+              }
+              className="h-10 rounded-lg border border-emerald-300 bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exporting
+                ? "Exporting..."
+                : "Export Excel"}
+            </button>
+
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading || saving}
+              className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs font-semibold text-slate-500">
+              Current Outstanding
+            </div>
+
+            <div
+              className={[
+                "mt-1 text-lg font-extrabold",
+                balanceClass(
+                  currentBalance
+                ),
+              ].join(" ")}
+            >
+              ₹{formatMoney(
+                currentBalance
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <div className="text-xs font-semibold text-blue-600">
+              Total Settlements
+            </div>
+
+            <div className="mt-1 text-lg font-extrabold text-blue-700">
+              {settlements.length}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <div className="text-xs font-semibold text-red-600">
+              Total Amount Paid
+            </div>
+
+            <div className="mt-1 text-lg font-extrabold text-red-700">
+              ₹{formatMoney(
+                totalSettlementAmount
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
+            <div className="text-xs font-semibold text-violet-600">
+              Last Settlement Date
+            </div>
+
+            <div className="mt-1 text-lg font-extrabold text-violet-700">
+              {settlements.length > 0
+                ? formatDate(
+                    settlements[0]
+                      .PaymentDate
+                  )
+                : "-"}
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-slate-200">
