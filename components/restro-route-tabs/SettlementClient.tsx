@@ -6,8 +6,13 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+
+import {
+  useSearchParams,
+} from "next/navigation";
 
 type RestroInfo = {
   RestroCode: number | string;
@@ -192,6 +197,18 @@ export default function SettlementClient({
   restroCode,
   currentUserName = null,
 }: Props) {
+  const searchParams =
+    useSearchParams();
+
+  const requestedRdsId =
+    textValue(
+      searchParams.get(
+        "rdsId"
+      )
+    );
+
+  const autoOpenedReceiptRef =
+    useRef<string | null>(null);
   const code = String(restroCode ?? "").trim();
 
   const [restro, setRestro] =
@@ -583,6 +600,49 @@ export default function SettlementClient({
       "noopener,noreferrer"
     );
   }
+
+  useEffect(() => {
+    if (
+      !requestedRdsId ||
+      loading
+    ) {
+      return;
+    }
+
+    if (
+      autoOpenedReceiptRef.current ===
+      requestedRdsId
+    ) {
+      return;
+    }
+
+    const match =
+      settlements.find(
+        (row) =>
+          textValue(
+            row.RestroRDSId
+          ) ===
+          requestedRdsId
+      );
+
+    if (!match) {
+      setError(
+        `Settlement receipt not found for Restro RDS ID ${requestedRdsId}`
+      );
+      return;
+    }
+
+    autoOpenedReceiptRef.current =
+      requestedRdsId;
+
+    openReceipt(
+      match.SettlementId
+    );
+  }, [
+    requestedRdsId,
+    loading,
+    settlements,
+  ]);
 
   async function handleSubmit(
     event: FormEvent
@@ -1258,7 +1318,13 @@ export default function SettlementClient({
                     <tr
                       key={`${row.SettlementId}-${index}`}
                       className={
-                        index % 2 === 0
+                        requestedRdsId &&
+                        textValue(
+                          row.RestroRDSId
+                        ) ===
+                          requestedRdsId
+                          ? "bg-amber-100 ring-2 ring-inset ring-amber-400"
+                          : index % 2 === 0
                           ? "bg-white"
                           : "bg-slate-50"
                       }
