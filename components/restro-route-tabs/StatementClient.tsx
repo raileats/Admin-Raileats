@@ -798,6 +798,50 @@ export default function StatementClient({
     }
   }
 
+  const sortedRows =
+    useMemo(
+      () =>
+        [...rows].sort(
+          (a, b) => {
+            const timeA =
+              a.CreatedAt
+                ? new Date(
+                    a.CreatedAt
+                  ).getTime()
+                : 0;
+
+            const timeB =
+              b.CreatedAt
+                ? new Date(
+                    b.CreatedAt
+                  ).getTime()
+                : 0;
+
+            if (
+              timeA !==
+              timeB
+            ) {
+              return (
+                timeB -
+                timeA
+              );
+            }
+
+            return (
+              numberValue(
+                b.RDSId
+              ) -
+              numberValue(
+                a.RDSId
+              )
+            );
+          }
+        ),
+      [
+        rows,
+      ]
+    );
+
   return (
     <div className="statement-page space-y-5">
       <div className="no-print rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -954,78 +998,100 @@ export default function StatementClient({
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-            <div className="text-xs font-bold uppercase tracking-wide text-blue-600">
-              Restaurant
+        <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <div className="text-xs font-bold uppercase tracking-wide text-blue-600">
+            Restaurant
+          </div>
+
+          <div className="mt-2 text-lg font-extrabold text-slate-950">
+            {restro
+              ?.RestroCode ??
+              code}
+            {restro
+              ?.RestroName
+              ? ` / ${restro.RestroName}`
+              : ""}
+          </div>
+
+          <div className="mt-1 text-sm font-semibold text-slate-600">
+            {[
+              restro
+                ?.StationCode,
+              restro
+                ?.StationName,
+              restro
+                ?.State,
+            ]
+              .filter(
+                Boolean
+              )
+              .join(
+                " - "
+              ) ||
+              "-"}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Opening Balance
             </div>
 
-            <div className="mt-2 text-lg font-extrabold text-slate-950">
-              {restro
-                ?.RestroCode ??
-                code}
-              {restro
-                ?.RestroName
-                ? ` / ${restro.RestroName}`
-                : ""}
-            </div>
-
-            <div className="mt-1 text-sm font-semibold text-slate-600">
-              {[
-                restro
-                  ?.StationCode,
-                restro
-                  ?.StationName,
-                restro
-                  ?.State,
-              ]
-                .filter(
-                  Boolean
-                )
-                .join(
-                  " - "
-                ) ||
-                "-"}
+            <div
+              className={[
+                "mt-1 text-lg font-extrabold",
+                balanceClass(
+                  summary.openingBalance
+                ),
+              ].join(" ")}
+            >
+              ₹{formatMoney(
+                summary.openingBalance
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Opening Balance
-              </div>
-
-              <div
-                className={[
-                  "mt-1 text-xl font-extrabold",
-                  balanceClass(
-                    summary.openingBalance
-                  ),
-                ].join(" ")}
-              >
-                ₹{formatMoney(
-                  summary.openingBalance
-                )}
-              </div>
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-red-600">
+              Total Debit
             </div>
 
-            <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4">
-              <div className="text-xs font-bold uppercase tracking-wide text-cyan-700">
-                Closing Balance
-              </div>
+            <div className="mt-1 text-lg font-extrabold text-red-700">
+              ₹{formatMoney(
+                summary.totalDebit
+              )}
+            </div>
+          </div>
 
-              <div
-                className={[
-                  "mt-1 text-xl font-extrabold",
-                  balanceClass(
-                    summary.closingBalance
-                  ),
-                ].join(" ")}
-              >
-                ₹{formatMoney(
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+              Total Credit
+            </div>
+
+            <div className="mt-1 text-lg font-extrabold text-emerald-700">
+              ₹{formatMoney(
+                summary.totalCredit
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-cyan-700">
+              Closing Balance
+            </div>
+
+            <div
+              className={[
+                "mt-1 text-lg font-extrabold",
+                balanceClass(
                   summary.closingBalance
-                )}
-              </div>
+                ),
+              ].join(" ")}
+            >
+              ₹{formatMoney(
+                summary.closingBalance
+              )}
             </div>
           </div>
         </div>
@@ -1183,7 +1249,7 @@ export default function StatementClient({
                     Loading statement...
                   </td>
                 </tr>
-              ) : rows.length ===
+              ) : sortedRows.length ===
                 0 ? (
                 <tr>
                   <td
@@ -1194,7 +1260,7 @@ export default function StatementClient({
                   </td>
                 </tr>
               ) : (
-                rows.map(
+                sortedRows.map(
                   (
                     row,
                     index
@@ -1326,69 +1392,6 @@ export default function StatementClient({
           </table>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Opening Balance
-            </div>
-
-            <div
-              className={[
-                "mt-1 text-lg font-extrabold",
-                balanceClass(
-                  summary.openingBalance
-                ),
-              ].join(" ")}
-            >
-              ₹{formatMoney(
-                summary.openingBalance
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-red-600">
-              Total Debit
-            </div>
-
-            <div className="mt-1 text-lg font-extrabold text-red-700">
-              ₹{formatMoney(
-                summary.totalDebit
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
-              Total Credit
-            </div>
-
-            <div className="mt-1 text-lg font-extrabold text-emerald-700">
-              ₹{formatMoney(
-                summary.totalCredit
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-cyan-700">
-              Closing Balance
-            </div>
-
-            <div
-              className={[
-                "mt-1 text-lg font-extrabold",
-                balanceClass(
-                  summary.closingBalance
-                ),
-              ].join(" ")}
-            >
-              ₹{formatMoney(
-                summary.closingBalance
-              )}
-            </div>
-          </div>
-        </div>
       </div>
 
       <style jsx global>{`
