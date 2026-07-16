@@ -376,6 +376,60 @@ function entrySourceDetails(
   };
 }
 
+function getReferenceUrl(
+  row: StatementRow,
+  restroCode: string
+) {
+  const reference =
+    textValue(row.OrderId);
+
+  const source =
+    normalizeSource(
+      row.EntrySource
+    );
+
+  if (!reference) {
+    return null;
+  }
+
+  if (source === "order") {
+    return `/admin/orders?orderId=${encodeURIComponent(
+      reference
+    )}`;
+  }
+
+  if (
+    source === "creditnote" ||
+    source === "debitnote"
+  ) {
+    return `/admin/restros/${encodeURIComponent(
+      restroCode
+    )}/edit/credit-debit-note?reference=${encodeURIComponent(
+      reference
+    )}`;
+  }
+
+  if (
+    source === "paymentpaid" ||
+    source === "paymentreceived"
+  ) {
+    const rdsId =
+      textValue(row.RDSId);
+
+    if (!rdsId) {
+      return null;
+    }
+
+    return `/admin/restros/${encodeURIComponent(
+      restroCode
+    )}/edit/settlement?rdsId=${encodeURIComponent(
+      rdsId
+    )}`;
+  }
+
+  return null;
+}
+
 export default function StatementClient({
   restroCode,
 }: Props) {
@@ -1225,6 +1279,10 @@ export default function StatementClient({
                   Payment
                 </th>
 
+                <th className="border-b border-r px-3 py-3">
+                  Remarks
+                </th>
+
                 <th className="border-b border-r px-3 py-3 text-right">
                   Debit
                 </th>
@@ -1243,7 +1301,7 @@ export default function StatementClient({
               {loading ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-4 py-12 text-center text-sm font-semibold text-slate-500"
                   >
                     Loading statement...
@@ -1253,7 +1311,7 @@ export default function StatementClient({
                 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-4 py-12 text-center text-sm font-semibold text-slate-400"
                   >
                     No statement records found
@@ -1268,6 +1326,12 @@ export default function StatementClient({
                     const entry =
                       entrySourceDetails(
                         row.EntrySource
+                      );
+
+                    const referenceUrl =
+                      getReferenceUrl(
+                        row,
+                        code
                       );
 
                     return (
@@ -1304,13 +1368,33 @@ export default function StatementClient({
                         </td>
 
                         <td className="border-b border-r px-3 py-3 text-xs font-semibold text-slate-700">
-                          {row.OrderId ||
-                            "-"}
+                          {referenceUrl ? (
+                            <a
+                              href={referenceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-bold text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900"
+                              title="Open entry details"
+                            >
+                              {row.OrderId || "-"}
+                            </a>
+                          ) : (
+                            row.OrderId || "-"
+                          )}
                         </td>
 
                         <td className="border-b border-r px-3 py-3 text-xs font-semibold text-slate-700">
                           {row.PaymentMode ||
                             "-"}
+                        </td>
+
+                        <td
+                          title={row.Remarks || "-"}
+                          className="max-w-[240px] border-b border-r px-3 py-3 text-xs font-semibold text-slate-700"
+                        >
+                          <span className="block truncate">
+                            {row.Remarks || "-"}
+                          </span>
                         </td>
 
                         <td className="border-b border-r px-3 py-3 text-right text-xs font-extrabold text-red-700">
@@ -1357,7 +1441,7 @@ export default function StatementClient({
             <tfoot>
               <tr className="bg-slate-100">
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="border-t border-r px-3 py-3 text-right text-sm font-extrabold text-slate-900"
                 >
                   Totals
