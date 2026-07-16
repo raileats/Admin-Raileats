@@ -202,7 +202,7 @@ export default function SettlementClient({
 
   const requestedRdsId =
     textValue(
-      searchParams.get(
+      searchParams?.get(
         "rdsId"
       )
     );
