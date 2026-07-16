@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 type TabKey =
   | "booked"
@@ -671,6 +672,14 @@ function PaymentLine({
 }
 
 export default function AdminOrdersPage() {
+  const searchParams = useSearchParams();
+
+  const requestedOrderId = String(
+    searchParams.get("orderId") || ""
+  ).trim();
+
+  const autoOpenedOrderRef =
+    useRef<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("raileats_admin_tab") as TabKey) || "booked";
@@ -873,6 +882,32 @@ export default function AdminOrdersPage() {
       clearInterval(interval);
     };
   }, []);
+
+  /* ================= URL ORDER OPEN ================= */
+  useEffect(() => {
+    if (!requestedOrderId) {
+      return;
+    }
+
+    setActiveTab("all");
+    localStorage.setItem(
+      "raileats_admin_tab",
+      "all"
+    );
+
+    setDraftOrderId(
+      requestedOrderId
+    );
+    setSearchOrderId(
+      requestedOrderId
+    );
+
+    setSearchDeliveryFrom("");
+    setSearchDeliveryTo("");
+    setSearchBookingFrom("");
+    setSearchBookingTo("");
+    setBookingDateFilterOn(false);
+  }, [requestedOrderId]);
 
   /* ================= LOAD ORDERS ================= */
   useEffect(() => {
@@ -1592,6 +1627,45 @@ export default function AdminOrdersPage() {
       }
     }
   };
+
+  /* ================= AUTO OPEN ORDER DRAWER ================= */
+  useEffect(() => {
+    if (!requestedOrderId) {
+      return;
+    }
+
+    if (
+      autoOpenedOrderRef.current ===
+      requestedOrderId
+    ) {
+      return;
+    }
+
+    const allTabOrders =
+      allOrders.all ?? [];
+
+    const match =
+      allTabOrders.find(
+        (order) =>
+          order.id.toLowerCase() ===
+          requestedOrderId.toLowerCase()
+      );
+
+    if (!match) {
+      return;
+    }
+
+    autoOpenedOrderRef.current =
+      requestedOrderId;
+
+    handleOpenDiagnosticsDrawer(
+      match,
+      "details"
+    );
+  }, [
+    requestedOrderId,
+    allOrders.all,
+  ]);
 
   function moveOrderToNext(orderId: string) {
     const current = allOrders[activeTab] ?? [];
