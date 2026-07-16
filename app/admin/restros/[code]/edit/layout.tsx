@@ -75,6 +75,12 @@ const tabs = [
     href:
       "./settlement",
   },
+  {
+    label:
+      "Statement",
+    href:
+      "../statement",
+  },
 ];
 
 export default async function RestroEditLayout({
