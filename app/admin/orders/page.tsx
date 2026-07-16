@@ -675,7 +675,7 @@ export default function AdminOrdersPage() {
   const searchParams = useSearchParams();
 
   const requestedOrderId = String(
-    searchParams.get("orderId") || ""
+    searchParams?.get("orderId") || ""
   ).trim();
 
   const autoOpenedOrderRef =
