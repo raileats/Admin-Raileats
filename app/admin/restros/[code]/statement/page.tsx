@@ -1,5 +1,11 @@
+// app/admin/restros/[code]/statement/page.tsx
+
+import Link from "next/link";
+
+import AdminButton from "@/components/admin/AdminButton";
 import AdminCard from "@/components/admin/AdminCard";
 import AdminPage from "@/components/admin/AdminPage";
+
 import StatementClient from "@/components/restro-route-tabs/StatementClient";
 
 type Props = {
@@ -14,13 +20,27 @@ export default function RestroStatementPage({
   return (
     <AdminPage
       title="Restaurant Statement"
-      subtitle="Restaurant Monthly / Date Range Statement"
+      subtitle="Restaurant monthly and custom date-range ledger statement"
     >
-      <AdminCard bodyClassName="p-0">
-        <StatementClient
-          restroCode={params.code}
-        />
-      </AdminCard>
+      <div className="space-y-5">
+        <div className="flex justify-end">
+          <Link
+            href={`/admin/restros/${encodeURIComponent(
+              params.code
+            )}/edit/settlement`}
+          >
+            <AdminButton variant="secondary">
+              Back to Settlement
+            </AdminButton>
+          </Link>
+        </div>
+
+        <AdminCard bodyClassName="p-0">
+          <StatementClient
+            restroCode={params.code}
+          />
+        </AdminCard>
+      </div>
     </AdminPage>
   );
 }
