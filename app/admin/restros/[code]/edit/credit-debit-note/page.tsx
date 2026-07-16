@@ -293,7 +293,7 @@ export default function CreditDebitNotePage({
 
   const requestedReference =
     cleanText(
-      searchParams.get(
+      searchParams?.get(
         "reference"
       )
     );
