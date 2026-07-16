@@ -118,6 +118,43 @@ function normalizeDate(
   return `${year}-${month}-${day}`;
 }
 
+function normalizeSettlementType(
+  value: unknown
+) {
+  const key =
+    String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(
+        /[^a-z]/g,
+        ""
+      );
+
+  if (
+    key ===
+      "paymentpaid" ||
+    key ===
+      "paid" ||
+    key ===
+      "pay"
+  ) {
+    return "PaymentPaid";
+  }
+
+  if (
+    key ===
+      "paymentreceived" ||
+    key ===
+      "received" ||
+    key ===
+      "receive"
+  ) {
+    return "PaymentReceived";
+  }
+
+  return null;
+}
+
 function normalizePaymentMode(
   value: unknown
 ) {
@@ -565,15 +602,17 @@ export async function GET(
 /* =========================================================
    POST
 
-   Restaurant payout settlement create karne ke liye.
-
-   Settlement type UI me nahi liya jayega.
-   Backend hamesha PaymentPaid pass karega.
+   Restaurant settlement create karne ke liye.
 
    PaymentPaid:
+   - RailEats ne restaurant ko payment diya
    - RestroRDS SettlementAmount negative
-   - Restaurant outstanding reduce
-   - RERDS company perspective opposite positive
+   - RERDS company perspective positive
+
+   PaymentReceived:
+   - Restaurant ne RailEats ko payment diya
+   - RestroRDS SettlementAmount positive
+   - RERDS company perspective negative
    ========================================================= */
 
 export async function POST(
@@ -616,6 +655,14 @@ export async function POST(
         .catch(
           () => ({})
         );
+
+    const settlementType =
+      normalizeSettlementType(
+        body.settlementType ??
+        body.SettlementType ??
+        body.type ??
+        body.Type
+      );
 
     const amount =
       cleanAmount(
@@ -684,6 +731,21 @@ export async function POST(
     /* =====================================================
        VALIDATION
        ===================================================== */
+
+    if (
+      !settlementType
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Please select Payment Paid or Payment Received",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
     if (
       amount === null ||
@@ -807,7 +869,7 @@ export async function POST(
     /* =====================================================
        CALL SQL FUNCTION
 
-       UI settlement = restaurant payout = PaymentPaid
+       Settlement type UI se validated value aayegi
        ===================================================== */
 
     const {
@@ -822,7 +884,7 @@ export async function POST(
               restroCode,
 
             p_settlement_type:
-              "PaymentPaid",
+              settlementType,
 
             p_amount:
               amount,
@@ -860,6 +922,7 @@ export async function POST(
         "CREATE RESTRO SETTLEMENT RPC ERROR =>",
         {
           restroCode,
+          settlementType,
           amount,
           paymentDate,
           paymentMode,
@@ -928,7 +991,10 @@ export async function POST(
         ok: true,
 
         message:
-          "Settlement saved successfully",
+          settlementType ===
+          "PaymentPaid"
+            ? "Payment Paid settlement saved successfully"
+            : "Payment Received settlement saved successfully",
 
         restro: {
           RestroCode:
@@ -958,7 +1024,7 @@ export async function POST(
           settlementType:
             data
               ?.settlementType ??
-            "PaymentPaid",
+            settlementType,
 
           amount:
             Number(
@@ -971,7 +1037,12 @@ export async function POST(
             Number(
               data
                 ?.restroSettlementAmount ??
-              -amount
+              (
+                settlementType ===
+                "PaymentPaid"
+                  ? -amount
+                  : amount
+              )
             ),
 
           previousBalance:
