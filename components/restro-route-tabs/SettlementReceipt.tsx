@@ -1,6 +1,7 @@
 // components/restro-route-tabs/SettlementReceipt.tsx
-import Image from "next/image";
 "use client";
+
+import Image from "next/image";
 
 import React, {
   useEffect,
@@ -304,23 +305,22 @@ export default function SettlementReceipt({
 
       <article className="receipt-page mx-auto max-w-4xl rounded-2xl bg-white p-8 shadow-xl print:max-w-none print:rounded-none print:p-0 print:shadow-none">
         <header className="flex items-start justify-between gap-6 border-b-2 border-slate-900 pb-5">
-          <div>
-            <div className="flex items-center gap-4">
-  <Image
-    src="/logo.png"
-    alt="RailEats"
-    width={170}
-    height={55}
-    priority
-    className="h-12 w-auto object-contain"
-  />
+          <div className="flex items-center gap-4">
+            <Image
+              src="/logo.png"
+              alt="RailEats"
+              width={180}
+              height={60}
+              priority
+              className="h-14 w-auto object-contain"
+            />
 
-  <div>
-    <div className="text-sm font-semibold text-slate-500">
-      Restaurant Settlement Receipt
-    </div>
-  </div>
-</div>
+            <div>
+              <div className="text-sm font-semibold text-slate-500">
+                Restaurant Settlement Receipt
+              </div>
+            </div>
+          </div>
 
           <div className="text-right">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
