@@ -6,8 +6,13 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+
+import {
+  useSearchParams,
+} from "next/navigation";
 
 type NoteType =
   | "CreditNote"
@@ -283,6 +288,20 @@ function amountClass(
 export default function CreditDebitNotePage({
   params,
 }: Props) {
+  const searchParams =
+    useSearchParams();
+
+  const requestedReference =
+    cleanText(
+      searchParams.get(
+        "reference"
+      )
+    );
+
+  const requestedRowRef =
+    useRef<HTMLTableRowElement | null>(
+      null
+    );
   const restroCode =
     Number(params.code);
 
@@ -470,6 +489,33 @@ export default function CreditDebitNotePage({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (
+      !requestedReference ||
+      loading
+    ) {
+      return;
+    }
+
+    const timer =
+      window.setTimeout(() => {
+        requestedRowRef.current
+          ?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+      }, 250);
+
+    return () =>
+      window.clearTimeout(
+        timer
+      );
+  }, [
+    requestedReference,
+    loading,
+    notes,
+  ]);
 
   /* =======================================================
      VALUES
@@ -1169,12 +1215,28 @@ export default function CreditDebitNotePage({
                       ).toLowerCase() ===
                       "creditnote";
 
+                    const isRequested =
+                      Boolean(
+                        requestedReference &&
+                        cleanText(
+                          row.OrderId
+                        ).toLowerCase() ===
+                          requestedReference.toLowerCase()
+                      );
+
                     return (
                       <tr
+                        ref={
+                          isRequested
+                            ? requestedRowRef
+                            : null
+                        }
                         key={`${row.RDSId}-${row.OrderId}-${index}`}
                         className={
-                          index % 2 ===
-                          0
+                          isRequested
+                            ? "bg-amber-100 ring-2 ring-inset ring-amber-400"
+                            : index % 2 ===
+                              0
                             ? "bg-white"
                             : "bg-slate-50"
                         }
