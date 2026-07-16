@@ -309,10 +309,10 @@ export default function SettlementReceipt({
             <Image
               src="/logo.png"
               alt="RailEats"
-              width={180}
-              height={60}
+              width={220}
+              height={70}
               priority
-              className="h-14 w-auto object-contain"
+              className="h-16 w-auto object-contain"
             />
 
             <div>
