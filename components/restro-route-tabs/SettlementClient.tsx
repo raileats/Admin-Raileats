@@ -77,6 +77,7 @@ type Props = {
 };
 
 type FormState = {
+  settlementType: "PaymentPaid" | "PaymentReceived";
   paymentDate: string;
   amount: string;
   paymentMode: string;
@@ -222,6 +223,7 @@ export default function SettlementClient({
 
   const [form, setForm] =
     useState<FormState>({
+      settlementType: "PaymentPaid",
       paymentDate: getIndiaToday(),
       amount: "",
       paymentMode: "NEFT",
@@ -233,6 +235,15 @@ export default function SettlementClient({
 
   const isCash =
     form.paymentMode === "CASH";
+
+  const isPaymentPaid =
+    form.settlementType ===
+    "PaymentPaid";
+
+  const settlementActionLabel =
+    isPaymentPaid
+      ? "Payment Paid to Restaurant"
+      : "Payment Received from Restaurant";
 
   const loadData = useCallback(async () => {
     if (!code) {
@@ -324,26 +335,67 @@ export default function SettlementClient({
   const estimatedBalance = useMemo(
     () =>
       Math.round(
-        (currentBalance - enteredAmount) *
+        (
+          currentBalance +
+          (
+            isPaymentPaid
+              ? -enteredAmount
+              : enteredAmount
+          )
+        ) *
           100
       ) / 100,
-    [currentBalance, enteredAmount]
+    [
+      currentBalance,
+      enteredAmount,
+      isPaymentPaid,
+    ]
   );
 
-  const totalSettlementAmount =
+  const settlementSummary =
     useMemo(
-      () =>
-        settlements.reduce(
-          (
-            total,
-            row
-          ) =>
-            total +
+      () => {
+        let totalPaid = 0;
+        let totalReceived = 0;
+
+        for (
+          const row of settlements
+        ) {
+          const amount =
             numberValue(
               row.Amount
-            ),
-          0
-        ),
+            );
+
+          const type =
+            textValue(
+              row.SettlementType
+            )
+              .toLowerCase()
+              .replace(
+                /[^a-z]/g,
+                ""
+              );
+
+          if (
+            type ===
+            "paymentreceived"
+          ) {
+            totalReceived +=
+              amount;
+          } else {
+            totalPaid +=
+              amount;
+          }
+        }
+
+        return {
+          totalPaid,
+          totalReceived,
+          netSettlement:
+            totalReceived -
+            totalPaid,
+        };
+      },
       [
         settlements,
       ]
@@ -504,9 +556,13 @@ export default function SettlementClient({
     }
 
     const confirmMessage =
-      `Confirm settlement payment of ₹${formatMoney(
-        amount
-      )} for Restro ${code}?`;
+      isPaymentPaid
+        ? `Confirm payment of ₹${formatMoney(
+            amount
+          )} paid to Restro ${code}?`
+        : `Confirm payment of ₹${formatMoney(
+            amount
+          )} received from Restro ${code}?`;
 
     if (
       typeof window !== "undefined" &&
@@ -531,6 +587,8 @@ export default function SettlementClient({
               "application/json",
           },
           body: JSON.stringify({
+            settlementType:
+              form.settlementType,
             paymentDate:
               form.paymentDate,
             amount,
@@ -570,6 +628,7 @@ export default function SettlementClient({
       );
 
       setForm({
+        settlementType: "PaymentPaid",
         paymentDate: getIndiaToday(),
         amount: "",
         paymentMode: "NEFT",
@@ -646,7 +705,7 @@ export default function SettlementClient({
 
           <div className="rounded-xl border border-violet-200 bg-violet-50 p-5">
             <div className="text-xs font-bold uppercase tracking-wide text-violet-600">
-              Balance After This Settlement
+              Balance After {settlementActionLabel}
             </div>
 
             <div
@@ -678,7 +737,7 @@ export default function SettlementClient({
             </h2>
 
             <p className="mt-1 text-xs font-medium text-slate-500">
-              Restaurant payout save hote hi RestroRDS aur RERDS dono update honge.
+              Payment Paid aur Payment Received dono RestroRDS aur RERDS me auto-update honge.
             </p>
           </div>
 
@@ -695,6 +754,39 @@ export default function SettlementClient({
           ) : null}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-semibold text-slate-700">
+                Settlement Type
+              </label>
+
+              <select
+                value={
+                  form.settlementType
+                }
+                onChange={(event) =>
+                  updateField(
+                    "settlementType",
+                    event.target.value
+                  )
+                }
+                className="search-pill-sm w-full"
+              >
+                <option value="PaymentPaid">
+                  Payment Paid to Restaurant
+                </option>
+
+                <option value="PaymentReceived">
+                  Payment Received from Restaurant
+                </option>
+              </select>
+
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                {isPaymentPaid
+                  ? "RailEats restaurant ko payment de raha hai. Restaurant balance kam hoga."
+                  : "Restaurant RailEats ko payment de raha hai. Restaurant balance badhega."}
+              </p>
+            </div>
+
             <div>
               <label className="mb-1 block text-sm font-semibold text-slate-700">
                 Payment Date
@@ -862,7 +954,9 @@ export default function SettlementClient({
             >
               {saving
                 ? "Saving Settlement..."
-                : "Save Settlement"}
+                : isPaymentPaid
+                ? "Save Payment Paid"
+                : "Save Payment Received"}
             </button>
           </div>
         </form>
@@ -909,7 +1003,7 @@ export default function SettlementClient({
           </div>
         </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="text-xs font-semibold text-slate-500">
               Current Outstanding
@@ -941,28 +1035,44 @@ export default function SettlementClient({
 
           <div className="rounded-lg border border-red-200 bg-red-50 p-3">
             <div className="text-xs font-semibold text-red-600">
-              Total Amount Paid
+              Total Paid
             </div>
 
             <div className="mt-1 text-lg font-extrabold text-red-700">
               ₹{formatMoney(
-                totalSettlementAmount
+                settlementSummary.totalPaid
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+            <div className="text-xs font-semibold text-emerald-600">
+              Total Received
+            </div>
+
+            <div className="mt-1 text-lg font-extrabold text-emerald-700">
+              ₹{formatMoney(
+                settlementSummary.totalReceived
               )}
             </div>
           </div>
 
           <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
             <div className="text-xs font-semibold text-violet-600">
-              Last Settlement Date
+              Net Settlement
             </div>
 
-            <div className="mt-1 text-lg font-extrabold text-violet-700">
-              {settlements.length > 0
-                ? formatDate(
-                    settlements[0]
-                      .PaymentDate
-                  )
-                : "-"}
+            <div
+              className={[
+                "mt-1 text-lg font-extrabold",
+                balanceClass(
+                  settlementSummary.netSettlement
+                ),
+              ].join(" ")}
+            >
+              ₹{formatMoney(
+                settlementSummary.netSettlement
+              )}
             </div>
           </div>
         </div>
@@ -1058,7 +1168,22 @@ export default function SettlementClient({
                         </span>
                       </td>
 
-                      <td className="border-b border-r px-3 py-3 text-right text-xs font-extrabold text-red-700">
+                      <td
+                        className={[
+                          "border-b border-r px-3 py-3 text-right text-xs font-extrabold",
+                          textValue(
+                            row.SettlementType
+                          )
+                            .toLowerCase()
+                            .replace(
+                              /[^a-z]/g,
+                              ""
+                            ) ===
+                          "paymentreceived"
+                            ? "text-emerald-700"
+                            : "text-red-700",
+                        ].join(" ")}
+                      >
                         ₹{formatMoney(
                           row.Amount
                         )}
