@@ -111,9 +111,40 @@ export async function PATCH(req: NextRequest) {
     if (action === "REJECT" && !adminRemarks) return NextResponse.json({ ok: false, error: "Rejection reason is required" }, { status: 400, headers: headers() });
     if (action === "PAID" && !utr) return NextResponse.json({ ok: false, error: "UTR number is required" }, { status: 400, headers: headers() });
 
-    const paidDateValue = action === "PAID" && paidDate
-      ? new Date(`${paidDate}T12:00:00+05:30`).toISOString()
-      : null;
+    const paidDateValue =
+  action === "PAID"
+    ? (() => {
+        if (!paidDate) {
+          return new Date().toISOString();
+        }
+
+        const nowParts = new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Asia/Kolkata",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).formatToParts(new Date());
+
+        const timeMap: Record<string, string> = {};
+
+        for (const part of nowParts) {
+          timeMap[part.type] = part.value;
+        }
+
+        const hour =
+          timeMap.hour === "24"
+            ? "00"
+            : timeMap.hour || "00";
+
+        const minute = timeMap.minute || "00";
+        const second = timeMap.second || "00";
+
+        return new Date(
+          `${paidDate}T${hour}:${minute}:${second}+05:30`
+        ).toISOString();
+      })()
+    : null;
 
     const { data, error } = await serviceClient.rpc("admin_update_settlement_request", {
       p_request_id: requestId,
