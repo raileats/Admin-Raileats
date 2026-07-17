@@ -5,8 +5,10 @@ import { createClient } from "@supabase/supabase-js";
 import {
   Bell,
   Clock,
+  Copy,
   Eye,
   MapPin,
+  MessageCircle,
   ShieldCheck,
   ShoppingBag,
   Smartphone,
@@ -626,6 +628,44 @@ const formatAdminDateTime = (value: any) => {
   });
 };
 
+const formatWhatsAppDate = (value: any) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "N/A";
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+  }
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return text;
+
+  return parsed
+    .toLocaleDateString("en-GB", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    })
+    .replace(/\//g, "-");
+};
+
+const formatWhatsAppTime = (value: any) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "N/A";
+
+  const timeMatch = text.match(/^(\d{1,2}):(\d{2})/);
+  if (!timeMatch) return text;
+
+  const hours = Number(timeMatch[1]);
+  const minutes = timeMatch[2];
+  if (!Number.isFinite(hours)) return text;
+
+  const suffix = hours >= 12 ? "PM" : "AM";
+  const shownHour = hours % 12 || 12;
+  return `${String(shownHour).padStart(2, "0")}:${minutes} ${suffix}`;
+};
+
 function OrderDetailField({
   label,
   value,
@@ -671,15 +711,103 @@ function PaymentLine({
   );
 }
 
+const buildVendorWhatsAppMessage = (order: Order, items: any[]) => {
+  const prepaid = isPrepaidOrder(order);
+  const paymentMode = prepaid ? "PREPAID" : "COD";
+
+  const totalAmount =
+    moneyFrom(order.raw, "TotalAmount", "totalAmount") ??
+    Number(order.total || 0);
+
+  const customerToPay = prepaid
+    ? "₹0 (Paid Online)"
+    : `₹${moneyNumber(totalAmount)}`;
+
+  const fallbackJourneyPayload = valueFrom(
+    order.raw,
+    "JourneyPayload",
+    "journeyPayload",
+  );
+
+  let payloadItems: any[] = [];
+  if (fallbackJourneyPayload) {
+    try {
+      const parsedPayload =
+        typeof fallbackJourneyPayload === "string"
+          ? JSON.parse(fallbackJourneyPayload)
+          : fallbackJourneyPayload;
+      payloadItems = Array.isArray(parsedPayload?.Items)
+        ? parsedPayload.Items
+        : Array.isArray(parsedPayload?.items)
+          ? parsedPayload.items
+          : [];
+    } catch {
+      payloadItems = [];
+    }
+  }
+
+  const sourceItems = items.length > 0 ? items : payloadItems;
+
+  const itemText =
+    sourceItems.length > 0
+      ? sourceItems
+          .map((item: any, index: number) => {
+            const itemName =
+              valueFrom(
+                item,
+                "ItemName",
+                "itemName",
+                "item_name",
+                "Name",
+                "name",
+              ) || `Item ${index + 1}`;
+
+            const quantity = Number(
+              valueFrom(item, "Quantity", "quantity", "Qty", "qty") || 1,
+            );
+
+            return `${quantity} × ${itemName}`;
+          })
+          .join(", ")
+      : "Items not available";
+
+  const stationName =
+    order.stationName ||
+    valueFrom(order.raw, "StationName", "stationName") ||
+    "N/A";
+
+  const restroName =
+    order.outletName ||
+    valueFrom(order.raw, "RestroName", "restroName") ||
+    "N/A";
+
+  return `*Please Deliver Order* (RailEats 🚊)
+
+Order ID: *${order.id || "N/A"}*
+
+Train: *${order.trainNo || "N/A"}*
+Delivery Time: *${formatWhatsAppTime(order.deliveryTime)}*
+Delivery Date: *${formatWhatsAppDate(order.deliveryDate)}*
+Coach, Seat: *${order.coach || "-"}, ${order.seat || "-"}*
+Station: *${stationName} - ${restroName}*
+
+Name: *${order.customerName || "Guest"}*
+Mobile: *${order.customerMobile || "N/A"}*
+
+Payment Mode: *${paymentMode}*
+Order Total: *₹${moneyNumber(totalAmount)}*
+Customer to Pay: *${customerToPay}*
+
+Items:
+*${itemText}*`;
+};
+
 export default function AdminOrdersPage() {
   const searchParams = useSearchParams();
 
-  const requestedOrderId = String(
-    searchParams?.get("orderId") || ""
-  ).trim();
+  const requestedOrderId = String(searchParams?.get("orderId") || "").trim();
 
-  const autoOpenedOrderRef =
-    useRef<string | null>(null);
+  const autoOpenedOrderRef = useRef<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("raileats_admin_tab") as TabKey) || "booked";
@@ -767,12 +895,14 @@ export default function AdminOrdersPage() {
   const [viewDrawerOpen, setViewDrawerOpen] = useState(false);
   const [detailedOrder, setDetailedOrder] = useState<any>(null);
   const [activeDrawerSection, setActiveDrawerSection] = useState<
-    "details" | "logs"
+    "details" | "logs" | "whatsapp"
   >("details");
 
   const [fetchedItems, setFetchedItems] = useState<any[]>([]);
   const [fetchedRestro, setFetchedRestro] = useState<any>(null);
   const [orderLogs, setOrderLogs] = useState<any[]>([]);
+  const [whatsappMessage, setWhatsappMessage] = useState("");
+  const [messageCopied, setMessageCopied] = useState(false);
 
   const [loadingItems, setLoadingItems] = useState(false);
   const [loadingRestro, setLoadingRestro] = useState(false);
@@ -890,17 +1020,10 @@ export default function AdminOrdersPage() {
     }
 
     setActiveTab("all");
-    localStorage.setItem(
-      "raileats_admin_tab",
-      "all"
-    );
+    localStorage.setItem("raileats_admin_tab", "all");
 
-    setDraftOrderId(
-      requestedOrderId
-    );
-    setSearchOrderId(
-      requestedOrderId
-    );
+    setDraftOrderId(requestedOrderId);
+    setSearchOrderId(requestedOrderId);
 
     setSearchDeliveryFrom("");
     setSearchDeliveryTo("");
@@ -1456,6 +1579,15 @@ export default function AdminOrdersPage() {
     }
   }, [allOrders]);
 
+  useEffect(() => {
+    if (!detailedOrder) {
+      setWhatsappMessage("");
+      return;
+    }
+
+    setWhatsappMessage(buildVendorWhatsAppMessage(detailedOrder, fetchedItems));
+  }, [detailedOrder, fetchedItems]);
+
   /* ================= TRAIN ROUTE MODAL ================= */
   const openRouteModal = async (trainNo?: string, stationCode?: string) => {
     const normalizedTrainNo = normalizeRouteValue(trainNo);
@@ -1546,6 +1678,8 @@ export default function AdminOrdersPage() {
     setDetailedOrder(order);
     setActiveDrawerSection(preferredSection);
     setViewDrawerOpen(true);
+    setWhatsappMessage("");
+    setMessageCopied(false);
 
     const targetOrderId = order.id;
     const targetRestroCode = order.outletId;
@@ -1634,38 +1768,24 @@ export default function AdminOrdersPage() {
       return;
     }
 
-    if (
-      autoOpenedOrderRef.current ===
-      requestedOrderId
-    ) {
+    if (autoOpenedOrderRef.current === requestedOrderId) {
       return;
     }
 
-    const allTabOrders =
-      allOrders.all ?? [];
+    const allTabOrders = allOrders.all ?? [];
 
-    const match =
-      allTabOrders.find(
-        (order) =>
-          order.id.toLowerCase() ===
-          requestedOrderId.toLowerCase()
-      );
+    const match = allTabOrders.find(
+      (order) => order.id.toLowerCase() === requestedOrderId.toLowerCase(),
+    );
 
     if (!match) {
       return;
     }
 
-    autoOpenedOrderRef.current =
-      requestedOrderId;
+    autoOpenedOrderRef.current = requestedOrderId;
 
-    handleOpenDiagnosticsDrawer(
-      match,
-      "details"
-    );
-  }, [
-    requestedOrderId,
-    allOrders.all,
-  ]);
+    handleOpenDiagnosticsDrawer(match, "details");
+  }, [requestedOrderId, allOrders.all]);
 
   function moveOrderToNext(orderId: string) {
     const current = allOrders[activeTab] ?? [];
@@ -2153,6 +2273,57 @@ export default function AdminOrdersPage() {
     params.set("orderIds", visibleOrders.map((o) => o.id).join(","));
 
     window.open(`/api/admin/orders-report?${params.toString()}`, "_blank");
+  }
+
+  async function copyWhatsAppMessage() {
+    if (!whatsappMessage.trim()) {
+      alert("WhatsApp message is empty");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(whatsappMessage);
+      setMessageCopied(true);
+      window.setTimeout(() => setMessageCopied(false), 2000);
+    } catch (error) {
+      console.error("Copy failed:", error);
+      alert("Message copy nahi ho paya");
+    }
+  }
+
+  function openVendorWhatsApp() {
+    if (!whatsappMessage.trim()) {
+      alert("WhatsApp message is empty");
+      return;
+    }
+
+    const vendorMobile = String(
+      valueFrom(
+        fetchedRestro,
+        "RestroPhone",
+        "restroPhone",
+        "OwnerPhone",
+        "ownerPhone",
+        "RestroLoginMobile",
+        "OwnerMobile",
+        "ownerMobile",
+      ) || "",
+    ).replace(/\D/g, "");
+
+    if (!vendorMobile) {
+      alert("Vendor mobile number RestroMaster me nahi mila");
+      return;
+    }
+
+    const mobileWithCountryCode =
+      vendorMobile.length === 10 ? `91${vendorMobile}` : vendorMobile;
+
+    window.open(
+      `https://wa.me/${mobileWithCountryCode}?text=${encodeURIComponent(
+        whatsappMessage,
+      )}`,
+      "_blank",
+    );
   }
   return (
     <section
@@ -3477,6 +3648,25 @@ export default function AdminOrdersPage() {
               >
                 Order Process Log
               </button>
+              <button
+                onClick={() => setActiveDrawerSection("whatsapp")}
+                style={{
+                  padding: "14px 20px",
+                  background: "none",
+                  border: "none",
+                  borderBottom:
+                    activeDrawerSection === "whatsapp"
+                      ? "3px solid #16a34a"
+                      : "3px solid transparent",
+                  color:
+                    activeDrawerSection === "whatsapp" ? "#16a34a" : "#64748b",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                WhatsApp Message
+              </button>
             </div>
 
             <div
@@ -4003,7 +4193,7 @@ export default function AdminOrdersPage() {
                     )}
                   </div>
                 </div>
-              ) : (
+              ) : activeDrawerSection === "logs" ? (
                 <div
                   style={{ display: "flex", flexDirection: "column", gap: 12 }}
                 >
@@ -4186,6 +4376,128 @@ export default function AdminOrdersPage() {
                       })}
                     </div>
                   )}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    maxWidth: 820,
+                    margin: "0 auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 14,
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      borderRadius: 14,
+                      padding: 18,
+                    }}
+                  >
+                    <h3
+                      style={{
+                        margin: "0 0 6px",
+                        color: "#166534",
+                        fontSize: 15,
+                        fontWeight: 900,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <MessageCircle size={18} /> Vendor WhatsApp Message
+                    </h3>
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#64748b",
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Message order details aur order items se automatically
+                      generate hua hai. Send karne se pehle edit bhi kar sakte
+                      ho.
+                    </p>
+                  </div>
+
+                  <textarea
+                    value={whatsappMessage}
+                    onChange={(e) => {
+                      setWhatsappMessage(e.target.value);
+                      setMessageCopied(false);
+                    }}
+                    rows={20}
+                    spellCheck={false}
+                    style={{
+                      width: "100%",
+                      minHeight: 430,
+                      resize: "vertical",
+                      padding: 18,
+                      borderRadius: 14,
+                      border: "1px solid #cbd5e1",
+                      background: "#ffffff",
+                      color: "#0f172a",
+                      fontSize: 14,
+                      lineHeight: 1.65,
+                      fontFamily:
+                        "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      alignItems: "center",
+                      gap: 10,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={copyWhatsAppMessage}
+                      style={{
+                        padding: "10px 16px",
+                        borderRadius: 8,
+                        border: "1px solid #cbd5e1",
+                        background: messageCopied ? "#dcfce7" : "#ffffff",
+                        color: messageCopied ? "#166534" : "#334155",
+                        cursor: "pointer",
+                        fontWeight: 800,
+                        fontSize: 13,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 7,
+                      }}
+                    >
+                      <Copy size={16} />
+                      {messageCopied ? "Copied ✓" : "Copy Message"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={openVendorWhatsApp}
+                      style={{
+                        padding: "10px 16px",
+                        borderRadius: 8,
+                        border: "none",
+                        background: "#16a34a",
+                        color: "#ffffff",
+                        cursor: "pointer",
+                        fontWeight: 800,
+                        fontSize: 13,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 7,
+                      }}
+                    >
+                      <MessageCircle size={16} /> Open Vendor WhatsApp
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
