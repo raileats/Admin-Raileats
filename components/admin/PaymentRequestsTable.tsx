@@ -70,21 +70,21 @@ export default function PaymentRequestsTable() {
       if (search) q.set("search", search);
 
       const response = await fetch(
-        `/api/admin/payment-requests?${q.toString()}`,
+        `/api/admin/deposited-update?${q.toString()}`,
         { cache: "no-store" }
       );
 
       const json = await response.json();
 
       if (!response.ok || !json.ok) {
-        throw new Error(json.error || "Unable to load payment requests");
+        throw new Error(json.error || "Unable to load deposit updates");
       }
 
       setRows(Array.isArray(json.rows) ? json.rows : []);
       setTotalPages(Math.max(1, Number(json.totalPages || 1)));
     } catch (e: any) {
       setRows([]);
-      setError(e?.message || "Unable to load payment requests");
+      setError(e?.message || "Unable to load deposit updates");
     } finally {
       setLoading(false);
     }
@@ -120,7 +120,7 @@ export default function PaymentRequestsTable() {
     setSuccess("");
 
     try {
-      const response = await fetch("/api/admin/payment-requests", {
+      const response = await fetch("/api/admin/deposited-update", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -136,7 +136,7 @@ export default function PaymentRequestsTable() {
         throw new Error(json.error || "Unable to update payment request");
       }
 
-      setSuccess(json.message || "Payment request updated");
+      setSuccess(json.message || "Deposit update updated");
       setSelected(null);
       setAction(null);
       await load();
@@ -222,7 +222,7 @@ export default function PaymentRequestsTable() {
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-14 text-center font-bold text-slate-400">
-                  No payment request found
+                  No deposit update found
                 </td>
               </tr>
             ) : (
@@ -302,10 +302,10 @@ export default function PaymentRequestsTable() {
               <div>
                 <h2 className="text-lg font-black">
                   {action === "RECEIVED"
-                    ? "Confirm Payment Received"
+                    ? "Confirm Deposit Received"
                     : action === "REJECT"
-                    ? "Reject Payment Request"
-                    : "Payment Request Details"}
+                    ? "Reject Deposit Update"
+                    : "Deposit Update Details"}
                 </h2>
                 <div className="text-xs font-bold text-blue-700">
                   {selected.RequestNo}
@@ -393,7 +393,7 @@ export default function PaymentRequestsTable() {
                   {saving
                     ? "Saving..."
                     : action === "RECEIVED"
-                    ? "Yes, Payment Received"
+                    ? "Yes, Deposit Received"
                     : "Confirm Reject"}
                 </button>
               ) : null}
