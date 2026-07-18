@@ -782,22 +782,17 @@ const buildVendorWhatsAppMessage = (order: Order, items: any[]) => {
     "N/A";
 
   return `*Please Deliver Order* (RailEats 🚊)
-
 Order ID: *${order.id || "N/A"}*
-
 Train: *${order.trainNo || "N/A"}*
 Delivery Time: *${formatWhatsAppTime(order.deliveryTime)}*
 Delivery Date: *${formatWhatsAppDate(order.deliveryDate)}*
 Coach, Seat: *${order.coach || "-"}, ${order.seat || "-"}*
 Station: *${stationName} - ${restroName}*
-
 Name: *${order.customerName || "Guest"}*
 Mobile: *${order.customerMobile || "N/A"}*
-
 Payment Mode: *${paymentMode}*
 Order Total: *₹${moneyNumber(totalAmount)}*
 Customer to Pay: *${customerToPay}*
-
 Items:
 *${itemText}*`;
 };
