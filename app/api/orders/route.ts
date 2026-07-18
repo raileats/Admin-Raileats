@@ -300,6 +300,19 @@ const dbStatus = normalizedStatusFilter
   ? statusMap[normalizedStatusFilter] || rawStatusFilter
   : null;
 
+const orderId = String(searchParams.get("orderId") || "").trim();
+const customerMobile = String(searchParams.get("customerMobile") || "")
+  .replace(/\D/g, "")
+  .slice(0, 15);
+const outlet = String(searchParams.get("outlet") || "").trim();
+const station = String(searchParams.get("station") || "").trim();
+const trainNo = String(searchParams.get("trainNo") || "").trim();
+const dateType = String(searchParams.get("dateType") || "delivery").trim();
+const dateFrom = String(searchParams.get("dateFrom") || "").trim();
+const dateTo = String(searchParams.get("dateTo") || "").trim();
+
+const safeLike = (value: string) => value.replace(/[%_,]/g, "").slice(0, 100);
+
    let query = supa
   .from("Orders")
   .select(`
@@ -318,7 +331,8 @@ const dbStatus = normalizedStatusFilter
     TotalAmount,
     PaymentMode,
     Status,
-    SubStatus
+    SubStatus,
+    CreatedAt
   `)
   .order("CreatedAt", { ascending: false });
     if (
@@ -333,6 +347,49 @@ const dbStatus = normalizedStatusFilter
     query = query.eq("Status", dbStatus);
   }
 }
+
+    if (orderId) {
+      query = query.ilike("OrderId", `%${safeLike(orderId)}%`);
+    }
+
+    if (customerMobile) {
+      query = query.ilike("CustomerMobile", `%${customerMobile}%`);
+    }
+
+    if (outlet) {
+      const safeOutlet = safeLike(outlet);
+      const outletFilters = [
+        `RestroName.ilike.%${safeOutlet}%`,
+      ];
+      const outletDigits = safeOutlet.replace(/\D/g, "");
+      if (outletDigits) {
+        outletFilters.push(`RestroCode.eq.${Number(outletDigits)}`);
+      }
+      query = query.or(outletFilters.join(","));
+    }
+
+    if (station) {
+      const safeStation = safeLike(station);
+      query = query.or(
+        `StationCode.ilike.%${safeStation}%,StationName.ilike.%${safeStation}%`,
+      );
+    }
+
+    if (trainNo) {
+      query = query.ilike("TrainNumber", `%${safeLike(trainNo)}%`);
+    }
+
+    if (dateFrom || dateTo) {
+      if (dateType === "booking") {
+        if (dateFrom) query = query.gte("CreatedAt", dateFrom);
+        if (dateTo) query = query.lte("CreatedAt", dateTo);
+      } else {
+        const fromDate = dateFrom.slice(0, 10);
+        const toDate = dateTo.slice(0, 10);
+        if (fromDate) query = query.gte("DeliveryDate", fromDate);
+        if (toDate) query = query.lte("DeliveryDate", toDate);
+      }
+    }
 
     const { data, error } = await query;
 
@@ -357,6 +414,7 @@ const dbStatus = normalizedStatusFilter
   customerMobile: row.CustomerMobile,
   totalAmount: Number(row.TotalAmount ?? 0),
   paymentMode: row.PaymentMode ?? "COD",
+  CreatedAt: row.CreatedAt ?? null,
   history: [] as any[],
 }));
 
