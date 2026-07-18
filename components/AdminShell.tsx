@@ -48,6 +48,12 @@ const LayoutTemplate =
   (LucideIcons as any).WalletCards ||
   (LucideIcons as any).CreditCard;
 
+const PaymentsIcon =
+  (LucideIcons as any).WalletCards ||
+  (LucideIcons as any).CreditCard ||
+  (LucideIcons as any).Landmark ||
+  IndianRupeeBadgeIcon;
+
 const LogOut =
   (LucideIcons as any).LogOut;
 
@@ -221,6 +227,12 @@ const adminNavItems = [
     label: "Hero Sliders",
     icon: LayoutTemplate,
     color: "text-pink-500",
+  },
+  {
+    href: "/admin/payment-requests",
+    label: "Payments",
+    icon: PaymentsIcon,
+    color: "text-emerald-600",
   },
 ] as const;
 
@@ -559,10 +571,13 @@ export default function AdminShell({
         {adminNavItems.map((item) => {
           const Icon = item.icon;
 
-          const active = isActivePath(
-            pathname,
-            item.href
-          );
+          const active =
+            item.label === "Payments"
+              ? pathname === "/admin/payment-requests" ||
+                pathname.startsWith("/admin/payment-requests/") ||
+                pathname === "/admin/deposited-update" ||
+                pathname.startsWith("/admin/deposited-update/")
+              : isActivePath(pathname, item.href);
 
           return (
             <Link
@@ -717,6 +732,41 @@ export default function AdminShell({
 
           <main className="flex-1 px-4 py-6 lg:px-7">
             <div className="mx-auto w-full max-w-[1560px]">
+              {pathname === "/admin/payment-requests" ||
+              pathname.startsWith("/admin/payment-requests/") ||
+              pathname === "/admin/deposited-update" ||
+              pathname.startsWith("/admin/deposited-update/") ? (
+                <div className="mb-5 rounded-xl border border-slate-200 bg-white p-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Link
+                      href="/admin/payment-requests"
+                      className={[
+                        "flex min-h-[44px] items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition",
+                        pathname === "/admin/payment-requests" ||
+                        pathname.startsWith("/admin/payment-requests/")
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-50 text-slate-700 hover:bg-slate-100",
+                      ].join(" ")}
+                    >
+                      Payment Request
+                    </Link>
+
+                    <Link
+                      href="/admin/deposited-update"
+                      className={[
+                        "flex min-h-[44px] items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition",
+                        pathname === "/admin/deposited-update" ||
+                        pathname.startsWith("/admin/deposited-update/")
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-50 text-slate-700 hover:bg-slate-100",
+                      ].join(" ")}
+                    >
+                      Restaurant Deposit Update
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
+
               {children}
             </div>
           </main>
