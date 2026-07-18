@@ -1043,6 +1043,28 @@ export default function AdminOrdersPage() {
           params.set("status", activeTab);
         }
 
+        if (searchOrderId.trim()) params.set("orderId", searchOrderId.trim());
+        if (searchCustomerMobile.trim()) {
+          params.set("customerMobile", searchCustomerMobile.trim());
+        }
+        if (searchOutlet.trim()) params.set("outlet", searchOutlet.trim());
+        if (searchStation.trim()) params.set("station", searchStation.trim());
+        if (searchTrainNo.trim()) params.set("trainNo", searchTrainNo.trim());
+
+        if (dateSearchType === "delivery") {
+          if (searchDeliveryFrom) params.set("dateFrom", searchDeliveryFrom);
+          if (searchDeliveryTo) params.set("dateTo", searchDeliveryTo);
+          if (searchDeliveryFrom || searchDeliveryTo) {
+            params.set("dateType", "delivery");
+          }
+        } else if (bookingDateFilterOn) {
+          if (searchBookingFrom) params.set("dateFrom", searchBookingFrom);
+          if (searchBookingTo) params.set("dateTo", searchBookingTo);
+          if (searchBookingFrom || searchBookingTo) {
+            params.set("dateType", "booking");
+          }
+        }
+
         const res = await fetch(
           activeTab === "all"
             ? "/api/orders"
@@ -1088,7 +1110,21 @@ export default function AdminOrdersPage() {
     };
 
     load();
-  }, [activeTab, refreshTick]);
+  }, [
+    activeTab,
+    refreshTick,
+    searchOrderId,
+    searchCustomerMobile,
+    searchOutlet,
+    searchStation,
+    searchTrainNo,
+    searchDeliveryFrom,
+    searchDeliveryTo,
+    searchBookingFrom,
+    searchBookingTo,
+    bookingDateFilterOn,
+    dateSearchType,
+  ]);
 
   /* ================= AUTO STATUS TABS SYNC ================= */
   useEffect(() => {
@@ -2434,6 +2470,17 @@ export default function AdminOrdersPage() {
               onClick={() => {
                 setActiveTab(tab.key);
                 localStorage.setItem("raileats_admin_tab", tab.key);
+
+                setSearchOrderId("");
+                setSearchCustomerMobile("");
+                setSearchOutlet("");
+                setSearchStation("");
+                setSearchTrainNo("");
+                setSearchDeliveryFrom("");
+                setSearchDeliveryTo("");
+                setSearchBookingFrom("");
+                setSearchBookingTo("");
+                setBookingDateFilterOn(false);
               }}
               style={{
                 padding: "8px 12px",
@@ -2634,14 +2681,30 @@ export default function AdminOrdersPage() {
 
         <button
           onClick={() => {
-            setSearchOrderId(draftOrderId);
-            setSearchCustomerMobile(draftCustomerMobile);
-            setSearchOutlet(draftOutlet);
-            setSearchStation(draftStation);
-            setSearchTrainNo(draftTrainNo);
+            const hasTextSearch = Boolean(
+              draftOrderId.trim() ||
+                draftCustomerMobile.trim() ||
+                draftOutlet.trim() ||
+                draftStation.trim() ||
+                draftTrainNo.trim(),
+            );
+
+            setSearchOrderId(draftOrderId.trim());
+            setSearchCustomerMobile(draftCustomerMobile.trim());
+            setSearchOutlet(draftOutlet.trim());
+            setSearchStation(draftStation.trim());
+            setSearchTrainNo(draftTrainNo.trim());
             setDateSearchType(draftDateSearchType);
 
-            if (draftDateSearchType === "delivery") {
+            if (hasTextSearch) {
+              setActiveTab("all");
+              localStorage.setItem("raileats_admin_tab", "all");
+              setSearchDeliveryFrom("");
+              setSearchDeliveryTo("");
+              setSearchBookingFrom("");
+              setSearchBookingTo("");
+              setBookingDateFilterOn(false);
+            } else if (draftDateSearchType === "delivery") {
               setSearchDeliveryFrom(draftDeliveryFrom);
               setSearchDeliveryTo(draftDeliveryTo);
               setSearchBookingFrom("");
@@ -2896,13 +2959,11 @@ export default function AdminOrdersPage() {
                         borderRadius: 999,
                         fontWeight: 700,
                         fontSize: 12,
-                        background:
-                          o.paymentMode === "ONLINE" ? "#dcfce7" : "#fee2e2",
-                        color:
-                          o.paymentMode === "ONLINE" ? "#166534" : "#991b1b",
+                        background: isPrepaidOrder(o) ? "#dcfce7" : "#fee2e2",
+                        color: isPrepaidOrder(o) ? "#166534" : "#991b1b",
                       }}
                     >
-                      {o.paymentMode === "ONLINE" ? "PPD" : "COD"}
+                      {isPrepaidOrder(o) ? "PPD" : "COD"}
                     </span>
                   </td>
 
