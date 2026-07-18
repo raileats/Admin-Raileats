@@ -216,7 +216,7 @@ export default function SettlementRequestsTable() {
       }
 
       const response = await fetch(
-        `/api/admin/settlement-requests?${query.toString()}`,
+        `/api/admin/payment-requests?${query.toString()}`,
         {
           cache: "no-store",
         }
@@ -226,7 +226,7 @@ export default function SettlementRequestsTable() {
 
       if (!response.ok || !json.ok) {
         throw new Error(
-          json.error || "Unable to load settlement requests"
+          json.error || "Unable to load payment requests"
         );
       }
 
@@ -238,7 +238,7 @@ export default function SettlementRequestsTable() {
       setTotal(0);
       setTotalPages(1);
       setError(
-        loadError?.message || "Unable to load settlement requests"
+        loadError?.message || "Unable to load payment requests"
       );
     } finally {
       setLoading(false);
@@ -323,7 +323,7 @@ export default function SettlementRequestsTable() {
 
     try {
       const response = await fetch(
-        "/api/admin/settlement-requests",
+        "/api/admin/payment-requests",
         {
           method: "PATCH",
           cache: "no-store",
@@ -349,7 +349,7 @@ export default function SettlementRequestsTable() {
         );
       }
 
-      setSuccess(json.message || "Settlement request updated");
+      setSuccess(json.message || "Payment request updated");
       setSelected(null);
       setAction(null);
       await load();
@@ -364,18 +364,18 @@ export default function SettlementRequestsTable() {
 
   const modalTitle = useMemo(() => {
     if (action === "APPROVE") {
-      return "Approve Settlement";
+      return "Approve Payment Request";
     }
 
     if (action === "REJECT") {
-      return "Reject Settlement";
+      return "Reject Payment Request";
     }
 
     if (action === "PAID") {
-      return "Mark Settlement Paid";
+      return "Mark Payment Paid";
     }
 
-    return "Settlement Details";
+    return "Payment Request Details";
   }, [action]);
 
   const liveBalance = selected
@@ -499,7 +499,7 @@ export default function SettlementRequestsTable() {
                   colSpan={7}
                   className="py-14 text-center font-bold text-slate-400"
                 >
-                  No settlement request found
+                  No payment request found
                 </td>
               </tr>
             ) : (
@@ -957,7 +957,7 @@ export default function SettlementRequestsTable() {
                     ? "Confirm Approve"
                     : action === "REJECT"
                     ? "Confirm Reject"
-                    : "Confirm Mark Paid"}
+                    : "Confirm Payment Paid"}
                 </button>
               ) : null}
             </div>
