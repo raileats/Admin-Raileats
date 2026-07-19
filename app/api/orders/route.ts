@@ -294,6 +294,9 @@ const statusMap: Record<string, string> = {
   notdelivered: "Not Delivered",
 
   baddelivery: "Bad Delivery",
+  complaints: "Complaints",
+  complaint: "Complaints",
+  refund: "Refund",
 };
 
 const dbStatus = normalizedStatusFilter
@@ -312,6 +315,28 @@ const dateFrom = String(searchParams.get("dateFrom") || "").trim();
 const dateTo = String(searchParams.get("dateTo") || "").trim();
 
 const safeLike = (value: string) => value.replace(/[%_,]/g, "").slice(0, 100);
+
+    // Refund is a workflow tab, not an Orders.Status. Load OrderRefunds first and
+    // merge the matching Orders rows into the same shape used by the Admin UI.
+    if (normalizedStatusFilter === "refund") {
+      let refundQuery = supa.from("OrderRefunds").select("*").order("CreatedAt", { ascending: false });
+      if (orderId) refundQuery = refundQuery.ilike("OrderId", `%${safeLike(orderId)}%`);
+      const { data: refundRows, error: refundError } = await refundQuery;
+      if (refundError) return NextResponse.json({ error: refundError.message || "refunds_fetch_failed" }, { status: 500 });
+      const ids = (refundRows || []).map((r: any) => String(r.OrderId || "")).filter(Boolean);
+      let orderRows: any[] = [];
+      if (ids.length) {
+        const { data, error } = await supa.from("Orders").select("*").in("OrderId", ids);
+        if (error) return NextResponse.json({ error: error.message || "refund_orders_fetch_failed" }, { status: 500 });
+        orderRows = data || [];
+      }
+      const byId = new Map(orderRows.map((r: any) => [String(r.OrderId), r]));
+      const orders = (refundRows || []).map((refund: any) => {
+        const row: any = byId.get(String(refund.OrderId)) || {};
+        return { id: String(refund.OrderId || ""), status: "Refund", restroCode: row.RestroCode, restroName: row.RestroName, stationCode: row.StationCode, stationName: row.StationName, deliveryDate: row.DeliveryDate, deliveryTime: row.DeliveryTime, trainNumber: row.TrainNumber, coach: row.Coach, seat: row.Seat, customerName: row.CustomerName, customerMobile: row.CustomerMobile, totalAmount: Number(row.TotalAmount ?? refund.PaidAmount ?? refund.RefundAmount ?? 0), paymentMode: row.PaymentMode ?? "PPD", CreatedAt: refund.CreatedAt ?? row.CreatedAt ?? null, history: [], ...refund };
+      });
+      return NextResponse.json({ ok: true, orders });
+    }
 
    let query = supa
   .from("Orders")
@@ -423,4 +448,34 @@ const safeLike = (value: string) => value.replace(/[%_,]/g, "").slice(0, 100);
     console.error("orders.GET error", err);
     return NextResponse.json({ error: "server_error" }, { status: 500 });
   }
+    let complaintByOrder = new Map<string, any>();
+    if (normalizedStatusFilter === "complaints") {
+      const ids = (data || []).map((row: any) => String(row.OrderId || "")).filter(Boolean);
+      if (ids.length) {
+        const { data: complaintRows } = await supa.from("OrderComplaints").select("*").in("OrderId", ids).eq("ComplaintStatus", "Pending").order("CreatedAt", { ascending: false });
+        (complaintRows || []).forEach((row: any) => { if (!complaintByOrder.has(String(row.OrderId))) complaintByOrder.set(String(row.OrderId), row); });
+      }
+    }
+
+    const orders = (data || []).map((row: any) => ({
+  id: row.OrderId as string,
+  status: (row.Status || "booked") as string,
+  restroCode: row.RestroCode,
+  restroName: row.RestroName,
+  stationCode: row.StationCode,
+  stationName: row.StationName,
+  deliveryDate: row.DeliveryDate,
+  deliveryTime: row.DeliveryTime,
+  trainNumber: row.TrainNumber,
+  coach: row.Coach,
+  seat: row.Seat,
+  customerName: row.CustomerName,
+  customerMobile: row.CustomerMobile,
+  totalAmount: Number(row.TotalAmount ?? 0),
+  paymentMode: row.PaymentMode ?? "COD",
+  CreatedAt: row.CreatedAt ?? null,
+  history: [] as any[],
+  ...(complaintByOrder.get(String(row.OrderId)) || {}),
+}));
+
 }
