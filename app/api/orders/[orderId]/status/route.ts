@@ -96,6 +96,9 @@ function normalizeStatus(value: any) {
     outfordelivery:
       "Out for Delivery",
 
+    restromarkeddelivered:
+      "Restro Marked Delivered",
+
     delivered:
       "Delivered",
 
