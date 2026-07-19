@@ -3,7 +3,11 @@
 
 import React, { useEffect, useState } from "react";
 
-const HEADERS = [
+/*
+ * Admin screen par dikhne wale columns.
+ * Existing table layout ko same rakha gaya hai.
+ */
+const TABLE_HEADERS = [
   { key: "restro_code", title: "Restro Code" },
   { key: "item_code", title: "Item Code" },
   { key: "item_name", title: "Item Name" },
@@ -18,10 +22,40 @@ const HEADERS = [
   { key: "status", title: "Status" },
 ];
 
+/*
+ * Download aur dobara upload karne ke liye complete headers.
+ * Inka order upload API me bhi exactly same validate hoga.
+ */
+const DOWNLOAD_HEADERS = [
+  { key: "restro_code", title: "Restro Code" },
+  { key: "item_code", title: "Item Code" },
+  { key: "item_name", title: "Item Name" },
+  { key: "item_description", title: "Item Description" },
+  { key: "item_category", title: "Item Category" },
+  { key: "item_cuisine", title: "Item Cuisine" },
+  { key: "start_time", title: "Start Time" },
+  { key: "end_time", title: "End Time" },
+  { key: "restro_price", title: "Restro Price" },
+  { key: "base_price", title: "Base Price" },
+  { key: "gst_percent", title: "GST %" },
+  { key: "base_price_gst", title: "Base Price GST" },
+  { key: "selling_price", title: "Selling Price" },
+  { key: "menu_type", title: "Menu Type" },
+  { key: "status", title: "Status" },
+  { key: "menu_item_image", title: "Menu Item Image" },
+];
+
 function getField(row: any, key: string) {
   if (!row) return "";
-  if (Object.prototype.hasOwnProperty.call(row, key)) return row[key];
-  const found = Object.keys(row).find((x) => x.toLowerCase() === key.toLowerCase());
+
+  if (Object.prototype.hasOwnProperty.call(row, key)) {
+    return row[key];
+  }
+
+  const found = Object.keys(row).find(
+    (x) => x.toLowerCase() === key.toLowerCase()
+  );
+
   return found ? row[found] : "";
 }
 
@@ -35,8 +69,10 @@ export default function MenuItemsTable() {
   const [restroCode, setRestroCode] = useState("");
   const [itemName, setItemName] = useState("");
   const [status, setStatus] = useState("");
+
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,21 +88,41 @@ export default function MenuItemsTable() {
   async function load(nextPage = page, clear = false) {
     setLoading(true);
     setError(null);
+
     try {
       const url = new URL("/api/menu-items", location.origin);
+
       url.searchParams.set("page", String(nextPage));
       url.searchParams.set("pageSize", String(pageSize));
+
       if (!clear) {
-        if (restroCode.trim()) url.searchParams.set("restroCode", restroCode.trim());
-        if (itemName.trim()) url.searchParams.set("itemName", itemName.trim());
-        if (status.trim()) url.searchParams.set("status", status.trim());
+        if (restroCode.trim()) {
+          url.searchParams.set("restroCode", restroCode.trim());
+        }
+
+        if (itemName.trim()) {
+          url.searchParams.set("itemName", itemName.trim());
+        }
+
+        if (status.trim()) {
+          url.searchParams.set("status", status.trim());
+        }
       }
 
-      const res = await fetch(url.toString(), { cache: "no-store" });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || json?.ok === false) throw new Error(json?.error || "Failed to load menu items");
+      const res = await fetch(url.toString(), {
+        cache: "no-store",
+      });
 
-      const nextRows = Array.isArray(json) ? json : json?.rows ?? [];
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || "Failed to load menu items");
+      }
+
+      const nextRows = Array.isArray(json)
+        ? json
+        : json?.rows ?? [];
+
       setRows(Array.isArray(nextRows) ? nextRows : []);
       setTotal(Number(json?.total ?? nextRows.length ?? 0));
       setPage(Number(json?.page ?? nextPage));
@@ -80,12 +136,30 @@ export default function MenuItemsTable() {
   }
 
   async function uploadMenuExcel() {
-    if (!uploadRestroCode.trim()) {
+    const cleanRestroCode = uploadRestroCode.trim();
+
+    if (!cleanRestroCode) {
       alert("Restro Code required");
       return;
     }
+
+    if (!/^\d+$/.test(cleanRestroCode)) {
+      alert("Restro Code must be numeric");
+      return;
+    }
+
     if (!uploadFile) {
-      alert("Please select Excel file");
+      alert("Please select Excel or CSV file");
+      return;
+    }
+
+    const extension = uploadFile.name
+      .split(".")
+      .pop()
+      ?.toLowerCase();
+
+    if (!extension || !["xlsx", "xls", "csv"].includes(extension)) {
+      alert("Only .xlsx, .xls or .csv file is allowed");
       return;
     }
 
@@ -94,7 +168,8 @@ export default function MenuItemsTable() {
 
     try {
       const formData = new FormData();
-      formData.append("restroCode", uploadRestroCode.trim());
+
+      formData.append("restroCode", cleanRestroCode);
       formData.append("file", uploadFile);
 
       const res = await fetch("/api/admin/menu-upload", {
@@ -109,11 +184,15 @@ export default function MenuItemsTable() {
       }
 
       alert(json?.message || "Menu uploaded successfully");
+
       setUploadOpen(false);
       setUploadRestroCode("");
       setUploadFile(null);
-      setRestroCode(uploadRestroCode.trim());
-      load(1);
+      setRestroCode(cleanRestroCode);
+      setItemName("");
+      setStatus("");
+
+      await load(1);
     } catch (e: any) {
       setError(e?.message || "Menu upload failed");
     } finally {
@@ -121,27 +200,80 @@ export default function MenuItemsTable() {
     }
   }
 
-  async function downloadMenuReport() {
-    setDownloading(true);
-    setError(null);
+  async function fetchAllDownloadRows() {
+    const allRows: any[] = [];
+    const downloadPageSize = 50;
 
-    try {
+    let currentPage = 1;
+    let expectedTotal = 0;
+
+    while (true) {
       const url = new URL("/api/menu-items", location.origin);
-      url.searchParams.set("page", "1");
-      url.searchParams.set("pageSize", String(Math.max(total || pageSize, pageSize)));
 
-      if (restroCode.trim()) url.searchParams.set("restroCode", restroCode.trim());
-      if (itemName.trim()) url.searchParams.set("itemName", itemName.trim());
-      if (status.trim()) url.searchParams.set("status", status.trim());
+      url.searchParams.set("page", String(currentPage));
+      url.searchParams.set("pageSize", String(downloadPageSize));
 
-      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (restroCode.trim()) {
+        url.searchParams.set("restroCode", restroCode.trim());
+      }
+
+      if (itemName.trim()) {
+        url.searchParams.set("itemName", itemName.trim());
+      }
+
+      if (status.trim()) {
+        url.searchParams.set("status", status.trim());
+      }
+
+      const res = await fetch(url.toString(), {
+        cache: "no-store",
+      });
+
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || json?.ok === false) {
         throw new Error(json?.error || "Failed to download menu report");
       }
 
-      const downloadRows = Array.isArray(json) ? json : json?.rows ?? [];
+      const pageRows = Array.isArray(json)
+        ? json
+        : Array.isArray(json?.rows)
+          ? json.rows
+          : [];
+
+      expectedTotal = Number(
+        json?.total ?? expectedTotal ?? pageRows.length
+      );
+
+      allRows.push(...pageRows);
+
+      if (
+        pageRows.length === 0 ||
+        pageRows.length < downloadPageSize ||
+        allRows.length >= expectedTotal
+      ) {
+        break;
+      }
+
+      currentPage += 1;
+
+      /*
+       * Accidental infinite loop se protection.
+       */
+      if (currentPage > 1000) {
+        throw new Error("Too many menu records to download");
+      }
+    }
+
+    return allRows;
+  }
+
+  async function downloadMenuReport() {
+    setDownloading(true);
+    setError(null);
+
+    try {
+      const downloadRows = await fetchAllDownloadRows();
 
       if (!downloadRows.length) {
         alert("No data found to download");
@@ -149,25 +281,37 @@ export default function MenuItemsTable() {
       }
 
       const csv = [
-        HEADERS.map((h) => csvEscape(h.title)).join(","),
+        DOWNLOAD_HEADERS.map((header) =>
+          csvEscape(header.title)
+        ).join(","),
+
         ...downloadRows.map((row: any) =>
-          HEADERS.map((h) => csvEscape(getField(row, h.key))).join(",")
+          DOWNLOAD_HEADERS.map((header) =>
+            csvEscape(getField(row, header.key))
+          ).join(",")
         ),
-      ].join("\n");
+      ].join("\r\n");
 
       const blob = new Blob(["\ufeff" + csv], {
         type: "text/csv;charset=utf-8;",
       });
 
       const today = new Date().toISOString().slice(0, 10);
-      const a = document.createElement("a");
+
+      const filterName = restroCode.trim()
+        ? `_Restro_${restroCode.trim()}`
+        : "";
+
+      const anchor = document.createElement("a");
       const objectUrl = URL.createObjectURL(blob);
 
-      a.href = objectUrl;
-      a.download = `Menu_Report_${today}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      anchor.href = objectUrl;
+      anchor.download = `Menu_Report${filterName}_${today}.csv`;
+
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+
       URL.revokeObjectURL(objectUrl);
     } catch (e: any) {
       setError(e?.message || "Failed to download menu report");
@@ -178,6 +322,7 @@ export default function MenuItemsTable() {
 
   useEffect(() => {
     load(1);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -186,6 +331,14 @@ export default function MenuItemsTable() {
     setItemName("");
     setStatus("");
     load(1, true);
+  }
+
+  function closeUploadModal() {
+    if (uploading) return;
+
+    setUploadOpen(false);
+    setUploadRestroCode("");
+    setUploadFile(null);
   }
 
   return (
@@ -198,30 +351,47 @@ export default function MenuItemsTable() {
         className="grid grid-cols-1 gap-3 lg:grid-cols-[180px_1fr_180px_auto_auto_auto_auto] lg:items-end"
       >
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-slate-600">Restro Code</span>
+          <span className="mb-1 block text-xs font-semibold text-slate-600">
+            Restro Code
+          </span>
+
           <input
             value={restroCode}
-            onChange={(e) => setRestroCode(e.target.value.replace(/\D/g, ""))}
+            onChange={(event) =>
+              setRestroCode(
+                event.target.value.replace(/\D/g, "")
+              )
+            }
             className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
             placeholder="1004"
           />
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-slate-600">Item Name</span>
+          <span className="mb-1 block text-xs font-semibold text-slate-600">
+            Item Name
+          </span>
+
           <input
             value={itemName}
-            onChange={(e) => setItemName(e.target.value)}
+            onChange={(event) =>
+              setItemName(event.target.value)
+            }
             className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
             placeholder="Veg Mini Thali"
           />
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-slate-600">Status</span>
+          <span className="mb-1 block text-xs font-semibold text-slate-600">
+            Status
+          </span>
+
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(event) =>
+              setStatus(event.target.value)
+            }
             className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
           >
             <option value="">All Status</option>
@@ -231,11 +401,19 @@ export default function MenuItemsTable() {
           </select>
         </label>
 
-        <button type="button" onClick={clearFilters} className="h-10 rounded-md border px-4 text-sm font-semibold">
+        <button
+          type="button"
+          onClick={clearFilters}
+          className="h-10 rounded-md border px-4 text-sm font-semibold"
+        >
           Clear
         </button>
 
-        <button type="submit" className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white">
+        <button
+          type="submit"
+          disabled={loading}
+          className="h-10 rounded-md bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
+        >
           Search
         </button>
 
@@ -245,29 +423,47 @@ export default function MenuItemsTable() {
           disabled={downloading || loading}
           className="h-10 rounded-md bg-green-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
         >
-          {downloading ? "Downloading..." : "Download Report"}
+          {downloading
+            ? "Downloading..."
+            : "Download Report"}
         </button>
 
         <button
           type="button"
-          onClick={() => setUploadOpen(true)}
+          onClick={() => {
+            setError(null);
+
+            setUploadRestroCode(
+              restroCode.trim()
+            );
+
+            setUploadOpen(true);
+          }}
           className="h-10 rounded-md bg-purple-600 px-4 text-sm font-semibold text-white"
         >
           Upload Menu
         </button>
       </form>
 
-      {error ? <div className="rounded border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div> : null}
+      {error ? (
+        <div className="whitespace-pre-wrap rounded border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          {error}
+        </div>
+      ) : null}
 
       {uploadOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900">Upload Menu Excel</h3>
+              <h3 className="text-lg font-bold text-slate-900">
+                Upload Menu Excel
+              </h3>
+
               <button
                 type="button"
-                onClick={() => setUploadOpen(false)}
-                className="rounded border px-3 py-1 text-sm font-semibold"
+                onClick={closeUploadModal}
+                disabled={uploading}
+                className="rounded border px-3 py-1 text-sm font-semibold disabled:opacity-50"
               >
                 ✕
               </button>
@@ -275,28 +471,81 @@ export default function MenuItemsTable() {
 
             <div className="space-y-4">
               <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-slate-600">Restro Code</span>
+                <span className="mb-1 block text-xs font-semibold text-slate-600">
+                  Restro Code
+                </span>
+
                 <input
                   value={uploadRestroCode}
-                  onChange={(e) => setUploadRestroCode(e.target.value.replace(/\D/g, ""))}
-                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
+                  onChange={(event) =>
+                    setUploadRestroCode(
+                      event.target.value.replace(/\D/g, "")
+                    )
+                  }
+                  disabled={uploading}
+                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm disabled:bg-slate-100"
                   placeholder="1004"
                 />
               </label>
 
               <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-slate-600">Excel File</span>
+                <span className="mb-1 block text-xs font-semibold text-slate-600">
+                  Excel or CSV File
+                </span>
+
                 <input
                   type="file"
                   accept=".xlsx,.xls,.csv"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  disabled={uploading}
+                  onChange={(event) =>
+                    setUploadFile(
+                      event.target.files?.[0] || null
+                    )
+                  }
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
                 />
               </label>
 
-              <div className="rounded bg-slate-50 p-3 text-xs text-slate-600">
-                Required columns: item_name, item_category, menu_type, start_time, end_time,
-                restro_price, base_price, gst_percent, selling_price, status
+              <div className="rounded border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-slate-700">
+                <div className="font-bold text-slate-900">
+                  Upload rules
+                </div>
+
+                <div>
+                  Download Report wali file ko edit karke upload
+                  karein. Header name aur header order change mat
+                  karein.
+                </div>
+
+                <div>
+                  Restro Code aur Item Code numeric hone chahiye.
+                </div>
+
+                <div>
+                  Prices, GST % aur Base Price GST numeric hone
+                  chahiye.
+                </div>
+
+                <div>
+                  Status me sirf ON, OFF ya DELETED allowed hai.
+                </div>
+
+                <div>
+                  Kisi bhi row me galat data hua to poori file
+                  reject hogi.
+                </div>
+              </div>
+
+              <div className="max-h-36 overflow-auto rounded bg-slate-50 p-3 text-xs text-slate-600">
+                <div className="mb-1 font-bold text-slate-800">
+                  Exact headers:
+                </div>
+
+                {DOWNLOAD_HEADERS.map((header, index) => (
+                  <div key={header.key}>
+                    {index + 1}. {header.title}
+                  </div>
+                ))}
               </div>
 
               <button
@@ -305,7 +554,9 @@ export default function MenuItemsTable() {
                 disabled={uploading}
                 className="h-10 w-full rounded-md bg-purple-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
               >
-                {uploading ? "Uploading..." : "Upload Menu"}
+                {uploading
+                  ? "Validating and Uploading..."
+                  : "Upload Menu"}
               </button>
             </div>
           </div>
@@ -316,33 +567,72 @@ export default function MenuItemsTable() {
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-700">
             <tr>
-              {HEADERS.map((header) => (
-                <th key={header.key} className="border-b px-3 py-3 font-semibold">
+              {TABLE_HEADERS.map((header) => (
+                <th
+                  key={header.key}
+                  className="border-b px-3 py-3 font-semibold"
+                >
                   {header.title}
                 </th>
               ))}
-              <th className="border-b px-3 py-3 font-semibold">Action</th>
+
+              <th className="border-b px-3 py-3 font-semibold">
+                Action
+              </th>
             </tr>
           </thead>
+
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={HEADERS.length + 1} className="px-3 py-8 text-center text-slate-500">Loading...</td>
+                <td
+                  colSpan={TABLE_HEADERS.length + 1}
+                  className="px-3 py-8 text-center text-slate-500"
+                >
+                  Loading...
+                </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={HEADERS.length + 1} className="px-3 py-8 text-center text-slate-500">No menu items found</td>
+                <td
+                  colSpan={TABLE_HEADERS.length + 1}
+                  className="px-3 py-8 text-center text-slate-500"
+                >
+                  No menu items found
+                </td>
               </tr>
             ) : (
               rows.map((row, index) => (
-                <tr key={`${getField(row, "restro_code")}-${getField(row, "item_code")}-${index}`} className={index % 2 ? "bg-slate-50" : "bg-white"}>
-                  {HEADERS.map((header) => (
-                    <td key={header.key} className="border-b px-3 py-3 text-slate-800">
-                      {String(getField(row, header.key) ?? "")}
+                <tr
+                  key={`${getField(
+                    row,
+                    "restro_code"
+                  )}-${getField(
+                    row,
+                    "item_code"
+                  )}-${index}`}
+                  className={
+                    index % 2
+                      ? "bg-slate-50"
+                      : "bg-white"
+                  }
+                >
+                  {TABLE_HEADERS.map((header) => (
+                    <td
+                      key={header.key}
+                      className="border-b px-3 py-3 text-slate-800"
+                    >
+                      {String(
+                        getField(row, header.key) ?? ""
+                      )}
                     </td>
                   ))}
+
                   <td className="border-b px-3 py-3">
-                    <button type="button" className="rounded bg-amber-400 px-3 py-1 text-sm font-semibold text-slate-900">
+                    <button
+                      type="button"
+                      className="rounded bg-amber-400 px-3 py-1 text-sm font-semibold text-slate-900"
+                    >
                       Edit
                     </button>
                   </td>
@@ -355,14 +645,57 @@ export default function MenuItemsTable() {
 
       <div className="flex flex-col gap-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          Showing {total === 0 ? 0 : (page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} of {total}
+          Showing{" "}
+          {total === 0
+            ? 0
+            : (page - 1) * pageSize + 1}{" "}
+          - {Math.min(page * pageSize, total)} of {total}
         </div>
+
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => load(1)} disabled={loading || page <= 1} className="rounded border px-3 py-2 disabled:opacity-50">«</button>
-          <button type="button" onClick={() => load(Math.max(1, page - 1))} disabled={loading || page <= 1} className="rounded border px-3 py-2 disabled:opacity-50">Prev</button>
-          <span className="rounded border px-3 py-2 font-semibold">{page} / {totalPages}</span>
-          <button type="button" onClick={() => load(Math.min(totalPages, page + 1))} disabled={loading || page >= totalPages} className="rounded border px-3 py-2 disabled:opacity-50">Next</button>
-          <button type="button" onClick={() => load(totalPages)} disabled={loading || page >= totalPages} className="rounded border px-3 py-2 disabled:opacity-50">»</button>
+          <button
+            type="button"
+            onClick={() => load(1)}
+            disabled={loading || page <= 1}
+            className="rounded border px-3 py-2 disabled:opacity-50"
+          >
+            «
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              load(Math.max(1, page - 1))
+            }
+            disabled={loading || page <= 1}
+            className="rounded border px-3 py-2 disabled:opacity-50"
+          >
+            Prev
+          </button>
+
+          <span className="rounded border px-3 py-2 font-semibold">
+            {page} / {totalPages}
+          </span>
+
+          <button
+            type="button"
+            onClick={() =>
+              load(Math.min(totalPages, page + 1))
+            }
+            disabled={loading || page >= totalPages}
+            className="rounded border px-3 py-2 disabled:opacity-50"
+          >
+            Next
+          </button>
+
+          <button
+            type="button"
+            onClick={() => load(totalPages)}
+            disabled={loading || page >= totalPages}
+            className="rounded border px-3 py-2 disabled:opacity-50"
+          >
+            »
+          </button>
         </div>
       </div>
     </div>
