@@ -81,6 +81,12 @@ function normalizeStatus(value: any) {
     cancellationrequest:
       "Cancellation Request",
 
+    complaints:
+      "Complaints",
+
+    complaint:
+      "Complaints",
+
     neworder:
       "New Order",
 
@@ -671,6 +677,267 @@ async function insertHistoryBestEffort(
   };
 }
 
+
+/* =========================================================
+   PREPAID REFUND HELPERS
+   ========================================================= */
+
+function isPrepaidOrder(
+  row: any
+) {
+  const paymentModeKey =
+    normalizeKey(
+      row?.PaymentMode ??
+      row?.paymentMode ??
+      row?.payment_mode
+    );
+
+  return [
+    "ppd",
+    "prepaid",
+    "online",
+    "paidonline",
+  ].includes(paymentModeKey);
+}
+
+function isRefundEligibleStatus(
+  status: any
+) {
+  const key =
+    normalizeKey(status);
+
+  return (
+    key === "cancelled" ||
+    key === "canceled" ||
+    key === "notdelivered"
+  );
+}
+
+async function upsertRefundBestEffort({
+  supabase,
+  order,
+  newStatus,
+  subStatus,
+}: {
+  supabase: any;
+  order: any;
+  newStatus: string;
+  subStatus: string | null;
+}) {
+  if (
+    !isPrepaidOrder(order) ||
+    !isRefundEligibleStatus(newStatus)
+  ) {
+    return {
+      data: null,
+      skipped: true,
+      warning: null,
+    };
+  }
+
+  const paidAmount =
+    Math.max(
+      0,
+      normalizeNumber(
+        order?.PPDAmount,
+        0
+      ) ||
+      normalizeNumber(
+        order?.TotalAmount,
+        0
+      ) ||
+      0
+    );
+
+  const normalizedStatus =
+    normalizeKey(newStatus) ===
+      "notdelivered"
+      ? "Not Delivered"
+      : "Cancelled";
+
+  const payload = {
+    OrderId:
+      String(order?.OrderId ?? "")
+        .trim(),
+
+    RestroCode:
+      normalizeNumber(
+        order?.RestroCode,
+        0
+      ) || 0,
+
+    RestroName:
+      cleanText(
+        order?.RestroName
+      ),
+
+    StationCode:
+      cleanText(
+        order?.StationCode
+      ),
+
+    StationName:
+      cleanText(
+        order?.StationName
+      ),
+
+    CustomerName:
+      cleanText(
+        order?.CustomerName
+      ),
+
+    CustomerMobile:
+      cleanText(
+        order?.CustomerMobile
+      ),
+
+    PaymentMode:
+      cleanText(
+        order?.PaymentMode
+      ) || "PPD",
+
+    PaidAmount:
+      paidAmount,
+
+    RefundAmount:
+      paidAmount,
+
+    OrderStatus:
+      normalizedStatus,
+
+    OrderSubStatus:
+      subStatus,
+
+    RefundReason:
+      subStatus ||
+      (
+        normalizedStatus ===
+          "Cancelled"
+          ? "Order Cancelled"
+          : "Order Not Delivered"
+      ),
+  };
+
+  const {
+    data: existingRefund,
+    error: findError,
+  } =
+    await supabase
+      .from("OrderRefunds")
+      .select("*")
+      .eq(
+        "OrderId",
+        payload.OrderId
+      )
+      .maybeSingle();
+
+  if (findError) {
+    return {
+      data: null,
+      skipped: false,
+      warning:
+        findError.message ||
+        "Unable to check refund record",
+    };
+  }
+
+  if (existingRefund) {
+    const refundStatus =
+      cleanText(
+        existingRefund.RefundStatus
+      ) || "Pending";
+
+    const updatePayload:
+      Record<string, any> = {
+        RestroCode:
+          payload.RestroCode,
+
+        RestroName:
+          payload.RestroName,
+
+        StationCode:
+          payload.StationCode,
+
+        StationName:
+          payload.StationName,
+
+        CustomerName:
+          payload.CustomerName,
+
+        CustomerMobile:
+          payload.CustomerMobile,
+
+        PaymentMode:
+          payload.PaymentMode,
+
+        PaidAmount:
+          payload.PaidAmount,
+
+        OrderStatus:
+          payload.OrderStatus,
+
+        OrderSubStatus:
+          payload.OrderSubStatus,
+
+        RefundReason:
+          payload.RefundReason,
+      };
+
+    /*
+     * Successful refund amount ko overwrite nahi karenge.
+     */
+    if (
+      normalizeKey(refundStatus) !==
+      "success"
+    ) {
+      updatePayload.RefundAmount =
+        payload.RefundAmount;
+    }
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from("OrderRefunds")
+        .update(updatePayload)
+        .eq(
+          "RefundId",
+          existingRefund.RefundId
+        )
+        .select("*")
+        .maybeSingle();
+
+    return {
+      data: data || existingRefund,
+      skipped: false,
+      warning:
+        error?.message || null,
+    };
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from("OrderRefunds")
+      .insert({
+        ...payload,
+        RefundStatus:
+          "Pending",
+      })
+      .select("*")
+      .maybeSingle();
+
+  return {
+    data,
+    skipped: false,
+    warning:
+      error?.message || null,
+  };
+}
+
 /* =========================================================
    PATCH
    ========================================================= */
@@ -1154,6 +1421,19 @@ export async function PATCH(
     }
 
     /* =====================================================
+       CREATE / UPDATE PREPAID REFUND
+       ===================================================== */
+
+    const refundResult =
+      await upsertRefundBestEffort({
+        supabase,
+        order:
+          updatedRows[0],
+        newStatus,
+        subStatus,
+      });
+
+    /* =====================================================
        SUCCESS RESPONSE
        ===================================================== */
 
@@ -1201,6 +1481,18 @@ export async function PATCH(
       restroRdsWarning:
         restroRdsResult
           .warning ??
+        null,
+
+      refund:
+        refundResult.data ??
+        null,
+
+      refundSkipped:
+        refundResult.skipped ??
+        false,
+
+      refundWarning:
+        refundResult.warning ??
         null,
     });
   } catch (
