@@ -53,6 +53,7 @@ type ValidatedRow = {
     item_name: string;
     item_description: string | null;
     item_category: string | null;
+    menu_type: string | null;
     item_cuisine: string | null;
     start_time: string | null;
     end_time: string | null;
@@ -61,7 +62,6 @@ type ValidatedRow = {
     gst_percent: number;
     base_price_gst: number;
     selling_price: number;
-    menu_type: string | null;
     menu_type_rank: number | null;
     status: "ON" | "OFF" | "DELETED";
     menu_item_image: string | null;
