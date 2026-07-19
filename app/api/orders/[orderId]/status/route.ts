@@ -612,6 +612,44 @@ async function updateOrderStatus(
 }
 
 /* =========================================================
+   ORDER JOURNEY
+   ========================================================= */
+
+function resolveOrderJourneyStage(
+  newStatus: string,
+  subStatus: string | null
+) {
+  const statusKey =
+    normalizeKey(newStatus);
+
+  const subStatusKey =
+    normalizeKey(subStatus);
+
+  /*
+   * Complaint ka master status "Complaints" hi rahega,
+   * lekin final complaint result ka journey stage
+   * SubStatus ke according save hoga.
+   */
+  if (statusKey === "complaints") {
+    if (subStatusKey === "notdelivered") {
+      return "Not Delivered";
+    }
+
+    if (subStatusKey === "baddelivery") {
+      return "Bad Delivery";
+    }
+
+    if (subStatusKey === "partialdelivery") {
+      return "Partial Delivery";
+    }
+
+    return "Complaints";
+  }
+
+  return newStatus;
+}
+
+/* =========================================================
    PREPAID REFUND HELPERS
    ========================================================= */
 
@@ -1007,7 +1045,7 @@ export async function PATCH(
      * - SubStatus update nahi hoga
      * - Penalty update nahi hogi
      * - IGST update nahi hoga
-     * - OrderJourney update nahi hoga
+     * - History insert nahi hogi
      * - RDS update nahi hogi
      */
     const rdsLock =
@@ -1227,42 +1265,64 @@ export async function PATCH(
        UPDATE ORDER JOURNEY
        ===================================================== */
 
+    const resolvedJourneyStage =
+      resolveOrderJourneyStage(
+        newStatus,
+        subStatus
+      );
+
+    const updatedOrder =
+      updatedRows[0];
+
     const journeyResult =
       await updateOrderJourneySafe({
         supabase,
         orderId,
-        stage: newStatus,
-        status: newStatus,
+        stage:
+          resolvedJourneyStage,
+        status:
+          newStatus,
         subStatus,
-        remarks,
+        remarks:
+          remarks ??
+          note ??
+          subStatus,
         userType,
         userName,
-        source: actionSource,
-        actionAt: changedAt,
+        source:
+          actionSource,
+        actionAt:
+          changedAt,
         order: {
           restroCode:
-            updatedRows[0]
-              ?.RestroCode,
-
+            updatedOrder?.RestroCode ??
+            existing?.RestroCode ??
+            null,
           restroName:
-            updatedRows[0]
-              ?.RestroName,
-
+            cleanText(
+              updatedOrder?.RestroName ??
+              existing?.RestroName
+            ),
           stationCode:
-            updatedRows[0]
-              ?.StationCode,
-
+            cleanText(
+              updatedOrder?.StationCode ??
+              existing?.StationCode
+            ),
           stationName:
-            updatedRows[0]
-              ?.StationName,
-
+            cleanText(
+              updatedOrder?.StationName ??
+              existing?.StationName
+            ),
           deliveryDate:
-            updatedRows[0]
-              ?.DeliveryDate,
-
+            cleanText(
+              updatedOrder?.DeliveryDate ??
+              existing?.DeliveryDate
+            ),
           deliveryTime:
-            updatedRows[0]
-              ?.DeliveryTime,
+            cleanText(
+              updatedOrder?.DeliveryTime ??
+              existing?.DeliveryTime
+            ),
         },
       });
 
