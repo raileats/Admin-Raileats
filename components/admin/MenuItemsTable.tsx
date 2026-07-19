@@ -508,31 +508,31 @@ export default function MenuItemsTable() {
 
               <div className="rounded border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-slate-700">
                 <div className="font-bold text-slate-900">
-                  Upload rules
+                  Upload Guidelines
                 </div>
 
                 <div>
-                  Download Report wali file ko edit karke upload
-                  karein. Header name aur header order change mat
-                  karein.
+                  • Use the downloaded report file only.
                 </div>
 
                 <div>
-                  Restro Code aur Item Code numeric hone chahiye.
+                  • Keep header names and column order unchanged.
                 </div>
 
                 <div>
-                  Prices, GST % aur Base Price GST numeric hone
-                  chahiye.
+                  • Leave Item Code blank for auto-generation.
                 </div>
 
                 <div>
-                  Status me sirf ON, OFF ya DELETED allowed hai.
+                  • Restro Code, prices and GST must be numeric.
                 </div>
 
                 <div>
-                  Kisi bhi row me galat data hua to poori file
-                  reject hogi.
+                  • Status must be ON, OFF or DELETED only.
+                </div>
+
+                <div>
+                  • Any invalid row will reject the entire file.
                 </div>
               </div>
 
