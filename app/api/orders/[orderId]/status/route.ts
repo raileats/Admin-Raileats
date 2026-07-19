@@ -1348,17 +1348,12 @@ export async function PATCH(
         finalIGST !== null,
 
       journey:
-        journeyResult
-          ?.data ??
-        null,
+        journeyResult,
 
       journeyWarning:
         journeyResult
-          ?.warning ??
-        journeyResult
-          ?.error
-          ?.message ??
-        null,
+          ? null
+          : "OrderJourney update failed. Check server logs.",
 
       restroRds:
         restroRdsResult
