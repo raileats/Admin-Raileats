@@ -17,6 +17,10 @@ import {
   syncRestroRdsForFinalOrder,
 } from "@/lib/restroRds";
 
+import {
+  updateOrderJourneySafe,
+} from "@/lib/orderJourney";
+
 /* =========================================================
    SUPABASE SERVER CLIENT
    ========================================================= */
@@ -608,80 +612,6 @@ async function updateOrderStatus(
 }
 
 /* =========================================================
-   STATUS HISTORY
-   ========================================================= */
-
-async function insertHistoryBestEffort(
-  supabase: any,
-  payload:
-    Record<string, any>
-) {
-  let attempt = {
-    ...payload,
-  };
-
-  for (
-    let i = 0;
-    i < 16;
-    i += 1
-  ) {
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from(
-          "OrderStatusHistory"
-        )
-        .insert(attempt)
-        .select("*")
-        .maybeSingle();
-
-    if (!error) {
-      return {
-        data,
-        error: null,
-      };
-    }
-
-    const missing =
-      missingColumnName(
-        error.message || ""
-      );
-
-    if (
-      !missing ||
-      !(missing in attempt)
-    ) {
-      return {
-        data: null,
-        error,
-      };
-    }
-
-    const nextAttempt = {
-      ...attempt,
-    };
-
-    delete nextAttempt[
-      missing
-    ];
-
-    attempt =
-      nextAttempt;
-  }
-
-  return {
-    data: null,
-    error: {
-      message:
-        "Unable to insert status history with available columns",
-    },
-  };
-}
-
-
-/* =========================================================
    PREPAID REFUND HELPERS
    ========================================================= */
 
@@ -1077,7 +1007,7 @@ export async function PATCH(
      * - SubStatus update nahi hoga
      * - Penalty update nahi hogi
      * - IGST update nahi hoga
-     * - History insert nahi hogi
+     * - OrderJourney update nahi hoga
      * - RDS update nahi hogi
      */
     const rdsLock =
@@ -1168,18 +1098,6 @@ export async function PATCH(
     const changedAt =
       new Date()
         .toISOString();
-
-    const statusColumn =
-      pickStatusColumn(
-        existing
-      );
-
-    const oldStatus =
-      cleanText(
-        existing[
-          statusColumn
-        ]
-      );
 
     const subStatus =
       cleanText(
@@ -1306,76 +1224,47 @@ export async function PATCH(
     }
 
     /* =====================================================
-       HISTORY PAYLOAD
+       UPDATE ORDER JOURNEY
        ===================================================== */
 
-    const historyPayload:
-      Record<string, any> = {
-        OrderId:
-          orderId,
-
-        OldStatus:
-          oldStatus,
-
-        PreviousStatus:
-          oldStatus,
-
-        NewStatus:
-          newStatus,
-
-        Status:
-          newStatus,
-
-        SubStatus:
-          subStatus,
-
-        Remarks:
-          remarks,
-
-        Note:
-          note,
-
-        ChangedBy:
-          userName,
-
-        UserType:
-          userType,
-
-        UserName:
-          userName,
-
-        ActionSource:
-          actionSource,
-
-        OrderPenalty:
-          orderPenalty,
-
-        ChangedAt:
-          changedAt,
-
-        CreatedAt:
-          changedAt,
-      };
-
-    if (
-      finalIGST !== null
-    ) {
-      historyPayload.IGST =
-        finalIGST;
-    }
-
-    /* =====================================================
-       INSERT HISTORY
-       ===================================================== */
-
-    const {
-      data: historyRow,
-      error: historyError,
-    } =
-      await insertHistoryBestEffort(
+    const journeyResult =
+      await updateOrderJourneySafe({
         supabase,
-        historyPayload
-      );
+        orderId,
+        stage: newStatus,
+        status: newStatus,
+        subStatus,
+        remarks,
+        userType,
+        userName,
+        source: actionSource,
+        actionAt: changedAt,
+        order: {
+          restroCode:
+            updatedRows[0]
+              ?.RestroCode,
+
+          restroName:
+            updatedRows[0]
+              ?.RestroName,
+
+          stationCode:
+            updatedRows[0]
+              ?.StationCode,
+
+          stationName:
+            updatedRows[0]
+              ?.StationName,
+
+          deliveryDate:
+            updatedRows[0]
+              ?.DeliveryDate,
+
+          deliveryTime:
+            updatedRows[0]
+              ?.DeliveryTime,
+        },
+      });
 
     /* =====================================================
        CREATE RESTRO RDS
@@ -1458,12 +1347,17 @@ export async function PATCH(
       igstCalculated:
         finalIGST !== null,
 
-      history:
-        historyRow,
+      journey:
+        journeyResult
+          ?.data ??
+        null,
 
-      historyWarning:
-        historyError
-          ?.message ||
+      journeyWarning:
+        journeyResult
+          ?.warning ??
+        journeyResult
+          ?.error
+          ?.message ??
         null,
 
       restroRds:
