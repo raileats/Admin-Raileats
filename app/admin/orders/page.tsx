@@ -28,6 +28,8 @@ type TabKey =
   | "cancelled"
   | "notdelivered"
   | "baddelivery"
+  | "complaints"
+  | "refund"
   | "all";
 
 type OrderHistoryItem = {
@@ -68,9 +70,11 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "neworder", label: "New Order" },
   { key: "inkitchen", label: "In Kitchen" },
   { key: "outfordelivery", label: "Out for Delivery" },
+  { key: "complaints", label: "Complaints" },
   { key: "delivered", label: "Delivered" },
   { key: "cancelled", label: "Cancelled" },
   { key: "notdelivered", label: "Not Delivered" },
+  { key: "refund", label: "Refund" },
   { key: "baddelivery", label: "Bad Delivery" },
   { key: "all", label: "All" },
 ];
@@ -303,6 +307,9 @@ const NEXT_MAP: Record<
     actionLabel: "",
     dbValue: "Bad Delivery",
   },
+
+  complaints: { next: null, actionLabel: "", dbValue: "Complaints" },
+  refund: { next: null, actionLabel: "", dbValue: "Refund" },
 
   all: {
     next: null,
@@ -541,6 +548,10 @@ const mapOrderRowToOrder = (row: any): Order => {
     tabStatus = "notdelivered";
   } else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") {
     tabStatus = "baddelivery";
+  } else if (lowerRaw === "complaints" || lowerRaw === "complaint") {
+    tabStatus = "complaints";
+  } else if (lowerRaw === "refund") {
+    tabStatus = "refund";
   }
 
   return {
@@ -819,6 +830,17 @@ export default function AdminOrdersPage() {
   const [refreshTick, setRefreshTick] = useState(0);
 
   const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [workflowModal, setWorkflowModal] = useState<{
+    open: boolean;
+    kind: "complaint-approve" | "complaint-reject" | "refund" | null;
+    order: Order | null;
+  }>({ open: false, kind: null, order: null });
+  const [workflowStatus, setWorkflowStatus] = useState("");
+  const [workflowSubStatus, setWorkflowSubStatus] = useState("");
+  const [workflowPenalty, setWorkflowPenalty] = useState("");
+  const [workflowRemarks, setWorkflowRemarks] = useState("");
+  const [workflowAmount, setWorkflowAmount] = useState("");
+  const [workflowSaving, setWorkflowSaving] = useState(false);
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
@@ -2255,6 +2277,8 @@ export default function AdminOrdersPage() {
       cancelled: 0,
       notdelivered: 0,
       baddelivery: 0,
+      complaints: 0,
+      refund: 0,
       all: 0,
     };
     const flatOrders = Object.values(allOrders).flat();
@@ -2356,6 +2380,55 @@ export default function AdminOrdersPage() {
       "_blank",
     );
   }
+  function openWorkflow(kind: "complaint-approve" | "complaint-reject" | "refund", order: Order) {
+    setWorkflowModal({ open: true, kind, order });
+    setWorkflowStatus("");
+    setWorkflowSubStatus("");
+    setWorkflowPenalty("");
+    setWorkflowRemarks("");
+    setWorkflowAmount(String(valueFrom(order.raw, "RefundAmount", "refundAmount", "PaidAmount", "paidAmount", "TotalAmount", "totalAmount") || ""));
+  }
+
+  async function submitWorkflow() {
+    const order = workflowModal.order;
+    if (!order || !workflowModal.kind) return;
+    const actor = getAdminActor();
+    setWorkflowSaving(true);
+    try {
+      if (workflowModal.kind === "complaint-approve" || workflowModal.kind === "complaint-reject") {
+        const complaintId = valueFrom(order.raw, "ComplaintId", "complaintId", "ComplaintNo", "complaintNo");
+        if (!complaintId) throw new Error("Complaint ID not found");
+        if (workflowModal.kind === "complaint-approve" && !workflowStatus) throw new Error("Final status select karein");
+        const res = await fetch(`/api/orders/complaints/${encodeURIComponent(String(complaintId))}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            decision: workflowModal.kind === "complaint-approve" ? "Approved" : "Rejected",
+            finalStatus: workflowStatus || undefined,
+            finalSubStatus: workflowSubStatus || undefined,
+            vendorPenalty: workflowPenalty === "" ? undefined : Number(workflowPenalty),
+            adminRemarks: workflowRemarks,
+            adminName: actor.userName, userName: actor.userName, changedBy: actor.userName,
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json?.ok) throw new Error(json?.error || "Complaint action failed");
+      } else {
+        const refundId = valueFrom(order.raw, "RefundId", "refundId", "RefundNo", "refundNo");
+        if (!refundId) throw new Error("Refund ID not found");
+        if (!workflowStatus) throw new Error("Refund status select karein");
+        const res = await fetch(`/api/admin/refunds/${encodeURIComponent(String(refundId))}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refundStatus: workflowStatus, refundAmount: workflowAmount === "" ? undefined : Number(workflowAmount), remarks: workflowRemarks, adminName: actor.userName }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json?.ok) throw new Error(json?.error || "Refund update failed");
+      }
+      setWorkflowModal({ open: false, kind: null, order: null });
+      hasLoadedTabRef.current[activeTab] = false;
+      setRefreshTick((v) => v + 1);
+    } catch (e: any) { alert(e?.message || "Action failed"); } finally { setWorkflowSaving(false); }
+  }
+
   return (
     <section
       style={{
@@ -2999,7 +3072,14 @@ export default function AdminOrdersPage() {
                       }}
                     >
                       {/* INLINE BUTTON CONTROLLERS */}
-                      {o.status === "cancellationrequest" ? (
+                      {o.status === "complaints" ? (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => openWorkflow("complaint-approve", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Approve</button>
+                          <button onClick={() => openWorkflow("complaint-reject", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#dc2626", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Reject</button>
+                        </div>
+                      ) : o.status === "refund" ? (
+                        <button onClick={() => openWorkflow("refund", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#7c3aed", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Update Refund</button>
+                      ) : o.status === "cancellationrequest" ? (
                         <button
                           type="button"
                           onClick={() => {
@@ -4564,6 +4644,29 @@ export default function AdminOrdersPage() {
       {/* ========================================================================= */}
       {/* STATUS ACTIONS MODAL */}
       {/* ========================================================================= */}
+      {workflowModal.open && workflowModal.order && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 10050, background: "rgba(15,23,42,.58)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ width: "100%", maxWidth: 560, background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 25px 70px rgba(0,0,0,.28)" }}>
+            <h3 style={{ margin: "0 0 6px", color: "#0f172a" }}>{workflowModal.kind === "complaint-approve" ? "Approve Complaint" : workflowModal.kind === "complaint-reject" ? "Reject Complaint" : "Update Refund"}</h3>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Order ID: <strong>{workflowModal.order.id}</strong></div>
+            {workflowModal.kind === "complaint-approve" && <>
+              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Final Status<select value={workflowStatus} onChange={(e)=>setWorkflowStatus(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}><option value="">Select status</option><option>Cancelled</option><option>Not Delivered</option><option>Delivered</option><option>Bad Delivery</option><option>Partial Delivery</option></select></label>
+              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Final Sub Status<input value={workflowSubStatus} onChange={(e)=>setWorkflowSubStatus(e.target.value)} placeholder="Sub status" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
+              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Vendor Penalty (Rs)<input type="number" min="0" value={workflowPenalty} onChange={(e)=>setWorkflowPenalty(e.target.value)} placeholder="0" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
+            </>}
+            {workflowModal.kind === "refund" && <>
+              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Refund Status<select value={workflowStatus} onChange={(e)=>setWorkflowStatus(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}><option value="">Select status</option><option>Pending</option><option>Approved</option><option>Processing</option><option>Success</option><option>Failed</option></select></label>
+              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Refund Amount<input type="number" min="0" step="0.01" value={workflowAmount} onChange={(e)=>setWorkflowAmount(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
+            </>}
+            <label style={{ display: "grid", gap: 6, marginBottom: 16, fontSize: 12, fontWeight: 800 }}>Admin Remarks<textarea rows={4} value={workflowRemarks} onChange={(e)=>setWorkflowRemarks(e.target.value)} placeholder="Remarks" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8, resize: "vertical" }}/></label>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button disabled={workflowSaving} onClick={()=>setWorkflowModal({open:false,kind:null,order:null})} style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontWeight: 700 }}>Close</button>
+              <button disabled={workflowSaving} onClick={submitWorkflow} style={{ padding: "9px 14px", borderRadius: 8, border: "none", background: workflowModal.kind === "complaint-reject" ? "#dc2626" : "#0f172a", color: "#fff", cursor: "pointer", fontWeight: 800 }}>{workflowSaving ? "Saving..." : "Submit"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {statusModalOpen && (
         <div
           style={{
