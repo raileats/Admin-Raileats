@@ -1923,6 +1923,88 @@ export default function AdminOrdersPage() {
     })();
   }
 
+
+  async function markComplaintAsDelivered(order: Order) {
+    const complaintId = valueFrom(
+      order.raw,
+      "ComplaintId",
+      "complaintId",
+      "ComplaintNo",
+      "complaintNo",
+      "id",
+    );
+
+    if (!complaintId) {
+      alert("Complaint ID not found");
+      return;
+    }
+
+    if (!confirm(`Mark complaint order ${order.id} as Delivered?`)) {
+      return;
+    }
+
+    try {
+      const actor = getAdminActor();
+      const actionNote = "Complaint reviewed and order marked as Delivered";
+
+      const res = await fetch(
+        `/api/orders/complaints/${encodeURIComponent(String(complaintId))}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            decision: "Approved",
+            finalStatus: "Delivered",
+            finalSubStatus: "Delivered",
+            vendorPenalty: 0,
+            adminRemarks: actionNote,
+            adminName: actor.userName,
+            changedBy: actor.userName,
+            userType: actor.userType,
+            userName: actor.userName,
+            actionSource: actor.userType || "Admin",
+          }),
+        },
+      );
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.ok) {
+        alert(json?.error || json?.details || "Failed to mark order as Delivered");
+        return;
+      }
+
+      const updated: Order = {
+        ...order,
+        status: "delivered",
+        dbStatus: "Delivered",
+        history: [
+          ...order.history,
+          {
+            at: new Date().toISOString(),
+            by: actor.userName,
+            note: actionNote,
+            status: "delivered",
+          },
+        ],
+      };
+
+      setAllOrders((prev) => {
+        const copy = { ...prev };
+        copy.complaints = (copy.complaints ?? []).filter(
+          (existingOrder) => existingOrder.id !== order.id,
+        );
+        copy.delivered = [updated, ...(copy.delivered ?? [])];
+        return copy;
+      });
+
+      setRefreshTick((prev) => prev + 1);
+    } catch (error) {
+      console.error("Complaint delivered update failed", error);
+      alert("Failed to mark order as Delivered (network error)");
+    }
+  }
+
   async function submitStatusAction() {
     if (!selectedOrder) return;
     if (!subStatus) {
@@ -3106,30 +3188,56 @@ export default function AdminOrdersPage() {
                     >
                       {/* INLINE BUTTON CONTROLLERS */}
                       {o.status === "complaints" ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedOrder(o);
-                            setActionType("mark");
-                            setSubStatus("");
-                            setRemarks("");
-                            setVendorPenaltyAmount("");
-                            setStatusModalOpen(true);
-                          }}
+                        <div
                           style={{
-                            padding: "6px 10px",
-                            borderRadius: 6,
-                            background: "#475569",
-                            color: "#fff",
-                            border: "none",
-                            cursor: "pointer",
-                            fontWeight: "bold",
-                            fontSize: 11,
-                            whiteSpace: "nowrap",
+                            display: "flex",
+                            gap: 6,
+                            flexWrap: "nowrap",
                           }}
                         >
-                          Mark Status
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => markComplaintAsDelivered(o)}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: 6,
+                              background: "#2563eb",
+                              color: "#fff",
+                              border: "none",
+                              cursor: "pointer",
+                              fontWeight: "bold",
+                              fontSize: 11,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Mark as Delivered ✅
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedOrder(o);
+                              setActionType("mark");
+                              setSubStatus("");
+                              setRemarks("");
+                              setVendorPenaltyAmount("");
+                              setStatusModalOpen(true);
+                            }}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: 6,
+                              background: "#475569",
+                              color: "#fff",
+                              border: "none",
+                              cursor: "pointer",
+                              fontWeight: "bold",
+                              fontSize: 11,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Mark Status
+                          </button>
+                        </div>
                       ) : o.status === "refund" ? (
                         <button onClick={() => openWorkflow("refund", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#7c3aed", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Update Refund</button>
                       ) : o.status === "cancellationrequest" ? (
