@@ -284,6 +284,7 @@ export async function GET(req: Request) {
       notdelivered: "Not Delivered",
       baddelivery: "Bad Delivery",
       complaints: "Complaints",
+      restromarkeddelivered: "Restro Marked Delivered",
     };
 
     const dbStatus = normalizedStatusFilter
