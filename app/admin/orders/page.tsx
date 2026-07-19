@@ -1933,7 +1933,8 @@ export default function AdminOrdersPage() {
     try {
       const outForDeliveryOption =
         selectedOrder.status === "inkitchen" ||
-        selectedOrder.status === "outfordelivery"
+        selectedOrder.status === "outfordelivery" ||
+        selectedOrder.status === "complaints"
           ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find(
               (option) => option.key === subStatus,
             )
@@ -1941,7 +1942,8 @@ export default function AdminOrdersPage() {
       const shouldApplyOrderPenalty =
         actionType === "mark" &&
         (selectedOrder.status === "inkitchen" ||
-          selectedOrder.status === "outfordelivery");
+          selectedOrder.status === "outfordelivery" ||
+          selectedOrder.status === "complaints");
       const selectedVendorPenalty = !shouldApplyOrderPenalty
         ? 0
         : outForDeliveryOption?.manualPenalty
@@ -1986,12 +1988,39 @@ export default function AdminOrdersPage() {
       const actor = getAdminActor();
       const cleanRemarks = remarks.trim();
 
-      const res = await fetch(
-        `/api/orders/${encodeURIComponent(selectedOrder.id)}/status`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+      const isComplaintResolution = selectedOrder.status === "complaints";
+      const complaintId = valueFrom(
+        selectedOrder.raw,
+        "ComplaintId",
+        "complaintId",
+        "ComplaintNo",
+        "complaintNo",
+        "id",
+      );
+
+      if (isComplaintResolution && !complaintId) {
+        alert("Complaint ID not found");
+        return;
+      }
+
+      const endpoint = isComplaintResolution
+        ? `/api/orders/complaints/${encodeURIComponent(String(complaintId))}`
+        : `/api/orders/${encodeURIComponent(selectedOrder.id)}/status`;
+
+      const requestBody = isComplaintResolution
+        ? {
+            decision: "Approved",
+            finalStatus: computedMainStatus,
+            finalSubStatus: subStatus,
+            vendorPenalty: selectedVendorPenalty,
+            adminRemarks: cleanRemarks,
+            adminName: actor.userName,
+            changedBy: actor.userName,
+            userType: actor.userType,
+            userName: actor.userName,
+            actionSource: actor.userType || "Admin",
+          }
+        : {
             newStatus: computedMainStatus,
             subStatus,
             remarks: cleanRemarks,
@@ -2004,9 +2033,13 @@ export default function AdminOrdersPage() {
             vendorPenalty: selectedVendorPenalty,
             vendorPenaltyAmount: selectedVendorPenalty,
             VendorPenalty: selectedVendorPenalty,
-          }),
-        },
-      );
+          };
+
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
 
       const json = await res.json();
       if (!res.ok || !json?.ok) {
@@ -3073,10 +3106,30 @@ export default function AdminOrdersPage() {
                     >
                       {/* INLINE BUTTON CONTROLLERS */}
                       {o.status === "complaints" ? (
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => openWorkflow("complaint-approve", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Approve</button>
-                          <button onClick={() => openWorkflow("complaint-reject", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#dc2626", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Reject</button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedOrder(o);
+                            setActionType("mark");
+                            setSubStatus("");
+                            setRemarks("");
+                            setVendorPenaltyAmount("");
+                            setStatusModalOpen(true);
+                          }}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: 6,
+                            background: "#475569",
+                            color: "#fff",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                            fontSize: 11,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Mark Status
+                        </button>
                       ) : o.status === "refund" ? (
                         <button onClick={() => openWorkflow("refund", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#7c3aed", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Update Refund</button>
                       ) : o.status === "cancellationrequest" ? (
@@ -4738,7 +4791,8 @@ export default function AdminOrdersPage() {
                     </option>
                   ))
                 : selectedOrder?.status === "inkitchen" ||
-                    selectedOrder?.status === "outfordelivery"
+                    selectedOrder?.status === "outfordelivery" ||
+                    selectedOrder?.status === "complaints"
                   ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.map((option) => (
                       <option key={option.key} value={option.key}>
                         {option.manualPenalty
@@ -4755,7 +4809,8 @@ export default function AdminOrdersPage() {
 
             {actionType === "mark" &&
               (selectedOrder?.status === "inkitchen" ||
-                selectedOrder?.status === "outfordelivery") &&
+                selectedOrder?.status === "outfordelivery" ||
+                selectedOrder?.status === "complaints") &&
               subStatus && (
                 <div
                   style={{
