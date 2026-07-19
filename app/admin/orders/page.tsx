@@ -29,6 +29,7 @@ type TabKey =
   | "notdelivered"
   | "baddelivery"
   | "complaints"
+  | "restromarkeddelivered"
   | "refund"
   | "all";
 
@@ -71,6 +72,10 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "inkitchen", label: "In Kitchen" },
   { key: "outfordelivery", label: "Out for Delivery" },
   { key: "complaints", label: "Complaints" },
+  {
+    key: "restromarkeddelivered",
+    label: "Restro Marked Delivered",
+  },
   { key: "delivered", label: "Delivered" },
   { key: "cancelled", label: "Cancelled" },
   { key: "notdelivered", label: "Not Delivered" },
@@ -309,6 +314,11 @@ const NEXT_MAP: Record<
   },
 
   complaints: { next: null, actionLabel: "", dbValue: "Complaints" },
+  restromarkeddelivered: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Restro Marked Delivered",
+  },
   refund: { next: null, actionLabel: "", dbValue: "Refund" },
 
   all: {
@@ -550,6 +560,11 @@ const mapOrderRowToOrder = (row: any): Order => {
     tabStatus = "baddelivery";
   } else if (lowerRaw === "complaints" || lowerRaw === "complaint") {
     tabStatus = "complaints";
+  } else if (
+    lowerRaw === "restromarkeddelivered" ||
+    lowerRaw === "restro marked delivered"
+  ) {
+    tabStatus = "restromarkeddelivered";
   } else if (lowerRaw === "refund") {
     tabStatus = "refund";
   }
