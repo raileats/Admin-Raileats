@@ -6,248 +6,898 @@ import { supabaseServer } from "@/lib/supabaseServer";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function cleanKey(key: any) {
-  return String(key ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
+const EXACT_HEADERS = [
+  "Restro Code",
+  "Item Code",
+  "Item Name",
+  "Item Description",
+  "Item Category",
+  "Item Cuisine",
+  "Start Time",
+  "End Time",
+  "Restro Price",
+  "Base Price",
+  "GST %",
+  "Base Price GST",
+  "Selling Price",
+  "Menu Type",
+  "Status",
+  "Menu Item Image",
+] as const;
+
+const ALLOWED_STATUSES = ["ON", "OFF", "DELETED"] as const;
+
+/*
+ * Ye values RestroMenuItems ke menu_type constraint ke according hain.
+ * Blank Menu Type allowed rakha gaya hai kyunki existing records me null ho sakta hai.
+ */
+const ALLOWED_MENU_TYPES = [
+  "Thalis",
+  "Combos",
+  "Rice And Biryani",
+  "Roti Paratha",
+  "Breakfast",
+  "Snacks",
+  "Sweets",
+] as const;
+
+type ExactHeader = (typeof EXACT_HEADERS)[number];
+
+type ValidatedRow = {
+  rowNumber: number;
+  restroCode: number;
+  itemCode: string;
+  payload: {
+    restro_code: number;
+    item_code: string;
+    item_name: string;
+    item_description: string | null;
+    item_category: string | null;
+    item_cuisine: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    restro_price: number;
+    base_price: number;
+    gst_percent: number;
+    base_price_gst: number;
+    selling_price: number;
+    menu_type: string | null;
+    menu_type_rank: number | null;
+    status: "ON" | "OFF" | "DELETED";
+    menu_item_image: string | null;
+    updated_at: string;
+  };
+};
+
+function cleanText(value: unknown) {
+  if (value === undefined || value === null) return "";
+  return String(value).trim();
 }
 
-function value(row: any, names: string[]) {
-  const map: any = {};
-  Object.keys(row || {}).forEach((k) => {
-    map[cleanKey(k)] = row[k];
-  });
+function normalizeHeader(value: unknown) {
+  return cleanText(value).replace(/^\uFEFF/, "");
+}
 
-  for (const name of names) {
-    const found = map[cleanKey(name)];
-    if (found !== undefined && found !== null && String(found).trim() !== "") return found;
+function isDigitsOnly(value: unknown) {
+  return /^\d+$/.test(cleanText(value));
+}
+
+function parseRequiredNumber(
+  value: unknown,
+  rowNumber: number,
+  columnName: string,
+  errors: string[]
+) {
+  const raw = cleanText(value);
+
+  if (!raw) {
+    errors.push(`Row ${rowNumber}: ${columnName} is required`);
+    return null;
   }
 
-  return "";
-}
+  /*
+   * Comma remove karte hain, taaki 1,000 bhi numeric maana ja sake.
+   * Currency symbols, percentage symbols aur text allowed nahi hai.
+   */
+  const normalized = raw.replace(/,/g, "");
 
-function text(v: any) {
-  if (v === undefined || v === null) return "";
-  return String(v).trim();
-}
-
-function num(v: any) {
-  if (v === undefined || v === null || String(v).trim() === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function statusValue(v: any) {
-  const s = text(v).toUpperCase();
-  if (s === "OFF" || s === "DEACTIVE" || s === "INACTIVE") return "OFF";
-  if (s === "DELETED") return "DELETED";
-  return "ON";
-}
-
-function excelTime(v: any) {
-  if (v === undefined || v === null || String(v).trim() === "") return null;
-
-  if (typeof v === "number") {
-    const totalSeconds = Math.round(v * 24 * 60 * 60);
-    const hh = String(Math.floor(totalSeconds / 3600) % 24).padStart(2, "0");
-    const mm = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
-    const ss = String(totalSeconds % 60).padStart(2, "0");
-    return `${hh}:${mm}:${ss}`;
+  if (!/^-?(?:\d+|\d*\.\d+)$/.test(normalized)) {
+    errors.push(
+      `Row ${rowNumber}: ${columnName} must be numeric. Received "${raw}"`
+    );
+    return null;
   }
 
-  const s = text(v);
-  if (/^\d{1,2}:\d{2}$/.test(s)) return `${s}:00`;
-  if (/^\d{1,2}:\d{2}:\d{2}$/.test(s)) return s;
-  return s;
+  const numberValue = Number(normalized);
+
+  if (!Number.isFinite(numberValue)) {
+    errors.push(
+      `Row ${rowNumber}: ${columnName} must be a valid number`
+    );
+    return null;
+  }
+
+  if (numberValue < 0) {
+    errors.push(
+      `Row ${rowNumber}: ${columnName} cannot be negative`
+    );
+    return null;
+  }
+
+  return numberValue;
 }
 
-function safeMenuType(v: any) {
-  const s = text(v);
+function parseStatus(
+  value: unknown,
+  rowNumber: number,
+  errors: string[]
+): "ON" | "OFF" | "DELETED" | null {
+  const status = cleanText(value).toUpperCase();
 
-  const allowed = [
-    "Thalis",
-    "Combos",
-    "Rice And Biryani",
-    "Roti Paratha",
-    "Breakfast",
-    "Snacks",
-    "Sweets",
-  ];
+  if (!status) {
+    errors.push(`Row ${rowNumber}: Status is required`);
+    return null;
+  }
 
-  const found = allowed.find((x) => x.toLowerCase() === s.toLowerCase());
-  return found || null;
+  if (!ALLOWED_STATUSES.includes(status as any)) {
+    errors.push(
+      `Row ${rowNumber}: Status must be ON, OFF or DELETED. Received "${cleanText(
+        value
+      )}"`
+    );
+    return null;
+  }
+
+  return status as "ON" | "OFF" | "DELETED";
 }
 
-function menuRank(menuType: any) {
-  const s = text(menuType).toLowerCase();
+function parseMenuType(
+  value: unknown,
+  rowNumber: number,
+  errors: string[]
+) {
+  const raw = cleanText(value);
 
-  if (s.includes("breakfast")) return 1;
-  if (s.includes("combo")) return 2;
-  if (s.includes("thali")) return 3;
-  if (s.includes("rice")) return 4;
-  if (s.includes("biryani")) return 5;
-  if (s.includes("roti")) return 6;
-  if (s.includes("paratha")) return 7;
-  if (s.includes("snack")) return 8;
-  if (s.includes("sweet")) return 9;
-  if (s.includes("bulk")) return 10;
+  if (!raw) {
+    return null;
+  }
+
+  const matched = ALLOWED_MENU_TYPES.find(
+    (allowed) => allowed.toLowerCase() === raw.toLowerCase()
+  );
+
+  if (!matched) {
+    errors.push(
+      `Row ${rowNumber}: Menu Type must be one of ${ALLOWED_MENU_TYPES.join(
+        ", "
+      )}. Received "${raw}"`
+    );
+    return null;
+  }
+
+  return matched;
+}
+
+function menuRank(menuType: string | null) {
+  const value = cleanText(menuType).toLowerCase();
+
+  if (!value) return null;
+  if (value.includes("breakfast")) return 1;
+  if (value.includes("combo")) return 2;
+  if (value.includes("thali")) return 3;
+  if (value.includes("rice")) return 4;
+  if (value.includes("biryani")) return 5;
+  if (value.includes("roti")) return 6;
+  if (value.includes("paratha")) return 7;
+  if (value.includes("snack")) return 8;
+  if (value.includes("sweet")) return 9;
 
   return null;
+}
+
+function parseExcelTime(
+  value: unknown,
+  rowNumber: number,
+  columnName: string,
+  errors: string[]
+) {
+  if (
+    value === undefined ||
+    value === null ||
+    cleanText(value) === ""
+  ) {
+    return null;
+  }
+
+  /*
+   * Excel actual time ko decimal number ke form me read kar sakta hai.
+   */
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value < 0 || value >= 1) {
+      errors.push(
+        `Row ${rowNumber}: ${columnName} contains an invalid Excel time`
+      );
+      return null;
+    }
+
+    const totalSeconds = Math.round(value * 24 * 60 * 60);
+
+    const hours = String(
+      Math.floor(totalSeconds / 3600) % 24
+    ).padStart(2, "0");
+
+    const minutes = String(
+      Math.floor((totalSeconds % 3600) / 60)
+    ).padStart(2, "0");
+
+    const seconds = String(
+      totalSeconds % 60
+    ).padStart(2, "0");
+
+    return `${hours}:${minutes}:${seconds}`;
+  }
+
+  const raw = cleanText(value);
+
+  /*
+   * HH:MM ya HH:MM:SS accept hoga.
+   */
+  const match = raw.match(
+    /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/
+  );
+
+  if (!match) {
+    errors.push(
+      `Row ${rowNumber}: ${columnName} must be HH:MM or HH:MM:SS. Received "${raw}"`
+    );
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3] ?? "0");
+
+  if (
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59 ||
+    seconds < 0 ||
+    seconds > 59
+  ) {
+    errors.push(
+      `Row ${rowNumber}: ${columnName} contains an invalid time "${raw}"`
+    );
+    return null;
+  }
+
+  return `${String(hours).padStart(2, "0")}:${String(
+    minutes
+  ).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function validateHeaders(actualHeaders: unknown[]) {
+  const normalizedHeaders = actualHeaders.map(normalizeHeader);
+  const errors: string[] = [];
+
+  if (normalizedHeaders.length !== EXACT_HEADERS.length) {
+    errors.push(
+      `Header count is incorrect. Expected ${EXACT_HEADERS.length} headers but found ${normalizedHeaders.length}.`
+    );
+  }
+
+  const maximumLength = Math.max(
+    normalizedHeaders.length,
+    EXACT_HEADERS.length
+  );
+
+  for (let index = 0; index < maximumLength; index++) {
+    const expected = EXACT_HEADERS[index];
+    const received = normalizedHeaders[index];
+
+    if (expected !== received) {
+      errors.push(
+        `Column ${index + 1}: Expected header "${expected ?? "none"}" but found "${received ?? "missing"}".`
+      );
+    }
+  }
+
+  const duplicateHeaders = normalizedHeaders.filter(
+    (header, index) =>
+      header &&
+      normalizedHeaders.indexOf(header) !== index
+  );
+
+  if (duplicateHeaders.length) {
+    errors.push(
+      `Duplicate headers found: ${Array.from(
+        new Set(duplicateHeaders)
+      ).join(", ")}`
+    );
+  }
+
+  return errors;
+}
+
+function createRowObject(rowValues: unknown[]) {
+  const row: Record<ExactHeader, unknown> = {} as Record<
+    ExactHeader,
+    unknown
+  >;
+
+  EXACT_HEADERS.forEach((header, index) => {
+    row[header] = rowValues[index] ?? "";
+  });
+
+  return row;
+}
+
+function isCompletelyBlankRow(rowValues: unknown[]) {
+  return rowValues.every((value) => cleanText(value) === "");
 }
 
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
 
-    const restroCodeRaw = text(formData.get("restroCode"));
-    const file = formData.get("file") as File | null;
+    const selectedRestroCodeRaw = cleanText(
+      formData.get("restroCode")
+    );
 
-    const restroCode = Number(restroCodeRaw);
+    const file = formData.get("file");
 
-    if (!restroCode || Number.isNaN(restroCode)) {
-      return NextResponse.json({ ok: false, error: "Valid Restro Code required" }, { status: 400 });
-    }
-
-    if (!file) {
-      return NextResponse.json({ ok: false, error: "Excel file required" }, { status: 400 });
-    }
-
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const sheetName = workbook.SheetNames[0];
-
-    if (!sheetName) {
-      return NextResponse.json({ ok: false, error: "Excel sheet not found" }, { status: 400 });
-    }
-
-    const sheet = workbook.Sheets[sheetName];
-    const excelRows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-    if (!excelRows.length) {
-      return NextResponse.json({ ok: false, error: "Excel file is empty" }, { status: 400 });
-    }
-
-    const { data: existingRows, error: existingError } = await supabaseServer
-      .from("RestroMenuItems")
-      .select("*")
-      .eq("restro_code", restroCode);
-
-    if (existingError) {
-      return NextResponse.json({ ok: false, error: existingError.message }, { status: 500 });
-    }
-
-    const existingByItemCode = new Map<string, any>();
-    const existingByItemName = new Map<string, any>();
-
-    let maxItemCode = 0;
-
-    (existingRows || []).forEach((r: any) => {
-      const code = String(r.item_code ?? "").trim();
-      const name = String(r.item_name ?? "").trim().toLowerCase();
-
-      if (code) existingByItemCode.set(code, r);
-      if (name) existingByItemName.set(name, r);
-
-      const n = Number(r.item_code);
-      if (Number.isFinite(n) && n > maxItemCode) maxItemCode = n;
-    });
-
-    let inserted = 0;
-    let updated = 0;
-    const errors: string[] = [];
-
-    for (let i = 0; i < excelRows.length; i++) {
-      const row = excelRows[i];
-      const rowNo = i + 2;
-
-      const itemName = text(value(row, ["item_name", "Item Name", "ItemName", "itemName"]));
-
-      if (!itemName) {
-        errors.push(`Row ${rowNo}: item_name required`);
-        continue;
-      }
-
-      let itemCode = text(value(row, ["item_code", "Item Code", "ItemCode", "itemId", "item_id"]));
-
-      let existing: any = null;
-
-      if (itemCode && existingByItemCode.has(itemCode)) {
-        existing = existingByItemCode.get(itemCode);
-      } else if (existingByItemName.has(itemName.toLowerCase())) {
-        existing = existingByItemName.get(itemName.toLowerCase());
-        itemCode = String(existing.item_code ?? "");
-      }
-
-      if (!itemCode) {
-        maxItemCode += 1;
-        itemCode = String(maxItemCode);
-      }
-
-      const basePrice = num(value(row, ["base_price", "Base Price", "BasePrice", "basePrice"]));
-      const gstPercent = num(value(row, ["gst_percent", "GST %", "GST", "GST Percent", "GstPercent", "basePriceGstRate"]));
-      const basePriceGst = num(value(row, ["base_price_gst", "Base Price GST", "basePriceGst"]));
-
-      let sellingPrice = num(value(row, ["selling_price", "Selling Price", "SellingPrice", "sellingPrice"]));
-
-      if (sellingPrice === null && basePrice !== null && gstPercent !== null) {
-        sellingPrice = Number((basePrice + (basePrice * gstPercent) / 100).toFixed(2));
-      }
-
-      const rawMenuType = text(value(row, ["menu_type", "Menu Type", "MenuType", "typeName"]));
-      const menuType = safeMenuType(rawMenuType);
-
-      const payload: any = {
-        restro_code: restroCode,
-        item_code: itemCode,
-        item_name: itemName,
-        item_description: text(value(row, ["item_description", "Item Description", "Description", "itemDescription"])) || null,
-        item_category: text(value(row, ["item_category", "Item Category", "Category", "categoryType"])) || null,
-        item_cuisine: text(value(row, ["item_cuisine", "Item Cuisine", "Cuisine", "cuisineName"])) || null,
-        menu_type: menuType,
-        start_time: excelTime(value(row, ["start_time", "Start Time", "StartTime", "itemStartTime"])),
-        end_time: excelTime(value(row, ["end_time", "End Time", "EndTime", "itemEndTime"])),
-        restro_price: num(value(row, ["restro_price", "Restro Price", "RestroPrice", "Vendor Price", "VendorPrice"])),
-        base_price: basePrice,
-        gst_percent: gstPercent,
-        selling_price: sellingPrice,
-        status: statusValue(value(row, ["status", "Status"])),
-        base_price_gst: basePriceGst,
-        menu_type_rank: menuRank(rawMenuType),
-        menu_item_image: text(value(row, ["menu_item_image", "Menu Item Image", "image"])) || null,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (existing?.id) {
-        const { error } = await supabaseServer
-          .from("RestroMenuItems")
-          .update(payload)
-          .eq("id", existing.id);
-
-        if (error) errors.push(`Row ${rowNo}: ${error.message}`);
-        else updated++;
-      } else {
-        const { error } = await supabaseServer
-          .from("RestroMenuItems")
-          .insert({
-            ...payload,
-            created_at: new Date().toISOString(),
-          });
-
-        if (error) errors.push(`Row ${rowNo}: ${error.message}`);
-        else inserted++;
-      }
-    }
-
-    if (errors.length) {
+    if (!isDigitsOnly(selectedRestroCodeRaw)) {
       return NextResponse.json(
         {
           ok: false,
-          error: errors.slice(0, 10).join(" | "),
-          inserted,
-          updated,
+          error: "Restro Code must contain numbers only",
         },
         { status: 400 }
+      );
+    }
+
+    const selectedRestroCode = Number(
+      selectedRestroCodeRaw
+    );
+
+    if (
+      !Number.isSafeInteger(selectedRestroCode) ||
+      selectedRestroCode <= 0
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Valid Restro Code required",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!(file instanceof File)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Excel or CSV file required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const fileName = file.name.toLowerCase();
+
+    if (
+      !fileName.endsWith(".xlsx") &&
+      !fileName.endsWith(".xls") &&
+      !fileName.endsWith(".csv")
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Only .xlsx, .xls or .csv file is allowed",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (file.size <= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Uploaded file is empty",
+        },
+        { status: 400 }
+      );
+    }
+
+    /*
+     * Large accidental file upload se protection.
+     * 10 MB se badi menu file reject hogi.
+     */
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Menu file is too large. Maximum allowed size is 10 MB",
+        },
+        { status: 400 }
+      );
+    }
+
+    const buffer = Buffer.from(
+      await file.arrayBuffer()
+    );
+
+    let workbook: XLSX.WorkBook;
+
+    try {
+      workbook = XLSX.read(buffer, {
+        type: "buffer",
+        cellDates: false,
+        raw: true,
+      });
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Unable to read the uploaded Excel/CSV file",
+        },
+        { status: 400 }
+      );
+    }
+
+    const sheetName = workbook.SheetNames[0];
+
+    if (!sheetName) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Excel sheet not found",
+        },
+        { status: 400 }
+      );
+    }
+
+    const sheet = workbook.Sheets[sheetName];
+
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(
+      sheet,
+      {
+        header: 1,
+        defval: "",
+        raw: true,
+        blankrows: false,
+      }
+    );
+
+    if (!rawRows.length) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Excel file is empty",
+        },
+        { status: 400 }
+      );
+    }
+
+    const actualHeaders = rawRows[0] ?? [];
+    const headerErrors = validateHeaders(actualHeaders);
+
+    if (headerErrors.length) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: [
+            "Invalid menu file headers.",
+            ...headerErrors.slice(0, 20),
+            "",
+            `Required header order: ${EXACT_HEADERS.join(
+              " | "
+            )}`,
+          ].join("\n"),
+        },
+        { status: 400 }
+      );
+    }
+
+    const dataRows = rawRows
+      .slice(1)
+      .filter((row) => !isCompletelyBlankRow(row));
+
+    if (!dataRows.length) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "No menu rows found in the file",
+        },
+        { status: 400 }
+      );
+    }
+
+    const validationErrors: string[] = [];
+    const validatedRows: ValidatedRow[] = [];
+    const fileItemCodes = new Set<string>();
+
+    /*
+     * IMPORTANT:
+     * Is loop me Supabase write nahi hoti.
+     * Pehle complete file validate hoti hai.
+     */
+    for (
+      let index = 0;
+      index < dataRows.length;
+      index++
+    ) {
+      const values = dataRows[index];
+      const rowNumber = index + 2;
+      const row = createRowObject(values);
+
+      const rowErrorCountBefore =
+        validationErrors.length;
+
+      const rowRestroCodeRaw = cleanText(
+        row["Restro Code"]
+      );
+
+      if (!rowRestroCodeRaw) {
+        validationErrors.push(
+          `Row ${rowNumber}: Restro Code is required`
+        );
+      } else if (!isDigitsOnly(rowRestroCodeRaw)) {
+        validationErrors.push(
+          `Row ${rowNumber}: Restro Code must be numeric. Received "${rowRestroCodeRaw}"`
+        );
+      }
+
+      const rowRestroCode = Number(
+        rowRestroCodeRaw
+      );
+
+      if (
+        rowRestroCodeRaw &&
+        isDigitsOnly(rowRestroCodeRaw) &&
+        (!Number.isSafeInteger(rowRestroCode) ||
+          rowRestroCode <= 0)
+      ) {
+        validationErrors.push(
+          `Row ${rowNumber}: Restro Code is invalid`
+        );
+      }
+
+      if (
+        Number.isSafeInteger(rowRestroCode) &&
+        rowRestroCode > 0 &&
+        rowRestroCode !== selectedRestroCode
+      ) {
+        validationErrors.push(
+          `Row ${rowNumber}: File Restro Code ${rowRestroCode} does not match selected Restro Code ${selectedRestroCode}`
+        );
+      }
+
+      const itemCode = cleanText(
+        row["Item Code"]
+      );
+
+      if (!itemCode) {
+        validationErrors.push(
+          `Row ${rowNumber}: Item Code is required`
+        );
+      } else if (!isDigitsOnly(itemCode)) {
+        validationErrors.push(
+          `Row ${rowNumber}: Item Code must be numeric. Received "${itemCode}"`
+        );
+      } else {
+        const itemCodeNumber = Number(itemCode);
+
+        if (
+          !Number.isSafeInteger(itemCodeNumber) ||
+          itemCodeNumber <= 0
+        ) {
+          validationErrors.push(
+            `Row ${rowNumber}: Item Code must be a positive whole number`
+          );
+        }
+
+        if (fileItemCodes.has(itemCode)) {
+          validationErrors.push(
+            `Row ${rowNumber}: Duplicate Item Code ${itemCode} found in the file`
+          );
+        } else {
+          fileItemCodes.add(itemCode);
+        }
+      }
+
+      const itemName = cleanText(
+        row["Item Name"]
+      );
+
+      if (!itemName) {
+        validationErrors.push(
+          `Row ${rowNumber}: Item Name is required`
+        );
+      }
+
+      const startTime = parseExcelTime(
+        row["Start Time"],
+        rowNumber,
+        "Start Time",
+        validationErrors
+      );
+
+      const endTime = parseExcelTime(
+        row["End Time"],
+        rowNumber,
+        "End Time",
+        validationErrors
+      );
+
+      const restroPrice = parseRequiredNumber(
+        row["Restro Price"],
+        rowNumber,
+        "Restro Price",
+        validationErrors
+      );
+
+      const basePrice = parseRequiredNumber(
+        row["Base Price"],
+        rowNumber,
+        "Base Price",
+        validationErrors
+      );
+
+      const gstPercent = parseRequiredNumber(
+        row["GST %"],
+        rowNumber,
+        "GST %",
+        validationErrors
+      );
+
+      const basePriceGst = parseRequiredNumber(
+        row["Base Price GST"],
+        rowNumber,
+        "Base Price GST",
+        validationErrors
+      );
+
+      const sellingPrice = parseRequiredNumber(
+        row["Selling Price"],
+        rowNumber,
+        "Selling Price",
+        validationErrors
+      );
+
+      if (
+        gstPercent !== null &&
+        gstPercent > 100
+      ) {
+        validationErrors.push(
+          `Row ${rowNumber}: GST % cannot be greater than 100`
+        );
+      }
+
+      const status = parseStatus(
+        row["Status"],
+        rowNumber,
+        validationErrors
+      );
+
+      const menuType = parseMenuType(
+        row["Menu Type"],
+        rowNumber,
+        validationErrors
+      );
+
+      /*
+       * Is row me koi error hua ho to payload prepare nahi hoga.
+       */
+      if (
+        validationErrors.length >
+        rowErrorCountBefore
+      ) {
+        continue;
+      }
+
+      if (
+        restroPrice === null ||
+        basePrice === null ||
+        gstPercent === null ||
+        basePriceGst === null ||
+        sellingPrice === null ||
+        status === null
+      ) {
+        continue;
+      }
+
+      validatedRows.push({
+        rowNumber,
+        restroCode: rowRestroCode,
+        itemCode,
+        payload: {
+          restro_code: rowRestroCode,
+          item_code: itemCode,
+          item_name: itemName,
+
+          item_description:
+            cleanText(row["Item Description"]) ||
+            null,
+
+          item_category:
+            cleanText(row["Item Category"]) ||
+            null,
+
+          item_cuisine:
+            cleanText(row["Item Cuisine"]) ||
+            null,
+
+          start_time: startTime,
+          end_time: endTime,
+
+          restro_price: restroPrice,
+          base_price: basePrice,
+          gst_percent: gstPercent,
+          base_price_gst: basePriceGst,
+          selling_price: sellingPrice,
+
+          menu_type: menuType,
+          menu_type_rank: menuRank(menuType),
+
+          status,
+
+          menu_item_image:
+            cleanText(row["Menu Item Image"]) ||
+            null,
+
+          updated_at: new Date().toISOString(),
+        },
+      });
+    }
+
+    /*
+     * Ek bhi invalid row hui to Supabase me koi change nahi hoga.
+     */
+    if (validationErrors.length) {
+      const maximumErrorsToShow = 50;
+      const shownErrors = validationErrors.slice(
+        0,
+        maximumErrorsToShow
+      );
+
+      const remainingErrors =
+        validationErrors.length -
+        shownErrors.length;
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: [
+            `Menu file validation failed. ${validationErrors.length} error(s) found. No rows were uploaded.`,
+            "",
+            ...shownErrors,
+            ...(remainingErrors > 0
+              ? [
+                  "",
+                  `And ${remainingErrors} more error(s).`,
+                ]
+              : []),
+          ].join("\n"),
+          totalRows: dataRows.length,
+          validRows: validatedRows.length,
+          invalidRows:
+            dataRows.length -
+            validatedRows.length,
+        },
+        { status: 400 }
+      );
+    }
+
+    /*
+     * Sirf required restaurant ke existing item codes load honge.
+     */
+    const { data: existingRows, error: existingError } =
+      await supabaseServer
+        .from("RestroMenuItems")
+        .select("id,item_code")
+        .eq("restro_code", selectedRestroCode);
+
+    if (existingError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: existingError.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    const existingByItemCode = new Map<
+      string,
+      number
+    >();
+
+    for (const existingRow of existingRows ?? []) {
+      const code = cleanText(
+        existingRow.item_code
+      );
+
+      if (code && existingRow.id) {
+        existingByItemCode.set(
+          code,
+          Number(existingRow.id)
+        );
+      }
+    }
+
+    let inserted = 0;
+    let updated = 0;
+    const databaseErrors: string[] = [];
+
+    /*
+     * Validation complete hone ke baad hi writes start hoti hain.
+     */
+    for (const validatedRow of validatedRows) {
+      const existingId = existingByItemCode.get(
+        validatedRow.itemCode
+      );
+
+      if (existingId) {
+        const { error } = await supabaseServer
+          .from("RestroMenuItems")
+          .update(validatedRow.payload)
+          .eq("id", existingId)
+          .eq(
+            "restro_code",
+            selectedRestroCode
+          );
+
+        if (error) {
+          databaseErrors.push(
+            `Row ${validatedRow.rowNumber}: ${error.message}`
+          );
+        } else {
+          updated += 1;
+        }
+      } else {
+        const { data, error } = await supabaseServer
+          .from("RestroMenuItems")
+          .insert({
+            ...validatedRow.payload,
+            created_at: new Date().toISOString(),
+          })
+          .select("id,item_code")
+          .single();
+
+        if (error) {
+          databaseErrors.push(
+            `Row ${validatedRow.rowNumber}: ${error.message}`
+          );
+        } else {
+          inserted += 1;
+
+          if (data?.id) {
+            existingByItemCode.set(
+              validatedRow.itemCode,
+              Number(data.id)
+            );
+          }
+        }
+      }
+    }
+
+    if (databaseErrors.length) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: [
+            "Menu data was valid, but some database rows could not be saved.",
+            ...databaseErrors.slice(0, 30),
+          ].join("\n"),
+          inserted,
+          updated,
+          failed: databaseErrors.length,
+        },
+        { status: 500 }
       );
     }
 
@@ -255,11 +905,22 @@ export async function POST(req: Request) {
       ok: true,
       inserted,
       updated,
-      message: `Menu upload successful. Inserted: ${inserted}, Updated: ${updated}`,
+      totalRows: validatedRows.length,
+      message: [
+        "Menu uploaded successfully.",
+        `Total rows: ${validatedRows.length}`,
+        `Inserted: ${inserted}`,
+        `Updated: ${updated}`,
+      ].join("\n"),
     });
-  } catch (e: any) {
+  } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Menu upload failed" },
+      {
+        ok: false,
+        error:
+          error?.message ||
+          "Menu upload failed",
+      },
       { status: 500 }
     );
   }
