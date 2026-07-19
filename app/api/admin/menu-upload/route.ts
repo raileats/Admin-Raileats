@@ -21,6 +21,7 @@ const EXACT_HEADERS = [
   "GST %",
   "Base Price GST",
   "Selling Price",
+  "Menu Type Rank",
   "Status",
   "Menu Item Image",
 ] as const;
