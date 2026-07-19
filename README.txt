@@ -1,11 +1,27 @@
-FULL REPLACEMENT FILES
+RailEats Complaints + Refund Step 3
 
-1. app/admin/orders/page.tsx
-2. app/api/orders/route.ts
+Full replacement / new files:
 
-FIXES
-- Orders table now recognizes PPD, PREPAID, ONLINE, PAID ONLINE, UPI and similar prepaid values instead of checking only exact ONLINE.
-- Order ID, customer mobile, outlet, station and train searches now query the API.
-- Text search automatically searches in All tab and is not restricted by the default current-day date range.
-- Clicking any status tab clears applied search filters, so records show immediately without browser refresh.
-- Existing order details, status actions, realtime behavior and calculations remain unchanged.
+1. app/api/orders/complaints/route.ts
+   - GET complaint list
+   - POST raise complaint
+   - Moves Orders.Status to Complaints
+   - Preserves previous status in OrderComplaints
+   - Adds best-effort status history
+
+2. app/api/orders/complaints/[complaintId]/route.ts
+   - GET single complaint
+   - PATCH Approve / Reject
+   - Approve reuses the existing central order-status route
+   - Reject restores PreviousStatus and PreviousSubStatus
+
+3. app/api/orders/[orderId]/status/route.ts
+   - Existing logic preserved
+   - Adds Complaints normalization
+   - Automatically creates/updates OrderRefunds for prepaid
+     Cancelled / Not Delivered orders
+   - Orders.Status remains Cancelled / Not Delivered
+
+Required database tables:
+- OrderComplaints
+- OrderRefunds
