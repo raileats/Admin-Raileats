@@ -264,218 +264,289 @@ export async function GET(req: Request) {
   try {
     const supa = serviceClient;
     const { searchParams } = new URL(req.url);
-    const rawStatusFilter = String(
-  searchParams.get("status") || ""
-).trim();
 
-const normalizedStatusFilter = rawStatusFilter
-  .toLowerCase()
-  .replace(/[^a-z0-9]/g, "");
+    const rawStatusFilter = String(searchParams.get("status") || "").trim();
+    const normalizedStatusFilter = rawStatusFilter
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
 
-const statusMap: Record<string, string> = {
-  booked: "Booked",
+    const statusMap: Record<string, string> = {
+      booked: "Booked",
+      verification: "In Verification",
+      inverification: "In Verification",
+      cancellationrequest: "Cancellation Request",
+      neworder: "New Order",
+      inkitchen: "In Kitchen",
+      outfordelivery: "Out for Delivery",
+      delivered: "Delivered",
+      cancelled: "Cancelled",
+      canceled: "Cancelled",
+      notdelivered: "Not Delivered",
+      baddelivery: "Bad Delivery",
+      complaints: "Complaints",
+    };
 
-  verification: "In Verification",
-  inverification: "In Verification",
+    const dbStatus = normalizedStatusFilter
+      ? statusMap[normalizedStatusFilter] || rawStatusFilter
+      : null;
 
-  cancellationrequest: "Cancellation Request",
+    const orderId = String(searchParams.get("orderId") || "").trim();
+    const customerMobile = String(searchParams.get("customerMobile") || "")
+      .replace(/\D/g, "")
+      .slice(0, 15);
+    const outlet = String(searchParams.get("outlet") || "").trim();
+    const station = String(searchParams.get("station") || "").trim();
+    const trainNo = String(searchParams.get("trainNo") || "").trim();
+    const dateType = String(searchParams.get("dateType") || "delivery").trim();
+    const dateFrom = String(searchParams.get("dateFrom") || "").trim();
+    const dateTo = String(searchParams.get("dateTo") || "").trim();
 
-  neworder: "New Order",
+    const safeLike = (value: string) =>
+      value.replace(/[%_,]/g, "").slice(0, 100);
 
-  inkitchen: "In Kitchen",
+    const orderSelect = `
+      OrderId,
+      RestroCode,
+      RestroName,
+      StationCode,
+      StationName,
+      DeliveryDate,
+      DeliveryTime,
+      TrainNumber,
+      Coach,
+      Seat,
+      CustomerName,
+      CustomerMobile,
+      TotalAmount,
+      PaymentMode,
+      Status,
+      SubStatus,
+      CreatedAt
+    `;
 
-  outfordelivery: "Out for Delivery",
-
-  delivered: "Delivered",
-
-  cancelled: "Cancelled",
-  canceled: "Cancelled",
-
-  notdelivered: "Not Delivered",
-
-  baddelivery: "Bad Delivery",
-  complaints: "Complaints",
-  complaint: "Complaints",
-  refund: "Refund",
-};
-
-const dbStatus = normalizedStatusFilter
-  ? statusMap[normalizedStatusFilter] || rawStatusFilter
-  : null;
-
-const orderId = String(searchParams.get("orderId") || "").trim();
-const customerMobile = String(searchParams.get("customerMobile") || "")
-  .replace(/\D/g, "")
-  .slice(0, 15);
-const outlet = String(searchParams.get("outlet") || "").trim();
-const station = String(searchParams.get("station") || "").trim();
-const trainNo = String(searchParams.get("trainNo") || "").trim();
-const dateType = String(searchParams.get("dateType") || "delivery").trim();
-const dateFrom = String(searchParams.get("dateFrom") || "").trim();
-const dateTo = String(searchParams.get("dateTo") || "").trim();
-
-const safeLike = (value: string) => value.replace(/[%_,]/g, "").slice(0, 100);
-
-    // Refund is a workflow tab, not an Orders.Status. Load OrderRefunds first and
-    // merge the matching Orders rows into the same shape used by the Admin UI.
-    if (normalizedStatusFilter === "refund") {
-      let refundQuery = supa.from("OrderRefunds").select("*").order("CreatedAt", { ascending: false });
-      if (orderId) refundQuery = refundQuery.ilike("OrderId", `%${safeLike(orderId)}%`);
-      const { data: refundRows, error: refundError } = await refundQuery;
-      if (refundError) return NextResponse.json({ error: refundError.message || "refunds_fetch_failed" }, { status: 500 });
-      const ids = (refundRows || []).map((r: any) => String(r.OrderId || "")).filter(Boolean);
-      let orderRows: any[] = [];
-      if (ids.length) {
-        const { data, error } = await supa.from("Orders").select("*").in("OrderId", ids);
-        if (error) return NextResponse.json({ error: error.message || "refund_orders_fetch_failed" }, { status: 500 });
-        orderRows = data || [];
+    const applyCommonOrderFilters = (query: any) => {
+      if (orderId) {
+        query = query.ilike("OrderId", `%${safeLike(orderId)}%`);
       }
-      const byId = new Map(orderRows.map((r: any) => [String(r.OrderId), r]));
-      const orders = (refundRows || []).map((refund: any) => {
-        const row: any = byId.get(String(refund.OrderId)) || {};
-        return { id: String(refund.OrderId || ""), status: "Refund", restroCode: row.RestroCode, restroName: row.RestroName, stationCode: row.StationCode, stationName: row.StationName, deliveryDate: row.DeliveryDate, deliveryTime: row.DeliveryTime, trainNumber: row.TrainNumber, coach: row.Coach, seat: row.Seat, customerName: row.CustomerName, customerMobile: row.CustomerMobile, totalAmount: Number(row.TotalAmount ?? refund.PaidAmount ?? refund.RefundAmount ?? 0), paymentMode: row.PaymentMode ?? "PPD", CreatedAt: refund.CreatedAt ?? row.CreatedAt ?? null, history: [], ...refund };
+
+      if (customerMobile) {
+        query = query.ilike("CustomerMobile", `%${customerMobile}%`);
+      }
+
+      if (outlet) {
+        const safeOutlet = safeLike(outlet);
+        const outletFilters = [`RestroName.ilike.%${safeOutlet}%`];
+        const outletDigits = safeOutlet.replace(/\D/g, "");
+
+        if (outletDigits) {
+          outletFilters.push(`RestroCode.eq.${Number(outletDigits)}`);
+        }
+
+        query = query.or(outletFilters.join(","));
+      }
+
+      if (station) {
+        const safeStation = safeLike(station);
+        query = query.or(
+          `StationCode.ilike.%${safeStation}%,StationName.ilike.%${safeStation}%`,
+        );
+      }
+
+      if (trainNo) {
+        query = query.ilike("TrainNumber", `%${safeLike(trainNo)}%`);
+      }
+
+      if (dateFrom || dateTo) {
+        if (dateType === "booking") {
+          if (dateFrom) query = query.gte("CreatedAt", dateFrom);
+          if (dateTo) query = query.lte("CreatedAt", dateTo);
+        } else {
+          const fromDate = dateFrom.slice(0, 10);
+          const toDate = dateTo.slice(0, 10);
+          if (fromDate) query = query.gte("DeliveryDate", fromDate);
+          if (toDate) query = query.lte("DeliveryDate", toDate);
+        }
+      }
+
+      return query;
+    };
+
+    const mapOrder = (row: any, extra: Record<string, any> = {}) => ({
+      id: String(row.OrderId ?? ""),
+      status: String(row.Status || "booked"),
+      restroCode: row.RestroCode,
+      restroName: row.RestroName,
+      stationCode: row.StationCode,
+      stationName: row.StationName,
+      deliveryDate: row.DeliveryDate,
+      deliveryTime: row.DeliveryTime,
+      trainNumber: row.TrainNumber,
+      coach: row.Coach,
+      seat: row.Seat,
+      customerName: row.CustomerName,
+      customerMobile: row.CustomerMobile,
+      totalAmount: Number(row.TotalAmount ?? 0),
+      paymentMode: row.PaymentMode ?? "COD",
+      subStatus: row.SubStatus ?? null,
+      CreatedAt: row.CreatedAt ?? null,
+      history: [] as any[],
+      ...extra,
+    });
+
+    /* ================= REFUND TAB ================= */
+    if (normalizedStatusFilter === "refund") {
+      let refundQuery = supa
+        .from("OrderRefunds")
+        .select("*")
+        .order("CreatedAt", { ascending: false });
+
+      const { data: refundRows, error: refundError } = await refundQuery;
+
+      if (refundError) {
+        console.error("OrderRefunds GET error", refundError);
+        return NextResponse.json(
+          { ok: false, error: "refunds_fetch_failed", details: refundError.message },
+          { status: 500 },
+        );
+      }
+
+      const refundOrderIds = Array.from(
+        new Set(
+          (refundRows || [])
+            .map((row: any) => String(row.OrderId || "").trim())
+            .filter(Boolean),
+        ),
+      );
+
+      if (refundOrderIds.length === 0) {
+        return NextResponse.json({ ok: true, orders: [] });
+      }
+
+      let ordersQuery = supa
+        .from("Orders")
+        .select(orderSelect)
+        .in("OrderId", refundOrderIds)
+        .order("CreatedAt", { ascending: false });
+
+      ordersQuery = applyCommonOrderFilters(ordersQuery);
+
+      const { data: orderRows, error: orderError } = await ordersQuery;
+
+      if (orderError) {
+        console.error("Refund Orders GET error", orderError);
+        return NextResponse.json(
+          { ok: false, error: "orders_fetch_failed", details: orderError.message },
+          { status: 500 },
+        );
+      }
+
+      const orderById = new Map<string, any>();
+      (orderRows || []).forEach((row: any) => {
+        orderById.set(String(row.OrderId || ""), row);
       });
+
+      const orders = (refundRows || [])
+        .map((refund: any) => {
+          const linkedOrder = orderById.get(String(refund.OrderId || ""));
+          if (!linkedOrder) return null;
+
+          return mapOrder(
+            { ...linkedOrder, Status: "Refund" },
+            {
+              ...refund,
+              RefundId: refund.RefundId ?? refund.id ?? null,
+              RefundNo: refund.RefundNo ?? null,
+              RefundStatus: refund.RefundStatus ?? "Pending",
+              RefundAmount: Number(
+                refund.RefundAmount ?? refund.PaidAmount ?? linkedOrder.TotalAmount ?? 0,
+              ),
+              PaidAmount: Number(
+                refund.PaidAmount ?? linkedOrder.TotalAmount ?? 0,
+              ),
+              OrderStatus: linkedOrder.Status,
+              OrderSubStatus: linkedOrder.SubStatus,
+            },
+          );
+        })
+        .filter(Boolean);
+
       return NextResponse.json({ ok: true, orders });
     }
 
-   let query = supa
-  .from("Orders")
-  .select(`
-    OrderId,
-    RestroCode,
-    RestroName,
-    StationCode,
-    StationName,
-    DeliveryDate,
-    DeliveryTime,
-    TrainNumber,
-    Coach,
-    Seat,
-    CustomerName,
-    CustomerMobile,
-    TotalAmount,
-    PaymentMode,
-    Status,
-    SubStatus,
-    CreatedAt
-  `)
-  .order("CreatedAt", { ascending: false });
-    if (
-  normalizedStatusFilter &&
-  normalizedStatusFilter !== "all"
-) {
-  if (normalizedStatusFilter === "baddelivery") {
-    query = query
-      .eq("Status", "Delivered")
-      .eq("SubStatus", "Bad Delivery");
-  } else if (dbStatus) {
-    query = query.eq("Status", dbStatus);
-  }
-}
+    /* ================= NORMAL + COMPLAINT TABS ================= */
+    let query = supa
+      .from("Orders")
+      .select(orderSelect)
+      .order("CreatedAt", { ascending: false });
 
-    if (orderId) {
-      query = query.ilike("OrderId", `%${safeLike(orderId)}%`);
-    }
-
-    if (customerMobile) {
-      query = query.ilike("CustomerMobile", `%${customerMobile}%`);
-    }
-
-    if (outlet) {
-      const safeOutlet = safeLike(outlet);
-      const outletFilters = [
-        `RestroName.ilike.%${safeOutlet}%`,
-      ];
-      const outletDigits = safeOutlet.replace(/\D/g, "");
-      if (outletDigits) {
-        outletFilters.push(`RestroCode.eq.${Number(outletDigits)}`);
-      }
-      query = query.or(outletFilters.join(","));
-    }
-
-    if (station) {
-      const safeStation = safeLike(station);
-      query = query.or(
-        `StationCode.ilike.%${safeStation}%,StationName.ilike.%${safeStation}%`,
-      );
-    }
-
-    if (trainNo) {
-      query = query.ilike("TrainNumber", `%${safeLike(trainNo)}%`);
-    }
-
-    if (dateFrom || dateTo) {
-      if (dateType === "booking") {
-        if (dateFrom) query = query.gte("CreatedAt", dateFrom);
-        if (dateTo) query = query.lte("CreatedAt", dateTo);
-      } else {
-        const fromDate = dateFrom.slice(0, 10);
-        const toDate = dateTo.slice(0, 10);
-        if (fromDate) query = query.gte("DeliveryDate", fromDate);
-        if (toDate) query = query.lte("DeliveryDate", toDate);
+    if (normalizedStatusFilter && normalizedStatusFilter !== "all") {
+      if (normalizedStatusFilter === "baddelivery") {
+        query = query
+          .eq("Status", "Delivered")
+          .eq("SubStatus", "Bad Delivery");
+      } else if (dbStatus) {
+        query = query.eq("Status", dbStatus);
       }
     }
+
+    query = applyCommonOrderFilters(query);
 
     const { data, error } = await query;
 
     if (error) {
       console.error("Orders GET error", error);
-      return NextResponse.json({ error: "orders_fetch_failed" }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: "orders_fetch_failed", details: error.message },
+        { status: 500 },
+      );
     }
 
-   const orders = (data || []).map((row: any) => ({
-  id: row.OrderId as string,
-  status: (row.Status || "booked") as string,
-  restroCode: row.RestroCode,
-  restroName: row.RestroName,
-  stationCode: row.StationCode,
-  stationName: row.StationName,
-  deliveryDate: row.DeliveryDate,
-  deliveryTime: row.DeliveryTime,
-  trainNumber: row.TrainNumber,
-  coach: row.Coach,
-  seat: row.Seat,
-  customerName: row.CustomerName,
-  customerMobile: row.CustomerMobile,
-  totalAmount: Number(row.TotalAmount ?? 0),
-  paymentMode: row.PaymentMode ?? "COD",
-  CreatedAt: row.CreatedAt ?? null,
-  history: [] as any[],
-}));
-
-    return NextResponse.json({ ok: true, orders });
-  } catch (err) {
-    console.error("orders.GET error", err);
-    return NextResponse.json({ error: "server_error" }, { status: 500 });
-  }
     let complaintByOrder = new Map<string, any>();
+
     if (normalizedStatusFilter === "complaints") {
-      const ids = (data || []).map((row: any) => String(row.OrderId || "")).filter(Boolean);
-      if (ids.length) {
-        const { data: complaintRows } = await supa.from("OrderComplaints").select("*").in("OrderId", ids).eq("ComplaintStatus", "Pending").order("CreatedAt", { ascending: false });
-        (complaintRows || []).forEach((row: any) => { if (!complaintByOrder.has(String(row.OrderId))) complaintByOrder.set(String(row.OrderId), row); });
+      const ids = (data || [])
+        .map((row: any) => String(row.OrderId || "").trim())
+        .filter(Boolean);
+
+      if (ids.length > 0) {
+        const { data: complaintRows, error: complaintError } = await supa
+          .from("OrderComplaints")
+          .select("*")
+          .in("OrderId", ids)
+          .eq("ComplaintStatus", "Pending")
+          .order("CreatedAt", { ascending: false });
+
+        if (complaintError) {
+          console.error("OrderComplaints GET error", complaintError);
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "complaints_fetch_failed",
+              details: complaintError.message,
+            },
+            { status: 500 },
+          );
+        }
+
+        (complaintRows || []).forEach((row: any) => {
+          const key = String(row.OrderId || "");
+          if (key && !complaintByOrder.has(key)) {
+            complaintByOrder.set(key, row);
+          }
+        });
       }
     }
 
-    const orders = (data || []).map((row: any) => ({
-  id: row.OrderId as string,
-  status: (row.Status || "booked") as string,
-  restroCode: row.RestroCode,
-  restroName: row.RestroName,
-  stationCode: row.StationCode,
-  stationName: row.StationName,
-  deliveryDate: row.DeliveryDate,
-  deliveryTime: row.DeliveryTime,
-  trainNumber: row.TrainNumber,
-  coach: row.Coach,
-  seat: row.Seat,
-  customerName: row.CustomerName,
-  customerMobile: row.CustomerMobile,
-  totalAmount: Number(row.TotalAmount ?? 0),
-  paymentMode: row.PaymentMode ?? "COD",
-  CreatedAt: row.CreatedAt ?? null,
-  history: [] as any[],
-  ...(complaintByOrder.get(String(row.OrderId)) || {}),
-}));
+    const orders = (data || []).map((row: any) =>
+      mapOrder(row, complaintByOrder.get(String(row.OrderId || "")) || {}),
+    );
 
+    return NextResponse.json({ ok: true, orders });
+  } catch (err: any) {
+    console.error("orders.GET error", err);
+    return NextResponse.json(
+      { ok: false, error: "server_error", details: err?.message || null },
+      { status: 500 },
+    );
+  }
 }
