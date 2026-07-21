@@ -1,81 +1,184 @@
 // lib/supabaseServer.ts
 
-import { createClient } from "@supabase/supabase-js";
+import "server-only";
+
+import {
+  createClient,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+/* =========================================================
+   ENVIRONMENT
+========================================================= */
 
-if (!SUPABASE_URL) {
-  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL");
-}
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  "";
 
-if (!SUPABASE_ANON_KEY) {
-  throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY");
-}
+const SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  "";
 
-if (!SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
-}
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  "";
 
-/* Admin-level client: bypasses RLS */
-export const serviceClient = createClient(
-  SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  }
-);
-
-/* Compatibility alias */
-export const supabaseServer = serviceClient;
-
-/* Cookie-aware anon client */
-export function getServerClient() {
-  const cookieStore = cookies();
-
-  const access_token = cookieStore.get("sb-access-token")?.value;
-  const refresh_token = cookieStore.get("sb-refresh-token")?.value;
-
-  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: {
-      headers: access_token
-        ? {
-            Authorization: `Bearer ${access_token}`,
-          }
-        : {},
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-
-  if (access_token && refresh_token) {
-    client.auth.setSession({
-      access_token,
-      refresh_token,
-    });
+function requireEnvironment(
+  name: string,
+  value: string,
+) {
+  if (!value) {
+    throw new Error(
+      `Missing required environment variable: ${name}`,
+    );
   }
 
-  return client;
+  return value;
 }
 
-/* Simple anon client */
-export function createAnonClient() {
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
+const SERVER_SUPABASE_URL =
+  requireEnvironment(
+    "SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL",
+    SUPABASE_URL,
+  );
+
+const SERVER_SERVICE_ROLE_KEY =
+  requireEnvironment(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    SUPABASE_SERVICE_ROLE_KEY,
+  );
+
+/* =========================================================
+   SHARED CLIENT OPTIONS
+========================================================= */
+
+const SERVER_AUTH_OPTIONS = {
+  persistSession: false,
+  autoRefreshToken: false,
+  detectSessionInUrl: false,
+} as const;
+
+/* =========================================================
+   SERVICE-ROLE CLIENT
+   - Server only
+   - Bypasses RLS
+   - Used by admin APIs, cron jobs and OrderJourney helper
+========================================================= */
+
+export const serviceClient: SupabaseClient =
+  createClient(
+    SERVER_SUPABASE_URL,
+    SERVER_SERVICE_ROLE_KEY,
+    {
+      auth: SERVER_AUTH_OPTIONS,
+      global: {
+        headers: {
+          "X-Client-Info":
+            "raileats-server-service-role",
+        },
+      },
     },
-  });
+  );
+
+/*
+ * Existing imports compatibility:
+ *
+ * import { supabaseServer } from "@/lib/supabaseServer";
+ */
+export const supabaseServer =
+  serviceClient;
+
+/* =========================================================
+   CREATE FRESH SERVICE CLIENT
+   Useful when a route needs an isolated client instance.
+========================================================= */
+
+export function createServiceClient(): SupabaseClient {
+  return createClient(
+    SERVER_SUPABASE_URL,
+    SERVER_SERVICE_ROLE_KEY,
+    {
+      auth: SERVER_AUTH_OPTIONS,
+      global: {
+        headers: {
+          "X-Client-Info":
+            "raileats-server-service-role",
+        },
+      },
+    },
+  );
 }
 
-export default supabaseServer;
+/* =========================================================
+   COOKIE-AWARE USER CLIENT
+   Uses anon key + current user access token.
+========================================================= */
+
+export function getServerClient(): SupabaseClient {
+  const anonKey =
+    requireEnvironment(
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY",
+      SUPABASE_ANON_KEY,
+    );
+
+  const cookieStore =
+    cookies();
+
+  const accessToken =
+    cookieStore
+      .get("sb-access-token")
+      ?.value ||
+    "";
+
+  return createClient(
+    SERVER_SUPABASE_URL,
+    anonKey,
+    {
+      auth: SERVER_AUTH_OPTIONS,
+      global: {
+        headers: accessToken
+          ? {
+              Authorization:
+                `Bearer ${accessToken}`,
+              "X-Client-Info":
+                "raileats-server-user",
+            }
+          : {
+              "X-Client-Info":
+                "raileats-server-anon",
+            },
+      },
+    },
+  );
+}
+
+/* =========================================================
+   SIMPLE ANON CLIENT
+========================================================= */
+
+export function createAnonClient(): SupabaseClient {
+  const anonKey =
+    requireEnvironment(
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY",
+      SUPABASE_ANON_KEY,
+    );
+
+  return createClient(
+    SERVER_SUPABASE_URL,
+    anonKey,
+    {
+      auth: SERVER_AUTH_OPTIONS,
+      global: {
+        headers: {
+          "X-Client-Info":
+            "raileats-server-anon",
+        },
+      },
+    },
+  );
+}
+
+export default serviceClient;
