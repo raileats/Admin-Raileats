@@ -654,6 +654,152 @@ const formatAdminDateTime = (value: any) => {
   });
 };
 
+
+type JourneyStageConfig = {
+  prefix: string;
+  label: string;
+};
+
+const ORDER_JOURNEY_LOG_STAGES: JourneyStageConfig[] = [
+  { prefix: "Booked", label: "Booked" },
+  { prefix: "InVerification", label: "In Verification" },
+  { prefix: "CancellationRequest", label: "Cancellation Request" },
+  { prefix: "NewOrder", label: "New Order" },
+  { prefix: "InKitchen", label: "In Kitchen" },
+  { prefix: "OutForDelivery", label: "Out for Delivery" },
+  { prefix: "RestroMarkedDelivered", label: "Restro Marked Delivered" },
+  { prefix: "Complaints", label: "Complaints" },
+  { prefix: "Delivered", label: "Delivered" },
+  { prefix: "Cancelled", label: "Cancelled" },
+  { prefix: "NotDelivered", label: "Not Delivered" },
+  { prefix: "BadDelivery", label: "Bad Delivery" },
+  { prefix: "PartialDelivery", label: "Partial Delivery" },
+];
+
+const buildJourneyChangedAt = (
+  dateValue: any,
+  timeValue: any,
+  updateValue: any,
+) => {
+  const updateText = String(updateValue ?? "").trim();
+
+  if (updateText && updateText.includes("T")) {
+    return updateText;
+  }
+
+  const dateText = String(dateValue ?? "").trim();
+  const timeText = String(timeValue ?? "").trim();
+
+  if (dateText && timeText) {
+    return `${dateText}T${timeText}+05:30`;
+  }
+
+  if (dateText) {
+    return `${dateText}T00:00:00+05:30`;
+  }
+
+  return updateText;
+};
+
+const mapOrderJourneyRowToLogs = (journey: any) => {
+  if (!journey) return [];
+
+  const logs: any[] = [];
+  let previousStatus = "";
+
+  for (const stage of ORDER_JOURNEY_LOG_STAGES) {
+    const prefix = stage.prefix;
+    const updateValue = journey?.[`${prefix}Update`];
+    const actionDate = journey?.[`${prefix}ActionAtDate`];
+    const actionTime = journey?.[`${prefix}ActionAtTime`];
+
+    const captured =
+      Boolean(String(updateValue ?? "").trim()) ||
+      Boolean(String(actionDate ?? "").trim()) ||
+      Boolean(String(actionTime ?? "").trim());
+
+    if (!captured) continue;
+
+    const remarks = String(journey?.[`${prefix}Remarks`] ?? "").trim();
+    const userType = String(journey?.[`${prefix}UserType`] ?? "").trim();
+    const userName = String(journey?.[`${prefix}UserName`] ?? "").trim();
+    const source = String(journey?.[`${prefix}Source`] ?? "").trim();
+
+    const changedAt = buildJourneyChangedAt(
+      actionDate,
+      actionTime,
+      updateValue,
+    );
+
+    const isCurrentStage =
+      String(journey?.Status ?? "").trim().toLowerCase() ===
+      stage.label.toLowerCase();
+
+    logs.push({
+      Id: `${journey?.OrderId ?? "order"}-${prefix}`,
+      OrderId: journey?.OrderId,
+      OldStatus: previousStatus,
+      NewStatus: stage.label,
+      Status: stage.label,
+      SubStatus: isCurrentStage ? journey?.SubStatus ?? "" : "",
+      Remarks: remarks,
+      Note: remarks,
+      UserType: userType || "System",
+      UserName: userName || "System",
+      ChangedBy: userName || "System",
+      ActionSource: source || userType || "System",
+      ChangedAt: changedAt,
+    });
+
+    previousStatus = stage.label;
+  }
+
+  return logs.sort((a, b) => {
+    const aTime = new Date(a.ChangedAt || 0).getTime();
+    const bTime = new Date(b.ChangedAt || 0).getTime();
+
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+    if (Number.isNaN(aTime)) return 1;
+    if (Number.isNaN(bTime)) return -1;
+
+    return aTime - bTime;
+  });
+};
+
+const loadOrderProcessLogs = async (orderId: string) => {
+  const normalizedOrderId = String(orderId || "").trim();
+  if (!normalizedOrderId) return [];
+
+  const { data: journeyRow, error: journeyError } = await supabase
+    .from("OrderJourney")
+    .select("*")
+    .eq("OrderId", normalizedOrderId)
+    .maybeSingle();
+
+  if (journeyError) {
+    console.error("OrderJourney fetch failed:", journeyError);
+  }
+
+  const journeyLogs = mapOrderJourneyRowToLogs(journeyRow);
+
+  if (journeyLogs.length > 0) {
+    return journeyLogs;
+  }
+
+  const { data: legacyLogs, error: legacyError } = await supabase
+    .from("OrderStatusHistory")
+    .select("*")
+    .eq("OrderId", normalizedOrderId)
+    .order("ChangedAt", { ascending: true });
+
+  if (legacyError) {
+    console.error("OrderStatusHistory fallback fetch failed:", legacyError);
+    return [];
+  }
+
+  return legacyLogs || [];
+};
+
 const formatWhatsAppDate = (value: any) => {
   const text = String(value ?? "").trim();
   if (!text) return "N/A";
@@ -1816,12 +1962,8 @@ export default function AdminOrdersPage() {
       setLoadingLogs(true);
       setOrderLogs([]);
       try {
-        const { data, error } = await supabase
-          .from("OrderStatusHistory")
-          .select("*")
-          .eq("OrderId", targetOrderId)
-          .order("ChangedAt", { ascending: true });
-        if (!error && data) setOrderLogs(data);
+        const logs = await loadOrderProcessLogs(targetOrderId);
+        setOrderLogs(logs);
       } catch (e) {
         console.error("Error connecting OrderStatusHistory database links:", e);
       } finally {
@@ -1922,12 +2064,8 @@ export default function AdminOrdersPage() {
 
         if (viewDrawerOpen && detailedOrder && detailedOrder.id === orderId) {
           try {
-            const { data: logReload } = await supabase
-              .from("OrderStatusHistory")
-              .select("*")
-              .eq("OrderId", orderId)
-              .order("ChangedAt", { ascending: true });
-            if (logReload) setOrderLogs(logReload);
+            const logReload = await loadOrderProcessLogs(orderId);
+            setOrderLogs(logReload);
           } catch (err) {
             console.error(err);
           }
@@ -2180,12 +2318,8 @@ export default function AdminOrdersPage() {
         detailedOrder.id === selectedOrder.id
       ) {
         try {
-          const { data: logReload } = await supabase
-            .from("OrderStatusHistory")
-            .select("*")
-            .eq("OrderId", selectedOrder.id)
-            .order("ChangedAt", { ascending: true });
-          if (logReload) setOrderLogs(logReload);
+          const logReload = await loadOrderProcessLogs(selectedOrder.id);
+          setOrderLogs(logReload);
         } catch (err) {
           console.error(err);
         }
@@ -2271,12 +2405,8 @@ export default function AdminOrdersPage() {
 
       if (viewDrawerOpen && detailedOrder && detailedOrder.id === order.id) {
         try {
-          const { data: logReload } = await supabase
-            .from("OrderStatusHistory")
-            .select("*")
-            .eq("OrderId", order.id)
-            .order("ChangedAt", { ascending: true });
-          if (logReload) setOrderLogs(logReload);
+          const logReload = await loadOrderProcessLogs(order.id);
+          setOrderLogs(logReload);
         } catch (err) {
           console.error(err);
         }
