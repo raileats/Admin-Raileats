@@ -12,7 +12,7 @@ function supabaseServer() {
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     "";
 
-  const serviceRoleKey =
+  const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     "";
 
@@ -22,13 +22,13 @@ function supabaseServer() {
     );
   }
 
-  if (!serviceRoleKey) {
+  if (!key) {
     throw new Error(
       "SUPABASE_SERVICE_ROLE_KEY is missing",
     );
   }
 
-  return createClient(url, serviceRoleKey, {
+  return createClient(url, key, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -44,17 +44,19 @@ function cleanText(value: unknown) {
 
 export async function GET(
   _req: NextRequest,
-  context: {
-    params: Promise<{
-      orderId: string;
-    }>;
+  {
+    params,
+  }: {
+    params: {
+      orderId?: string;
+    };
   },
 ) {
   try {
-    const params = await context.params;
-
     const orderId = cleanText(
-      decodeURIComponent(params?.orderId || ""),
+      decodeURIComponent(
+        String(params?.orderId ?? ""),
+      ),
     );
 
     if (!orderId) {
@@ -87,7 +89,8 @@ export async function GET(
     return NextResponse.json(
       {
         ok: true,
-        journey: journey || null,
+        orderId,
+        journey: journey ?? null,
       },
       {
         headers: {
