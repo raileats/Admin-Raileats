@@ -770,22 +770,45 @@ const loadOrderProcessLogs = async (orderId: string) => {
   const normalizedOrderId = String(orderId || "").trim();
   if (!normalizedOrderId) return [];
 
-  const { data: journeyRow, error: journeyError } = await supabase
-    .from("OrderJourney")
-    .select("*")
-    .eq("OrderId", normalizedOrderId)
-    .maybeSingle();
+  /*
+   * IMPORTANT:
+   * OrderJourney ko browser ke anon Supabase client se directly read nahi karna.
+   * RLS/SELECT policy ki wajah se browser query empty/error de sakti hai aur UI
+   * purane OrderStatusHistory fallback par chali jaati thi.
+   *
+   * Server API service-role key se exact OrderJourney row read karti hai.
+   */
+  try {
+    const response = await fetch(
+      `/api/admin/order-journey/${encodeURIComponent(normalizedOrderId)}`,
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
 
-  if (journeyError) {
-    console.error("OrderJourney fetch failed:", journeyError);
+    const json = await response.json().catch(() => ({}));
+
+    if (response.ok && json?.ok && json?.journey) {
+      const journeyLogs = mapOrderJourneyRowToLogs(json.journey);
+
+      if (journeyLogs.length > 0) {
+        return journeyLogs;
+      }
+    } else if (!response.ok) {
+      console.error("OrderJourney server API failed:", json);
+    }
+  } catch (error) {
+    console.error("OrderJourney server API network error:", error);
   }
 
-  const journeyLogs = mapOrderJourneyRowToLogs(journeyRow);
-
-  if (journeyLogs.length > 0) {
-    return journeyLogs;
-  }
-
+  /*
+   * Sirf un old orders ke liye fallback jinke OrderJourney rows/stages
+   * abhi backfill nahi hue hain.
+   */
   const { data: legacyLogs, error: legacyError } = await supabase
     .from("OrderStatusHistory")
     .select("*")
