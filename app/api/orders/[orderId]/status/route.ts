@@ -8,9 +8,7 @@ import {
   NextResponse,
 } from "next/server";
 
-import {
-  createClient,
-} from "@supabase/supabase-js";
+import { serviceClient } from "@/lib/supabaseServer";
 
 import {
   checkRestroRdsOrderLocked,
@@ -26,25 +24,7 @@ import {
    ========================================================= */
 
 function supabaseServer() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
-    "";
-
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "";
-
-  return createClient(
-    url,
-    key,
-    {
-      auth: {
-        persistSession: false,
-      },
-    }
-  );
+  return serviceClient;
 }
 
 /* =========================================================
@@ -650,6 +630,308 @@ function resolveOrderJourneyStage(
 }
 
 /* =========================================================
+   ORDER JOURNEY ACTOR / BOOKED BACKFILL HELPERS
+   ========================================================= */
+
+function firstText(...values: any[]) {
+  for (const value of values) {
+    const text = cleanText(value);
+    if (text) return text;
+  }
+
+  return null;
+}
+
+function isGenericAdminActor(value: any) {
+  const key = normalizeKey(value);
+  return !key || ["admin", "system", "unknown", "na"].includes(key);
+}
+
+function looksLikeRestroSource(value: any) {
+  const key = normalizeKey(value);
+
+  return (
+    key.includes("restro") ||
+    key.includes("restaurant") ||
+    key.includes("vendor") ||
+    key.includes("outlet")
+  );
+}
+
+function looksLikeRestaurantReportedText(value: any) {
+  const key = normalizeKey(value);
+
+  return (
+    key.includes("restaurantreported") ||
+    key.includes("restroreported") ||
+    key.includes("vendorreported")
+  );
+}
+
+async function loadLatestComplaint(
+  supabase: any,
+  orderId: string
+) {
+  const { data, error } = await supabase
+    .from("OrderComplaints")
+    .select("*")
+    .eq("OrderId", orderId)
+    .order("CreatedAt", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Order complaint actor lookup warning:", {
+      orderId,
+      error: error.message,
+    });
+
+    return null;
+  }
+
+  return data || null;
+}
+
+function resolveComplaintReporterActor({
+  complaint,
+  existing,
+}: {
+  complaint: any;
+  existing: any;
+}) {
+  if (!complaint) return null;
+
+  const reporterType = firstText(
+    complaint.ReportedByType,
+    complaint.ReporterType,
+    complaint.UserType,
+    complaint.CreatedByType,
+    complaint.SourceType,
+    complaint.ReportedUserType
+  );
+
+  const reporterName = firstText(
+    complaint.ReportedByName,
+    complaint.ReporterName,
+    complaint.UserName,
+    complaint.CreatedByName,
+    complaint.ReportedUserName,
+    complaint.RestroUserName,
+    complaint.RestroName,
+    existing?.RestroName
+  );
+
+  const reporterSource = firstText(
+    complaint.ReportedSource,
+    complaint.Source,
+    complaint.ActionSource,
+    complaint.CreatedFrom,
+    complaint.ReportedFrom
+  );
+
+  const complaintText = firstText(
+    complaint.Remarks,
+    complaint.ComplaintRemarks,
+    complaint.Description,
+    complaint.Reason,
+    complaint.ComplaintReason,
+    complaint.Message
+  );
+
+  const isRestroReporter =
+    looksLikeRestroSource(reporterType) ||
+    looksLikeRestroSource(reporterSource) ||
+    looksLikeRestaurantReportedText(complaintText);
+
+  if (!isRestroReporter) return null;
+
+  return {
+    userType: "Restro",
+    userName: reporterName || firstText(existing?.RestroName) || "Restro",
+    source: reporterSource || "Restro Panel",
+  };
+}
+
+function resolveJourneyActor({
+  body,
+  existing,
+  newStatus,
+  subStatus,
+  remarks,
+  note,
+  complaint,
+}: {
+  body: any;
+  existing: any;
+  newStatus: string;
+  subStatus: string | null;
+  remarks: string | null;
+  note: string | null;
+  complaint: any;
+}) {
+  const requestedUserType = firstText(
+    body.userType,
+    body.UserType,
+    body.actorType,
+    body.ActorType
+  );
+
+  const requestedUserName = firstText(
+    body.userName,
+    body.UserName,
+    body.changedBy,
+    body.ChangedBy,
+    body.actorName,
+    body.ActorName
+  );
+
+  const requestedSource = firstText(
+    body.actionSource,
+    body.ActionSource,
+    body.source,
+    body.Source
+  );
+
+  const restroIdentity = firstText(
+    body.restroUserName,
+    body.RestroUserName,
+    body.restaurantUserName,
+    body.RestaurantUserName,
+    body.vendorUserName,
+    body.VendorUserName,
+    body.restroName,
+    body.RestroName,
+    existing?.RestroName
+  );
+
+  const restroCodeSignal = firstText(
+    body.restroCode,
+    body.RestroCode,
+    body.restroId,
+    body.RestroId,
+    body.outletId,
+    body.OutletId,
+    body.vendorId,
+    body.VendorId
+  );
+
+  const stageKey = normalizeKey(newStatus);
+  const sourceSaysRestro =
+    looksLikeRestroSource(requestedUserType) ||
+    looksLikeRestroSource(requestedSource);
+
+  const operationalRestroStage = [
+    "inkitchen",
+    "outfordelivery",
+    "restromarkeddelivered",
+  ].includes(stageKey);
+
+  const complaintReporterActor = resolveComplaintReporterActor({
+    complaint,
+    existing,
+  });
+
+  const isComplaintFinalResult = [
+    "notdelivered",
+    "baddelivery",
+    "partialdelivery",
+  ].includes(stageKey);
+
+  const requestText = [remarks, note, subStatus, requestedSource]
+    .filter(Boolean)
+    .join(" ");
+
+  if (
+    isComplaintFinalResult &&
+    (complaintReporterActor || looksLikeRestaurantReportedText(requestText))
+  ) {
+    return (
+      complaintReporterActor || {
+        userType: "Restro",
+        userName: restroIdentity || "Restro",
+        source: "Restro Panel",
+      }
+    );
+  }
+
+  const explicitlyAdminAction =
+    normalizeKey(requestedUserType).includes("admin") ||
+    normalizeKey(requestedSource).includes("admin");
+
+  if (
+    sourceSaysRestro ||
+    (operationalRestroStage && !explicitlyAdminAction) ||
+    (operationalRestroStage && restroCodeSignal && isGenericAdminActor(requestedUserName))
+  ) {
+    return {
+      userType: "Restro",
+      userName: restroIdentity || requestedUserName || "Restro",
+      source: requestedSource || "Restro Panel",
+    };
+  }
+
+  return {
+    userType: requestedUserType || "Admin",
+    userName: requestedUserName || "Admin",
+    source: requestedSource || requestedUserType || "Admin",
+  };
+}
+
+async function ensureBookedJourneyStage({
+  supabase,
+  orderId,
+  order,
+}: {
+  supabase: any;
+  orderId: string;
+  order: any;
+}) {
+  const createdAt = firstText(
+    order?.CreatedAt,
+    order?.created_at,
+    order?.createdAt,
+    order?.BookedAt,
+    order?.booked_at,
+    order?.OrderDateTime
+  );
+
+  const customerName = firstText(
+    order?.CustomerName,
+    order?.customerName,
+    order?.CustomerFullName,
+    order?.Name
+  );
+
+  const bookingSource = firstText(
+    order?.BookingSource,
+    order?.BookedSource,
+    order?.Source,
+    order?.bookingSource
+  ) || "Website";
+
+  return updateOrderJourneySafe({
+    supabase,
+    orderId,
+    stage: "Booked",
+    status: firstText(order?.Status, order?.OrderStatus) || "Booked",
+    subStatus: null,
+    remarks: "Order booked",
+    userType: "Customer",
+    userName: customerName || "Customer",
+    source: bookingSource,
+    actionAt: createdAt || new Date().toISOString(),
+    order: {
+      restroCode: order?.RestroCode ?? null,
+      restroName: firstText(order?.RestroName),
+      stationCode: firstText(order?.StationCode),
+      stationName: firstText(order?.StationName),
+      deliveryDate: firstText(order?.DeliveryDate),
+      deliveryTime: firstText(order?.DeliveryTime),
+    },
+  });
+}
+
+/* =========================================================
    PREPAID REFUND HELPERS
    ========================================================= */
 
@@ -1157,25 +1439,31 @@ export async function PATCH(
         subStatus
       );
 
+    const complaint =
+      await loadLatestComplaint(
+        supabase,
+        orderId
+      );
+
+    const actor =
+      resolveJourneyActor({
+        body,
+        existing,
+        newStatus,
+        subStatus,
+        remarks,
+        note,
+        complaint,
+      });
+
     const userType =
-      cleanText(
-        body.userType ??
-        body.UserType
-      ) || "Admin";
+      actor.userType;
 
     const userName =
-      cleanText(
-        body.userName ??
-        body.UserName ??
-        body.changedBy ??
-        body.ChangedBy
-      ) || "Admin";
+      actor.userName;
 
     const actionSource =
-      cleanText(
-        body.actionSource ??
-        body.ActionSource
-      ) || userType;
+      actor.source;
 
     /* =====================================================
        PENALTY
@@ -1265,6 +1553,13 @@ export async function PATCH(
        UPDATE ORDER JOURNEY
        ===================================================== */
 
+    const bookedJourneyResult =
+      await ensureBookedJourneyStage({
+        supabase,
+        orderId,
+        order: existing,
+      });
+
     const resolvedJourneyStage =
       resolveOrderJourneyStage(
         newStatus,
@@ -1293,6 +1588,11 @@ export async function PATCH(
           actionSource,
         actionAt:
           changedAt,
+        overwriteStage:
+          Boolean(
+            normalizeKey(actionSource) === "complaintapproved" ||
+            looksLikeRestaurantReportedText(remarks ?? note)
+          ),
         order: {
           restroCode:
             updatedOrder?.RestroCode ??
@@ -1407,8 +1707,17 @@ export async function PATCH(
       igstCalculated:
         finalIGST !== null,
 
+      bookedJourney:
+        bookedJourneyResult,
+
       journey:
         journeyResult,
+
+      journeyActor: {
+        userType,
+        userName,
+        source: actionSource,
+      },
 
       journeyWarning:
         journeyResult
