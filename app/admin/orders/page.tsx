@@ -806,21 +806,11 @@ const loadOrderProcessLogs = async (orderId: string) => {
   }
 
   /*
-   * Sirf un old orders ke liye fallback jinke OrderJourney rows/stages
-   * abhi backfill nahi hue hain.
+   * Process Log ka single source of truth ab OrderJourney hai.
+   * Legacy OrderStatusHistory fallback intentionally remove kiya gaya hai,
+   * taaki old SYSTEM / ADMIN actor rows UI me dobara na dikhein.
    */
-  const { data: legacyLogs, error: legacyError } = await supabase
-    .from("OrderStatusHistory")
-    .select("*")
-    .eq("OrderId", normalizedOrderId)
-    .order("ChangedAt", { ascending: true });
-
-  if (legacyError) {
-    console.error("OrderStatusHistory fallback fetch failed:", legacyError);
-    return [];
-  }
-
-  return legacyLogs || [];
+  return [];
 };
 
 const formatWhatsAppDate = (value: any) => {
@@ -1988,7 +1978,7 @@ export default function AdminOrdersPage() {
         const logs = await loadOrderProcessLogs(targetOrderId);
         setOrderLogs(logs);
       } catch (e) {
-        console.error("Error connecting OrderStatusHistory database links:", e);
+        console.error("Error loading OrderJourney process logs:", e);
       } finally {
         setLoadingLogs(false);
       }
