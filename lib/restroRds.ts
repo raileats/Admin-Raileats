@@ -6,12 +6,7 @@ import {
 } from "@supabase/supabase-js";
 
 type SyncRestroRdsInput = {
-  /*
-   * Existing route compatibility ke liye optional rakha hai.
-   * RestroRDS sync apna secure service-role client use karega.
-   */
   supabase?: SupabaseClient<any, any, any>;
-
   orderId: string;
   remarks?: string | null;
 };
@@ -77,12 +72,6 @@ function getRestroRdsSupabase() {
   );
 }
 
-/*
- * Status route me order update se pehle ye function call hoga.
- *
- * Agar RestroRDS me same OrderId already present hai,
- * to order permanently marked/locked maana jayega.
- */
 export async function checkRestroRdsOrderLocked({
   orderId,
 }: {
@@ -193,12 +182,6 @@ export async function checkRestroRdsOrderLocked({
   }
 }
 
-/*
- * Final status mark hone ke baad Supabase RPC call karta hai.
- *
- * Database function me bhi hard lock hona chahiye:
- * same OrderId already RestroRDS me ho to update/insert nahi hoga.
- */
 export async function syncRestroRdsForFinalOrder({
   orderId,
   remarks = null,
