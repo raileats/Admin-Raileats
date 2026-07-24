@@ -9,7 +9,6 @@ type StationRow = {
   StationName?: string;
   State?: string;
   District?: string;
-  image_url?: string | null;
 };
 
 type AnyRow = Record<string, any>;
@@ -57,13 +56,11 @@ async function fetchJsonWithKey(url: string, serviceKey: string) {
 
 /* =========================================================
    CASE-INSENSITIVE COLUMN READER
-
-   RestroFSSAI table mein column names thode different hone par
-   bhi API kaam kar sake, isliye multiple possible names check
-   kiye ja rahe hain.
 ========================================================= */
 function getValue(row: AnyRow, possibleKeys: string[]) {
-  if (!row || typeof row !== "object") return undefined;
+  if (!row || typeof row !== "object") {
+    return undefined;
+  }
 
   for (const key of possibleKeys) {
     if (Object.prototype.hasOwnProperty.call(row, key)) {
@@ -96,7 +93,9 @@ function cleanText(value: any) {
 function normalizeRestroCode(value: any) {
   const raw = cleanText(value);
 
-  if (!raw) return "";
+  if (!raw) {
+    return "";
+  }
 
   const numericValue = Number(raw);
 
@@ -131,7 +130,7 @@ function isActiveStatus(value: any) {
 /* =========================================================
    DATE PARSER
 
-   Supported formats:
+   Supported:
    - 2026-05-03
    - 2026-05-03T00:00:00
    - 03/05/2026
@@ -156,11 +155,13 @@ function parseExpiryDate(value: any): Date | null {
 
   const raw = cleanText(value);
 
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
 
   // DD/MM/YYYY or DD-MM-YYYY
   const indianDateMatch = raw.match(
-    /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/
+    /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/
   );
 
   if (indianDateMatch) {
@@ -168,7 +169,15 @@ function parseExpiryDate(value: any): Date | null {
     const month = Number(indianDateMatch[2]);
     const year = Number(indianDateMatch[3]);
 
-    const parsed = new Date(year, month - 1, day, 23, 59, 59, 999);
+    const parsed = new Date(
+      year,
+      month - 1,
+      day,
+      23,
+      59,
+      59,
+      999
+    );
 
     if (
       parsed.getFullYear() === year &&
@@ -181,15 +190,25 @@ function parseExpiryDate(value: any): Date | null {
     return null;
   }
 
-  // YYYY-MM-DD or complete ISO datetime
-  const isoDateMatch = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  // YYYY-MM-DD or ISO datetime
+  const isoDateMatch = raw.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})/
+  );
 
   if (isoDateMatch) {
     const year = Number(isoDateMatch[1]);
     const month = Number(isoDateMatch[2]);
     const day = Number(isoDateMatch[3]);
 
-    const parsed = new Date(year, month - 1, day, 23, 59, 59, 999);
+    const parsed = new Date(
+      year,
+      month - 1,
+      day,
+      23,
+      59,
+      59,
+      999
+    );
 
     if (
       parsed.getFullYear() === year &&
@@ -220,15 +239,27 @@ function parseExpiryDate(value: any): Date | null {
 }
 
 /* =========================================================
-   TODAY START — SERVER LOCAL DATE
+   INDIA TODAY START
+
+   Vercel server UTC mein hota hai, isliye India date nikali
+   ja rahi hai.
 ========================================================= */
-function getTodayStart() {
-  const now = new Date();
+function getIndiaTodayStart() {
+  const indiaDateString = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+
+  const [year, month, day] = indiaDateString
+    .split("-")
+    .map(Number);
 
   return new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
+    year,
+    month - 1,
+    day,
     0,
     0,
     0,
@@ -237,7 +268,7 @@ function getTodayStart() {
 }
 
 /* =========================================================
-   FSSAI ROW HELPERS
+   FSSAI HELPERS
 ========================================================= */
 function getFssaiRestroCode(row: AnyRow) {
   return normalizeRestroCode(
@@ -285,20 +316,25 @@ function getFssaiStatusValue(row: AnyRow) {
 /* =========================================================
    VALID FSSAI CHECK
 
-   Restaurant tabhi valid maana jayega jab:
-   1. FSSAI row restaurant se match kare
-   2. Status active ho
-   3. Expiry present ho
-   4. Expiry today ya future ki ho
+   Restaurant tabhi website par aayega jab:
+   - RestroCode match ho
+   - FSSAI status active ho
+   - Expiry date available ho
+   - Expiry aaj ya future ki ho
 ========================================================= */
-function hasValidFssai(rows: AnyRow[], restroCode: any) {
+function hasValidFssai(
+  fssaiRows: AnyRow[],
+  restroCode: any
+) {
   const normalizedCode = normalizeRestroCode(restroCode);
 
-  if (!normalizedCode) return false;
+  if (!normalizedCode) {
+    return false;
+  }
 
-  const todayStart = getTodayStart();
+  const todayStart = getIndiaTodayStart();
 
-  return rows.some((row) => {
+  return fssaiRows.some((row) => {
     const rowRestroCode = getFssaiRestroCode(row);
 
     if (rowRestroCode !== normalizedCode) {
@@ -323,7 +359,7 @@ function hasValidFssai(rows: AnyRow[], restroCode: any) {
 }
 
 /* =========================================================
-   RESTRO MASTER ACTIVE CHECK
+   RESTAURANT ACTIVE CHECK
 ========================================================= */
 function isRestaurantActive(value: any) {
   const normalized = cleanText(value).toLowerCase();
@@ -339,7 +375,23 @@ function isRestaurantActive(value: any) {
 }
 
 /* =========================================================
-   OPTIONS — CORS
+   PURE VEG CHECK
+========================================================= */
+function isPureVeg(value: any) {
+  const normalized = cleanText(value).toLowerCase();
+
+  return (
+    value === 1 ||
+    value === true ||
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "yes" ||
+    normalized === "veg"
+  );
+}
+
+/* =========================================================
+   OPTIONS
 ========================================================= */
 export async function OPTIONS(request: Request) {
   const { FRONTEND_ORIGIN } = getEnv();
@@ -366,7 +418,11 @@ export async function GET(
   request: Request,
   { params }: { params: { code?: string } }
 ) {
-  const { PROJECT_URL, SERVICE_KEY, FRONTEND_ORIGIN } = getEnv();
+  const {
+    PROJECT_URL,
+    SERVICE_KEY,
+    FRONTEND_ORIGIN,
+  } = getEnv();
 
   const requestOrigin = request.headers.get("origin");
 
@@ -404,7 +460,8 @@ export async function GET(
       );
     }
 
-    const code = cleanText(params?.code).toUpperCase();
+    const code = cleanText(params?.code)
+      .toUpperCase();
 
     if (!code) {
       return NextResponse.json(
@@ -420,10 +477,13 @@ export async function GET(
 
     /* =====================================================
        1. STATION FETCH
+
+       image_url hata diya gaya hai kyunki Stations table
+       mein ye column available nahi hai.
     ===================================================== */
     const stationUrl =
       `${PROJECT_URL}/rest/v1/Stations` +
-      `?select=StationCode,StationName,State,District,image_url` +
+      `?select=StationCode,StationName,State,District` +
       `&StationCode=eq.${encodeURIComponent(code)}` +
       `&limit=1`;
 
@@ -447,9 +507,8 @@ export async function GET(
       );
     }
 
-    const stationJson: StationRow[] = await stationRes
-      .json()
-      .catch(() => []);
+    const stationJson: StationRow[] =
+      await stationRes.json().catch(() => []);
 
     const station = stationJson?.[0] ?? null;
 
@@ -496,28 +555,28 @@ export async function GET(
       );
     }
 
-    const restroRows: AnyRow[] = await restroRes
-      .json()
-      .catch(() => []);
+    const restroRows: AnyRow[] =
+      await restroRes.json().catch(() => []);
 
-    /*
-      Sirf active RailEats restaurants ke codes nikalo.
-      Isse FSSAI query unnecessary restaurants ko fetch nahi karegi.
-    */
-    const activeRestroRows = restroRows.filter((row) =>
-      isRestaurantActive(row.RaileatsStatus)
+    /* =====================================================
+       3. ACTIVE RESTAURANTS
+    ===================================================== */
+    const activeRestroRows = restroRows.filter(
+      (row) => isRestaurantActive(row.RaileatsStatus)
     );
 
     const restroCodes = Array.from(
       new Set(
         activeRestroRows
-          .map((row) => normalizeRestroCode(row.RestroCode))
+          .map((row) =>
+            normalizeRestroCode(row.RestroCode)
+          )
           .filter(Boolean)
       )
     );
 
     /* =====================================================
-       3. FSSAI RECORDS FETCH
+       4. FSSAI RECORDS FETCH
     ===================================================== */
     let fssaiRows: AnyRow[] = [];
 
@@ -527,7 +586,7 @@ export async function GET(
       const fssaiUrl =
         `${PROJECT_URL}/rest/v1/RestroFSSAI` +
         `?select=*` +
-        `&RestroCode=in.(${encodeURIComponent(inFilter)})`;
+        `&RestroCode=in.(${inFilter})`;
 
       const fssaiRes = await fetchJsonWithKey(
         fssaiUrl,
@@ -539,7 +598,8 @@ export async function GET(
 
         return NextResponse.json(
           {
-            error: "Failed to fetch restaurant FSSAI records",
+            error:
+              "Failed to fetch restaurant FSSAI records",
             details,
           },
           {
@@ -549,35 +609,33 @@ export async function GET(
         );
       }
 
-      fssaiRows = await fssaiRes.json().catch(() => []);
+      fssaiRows = await fssaiRes
+        .json()
+        .catch(() => []);
     }
 
     /* =====================================================
-       4. RESTAURANT FILTER + NORMALIZE
+       5. VALID FSSAI FILTER
     ===================================================== */
     const restaurants = activeRestroRows
-      .filter((restaurant) => {
-        /*
-          Actual RestroFSSAI table se valid certificate check.
-
-          Expired, inactive, missing expiry ya missing FSSAI:
-          customer website par restaurant hide hoga.
-        */
-        return hasValidFssai(
+      .filter((restaurant) =>
+        hasValidFssai(
           fssaiRows,
           restaurant.RestroCode
-        );
-      })
+        )
+      )
       .map((restaurant) => ({
-        RestroCode: restaurant.RestroCode,
-        RestroName: restaurant.RestroName,
-        RestroRating: restaurant.RestroRating ?? null,
+        RestroCode:
+          restaurant.RestroCode,
+
+        RestroName:
+          restaurant.RestroName,
+
+        RestroRating:
+          restaurant.RestroRating ?? null,
 
         isPureVeg:
-          restaurant.IsPureVeg === 1 ||
-          restaurant.IsPureVeg === true ||
-          cleanText(restaurant.IsPureVeg).toLowerCase() === "true" ||
-          cleanText(restaurant.IsPureVeg) === "1",
+          isPureVeg(restaurant.IsPureVeg),
 
         RestroDisplayPhoto:
           restaurant.RestroDisplayPhoto ?? null,
@@ -589,15 +647,14 @@ export async function GET(
           restaurant.closed_time ?? null,
 
         /*
-          Existing frontend key spelling same rakhi hai,
-          taaki previous website behaviour break na ho.
+          Existing frontend spelling same rakhi hai.
         */
         MinimumOrdermValue:
           restaurant.MinimumOrderValue ?? null,
       }));
 
     /* =====================================================
-       5. FINAL RESPONSE
+       6. FINAL RESPONSE
     ===================================================== */
     return NextResponse.json(
       {
@@ -614,8 +671,11 @@ export async function GET(
           District:
             station?.District ?? null,
 
-          image_url:
-            station?.image_url ?? null,
+          /*
+            Frontend compatibility ke liye key rakhi hai,
+            lekin database column available nahi hai.
+          */
+          image_url: null,
         },
 
         restaurants,
