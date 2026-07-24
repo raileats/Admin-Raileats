@@ -29,7 +29,6 @@ type TabKey =
   | "notdelivered"
   | "baddelivery"
   | "complaints"
-  | "restromarkeddelivered"
   | "refund"
   | "all";
 
@@ -72,10 +71,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "inkitchen", label: "In Kitchen" },
   { key: "outfordelivery", label: "Out for Delivery" },
   { key: "complaints", label: "Complaints" },
-  {
-    key: "restromarkeddelivered",
-    label: "Restro Marked Delivered",
-  },
   { key: "delivered", label: "Delivered" },
   { key: "cancelled", label: "Cancelled" },
   { key: "notdelivered", label: "Not Delivered" },
@@ -314,11 +309,6 @@ const NEXT_MAP: Record<
   },
 
   complaints: { next: null, actionLabel: "", dbValue: "Complaints" },
-  restromarkeddelivered: {
-    next: null,
-    actionLabel: "",
-    dbValue: "Restro Marked Delivered",
-  },
   refund: { next: null, actionLabel: "", dbValue: "Refund" },
 
   all: {
@@ -560,11 +550,6 @@ const mapOrderRowToOrder = (row: any): Order => {
     tabStatus = "baddelivery";
   } else if (lowerRaw === "complaints" || lowerRaw === "complaint") {
     tabStatus = "complaints";
-  } else if (
-    lowerRaw === "restromarkeddelivered" ||
-    lowerRaw === "restro marked delivered"
-  ) {
-    tabStatus = "restromarkeddelivered";
   } else if (lowerRaw === "refund") {
     tabStatus = "refund";
   }
@@ -652,165 +637,6 @@ const formatAdminDateTime = (value: any) => {
     hour: "2-digit",
     minute: "2-digit",
   });
-};
-
-
-type JourneyStageConfig = {
-  prefix: string;
-  label: string;
-};
-
-const ORDER_JOURNEY_LOG_STAGES: JourneyStageConfig[] = [
-  { prefix: "Booked", label: "Booked" },
-  { prefix: "InVerification", label: "In Verification" },
-  { prefix: "CancellationRequest", label: "Cancellation Request" },
-  { prefix: "NewOrder", label: "New Order" },
-  { prefix: "InKitchen", label: "In Kitchen" },
-  { prefix: "OutForDelivery", label: "Out for Delivery" },
-  { prefix: "RestroMarkedDelivered", label: "Restro Marked Delivered" },
-  { prefix: "Complaints", label: "Complaints" },
-  { prefix: "Delivered", label: "Delivered" },
-  { prefix: "Cancelled", label: "Cancelled" },
-  { prefix: "NotDelivered", label: "Not Delivered" },
-  { prefix: "BadDelivery", label: "Bad Delivery" },
-  { prefix: "PartialDelivery", label: "Partial Delivery" },
-];
-
-const buildJourneyChangedAt = (
-  dateValue: any,
-  timeValue: any,
-  updateValue: any,
-) => {
-  const updateText = String(updateValue ?? "").trim();
-
-  if (updateText && updateText.includes("T")) {
-    return updateText;
-  }
-
-  const dateText = String(dateValue ?? "").trim();
-  const timeText = String(timeValue ?? "").trim();
-
-  if (dateText && timeText) {
-    return `${dateText}T${timeText}+05:30`;
-  }
-
-  if (dateText) {
-    return `${dateText}T00:00:00+05:30`;
-  }
-
-  return updateText;
-};
-
-const mapOrderJourneyRowToLogs = (journey: any) => {
-  if (!journey) return [];
-
-  const logs: any[] = [];
-  let previousStatus = "";
-
-  for (const stage of ORDER_JOURNEY_LOG_STAGES) {
-    const prefix = stage.prefix;
-    const updateValue = journey?.[`${prefix}Update`];
-    const actionDate = journey?.[`${prefix}ActionAtDate`];
-    const actionTime = journey?.[`${prefix}ActionAtTime`];
-
-    const captured =
-      Boolean(String(updateValue ?? "").trim()) ||
-      Boolean(String(actionDate ?? "").trim()) ||
-      Boolean(String(actionTime ?? "").trim());
-
-    if (!captured) continue;
-
-    const remarks = String(journey?.[`${prefix}Remarks`] ?? "").trim();
-    const userType = String(journey?.[`${prefix}UserType`] ?? "").trim();
-    const userName = String(journey?.[`${prefix}UserName`] ?? "").trim();
-    const source = String(journey?.[`${prefix}Source`] ?? "").trim();
-
-    const changedAt = buildJourneyChangedAt(
-      actionDate,
-      actionTime,
-      updateValue,
-    );
-
-    const isCurrentStage =
-      String(journey?.Status ?? "").trim().toLowerCase() ===
-      stage.label.toLowerCase();
-
-    logs.push({
-      Id: `${journey?.OrderId ?? "order"}-${prefix}`,
-      OrderId: journey?.OrderId,
-      OldStatus: previousStatus,
-      NewStatus: stage.label,
-      Status: stage.label,
-      SubStatus: isCurrentStage ? journey?.SubStatus ?? "" : "",
-      Remarks: remarks,
-      Note: remarks,
-      UserType: userType || "System",
-      UserName: userName || "System",
-      ChangedBy: userName || "System",
-      ActionSource: source || userType || "System",
-      ChangedAt: changedAt,
-    });
-
-    previousStatus = stage.label;
-  }
-
-  return logs.sort((a, b) => {
-    const aTime = new Date(a.ChangedAt || 0).getTime();
-    const bTime = new Date(b.ChangedAt || 0).getTime();
-
-    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
-    if (Number.isNaN(aTime)) return 1;
-    if (Number.isNaN(bTime)) return -1;
-
-    return aTime - bTime;
-  });
-};
-
-const loadOrderProcessLogs = async (orderId: string) => {
-  const normalizedOrderId = String(orderId || "").trim();
-  if (!normalizedOrderId) return [];
-
-  /*
-   * IMPORTANT:
-   * OrderJourney ko browser ke anon Supabase client se directly read nahi karna.
-   * RLS/SELECT policy ki wajah se browser query empty/error de sakti hai aur UI
-   * purane OrderStatusHistory fallback par chali jaati thi.
-   *
-   * Server API service-role key se exact OrderJourney row read karti hai.
-   */
-  try {
-    const response = await fetch(
-      `/api/admin/order-journey/${encodeURIComponent(normalizedOrderId)}`,
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          Accept: "application/json",
-        },
-      },
-    );
-
-    const json = await response.json().catch(() => ({}));
-
-    if (response.ok && json?.ok && json?.journey) {
-      const journeyLogs = mapOrderJourneyRowToLogs(json.journey);
-
-      if (journeyLogs.length > 0) {
-        return journeyLogs;
-      }
-    } else if (!response.ok) {
-      console.error("OrderJourney server API failed:", json);
-    }
-  } catch (error) {
-    console.error("OrderJourney server API network error:", error);
-  }
-
-  /*
-   * Process Log ka single source of truth ab OrderJourney hai.
-   * Legacy OrderStatusHistory fallback intentionally remove kiya gaya hai,
-   * taaki old SYSTEM / ADMIN actor rows UI me dobara na dikhein.
-   */
-  return [];
 };
 
 const formatWhatsAppDate = (value: any) => {
@@ -1975,10 +1801,14 @@ export default function AdminOrdersPage() {
       setLoadingLogs(true);
       setOrderLogs([]);
       try {
-        const logs = await loadOrderProcessLogs(targetOrderId);
-        setOrderLogs(logs);
+        const { data, error } = await supabase
+          .from("OrderStatusHistory")
+          .select("*")
+          .eq("OrderId", targetOrderId)
+          .order("ChangedAt", { ascending: true });
+        if (!error && data) setOrderLogs(data);
       } catch (e) {
-        console.error("Error loading OrderJourney process logs:", e);
+        console.error("Error connecting OrderStatusHistory database links:", e);
       } finally {
         setLoadingLogs(false);
       }
@@ -2077,8 +1907,12 @@ export default function AdminOrdersPage() {
 
         if (viewDrawerOpen && detailedOrder && detailedOrder.id === orderId) {
           try {
-            const logReload = await loadOrderProcessLogs(orderId);
-            setOrderLogs(logReload);
+            const { data: logReload } = await supabase
+              .from("OrderStatusHistory")
+              .select("*")
+              .eq("OrderId", orderId)
+              .order("ChangedAt", { ascending: true });
+            if (logReload) setOrderLogs(logReload);
           } catch (err) {
             console.error(err);
           }
@@ -2087,88 +1921,6 @@ export default function AdminOrdersPage() {
         alert("Failed to change status (network error)");
       }
     })();
-  }
-
-
-  async function markComplaintAsDelivered(order: Order) {
-    const complaintId = valueFrom(
-      order.raw,
-      "ComplaintId",
-      "complaintId",
-      "ComplaintNo",
-      "complaintNo",
-      "id",
-    );
-
-    if (!complaintId) {
-      alert("Complaint ID not found");
-      return;
-    }
-
-    if (!confirm(`Mark complaint order ${order.id} as Delivered?`)) {
-      return;
-    }
-
-    try {
-      const actor = getAdminActor();
-      const actionNote = "Complaint reviewed and order marked as Delivered";
-
-      const res = await fetch(
-        `/api/orders/complaints/${encodeURIComponent(String(complaintId))}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            decision: "Approved",
-            finalStatus: "Delivered",
-            finalSubStatus: "Delivered",
-            vendorPenalty: 0,
-            adminRemarks: actionNote,
-            adminName: actor.userName,
-            changedBy: actor.userName,
-            userType: actor.userType,
-            userName: actor.userName,
-            actionSource: actor.userType || "Admin",
-          }),
-        },
-      );
-
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok || !json?.ok) {
-        alert(json?.error || json?.details || "Failed to mark order as Delivered");
-        return;
-      }
-
-      const updated: Order = {
-        ...order,
-        status: "delivered",
-        dbStatus: "Delivered",
-        history: [
-          ...order.history,
-          {
-            at: new Date().toISOString(),
-            by: actor.userName,
-            note: actionNote,
-            status: "delivered",
-          },
-        ],
-      };
-
-      setAllOrders((prev) => {
-        const copy = { ...prev };
-        copy.complaints = (copy.complaints ?? []).filter(
-          (existingOrder) => existingOrder.id !== order.id,
-        );
-        copy.delivered = [updated, ...(copy.delivered ?? [])];
-        return copy;
-      });
-
-      setRefreshTick((prev) => prev + 1);
-    } catch (error) {
-      console.error("Complaint delivered update failed", error);
-      alert("Failed to mark order as Delivered (network error)");
-    }
   }
 
   async function submitStatusAction() {
@@ -2181,8 +1933,7 @@ export default function AdminOrdersPage() {
     try {
       const outForDeliveryOption =
         selectedOrder.status === "inkitchen" ||
-        selectedOrder.status === "outfordelivery" ||
-        selectedOrder.status === "complaints"
+        selectedOrder.status === "outfordelivery"
           ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find(
               (option) => option.key === subStatus,
             )
@@ -2190,8 +1941,7 @@ export default function AdminOrdersPage() {
       const shouldApplyOrderPenalty =
         actionType === "mark" &&
         (selectedOrder.status === "inkitchen" ||
-          selectedOrder.status === "outfordelivery" ||
-          selectedOrder.status === "complaints");
+          selectedOrder.status === "outfordelivery");
       const selectedVendorPenalty = !shouldApplyOrderPenalty
         ? 0
         : outForDeliveryOption?.manualPenalty
@@ -2236,39 +1986,12 @@ export default function AdminOrdersPage() {
       const actor = getAdminActor();
       const cleanRemarks = remarks.trim();
 
-      const isComplaintResolution = selectedOrder.status === "complaints";
-      const complaintId = valueFrom(
-        selectedOrder.raw,
-        "ComplaintId",
-        "complaintId",
-        "ComplaintNo",
-        "complaintNo",
-        "id",
-      );
-
-      if (isComplaintResolution && !complaintId) {
-        alert("Complaint ID not found");
-        return;
-      }
-
-      const endpoint = isComplaintResolution
-        ? `/api/orders/complaints/${encodeURIComponent(String(complaintId))}`
-        : `/api/orders/${encodeURIComponent(selectedOrder.id)}/status`;
-
-      const requestBody = isComplaintResolution
-        ? {
-            decision: "Approved",
-            finalStatus: computedMainStatus,
-            finalSubStatus: subStatus,
-            vendorPenalty: selectedVendorPenalty,
-            adminRemarks: cleanRemarks,
-            adminName: actor.userName,
-            changedBy: actor.userName,
-            userType: actor.userType,
-            userName: actor.userName,
-            actionSource: actor.userType || "Admin",
-          }
-        : {
+      const res = await fetch(
+        `/api/orders/${encodeURIComponent(selectedOrder.id)}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             newStatus: computedMainStatus,
             subStatus,
             remarks: cleanRemarks,
@@ -2281,13 +2004,9 @@ export default function AdminOrdersPage() {
             vendorPenalty: selectedVendorPenalty,
             vendorPenaltyAmount: selectedVendorPenalty,
             VendorPenalty: selectedVendorPenalty,
-          };
-
-      const res = await fetch(endpoint, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
+          }),
+        },
+      );
 
       const json = await res.json();
       if (!res.ok || !json?.ok) {
@@ -2331,8 +2050,12 @@ export default function AdminOrdersPage() {
         detailedOrder.id === selectedOrder.id
       ) {
         try {
-          const logReload = await loadOrderProcessLogs(selectedOrder.id);
-          setOrderLogs(logReload);
+          const { data: logReload } = await supabase
+            .from("OrderStatusHistory")
+            .select("*")
+            .eq("OrderId", selectedOrder.id)
+            .order("ChangedAt", { ascending: true });
+          if (logReload) setOrderLogs(logReload);
         } catch (err) {
           console.error(err);
         }
@@ -2418,8 +2141,12 @@ export default function AdminOrdersPage() {
 
       if (viewDrawerOpen && detailedOrder && detailedOrder.id === order.id) {
         try {
-          const logReload = await loadOrderProcessLogs(order.id);
-          setOrderLogs(logReload);
+          const { data: logReload } = await supabase
+            .from("OrderStatusHistory")
+            .select("*")
+            .eq("OrderId", order.id)
+            .order("ChangedAt", { ascending: true });
+          if (logReload) setOrderLogs(logReload);
         } catch (err) {
           console.error(err);
         }
@@ -3346,55 +3073,9 @@ export default function AdminOrdersPage() {
                     >
                       {/* INLINE BUTTON CONTROLLERS */}
                       {o.status === "complaints" ? (
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 6,
-                            flexWrap: "nowrap",
-                          }}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => markComplaintAsDelivered(o)}
-                            style={{
-                              padding: "6px 10px",
-                              borderRadius: 6,
-                              background: "#2563eb",
-                              color: "#fff",
-                              border: "none",
-                              cursor: "pointer",
-                              fontWeight: "bold",
-                              fontSize: 11,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            Mark as Delivered ✅
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedOrder(o);
-                              setActionType("mark");
-                              setSubStatus("");
-                              setRemarks("");
-                              setVendorPenaltyAmount("");
-                              setStatusModalOpen(true);
-                            }}
-                            style={{
-                              padding: "6px 10px",
-                              borderRadius: 6,
-                              background: "#475569",
-                              color: "#fff",
-                              border: "none",
-                              cursor: "pointer",
-                              fontWeight: "bold",
-                              fontSize: 11,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            Mark Status
-                          </button>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => openWorkflow("complaint-approve", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Approve</button>
+                          <button onClick={() => openWorkflow("complaint-reject", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#dc2626", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Reject</button>
                         </div>
                       ) : o.status === "refund" ? (
                         <button onClick={() => openWorkflow("refund", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#7c3aed", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Update Refund</button>
@@ -5057,8 +4738,7 @@ export default function AdminOrdersPage() {
                     </option>
                   ))
                 : selectedOrder?.status === "inkitchen" ||
-                    selectedOrder?.status === "outfordelivery" ||
-                    selectedOrder?.status === "complaints"
+                    selectedOrder?.status === "outfordelivery"
                   ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.map((option) => (
                       <option key={option.key} value={option.key}>
                         {option.manualPenalty
@@ -5075,8 +4755,7 @@ export default function AdminOrdersPage() {
 
             {actionType === "mark" &&
               (selectedOrder?.status === "inkitchen" ||
-                selectedOrder?.status === "outfordelivery" ||
-                selectedOrder?.status === "complaints") &&
+                selectedOrder?.status === "outfordelivery") &&
               subStatus && (
                 <div
                   style={{
