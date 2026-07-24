@@ -1,18 +1,23 @@
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const TABLES = {
   orders: "Orders",
   refunds: "Refunds",
+  orderJourney: "OrderJourney",
 } as const;
 
-const TRANSACTION_RPC = "raileats_apply_refund_transition";
-const ELIGIBLE_ORDER_STATUSES = new Set(["delivered", "baddelivery", "partialdelivery"]);
 const ACTIVE_REFUND_STATUSES = [
   "RefundRequested",
   "RefundUnderReview",
   "RefundApproved",
   "RefundProcessing",
+] as const;
+
+const RETRYABLE_REFUND_STATUSES = [
+  "RefundRejected",
+  "RefundFailed",
+  "RefundCancelled",
 ] as const;
 
 export type RefundStatus =
@@ -27,6 +32,7 @@ export type RefundStatus =
   | "RefundCancelled";
 
 export type PaymentMode = "COD" | "PREPAID";
+
 export type RefundJourneyStage =
   | "RefundRequested"
   | "RefundUnderReview"
@@ -53,8 +59,8 @@ export interface RefundActor {
   userType: string;
   userName: string;
   source: string;
-  ip?: string;
-  device?: string;
+  ip?: string | null;
+  device?: string | null;
 }
 
 export interface RefundRecord {
@@ -102,11 +108,10 @@ export interface RequestRefundInput extends CommonInput {
   reason: string;
 }
 
-export interface ReviewRefundInput extends CommonInput {}
+export type ReviewRefundInput = CommonInput;
 
 export interface ApproveRefundInput extends CommonInput {
   approvedAmount: number;
-  /** COD refunds require an explicit manual approval decision. */
   approveCodManually?: boolean;
 }
 
@@ -121,7 +126,8 @@ export interface StartRefundProcessingInput extends CommonInput {
 }
 
 export interface CompleteRefundInput extends CommonInput {
-  providerRefundId: string;
+  providerRefundId?: string;
+  manualTransactionId?: string;
 }
 
 interface DbOrder extends Record<string, unknown> {
@@ -130,9 +136,12 @@ interface DbOrder extends Record<string, unknown> {
   Status?: string | null;
   PaymentMode?: string | null;
   PaymentMethod?: string | null;
+  PPDAmount?: number | string | null;
+  CODAmount?: number | string | null;
   PaidAmount?: number | string | null;
   AmountPaid?: number | string | null;
   TotalPaidAmount?: number | string | null;
+  TotalAmount?: number | string | null;
   OrderAmount?: number | string | null;
   CustomerId?: string | null;
   CustomerName?: string | null;
@@ -165,21 +174,40 @@ interface DbRefund extends Record<string, unknown> {
   UpdatedAt: string;
 }
 
-interface RefundContext {
-  order: DbOrder;
-  refund: DbRefund;
-  paidAmount: number;
-  paymentMode: PaymentMode;
+interface DbOrderJourney extends Record<string, unknown> {
+  OrderId: string;
 }
 
-interface TransactionPayload {
-  order_id: string;
-  refund_attempt: number;
-  expected_refund_status: RefundStatus | null;
-  create_refund: boolean;
-  order_patch: Record<string, unknown>;
-  refund_patch: Record<string, unknown>;
-  journey_patch: Record<string, unknown>;
+interface ValidatedActor {
+  userType: string;
+  userName: string;
+  source: string;
+  ip: string | null;
+  device: string | null;
+}
+
+interface RefundContext {
+  actor: ValidatedActor;
+  order: DbOrder;
+  refund: DbRefund;
+  paymentMode: PaymentMode;
+  paidAmount: number;
+}
+
+interface ISTDateTime {
+  iso: string;
+  date: string;
+  time: string;
+}
+
+interface SequentialMutation {
+  orderId: string;
+  refundBefore: DbRefund | null;
+  createRefund: boolean;
+  expectedRefundStatus: RefundStatus | null;
+  refundPatch: Record<string, unknown>;
+  orderPatch: Record<string, unknown>;
+  journeyPatch: Record<string, unknown>;
 }
 
 class RefundEngineError extends Error {
@@ -200,6 +228,7 @@ function supabase(): SupabaseClient {
 
   const url = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
   if (!url || !serviceRoleKey) {
     throw new RefundEngineError(
       "CONFIGURATION_ERROR",
@@ -213,56 +242,149 @@ function supabase(): SupabaseClient {
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
-    global: { headers: { "X-RailEats-Client": "refund-engine" } },
+    global: {
+      headers: {
+        "X-RailEats-Client": "refund-engine",
+      },
+    },
   });
 
   return serviceRoleClient;
 }
 
 function normalize(value: unknown): string {
-  return String(value ?? "").replace(/[\s_-]+/g, "").toLowerCase();
+  return String(value ?? "")
+    .replace(/[\s_-]+/g, "")
+    .toUpperCase();
 }
 
-function requiredText(value: string | undefined, field: string): string {
-  const result = value?.trim();
-  if (!result) throw new RefundEngineError("INVALID_ARGUMENT", `${field} is required`);
-  return result;
-}
-
-function validateInput(input: CommonInput): void {
-  const orderId = requiredText(input.orderId, "orderId");
-  if (!/^RE-\d{8}-\d+$/.test(orderId)) {
-    throw new RefundEngineError("INVALID_ARGUMENT", "orderId has an invalid RailEats format");
+function requiredText(value: unknown, field: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new RefundEngineError("INVALID_ARGUMENT", `${field} is required`);
   }
-  requiredText(input.actor.userType, "actor.userType");
-  requiredText(input.actor.userName, "actor.userName");
-  requiredText(input.actor.source, "actor.source");
+  return value.trim();
 }
 
-function numberValue(value: unknown, field: string): number {
-  const result = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(result)) {
+function optionalText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function validateOrderId(value: unknown): string {
+  const orderId = requiredText(value, "orderId");
+  if (!orderId.toUpperCase().startsWith("RE-") || orderId.length > 100) {
+    throw new RefundEngineError(
+      "INVALID_ARGUMENT",
+      "orderId must start with RE- and contain at most 100 characters",
+    );
+  }
+  return orderId;
+}
+
+function validateActor(actor: RefundActor | null | undefined): ValidatedActor {
+  if (!actor || typeof actor !== "object") {
+    throw new RefundEngineError("INVALID_ARGUMENT", "actor is required");
+  }
+
+  return {
+    userType: requiredText(actor.userType, "actor.userType"),
+    userName: requiredText(actor.userName, "actor.userName"),
+    source: requiredText(actor.source, "actor.source"),
+    ip: optionalText(actor.ip),
+    device: optionalText(actor.device),
+  };
+}
+
+function validateCommonInput(input: CommonInput | null | undefined): {
+  orderId: string;
+  actor: ValidatedActor;
+} {
+  if (!input || typeof input !== "object") {
+    throw new RefundEngineError("INVALID_ARGUMENT", "input is required");
+  }
+
+  return {
+    orderId: validateOrderId(input.orderId),
+    actor: validateActor(input.actor),
+  };
+}
+
+function numericValue(value: unknown, field: string): number {
+  if (value === null || value === undefined || value === "") {
+    throw new RefundEngineError("INVALID_AMOUNT", `${field} is not available`);
+  }
+
+  const amount = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(amount)) {
     throw new RefundEngineError("INVALID_AMOUNT", `${field} is not a valid amount`);
   }
-  return result;
-}
 
-function orderPaidAmount(order: DbOrder): number {
-  const amount = numberValue(
-    order.PaidAmount ?? order.AmountPaid ?? order.TotalPaidAmount ?? order.OrderAmount,
-    "order paid amount",
-  );
-  if (amount < 0) throw new RefundEngineError("INVALID_AMOUNT", "Order paid amount cannot be negative");
   return amount;
 }
 
-function orderPaymentMode(order: DbOrder): PaymentMode {
-  const value = normalize(order.PaymentMode ?? order.PaymentMethod);
-  if (value === "cod" || value === "cashondelivery") return "COD";
-  if (["prepaid", "online", "paid", "upi", "card", "netbanking", "wallet"].includes(value)) {
+function firstDefinedAmount(
+  order: DbOrder,
+  fields: ReadonlyArray<keyof DbOrder>,
+): { amount: number; field: string } {
+  for (const field of fields) {
+    const value = order[field];
+    if (value !== null && value !== undefined && value !== "") {
+      return {
+        amount: numericValue(value, String(field)),
+        field: String(field),
+      };
+    }
+  }
+
+  throw new RefundEngineError(
+    "INVALID_AMOUNT",
+    `Order has no paid amount in any supported field: ${fields.join(", ")}`,
+  );
+}
+
+function getPaymentMode(order: DbOrder): PaymentMode {
+  const mode = normalize(order.PaymentMode ?? order.PaymentMethod);
+
+  if (mode === "COD" || mode === "CASHONDELIVERY") {
+    return "COD";
+  }
+
+  if (
+    mode === "PREPAID" ||
+    mode === "PPD" ||
+    mode === "ONLINE" ||
+    mode === "UPI" ||
+    mode === "CARD" ||
+    mode === "NETBANKING" ||
+    mode === "WALLET"
+  ) {
     return "PREPAID";
   }
-  throw new RefundEngineError("UNSUPPORTED_PAYMENT_MODE", "Order payment mode must be COD or PREPAID");
+
+  throw new RefundEngineError(
+    "UNSUPPORTED_PAYMENT_MODE",
+    "PaymentMode must be COD, CASH ON DELIVERY, PREPAID, PPD, ONLINE, UPI, CARD, NETBANKING, or WALLET",
+  );
+}
+
+function getPaidAmount(order: DbOrder, paymentMode: PaymentMode): number {
+  const fields: ReadonlyArray<keyof DbOrder> =
+    paymentMode === "PREPAID"
+      ? [
+          "PPDAmount",
+          "PaidAmount",
+          "AmountPaid",
+          "TotalPaidAmount",
+          "TotalAmount",
+          "OrderAmount",
+        ]
+      : ["CODAmount", "TotalAmount", "OrderAmount"];
+
+  const { amount, field } = firstDefinedAmount(order, fields);
+  if (amount < 0) {
+    throw new RefundEngineError("INVALID_AMOUNT", `${field} cannot be negative`);
+  }
+
+  return amount;
 }
 
 async function getOrder(orderId: string): Promise<DbOrder> {
@@ -272,8 +394,11 @@ async function getOrder(orderId: string): Promise<DbOrder> {
     .eq("OrderId", orderId)
     .maybeSingle();
 
-  if (error) throw databaseError(error);
-  if (!data) throw new RefundEngineError("ORDER_NOT_FOUND", `Order ${orderId} was not found`);
+  if (error) throw toDatabaseError(error);
+  if (!data) {
+    throw new RefundEngineError("ORDER_NOT_FOUND", `Order ${orderId} was not found`);
+  }
+
   return data as DbOrder;
 }
 
@@ -286,13 +411,55 @@ async function getRefund(orderId: string): Promise<DbRefund | null> {
     .limit(1)
     .maybeSingle();
 
-  if (error) throw databaseError(error);
+  if (error) throw toDatabaseError(error);
   return data as DbRefund | null;
+}
+
+async function getActiveRefund(orderId: string): Promise<DbRefund | null> {
+  const { data, error } = await supabase()
+    .from(TABLES.refunds)
+    .select("*")
+    .eq("OrderId", orderId)
+    .in("RefundStatus", [...ACTIVE_REFUND_STATUSES])
+    .order("RefundAttempt", { ascending: false })
+    .limit(2);
+
+  if (error) throw toDatabaseError(error);
+  const refunds = (data ?? []) as DbRefund[];
+  if (refunds.length > 1) {
+    throw new RefundEngineError(
+      "DUPLICATE_REFUND",
+      "More than one active refund exists for this order",
+    );
+  }
+  return refunds[0] ?? null;
+}
+
+async function getOrderJourney(orderId: string): Promise<DbOrderJourney> {
+  const { data, error } = await supabase()
+    .from(TABLES.orderJourney)
+    .select("*")
+    .eq("OrderId", orderId)
+    .maybeSingle();
+
+  if (error) throw toDatabaseError(error);
+  if (!data) {
+    throw new RefundEngineError(
+      "DATABASE_ERROR",
+      `OrderJourney record for ${orderId} was not found`,
+    );
+  }
+
+  return data as DbOrderJourney;
 }
 
 function validateRefundEligibility(order: DbOrder): void {
   const status = normalize(order.OrderStatus ?? order.Status);
-  if (!ELIGIBLE_ORDER_STATUSES.has(status)) {
+  if (
+    status !== "DELIVERED" &&
+    status !== "BADDELIVERY" &&
+    status !== "PARTIALDELIVERY"
+  ) {
     throw new RefundEngineError(
       "ORDER_NOT_ELIGIBLE",
       "Only Delivered, Bad Delivery, or Partial Delivery orders are eligible for refunds",
@@ -306,88 +473,344 @@ function validateRefundAmount(
   approvedAmount?: number,
 ): void {
   if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
-    throw new RefundEngineError("INVALID_AMOUNT", "RequestedAmount must be greater than zero");
+    throw new RefundEngineError(
+      "INVALID_AMOUNT",
+      "RequestedAmount must be greater than zero",
+    );
   }
+
   if (requestedAmount > paidAmount) {
     throw new RefundEngineError(
       "AMOUNT_EXCEEDS_PAID_AMOUNT",
-      "RequestedAmount cannot exceed the order paid amount",
+      "RequestedAmount cannot exceed the paid amount",
     );
   }
+
   if (approvedAmount !== undefined) {
-    if (!Number.isFinite(approvedAmount) || approvedAmount < 0) {
-      throw new RefundEngineError("INVALID_AMOUNT", "ApprovedAmount must be zero or greater");
+    if (!Number.isFinite(approvedAmount) || approvedAmount <= 0) {
+      throw new RefundEngineError(
+        "INVALID_AMOUNT",
+        "ApprovedAmount must be greater than zero",
+      );
     }
+
     if (approvedAmount > requestedAmount || approvedAmount > paidAmount) {
       throw new RefundEngineError(
         "AMOUNT_EXCEEDS_PAID_AMOUNT",
-        "ApprovedAmount cannot exceed RequestedAmount or the order paid amount",
+        "ApprovedAmount cannot exceed RequestedAmount or the paid amount",
       );
     }
   }
 }
 
 function buildRefundReference(orderId: string, attempt: number): string {
-  const compactOrderId = orderId.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-  return `RF-${compactOrderId}-${String(attempt).padStart(2, "0")}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+  const digest = createHash("sha256")
+    .update(`${orderId.toUpperCase()}:${attempt}`)
+    .digest("hex")
+    .slice(0, 16)
+    .toUpperCase();
+
+  return `RF-${digest}-${String(attempt).padStart(3, "0")}`;
 }
 
-function nextRefundAttempt(refund: DbRefund | null): number {
-  if (!refund) return 1;
-  const current = Number(refund.RefundAttempt);
-  if (!Number.isSafeInteger(current) || current < 1) {
-    throw new RefundEngineError("DATABASE_ERROR", "Stored RefundAttempt is invalid");
+function nextRefundAttempt(latestRefund: DbRefund | null): number {
+  if (!latestRefund) return 1;
+
+  if (latestRefund.RefundStatus === "RefundCompleted") {
+    throw new RefundEngineError(
+      "DUPLICATE_REFUND",
+      "A new refund attempt is not allowed after RefundCompleted",
+    );
   }
-  return current + 1;
-}
 
-function isActive(refund: DbRefund | null): boolean {
-  return refund !== null && ACTIVE_REFUND_STATUSES.includes(
-    refund.RefundStatus as (typeof ACTIVE_REFUND_STATUSES)[number],
-  );
-}
+  if (
+    ACTIVE_REFUND_STATUSES.includes(
+      latestRefund.RefundStatus as (typeof ACTIVE_REFUND_STATUSES)[number],
+    )
+  ) {
+    throw new RefundEngineError(
+      "DUPLICATE_REFUND",
+      "Only one active refund is allowed per order",
+    );
+  }
 
-function assertStatus(refund: DbRefund, allowed: readonly RefundStatus[]): void {
-  if (!allowed.includes(refund.RefundStatus)) {
+  if (
+    !RETRYABLE_REFUND_STATUSES.includes(
+      latestRefund.RefundStatus as (typeof RETRYABLE_REFUND_STATUSES)[number],
+    )
+  ) {
     throw new RefundEngineError(
       "INVALID_REFUND_STATE",
-      `Refund is ${refund.RefundStatus}; expected ${allowed.join(" or ")}`,
+      `A new attempt is not allowed after ${latestRefund.RefundStatus}`,
+    );
+  }
+
+  const currentAttempt = Number(latestRefund.RefundAttempt);
+  if (!Number.isSafeInteger(currentAttempt) || currentAttempt < 1) {
+    throw new RefundEngineError(
+      "DATABASE_ERROR",
+      "Stored RefundAttempt is invalid",
+    );
+  }
+
+  return currentAttempt + 1;
+}
+
+function getCurrentISTDateTime(): ISTDateTime {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+
+  const date = `${values.year}-${values.month}-${values.day}`;
+  const time = `${values.hour}:${values.minute}:${values.second}`;
+
+  return {
+    iso: `${date}T${time}+05:30`,
+    date,
+    time,
+  };
+}
+
+function buildJourneyPatch(
+  status: RefundStatus,
+  actor: ValidatedActor,
+  remarks: string | undefined,
+  currentTime: ISTDateTime,
+  stage?: RefundJourneyStage,
+): Record<string, unknown> {
+  const effectiveRemarks = optionalText(remarks) ?? status;
+  const patch: Record<string, unknown> = {
+    Status: "Refund",
+    SubStatus: status,
+    Remarks: effectiveRemarks,
+  };
+
+  if (stage) {
+    Object.assign(patch, {
+      [`${stage}Update`]: status,
+      [`${stage}Remarks`]: effectiveRemarks,
+      [`${stage}UserType`]: actor.userType,
+      [`${stage}UserName`]: actor.userName,
+      [`${stage}Source`]: actor.source,
+      [`${stage}ActionAtDate`]: currentTime.date,
+      [`${stage}ActionAtTime`]: currentTime.time,
+    });
+  }
+
+  return patch;
+}
+
+function assertRefundStatus(
+  refund: DbRefund,
+  allowedStatuses: readonly RefundStatus[],
+): void {
+  if (!allowedStatuses.includes(refund.RefundStatus)) {
+    throw new RefundEngineError(
+      "INVALID_REFUND_STATE",
+      `Refund is ${refund.RefundStatus}; expected ${allowedStatuses.join(" or ")}`,
     );
   }
 }
 
-function actionParts(now: string): { date: string; time: string } {
-  return { date: now.slice(0, 10), time: now.slice(11, 19) };
+function snapshotPatch(
+  row: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.keys(patch).map((key) => [key, row[key] ?? null]),
+  );
 }
 
-function buildJourneyPatch(
-  stage: RefundJourneyStage,
-  actor: RefundActor,
-  remarks: string | undefined,
-  now: string,
-): Record<string, unknown> {
-  const action = actionParts(now);
-  return {
-    [`${stage}Update`]: stage,
-    [`${stage}Remarks`]: remarks?.trim() || null,
-    [`${stage}UserType`]: actor.userType.trim(),
-    [`${stage}UserName`]: actor.userName.trim(),
-    [`${stage}Source`]: actor.source.trim(),
-    [`${stage}ActionAtDate`]: action.date,
-    [`${stage}ActionAtTime`]: action.time,
-  };
+function toDatabaseError(error: {
+  code?: string;
+  message: string;
+}): RefundEngineError {
+  if (error.code === "23505") {
+    return new RefundEngineError(
+      "DUPLICATE_REFUND",
+      "A conflicting refund attempt or reference already exists",
+      error.code,
+    );
+  }
+
+  if (error.code === "40001" || error.code === "P0002") {
+    return new RefundEngineError(
+      "CONCURRENT_UPDATE",
+      "Refund state changed concurrently",
+      error.code,
+    );
+  }
+
+  return new RefundEngineError("DATABASE_ERROR", error.message, error.code);
+}
+
+async function rollbackRefund(
+  refundBefore: DbRefund | null,
+  refundAfter: DbRefund,
+  createRefund: boolean,
+  originalPatch: Record<string, unknown>,
+): Promise<string | null> {
+  if (createRefund) {
+    const { error } = await supabase()
+      .from(TABLES.refunds)
+      .delete()
+      .eq("RefundId", refundAfter.RefundId)
+      .eq("RefundReference", refundAfter.RefundReference);
+
+    return error ? `Refund rollback failed: ${error.message}` : null;
+  }
+
+  if (!refundBefore) return "Refund rollback failed: previous refund snapshot is missing";
+
+  const { error } = await supabase()
+    .from(TABLES.refunds)
+    .update(snapshotPatch(refundBefore, originalPatch))
+    .eq("RefundId", refundBefore.RefundId)
+    .eq("RefundStatus", refundAfter.RefundStatus);
+
+  return error ? `Refund rollback failed: ${error.message}` : null;
+}
+
+async function applySequentialMutation(
+  mutation: SequentialMutation,
+): Promise<RefundRecord> {
+  const orderBefore = await getOrder(mutation.orderId);
+  await getOrderJourney(mutation.orderId);
+
+  let refundAfter: DbRefund;
+
+  if (mutation.createRefund) {
+    const { data, error } = await supabase()
+      .from(TABLES.refunds)
+      .insert(mutation.refundPatch)
+      .select("*")
+      .single();
+
+    if (error) throw toDatabaseError(error);
+    refundAfter = data as DbRefund;
+  } else {
+    if (!mutation.refundBefore || !mutation.expectedRefundStatus) {
+      throw new RefundEngineError(
+        "DATABASE_ERROR",
+        "Refund update is missing its previous state",
+      );
+    }
+
+    const { data, error } = await supabase()
+      .from(TABLES.refunds)
+      .update(mutation.refundPatch)
+      .eq("RefundId", mutation.refundBefore.RefundId)
+      .eq("RefundStatus", mutation.expectedRefundStatus)
+      .select("*")
+      .maybeSingle();
+
+    if (error) throw toDatabaseError(error);
+    if (!data) {
+      throw new RefundEngineError(
+        "CONCURRENT_UPDATE",
+        "Refund state changed before the update could be applied",
+      );
+    }
+    refundAfter = data as DbRefund;
+  }
+
+  const orderBeforePatch = snapshotPatch(orderBefore, mutation.orderPatch);
+  const { data: orderAfter, error: orderError } = await supabase()
+    .from(TABLES.orders)
+    .update(mutation.orderPatch)
+    .eq("OrderId", mutation.orderId)
+    .select("OrderId")
+    .maybeSingle();
+
+  if (orderError || !orderAfter) {
+    const rollbackError = await rollbackRefund(
+      mutation.refundBefore,
+      refundAfter,
+      mutation.createRefund,
+      mutation.refundPatch,
+    );
+    const reason = orderError?.message ?? "Order disappeared during refund update";
+    throw new RefundEngineError(
+      "DATABASE_ERROR",
+      `Orders update failed: ${reason}${rollbackError ? `; ${rollbackError}` : "; Refunds change was rolled back"}`,
+    );
+  }
+
+  const { data: journeyAfter, error: journeyError } = await supabase()
+    .from(TABLES.orderJourney)
+    .update(mutation.journeyPatch)
+    .eq("OrderId", mutation.orderId)
+    .select("OrderId")
+    .maybeSingle();
+
+  if (journeyError || !journeyAfter) {
+    const compensationErrors: string[] = [];
+
+    const { error: orderRollbackError } = await supabase()
+      .from(TABLES.orders)
+      .update(orderBeforePatch)
+      .eq("OrderId", mutation.orderId);
+    if (orderRollbackError) {
+      compensationErrors.push(`Orders rollback failed: ${orderRollbackError.message}`);
+    }
+
+    const refundRollbackError = await rollbackRefund(
+      mutation.refundBefore,
+      refundAfter,
+      mutation.createRefund,
+      mutation.refundPatch,
+    );
+    if (refundRollbackError) compensationErrors.push(refundRollbackError);
+
+    const reason =
+      journeyError?.message ?? "OrderJourney disappeared during refund update";
+    throw new RefundEngineError(
+      "DATABASE_ERROR",
+      `OrderJourney update failed: ${reason}; ${
+        compensationErrors.length
+          ? compensationErrors.join("; ")
+          : "Orders and Refunds changes were rolled back"
+      }`,
+    );
+  }
+
+  return mapRefund(refundAfter);
 }
 
 function mapRefund(row: DbRefund): RefundRecord {
+  const paymentMode = normalize(row.PaymentMode);
+  if (paymentMode !== "COD" && paymentMode !== "PREPAID") {
+    throw new RefundEngineError(
+      "DATABASE_ERROR",
+      `Stored refund PaymentMode is invalid: ${String(row.PaymentMode ?? "")}`,
+    );
+  }
+
   return {
     refundId: row.RefundId,
     refundReference: row.RefundReference,
     orderId: row.OrderId,
     refundAttempt: Number(row.RefundAttempt),
     status: row.RefundStatus,
-    paymentMode: normalize(row.PaymentMode) === "cod" ? "COD" : "PREPAID",
+    paymentMode,
     requestedAmount: Number(row.RequestedAmount),
-    approvedAmount: row.ApprovedAmount == null ? null : Number(row.ApprovedAmount),
+    approvedAmount:
+      row.ApprovedAmount === null || row.ApprovedAmount === undefined
+        ? null
+        : Number(row.ApprovedAmount),
     reason: row.RefundReason,
     remarks: row.RefundRemarks ?? null,
     requestedAt: row.RequestedAt,
@@ -399,127 +822,148 @@ function mapRefund(row: DbRefund): RefundRecord {
   };
 }
 
-function databaseError(error: { code?: string; message: string }): RefundEngineError {
-  if (error.code === "23505") {
-    return new RefundEngineError("DUPLICATE_REFUND", "A conflicting refund already exists", error.code);
-  }
-  if (error.code === "40001" || error.code === "P0002") {
-    return new RefundEngineError("CONCURRENT_UPDATE", "Refund state changed concurrently", error.code);
-  }
-  return new RefundEngineError("DATABASE_ERROR", error.message, error.code);
-}
-
-async function applyTransaction(payload: TransactionPayload): Promise<RefundRecord> {
-  const { data, error } = await supabase().rpc(TRANSACTION_RPC, { p_transition: payload });
-  if (error) throw databaseError(error);
-
-  const row = (Array.isArray(data) ? data[0] : data) as DbRefund | null;
-  if (!row) throw new RefundEngineError("DATABASE_ERROR", "Refund transaction returned no record");
-  return mapRefund(row);
-}
-
 async function loadContext(input: CommonInput): Promise<RefundContext> {
-  validateInput(input);
-  const order = await getOrder(input.orderId);
+  const validated = validateCommonInput(input);
+  const order = await getOrder(validated.orderId);
   validateRefundEligibility(order);
-  const paymentMode = orderPaymentMode(order);
-  const paidAmount = orderPaidAmount(order);
-  const refund = await getRefund(input.orderId);
-  if (!refund) throw new RefundEngineError("REFUND_NOT_FOUND", "Refund was not found");
-  validateRefundAmount(Number(refund.RequestedAmount), paidAmount,
-    refund.ApprovedAmount == null ? undefined : Number(refund.ApprovedAmount));
-  return { order, refund, paidAmount, paymentMode };
+
+  const paymentMode = getPaymentMode(order);
+  const paidAmount = getPaidAmount(order, paymentMode);
+  const refund = await getRefund(validated.orderId);
+
+  if (!refund) {
+    throw new RefundEngineError("REFUND_NOT_FOUND", "Refund was not found");
+  }
+
+  const activeRefund = await getActiveRefund(validated.orderId);
+  if (activeRefund && activeRefund.RefundId !== refund.RefundId) {
+    throw new RefundEngineError(
+      "DUPLICATE_REFUND",
+      "More than one current refund record exists for this order",
+    );
+  }
+
+  validateRefundAmount(
+    numericValue(refund.RequestedAmount, "RequestedAmount"),
+    paidAmount,
+    refund.ApprovedAmount === null || refund.ApprovedAmount === undefined
+      ? undefined
+      : numericValue(refund.ApprovedAmount, "ApprovedAmount"),
+  );
+
+  return {
+    actor: validated.actor,
+    order,
+    refund,
+    paymentMode,
+    paidAmount,
+  };
 }
 
-async function execute(operation: () => Promise<RefundRecord>): Promise<RefundResponse> {
+async function execute(
+  operation: () => Promise<RefundRecord>,
+): Promise<RefundResponse> {
   try {
-    return { ok: true, data: await operation() };
+    return {
+      ok: true,
+      data: await operation(),
+    };
   } catch (error) {
-    const failure = error instanceof RefundEngineError
-      ? error
-      : new RefundEngineError("DATABASE_ERROR", error instanceof Error ? error.message : "Refund operation failed");
-    return { ok: false, error: { code: failure.code, message: failure.message } };
+    const failure =
+      error instanceof RefundEngineError
+        ? error
+        : new RefundEngineError(
+            "DATABASE_ERROR",
+            error instanceof Error ? error.message : "Refund operation failed",
+          );
+
+    return {
+      ok: false,
+      error: {
+        code: failure.code,
+        message: failure.message,
+      },
+    };
   }
 }
 
-async function transition(
+async function transitionRefund(
   input: CommonInput,
-  allowed: readonly RefundStatus[],
+  allowedStatuses: readonly RefundStatus[],
   nextStatus: RefundStatus,
-  stage: RefundJourneyStage,
-  refundPatch: Record<string, unknown> = {},
-  orderPatch: Record<string, unknown> = {},
+  refundPatch: Record<string, unknown>,
+  orderPatch: Record<string, unknown>,
+  stage?: RefundJourneyStage,
 ): Promise<RefundRecord> {
-  const { refund } = await loadContext(input);
-  assertStatus(refund, allowed);
-  const now = new Date().toISOString();
+  const context = await loadContext(input);
+  assertRefundStatus(context.refund, allowedStatuses);
+  const currentTime = getCurrentISTDateTime();
+  const remarks = optionalText(input.remarks) ?? nextStatus;
 
-  return applyTransaction({
-    order_id: input.orderId,
-    refund_attempt: Number(refund.RefundAttempt),
-    expected_refund_status: refund.RefundStatus,
-    create_refund: false,
-    order_patch: {
+  return applySequentialMutation({
+    orderId: context.order.OrderId,
+    refundBefore: context.refund,
+    createRefund: false,
+    expectedRefundStatus: context.refund.RefundStatus,
+    refundPatch: {
       RefundStatus: nextStatus,
-      RefundRemarks: input.remarks?.trim() || null,
-      RefundBy: input.actor.userName.trim(),
-      ...orderPatch,
-    },
-    refund_patch: {
-      RefundStatus: nextStatus,
-      RefundRemarks: input.remarks?.trim() || null,
-      UpdatedBy: input.actor.userName.trim(),
-      UpdatedIP: input.actor.ip?.trim() || null,
-      UpdatedDevice: input.actor.device?.trim() || null,
+      RefundRemarks: remarks,
+      UpdatedBy: context.actor.userName,
+      UpdatedIP: context.actor.ip,
+      UpdatedDevice: context.actor.device,
       ...refundPatch,
     },
-    journey_patch: buildJourneyPatch(stage, input.actor, input.remarks, now),
+    orderPatch: {
+      RefundStatus: nextStatus,
+      RefundRemarks: remarks,
+      RefundBy: context.actor.userName,
+      ...orderPatch,
+    },
+    journeyPatch: buildJourneyPatch(
+      nextStatus,
+      context.actor,
+      remarks,
+      currentTime,
+      stage,
+    ),
   });
 }
 
-export async function requestRefund(input: RequestRefundInput): Promise<RefundResponse> {
+export async function requestRefund(
+  input: RequestRefundInput,
+): Promise<RefundResponse> {
   return execute(async () => {
-    validateInput(input);
+    const validated = validateCommonInput(input);
     const reason = requiredText(input.reason, "reason");
-    const order = await getOrder(input.orderId);
+    const order = await getOrder(validated.orderId);
     validateRefundEligibility(order);
-    const paymentMode = orderPaymentMode(order);
-    const paidAmount = orderPaidAmount(order);
+
+    const paymentMode = getPaymentMode(order);
+    const paidAmount = getPaidAmount(order, paymentMode);
     validateRefundAmount(input.requestedAmount, paidAmount);
 
-    const latestRefund = await getRefund(input.orderId);
-    if (isActive(latestRefund)) {
-      throw new RefundEngineError("DUPLICATE_REFUND", "Only one active refund is allowed per order");
+    const activeRefund = await getActiveRefund(validated.orderId);
+    if (activeRefund) {
+      throw new RefundEngineError(
+        "DUPLICATE_REFUND",
+        "Only one active refund is allowed per order",
+      );
     }
 
+    const latestRefund = await getRefund(validated.orderId);
     const attempt = nextRefundAttempt(latestRefund);
-    const reference = buildRefundReference(input.orderId, attempt);
-    const now = new Date().toISOString();
+    const refundReference = buildRefundReference(validated.orderId, attempt);
+    const currentTime = getCurrentISTDateTime();
+    const remarks = optionalText(input.remarks) ?? reason;
 
-    return applyTransaction({
-      order_id: input.orderId,
-      refund_attempt: attempt,
-      expected_refund_status: latestRefund?.RefundStatus ?? null,
-      create_refund: true,
-      order_patch: {
-        RefundStatus: "RefundRequested",
-        RefundRequestedAmount: input.requestedAmount,
-        RefundApprovedAmount: null,
-        RefundReference: reference,
-        RefundReason: reason,
-        RefundRemarks: input.remarks?.trim() || null,
-        RefundRequestedAt: now,
-        RefundReviewedAt: null,
-        RefundApprovedAt: null,
-        RefundProcessingAt: null,
-        RefundCompletedAt: null,
-        RefundTransactionId: null,
-        RefundBy: input.actor.userName.trim(),
-        IsRefunded: false,
-      },
-      refund_patch: {
-        RefundReference: reference,
-        OrderId: input.orderId,
+    return applySequentialMutation({
+      orderId: validated.orderId,
+      refundBefore: latestRefund,
+      createRefund: true,
+      expectedRefundStatus: latestRefund?.RefundStatus ?? null,
+      refundPatch: {
+        RefundReference: refundReference,
+        OrderId: validated.orderId,
         RefundAttempt: attempt,
         CustomerId: order.CustomerId ?? null,
         CustomerName: order.CustomerName ?? null,
@@ -537,113 +981,264 @@ export async function requestRefund(input: RequestRefundInput): Promise<RefundRe
         ApprovedAmount: null,
         RefundStatus: "RefundRequested",
         RefundReason: reason,
-        RefundRemarks: input.remarks?.trim() || null,
-        RequestedByUserType: input.actor.userType.trim(),
-        RequestedByUserName: input.actor.userName.trim(),
-        RequestedSource: input.actor.source.trim(),
-        RequestedAt: now,
-        CreatedIP: input.actor.ip?.trim() || null,
-        UpdatedIP: input.actor.ip?.trim() || null,
-        CreatedDevice: input.actor.device?.trim() || null,
-        UpdatedDevice: input.actor.device?.trim() || null,
-        UpdatedBy: input.actor.userName.trim(),
+        RefundRemarks: remarks,
+        RequestedByUserType: validated.actor.userType,
+        RequestedByUserName: validated.actor.userName,
+        RequestedSource: validated.actor.source,
+        RequestedAt: currentTime.iso,
+        CreatedIP: validated.actor.ip,
+        UpdatedIP: validated.actor.ip,
+        CreatedDevice: validated.actor.device,
+        UpdatedDevice: validated.actor.device,
+        UpdatedBy: validated.actor.userName,
       },
-      journey_patch: buildJourneyPatch("RefundRequested", input.actor, input.remarks, now),
+      orderPatch: {
+        RefundStatus: "RefundRequested",
+        RefundRequestedAmount: input.requestedAmount,
+        RefundApprovedAmount: null,
+        RefundReference: refundReference,
+        RefundReason: reason,
+        RefundRemarks: remarks,
+        RefundRequestedAt: currentTime.iso,
+        RefundReviewedAt: null,
+        RefundApprovedAt: null,
+        RefundProcessingAt: null,
+        RefundCompletedAt: null,
+        RefundTransactionId: null,
+        RefundBy: validated.actor.userName,
+        IsRefunded: false,
+      },
+      journeyPatch: buildJourneyPatch(
+        "RefundRequested",
+        validated.actor,
+        remarks,
+        currentTime,
+        "RefundRequested",
+      ),
     });
   });
 }
 
-export async function reviewRefund(input: ReviewRefundInput): Promise<RefundResponse> {
-  const now = new Date().toISOString();
-  return execute(() => transition(
-    input,
-    ["RefundRequested"],
-    "RefundUnderReview",
-    "RefundUnderReview",
-    { ReviewedAt: now, ReviewedBy: input.actor.userName.trim() },
-    { RefundReviewedAt: now },
-  ));
+export async function reviewRefund(
+  input: ReviewRefundInput,
+): Promise<RefundResponse> {
+  return execute(async () => {
+    const validated = validateCommonInput(input);
+    const currentTime = getCurrentISTDateTime();
+
+    return transitionRefund(
+      { ...input, orderId: validated.orderId, actor: validated.actor },
+      ["RefundRequested"],
+      "RefundUnderReview",
+      {
+        ReviewedAt: currentTime.iso,
+        ReviewedBy: validated.actor.userName,
+      },
+      {
+        RefundReviewedAt: currentTime.iso,
+      },
+      "RefundUnderReview",
+    );
+  });
 }
 
-export async function approveRefund(input: ApproveRefundInput): Promise<RefundResponse> {
+export async function approveRefund(
+  input: ApproveRefundInput,
+): Promise<RefundResponse> {
   return execute(async () => {
     const context = await loadContext(input);
-    assertStatus(context.refund, ["RefundUnderReview"]);
-    validateRefundAmount(Number(context.refund.RequestedAmount), context.paidAmount, input.approvedAmount);
+    assertRefundStatus(context.refund, ["RefundUnderReview"]);
+
+    validateRefundAmount(
+      numericValue(context.refund.RequestedAmount, "RequestedAmount"),
+      context.paidAmount,
+      input.approvedAmount,
+    );
+
     if (context.paymentMode === "COD" && input.approveCodManually !== true) {
       throw new RefundEngineError(
         "COD_MANUAL_APPROVAL_REQUIRED",
         "COD refunds require explicit manual approval",
       );
     }
-    const now = new Date().toISOString();
-    return transition(
-      input,
-      ["RefundUnderReview"],
-      "RefundApproved",
-      "RefundApproved",
-      { ApprovedAmount: input.approvedAmount, ApprovedAt: now, ApprovedBy: input.actor.userName.trim() },
-      { RefundApprovedAmount: input.approvedAmount, RefundApprovedAt: now },
-    );
+
+    const currentTime = getCurrentISTDateTime();
+    const remarks = optionalText(input.remarks) ?? "RefundApproved";
+
+    return applySequentialMutation({
+      orderId: context.order.OrderId,
+      refundBefore: context.refund,
+      createRefund: false,
+      expectedRefundStatus: "RefundUnderReview",
+      refundPatch: {
+        RefundStatus: "RefundApproved",
+        ApprovedAmount: input.approvedAmount,
+        ApprovedAt: currentTime.iso,
+        ApprovedBy: context.actor.userName,
+        RefundRemarks: remarks,
+        UpdatedBy: context.actor.userName,
+        UpdatedIP: context.actor.ip,
+        UpdatedDevice: context.actor.device,
+      },
+      orderPatch: {
+        RefundStatus: "RefundApproved",
+        RefundApprovedAmount: input.approvedAmount,
+        RefundApprovedAt: currentTime.iso,
+        RefundRemarks: remarks,
+        RefundBy: context.actor.userName,
+      },
+      journeyPatch: buildJourneyPatch(
+        "RefundApproved",
+        context.actor,
+        remarks,
+        currentTime,
+        "RefundApproved",
+      ),
+    });
   });
 }
 
-export async function rejectRefund(input: RejectRefundInput): Promise<RefundResponse> {
-  return execute(async () => {
-    const remarks = requiredText(input.remarks, "remarks");
-    return transition(
-      input,
-      ["RefundRequested", "RefundUnderReview"],
-      "RefundRejected",
-      "RefundUnderReview",
-      { FailureReason: remarks },
-    );
-  });
-}
-
-export async function startRefundProcessing(input: StartRefundProcessingInput): Promise<RefundResponse> {
+export async function rejectRefund(
+  input: RejectRefundInput,
+): Promise<RefundResponse> {
   return execute(async () => {
     const context = await loadContext(input);
-    assertStatus(context.refund, ["RefundApproved"]);
-    const refundMethod = context.paymentMode === "COD"
-      ? requiredText(input.refundMethod, "refundMethod for COD refund")
-      : input.refundMethod?.trim() || "ORIGINAL_PAYMENT_METHOD";
-    const now = new Date().toISOString();
-    return transition(
-      input,
-      ["RefundApproved"],
-      "RefundProcessing",
-      "RefundProcessing",
-      {
-        RefundMethod: refundMethod,
-        PaymentProvider: input.paymentProvider?.trim() || null,
-        GatewayTransactionId: input.gatewayTransactionId?.trim() || null,
-        ProcessingStartedAt: now,
+    assertRefundStatus(context.refund, [
+      "RefundRequested",
+      "RefundUnderReview",
+    ]);
+    const rejectionReason = requiredText(input.remarks, "remarks");
+    const currentTime = getCurrentISTDateTime();
+
+    return applySequentialMutation({
+      orderId: context.order.OrderId,
+      refundBefore: context.refund,
+      createRefund: false,
+      expectedRefundStatus: context.refund.RefundStatus,
+      refundPatch: {
+        RefundStatus: "RefundRejected",
+        RefundRemarks: rejectionReason,
+        FailureReason: rejectionReason,
+        UpdatedBy: context.actor.userName,
+        UpdatedIP: context.actor.ip,
+        UpdatedDevice: context.actor.device,
       },
-      { RefundProcessingAt: now },
-    );
+      orderPatch: {
+        RefundStatus: "RefundRejected",
+        RefundRemarks: rejectionReason,
+        RefundBy: context.actor.userName,
+      },
+      journeyPatch: buildJourneyPatch(
+        "RefundRejected",
+        context.actor,
+        rejectionReason,
+        currentTime,
+      ),
+    });
   });
 }
 
-export async function completeRefund(input: CompleteRefundInput): Promise<RefundResponse> {
+export async function startRefundProcessing(
+  input: StartRefundProcessingInput,
+): Promise<RefundResponse> {
   return execute(async () => {
-    const providerRefundId = requiredText(input.providerRefundId, "providerRefundId");
-    const now = new Date().toISOString();
-    return transition(
-      input,
-      ["RefundProcessing"],
-      "RefundCompleted",
-      "RefundCompleted",
-      {
-        ProviderRefundId: providerRefundId,
-        CompletedAt: now,
-        CompletedBy: input.actor.userName.trim(),
+    const context = await loadContext(input);
+    assertRefundStatus(context.refund, ["RefundApproved"]);
+
+    const refundMethod =
+      context.paymentMode === "COD"
+        ? requiredText(input.refundMethod, "refundMethod")
+        : optionalText(input.refundMethod) ?? "ORIGINAL_PAYMENT_METHOD";
+
+    const currentTime = getCurrentISTDateTime();
+    const remarks = optionalText(input.remarks) ?? "RefundProcessing";
+
+    return applySequentialMutation({
+      orderId: context.order.OrderId,
+      refundBefore: context.refund,
+      createRefund: false,
+      expectedRefundStatus: "RefundApproved",
+      refundPatch: {
+        RefundStatus: "RefundProcessing",
+        RefundMethod: refundMethod,
+        PaymentProvider: optionalText(input.paymentProvider),
+        GatewayTransactionId: optionalText(input.gatewayTransactionId),
+        ProcessingStartedAt: currentTime.iso,
+        RefundRemarks: remarks,
+        UpdatedBy: context.actor.userName,
+        UpdatedIP: context.actor.ip,
+        UpdatedDevice: context.actor.device,
       },
-      {
-        RefundCompletedAt: now,
-        RefundTransactionId: providerRefundId,
+      orderPatch: {
+        RefundStatus: "RefundProcessing",
+        RefundProcessingAt: currentTime.iso,
+        RefundRemarks: remarks,
+        RefundBy: context.actor.userName,
+      },
+      journeyPatch: buildJourneyPatch(
+        "RefundProcessing",
+        context.actor,
+        remarks,
+        currentTime,
+        "RefundProcessing",
+      ),
+    });
+  });
+}
+
+export async function completeRefund(
+  input: CompleteRefundInput,
+): Promise<RefundResponse> {
+  return execute(async () => {
+    const context = await loadContext(input);
+    assertRefundStatus(context.refund, ["RefundProcessing"]);
+
+    const transactionId =
+      context.paymentMode === "PREPAID"
+        ? requiredText(input.providerRefundId, "providerRefundId")
+        : requiredText(
+            input.manualTransactionId ?? input.providerRefundId,
+            "manualTransactionId",
+          );
+
+    const currentTime = getCurrentISTDateTime();
+    const remarks = optionalText(input.remarks) ?? "RefundCompleted";
+
+    return applySequentialMutation({
+      orderId: context.order.OrderId,
+      refundBefore: context.refund,
+      createRefund: false,
+      expectedRefundStatus: "RefundProcessing",
+      refundPatch: {
+        RefundStatus: "RefundCompleted",
+        ProviderRefundId:
+          context.paymentMode === "PREPAID"
+            ? transactionId
+            : optionalText(input.providerRefundId),
+        GatewayTransactionId:
+          context.paymentMode === "COD" ? transactionId : context.refund.GatewayTransactionId ?? null,
+        CompletedAt: currentTime.iso,
+        CompletedBy: context.actor.userName,
+        RefundRemarks: remarks,
+        UpdatedBy: context.actor.userName,
+        UpdatedIP: context.actor.ip,
+        UpdatedDevice: context.actor.device,
+      },
+      orderPatch: {
         IsRefunded: true,
+        RefundStatus: "RefundCompleted",
+        RefundCompletedAt: currentTime.iso,
+        RefundTransactionId: transactionId,
+        RefundRemarks: remarks,
+        RefundBy: context.actor.userName,
       },
-    );
+      journeyPatch: buildJourneyPatch(
+        "RefundCompleted",
+        context.actor,
+        remarks,
+        currentTime,
+        "RefundCompleted",
+      ),
+    });
   });
 }
