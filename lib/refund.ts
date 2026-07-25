@@ -435,7 +435,9 @@ async function getActiveRefund(orderId: string): Promise<DbRefund | null> {
   return refunds[0] ?? null;
 }
 
-async function getOrderJourney(orderId: string): Promise<DbOrderJourney> {
+async function getOrderJourney(
+  orderId: string,
+): Promise<DbOrderJourney | null> {
   const { data, error } = await supabase()
     .from(TABLES.orderJourney)
     .select("*")
@@ -443,14 +445,10 @@ async function getOrderJourney(orderId: string): Promise<DbOrderJourney> {
     .maybeSingle();
 
   if (error) throw toDatabaseError(error);
-  if (!data) {
-    throw new RefundEngineError(
-      "DATABASE_ERROR",
-      `OrderJourney record for ${orderId} was not found`,
-    );
-  }
 
-  return data as DbOrderJourney;
+  // Older orders may not have an OrderJourney row. Refund creation must not
+  // fail only because the optional journey/audit row is missing.
+  return (data as DbOrderJourney | null) ?? null;
 }
 
 function validateRefundEligibility(order: DbOrder): void {
@@ -688,7 +686,7 @@ async function applySequentialMutation(
   mutation: SequentialMutation,
 ): Promise<RefundRecord> {
   const orderBefore = await getOrder(mutation.orderId);
-  await getOrderJourney(mutation.orderId);
+  const existingJourney = await getOrderJourney(mutation.orderId);
 
   let refundAfter: DbRefund;
 
@@ -749,42 +747,49 @@ async function applySequentialMutation(
     );
   }
 
-  const { data: journeyAfter, error: journeyError } = await supabase()
-    .from(TABLES.orderJourney)
-    .update(mutation.journeyPatch)
-    .eq("OrderId", mutation.orderId)
-    .select("OrderId")
-    .maybeSingle();
+  // Keep the original delivery status/sub-status unchanged. Only update the
+  // journey/audit record when one already exists. Older imported orders may
+  // legitimately have no OrderJourney row.
+  if (existingJourney) {
+    const { data: journeyAfter, error: journeyError } = await supabase()
+      .from(TABLES.orderJourney)
+      .update(mutation.journeyPatch)
+      .eq("OrderId", mutation.orderId)
+      .select("OrderId")
+      .maybeSingle();
 
-  if (journeyError || !journeyAfter) {
-    const compensationErrors: string[] = [];
+    if (journeyError || !journeyAfter) {
+      const compensationErrors: string[] = [];
 
-    const { error: orderRollbackError } = await supabase()
-      .from(TABLES.orders)
-      .update(orderBeforePatch)
-      .eq("OrderId", mutation.orderId);
-    if (orderRollbackError) {
-      compensationErrors.push(`Orders rollback failed: ${orderRollbackError.message}`);
+      const { error: orderRollbackError } = await supabase()
+        .from(TABLES.orders)
+        .update(orderBeforePatch)
+        .eq("OrderId", mutation.orderId);
+      if (orderRollbackError) {
+        compensationErrors.push(
+          `Orders rollback failed: ${orderRollbackError.message}`,
+        );
+      }
+
+      const refundRollbackError = await rollbackRefund(
+        mutation.refundBefore,
+        refundAfter,
+        mutation.createRefund,
+        mutation.refundPatch,
+      );
+      if (refundRollbackError) compensationErrors.push(refundRollbackError);
+
+      const reason =
+        journeyError?.message ?? "OrderJourney disappeared during refund update";
+      throw new RefundEngineError(
+        "DATABASE_ERROR",
+        `OrderJourney update failed: ${reason}; ${
+          compensationErrors.length
+            ? compensationErrors.join("; ")
+            : "Orders and Refunds changes were rolled back"
+        }`,
+      );
     }
-
-    const refundRollbackError = await rollbackRefund(
-      mutation.refundBefore,
-      refundAfter,
-      mutation.createRefund,
-      mutation.refundPatch,
-    );
-    if (refundRollbackError) compensationErrors.push(refundRollbackError);
-
-    const reason =
-      journeyError?.message ?? "OrderJourney disappeared during refund update";
-    throw new RefundEngineError(
-      "DATABASE_ERROR",
-      `OrderJourney update failed: ${reason}; ${
-        compensationErrors.length
-          ? compensationErrors.join("; ")
-          : "Orders and Refunds changes were rolled back"
-      }`,
-    );
   }
 
   return mapRefund(refundAfter);
