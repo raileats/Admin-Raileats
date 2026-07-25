@@ -1,24 +1,25 @@
-import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const TABLES = {
   orders: "Orders",
-  refunds: "Refunds",
+  refunds: "OrderRefunds",
   orderJourney: "OrderJourney",
 } as const;
 
 const ACTIVE_REFUND_STATUSES = [
-  "RefundRequested",
-  "RefundUnderReview",
-  "RefundApproved",
-  "RefundProcessing",
+  "Pending",
+  "Approved",
+  "Processing",
 ] as const;
 
-const RETRYABLE_REFUND_STATUSES = [
-  "RefundRejected",
-  "RefundFailed",
-  "RefundCancelled",
-] as const;
+const RETRYABLE_REFUND_STATUSES = ["Failed"] as const;
+
+type DbRefundStatus =
+  | "Pending"
+  | "Approved"
+  | "Processing"
+  | "Success"
+  | "Failed";
 
 export type RefundStatus =
   | "NoRefund"
@@ -156,16 +157,16 @@ interface DbOrder extends Record<string, unknown> {
 }
 
 interface DbRefund extends Record<string, unknown> {
-  RefundId: string;
-  RefundReference: string;
+  RefundId: number | string;
+  RefundNo: string;
   OrderId: string;
   RefundAttempt: number | string;
-  RefundStatus: RefundStatus;
+  RefundStatus: DbRefundStatus;
   PaymentMode?: string | null;
-  RequestedAmount: number | string;
+  RefundAmount: number | string;
   ApprovedAmount?: number | string | null;
   RefundReason: string;
-  RefundRemarks?: string | null;
+  AdminRemarks?: string | null;
   RequestedAt: string;
   ReviewedAt?: string | null;
   ApprovedAt?: string | null;
@@ -204,7 +205,7 @@ interface SequentialMutation {
   orderId: string;
   refundBefore: DbRefund | null;
   createRefund: boolean;
-  expectedRefundStatus: RefundStatus | null;
+  expectedRefundStatus: DbRefundStatus | null;
   refundPatch: Record<string, unknown>;
   orderPatch: Record<string, unknown>;
   journeyPatch: Record<string, unknown>;
@@ -473,14 +474,14 @@ function validateRefundAmount(
   if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
     throw new RefundEngineError(
       "INVALID_AMOUNT",
-      "RequestedAmount must be greater than zero",
+      "RefundAmount must be greater than zero",
     );
   }
 
   if (requestedAmount > paidAmount) {
     throw new RefundEngineError(
       "AMOUNT_EXCEEDS_PAID_AMOUNT",
-      "RequestedAmount cannot exceed the paid amount",
+      "RefundAmount cannot exceed the paid amount",
     );
   }
 
@@ -495,26 +496,16 @@ function validateRefundAmount(
     if (approvedAmount > requestedAmount || approvedAmount > paidAmount) {
       throw new RefundEngineError(
         "AMOUNT_EXCEEDS_PAID_AMOUNT",
-        "ApprovedAmount cannot exceed RequestedAmount or the paid amount",
+        "ApprovedAmount cannot exceed RefundAmount or the paid amount",
       );
     }
   }
 }
 
-function buildRefundReference(orderId: string, attempt: number): string {
-  const digest = createHash("sha256")
-    .update(`${orderId.toUpperCase()}:${attempt}`)
-    .digest("hex")
-    .slice(0, 16)
-    .toUpperCase();
-
-  return `RF-${digest}-${String(attempt).padStart(3, "0")}`;
-}
-
 function nextRefundAttempt(latestRefund: DbRefund | null): number {
   if (!latestRefund) return 1;
 
-  if (latestRefund.RefundStatus === "RefundCompleted") {
+  if (latestRefund.RefundStatus === "Success") {
     throw new RefundEngineError(
       "DUPLICATE_REFUND",
       "A new refund attempt is not allowed after RefundCompleted",
@@ -615,11 +606,50 @@ function assertRefundStatus(
   refund: DbRefund,
   allowedStatuses: readonly RefundStatus[],
 ): void {
-  if (!allowedStatuses.includes(refund.RefundStatus)) {
+  const currentStatus = publicRefundStatus(refund);
+  if (!allowedStatuses.includes(currentStatus)) {
     throw new RefundEngineError(
       "INVALID_REFUND_STATE",
-      `Refund is ${refund.RefundStatus}; expected ${allowedStatuses.join(" or ")}`,
+      `Refund is ${currentStatus}; expected ${allowedStatuses.join(" or ")}`,
     );
+  }
+}
+
+function databaseRefundStatus(status: RefundStatus): DbRefundStatus {
+  switch (status) {
+    case "RefundRequested":
+    case "RefundUnderReview":
+      return "Pending";
+    case "RefundApproved":
+      return "Approved";
+    case "RefundProcessing":
+      return "Processing";
+    case "RefundCompleted":
+      return "Success";
+    case "RefundRejected":
+    case "RefundFailed":
+    case "RefundCancelled":
+      return "Failed";
+    default:
+      throw new RefundEngineError(
+        "INVALID_REFUND_STATE",
+        `${status} cannot be stored as a refund status`,
+      );
+  }
+}
+
+function publicRefundStatus(refund: DbRefund): RefundStatus {
+  switch (refund.RefundStatus) {
+    case "Pending":
+      return refund.ReviewedAt ? "RefundUnderReview" : "RefundRequested";
+    case "Approved":
+      return "RefundApproved";
+    case "Processing":
+      return "RefundProcessing";
+    case "Success":
+      return "RefundCompleted";
+    case "Failed":
+      return "RefundRejected";
   }
 }
 
@@ -666,7 +696,7 @@ async function rollbackRefund(
       .from(TABLES.refunds)
       .delete()
       .eq("RefundId", refundAfter.RefundId)
-      .eq("RefundReference", refundAfter.RefundReference);
+      .eq("RefundNo", refundAfter.RefundNo);
 
     return error ? `Refund rollback failed: ${error.message}` : null;
   }
@@ -725,10 +755,16 @@ async function applySequentialMutation(
     refundAfter = data as DbRefund;
   }
 
-  const orderBeforePatch = snapshotPatch(orderBefore, mutation.orderPatch);
+  const effectiveOrderPatch = mutation.createRefund
+    ? {
+        ...mutation.orderPatch,
+        RefundReference: refundAfter.RefundNo,
+      }
+    : mutation.orderPatch;
+  const orderBeforePatch = snapshotPatch(orderBefore, effectiveOrderPatch);
   const { data: orderAfter, error: orderError } = await supabase()
     .from(TABLES.orders)
-    .update(mutation.orderPatch)
+    .update(effectiveOrderPatch)
     .eq("OrderId", mutation.orderId)
     .select("OrderId")
     .maybeSingle();
@@ -743,7 +779,7 @@ async function applySequentialMutation(
     const reason = orderError?.message ?? "Order disappeared during refund update";
     throw new RefundEngineError(
       "DATABASE_ERROR",
-      `Orders update failed: ${reason}${rollbackError ? `; ${rollbackError}` : "; Refunds change was rolled back"}`,
+      `Orders update failed: ${reason}${rollbackError ? `; ${rollbackError}` : "; refund change was rolled back"}`,
     );
   }
 
@@ -786,7 +822,7 @@ async function applySequentialMutation(
         `OrderJourney update failed: ${reason}; ${
           compensationErrors.length
             ? compensationErrors.join("; ")
-            : "Orders and Refunds changes were rolled back"
+            : "Orders and refund changes were rolled back"
         }`,
       );
     }
@@ -805,19 +841,19 @@ function mapRefund(row: DbRefund): RefundRecord {
   }
 
   return {
-    refundId: row.RefundId,
-    refundReference: row.RefundReference,
+    refundId: String(row.RefundId),
+    refundReference: row.RefundNo,
     orderId: row.OrderId,
     refundAttempt: Number(row.RefundAttempt),
-    status: row.RefundStatus,
+    status: publicRefundStatus(row),
     paymentMode,
-    requestedAmount: Number(row.RequestedAmount),
+    requestedAmount: Number(row.RefundAmount),
     approvedAmount:
       row.ApprovedAmount === null || row.ApprovedAmount === undefined
         ? null
         : Number(row.ApprovedAmount),
     reason: row.RefundReason,
-    remarks: row.RefundRemarks ?? null,
+    remarks: row.AdminRemarks ?? null,
     requestedAt: row.RequestedAt,
     reviewedAt: row.ReviewedAt ?? null,
     approvedAt: row.ApprovedAt ?? null,
@@ -849,7 +885,7 @@ async function loadContext(input: CommonInput): Promise<RefundContext> {
   }
 
   validateRefundAmount(
-    numericValue(refund.RequestedAmount, "RequestedAmount"),
+    numericValue(refund.RefundAmount, "RefundAmount"),
     paidAmount,
     refund.ApprovedAmount === null || refund.ApprovedAmount === undefined
       ? undefined
@@ -911,8 +947,8 @@ async function transitionRefund(
     createRefund: false,
     expectedRefundStatus: context.refund.RefundStatus,
     refundPatch: {
-      RefundStatus: nextStatus,
-      RefundRemarks: remarks,
+      RefundStatus: databaseRefundStatus(nextStatus),
+      AdminRemarks: remarks,
       UpdatedBy: context.actor.userName,
       UpdatedIP: context.actor.ip,
       UpdatedDevice: context.actor.device,
@@ -957,7 +993,6 @@ export async function requestRefund(
 
     const latestRefund = await getRefund(validated.orderId);
     const attempt = nextRefundAttempt(latestRefund);
-    const refundReference = buildRefundReference(validated.orderId, attempt);
     const currentTime = getCurrentISTDateTime();
     const remarks = optionalText(input.remarks) ?? reason;
 
@@ -967,7 +1002,6 @@ export async function requestRefund(
       createRefund: true,
       expectedRefundStatus: latestRefund?.RefundStatus ?? null,
       refundPatch: {
-        RefundReference: refundReference,
         OrderId: validated.orderId,
         RefundAttempt: attempt,
         CustomerId: order.CustomerId ?? null,
@@ -976,30 +1010,25 @@ export async function requestRefund(
         RestroCode: order.RestroCode ?? null,
         RestroName: order.RestroName ?? null,
         PaymentMode: paymentMode,
-        OrderAmount: paidAmount,
-
-        // Compatibility with the existing legacy Refunds table.
-        // These columns are NOT NULL in the current production schema.
-        Amount: input.requestedAmount,
-        InitiatedBy: validated.actor.userName,
+        PaidAmount: paidAmount,
 
         TrainNo: order.TrainNo ?? null,
         DeliveryDate: order.DeliveryDate ?? null,
         DeliveryTime: order.DeliveryTime ?? null,
         StationCode: order.StationCode ?? null,
         StationName: order.StationName ?? null,
-        RequestedAmount: input.requestedAmount,
+        RefundAmount: input.requestedAmount,
         ApprovedAmount: null,
-        RefundStatus: "RefundRequested",
+        RefundStatus: "Pending",
         RefundReason: reason,
-        RefundRemarks: remarks,
-        RequestedByUserType: validated.actor.userType,
-        RequestedByUserName: validated.actor.userName,
+        AdminRemarks: remarks,
+        RequestedByType: validated.actor.userType,
+        RequestedByName: validated.actor.userName,
         RequestedSource: validated.actor.source,
         RequestedAt: currentTime.iso,
-        CreatedIP: validated.actor.ip,
+        RequestedIp: validated.actor.ip,
         UpdatedIP: validated.actor.ip,
-        CreatedDevice: validated.actor.device,
+        RequestedDevice: validated.actor.device,
         UpdatedDevice: validated.actor.device,
         UpdatedBy: validated.actor.userName,
       },
@@ -1007,7 +1036,6 @@ export async function requestRefund(
         RefundStatus: "RefundRequested",
         RefundRequestedAmount: input.requestedAmount,
         RefundApprovedAmount: null,
-        RefundReference: refundReference,
         RefundReason: reason,
         RefundRemarks: remarks,
         RefundRequestedAt: currentTime.iso,
@@ -1061,7 +1089,7 @@ export async function approveRefund(
     assertRefundStatus(context.refund, ["RefundUnderReview"]);
 
     validateRefundAmount(
-      numericValue(context.refund.RequestedAmount, "RequestedAmount"),
+      numericValue(context.refund.RefundAmount, "RefundAmount"),
       context.paidAmount,
       input.approvedAmount,
     );
@@ -1080,13 +1108,13 @@ export async function approveRefund(
       orderId: context.order.OrderId,
       refundBefore: context.refund,
       createRefund: false,
-      expectedRefundStatus: "RefundUnderReview",
+      expectedRefundStatus: "Pending",
       refundPatch: {
-        RefundStatus: "RefundApproved",
+        RefundStatus: "Approved",
         ApprovedAmount: input.approvedAmount,
         ApprovedAt: currentTime.iso,
         ApprovedBy: context.actor.userName,
-        RefundRemarks: remarks,
+        AdminRemarks: remarks,
         UpdatedBy: context.actor.userName,
         UpdatedIP: context.actor.ip,
         UpdatedDevice: context.actor.device,
@@ -1127,9 +1155,10 @@ export async function rejectRefund(
       createRefund: false,
       expectedRefundStatus: context.refund.RefundStatus,
       refundPatch: {
-        RefundStatus: "RefundRejected",
-        RefundRemarks: rejectionReason,
+        RefundStatus: "Failed",
+        AdminRemarks: rejectionReason,
         FailureReason: rejectionReason,
+        FailedAt: currentTime.iso,
         UpdatedBy: context.actor.userName,
         UpdatedIP: context.actor.ip,
         UpdatedDevice: context.actor.device,
@@ -1168,14 +1197,14 @@ export async function startRefundProcessing(
       orderId: context.order.OrderId,
       refundBefore: context.refund,
       createRefund: false,
-      expectedRefundStatus: "RefundApproved",
+      expectedRefundStatus: "Approved",
       refundPatch: {
-        RefundStatus: "RefundProcessing",
+        RefundStatus: "Processing",
         RefundMethod: refundMethod,
         PaymentProvider: optionalText(input.paymentProvider),
         GatewayTransactionId: optionalText(input.gatewayTransactionId),
         ProcessingStartedAt: currentTime.iso,
-        RefundRemarks: remarks,
+        AdminRemarks: remarks,
         UpdatedBy: context.actor.userName,
         UpdatedIP: context.actor.ip,
         UpdatedDevice: context.actor.device,
@@ -1219,9 +1248,9 @@ export async function completeRefund(
       orderId: context.order.OrderId,
       refundBefore: context.refund,
       createRefund: false,
-      expectedRefundStatus: "RefundProcessing",
+      expectedRefundStatus: "Processing",
       refundPatch: {
-        RefundStatus: "RefundCompleted",
+        RefundStatus: "Success",
         ProviderRefundId:
           context.paymentMode === "PREPAID"
             ? transactionId
@@ -1230,7 +1259,7 @@ export async function completeRefund(
           context.paymentMode === "COD" ? transactionId : context.refund.GatewayTransactionId ?? null,
         CompletedAt: currentTime.iso,
         CompletedBy: context.actor.userName,
-        RefundRemarks: remarks,
+        AdminRemarks: remarks,
         UpdatedBy: context.actor.userName,
         UpdatedIP: context.actor.ip,
         UpdatedDevice: context.actor.device,
