@@ -114,13 +114,13 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await startRefundProcessing({
-      orderId,
-      refundMethod: refundMethod || undefined,
-      paymentProvider: paymentProvider || undefined,
-      gatewayTransactionId: gatewayTransactionId || undefined,
-      remarks: remarks || undefined,
-      actor,
-    });
+  orderId,
+  refundMethod: refundMethod || undefined,
+  PaymentGateway: paymentProvider || undefined,
+  gatewayTransactionId: gatewayTransactionId || undefined,
+  remarks: remarks || undefined,
+  actor,
+});
 
     if (!result.ok) {
       return NextResponse.json(result, {
