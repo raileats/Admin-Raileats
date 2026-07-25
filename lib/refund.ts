@@ -967,49 +967,42 @@ export async function requestRefund(
       createRefund: true,
       expectedRefundStatus: latestRefund?.RefundStatus ?? null,
       refundPatch: {
-  RefundReference: refundReference,
-  OrderId: validated.orderId,
-  RefundAttempt: attempt,
+        RefundReference: refundReference,
+        OrderId: validated.orderId,
+        RefundAttempt: attempt,
+        CustomerId: order.CustomerId ?? null,
+        CustomerName: order.CustomerName ?? null,
+        CustomerMobile: order.CustomerMobile ?? null,
+        RestroCode: order.RestroCode ?? null,
+        RestroName: order.RestroName ?? null,
+        PaymentMode: paymentMode,
+        OrderAmount: paidAmount,
 
-  CustomerId: order.CustomerId ?? null,
-  CustomerName: order.CustomerName ?? null,
-  CustomerMobile: order.CustomerMobile ?? null,
+        // Compatibility with the existing legacy Refunds table.
+        // These columns are NOT NULL in the current production schema.
+        Amount: input.requestedAmount,
+        InitiatedBy: validated.actor.userName,
 
-  RestroCode: order.RestroCode ?? null,
-  RestroName: order.RestroName ?? null,
-
-  PaymentMode: paymentMode,
-
-  OrderAmount: paidAmount,
-
-  // Legacy Refunds table ka required NOT NULL column
-  Amount: input.requestedAmount,
-
-  // New refund engine columns
-  RequestedAmount: input.requestedAmount,
-  ApprovedAmount: null,
-
-  TrainNo: order.TrainNo ?? null,
-  DeliveryDate: order.DeliveryDate ?? null,
-  DeliveryTime: order.DeliveryTime ?? null,
-  StationCode: order.StationCode ?? null,
-  StationName: order.StationName ?? null,
-
-  RefundStatus: "RefundRequested",
-  RefundReason: reason,
-  RefundRemarks: remarks,
-
-  RequestedByUserType: validated.actor.userType,
-  RequestedByUserName: validated.actor.userName,
-  RequestedSource: validated.actor.source,
-  RequestedAt: currentTime.iso,
-
-  CreatedIP: validated.actor.ip,
-  UpdatedIP: validated.actor.ip,
-  CreatedDevice: validated.actor.device,
-  UpdatedDevice: validated.actor.device,
-  UpdatedBy: validated.actor.userName,
-},
+        TrainNo: order.TrainNo ?? null,
+        DeliveryDate: order.DeliveryDate ?? null,
+        DeliveryTime: order.DeliveryTime ?? null,
+        StationCode: order.StationCode ?? null,
+        StationName: order.StationName ?? null,
+        RequestedAmount: input.requestedAmount,
+        ApprovedAmount: null,
+        RefundStatus: "RefundRequested",
+        RefundReason: reason,
+        RefundRemarks: remarks,
+        RequestedByUserType: validated.actor.userType,
+        RequestedByUserName: validated.actor.userName,
+        RequestedSource: validated.actor.source,
+        RequestedAt: currentTime.iso,
+        CreatedIP: validated.actor.ip,
+        UpdatedIP: validated.actor.ip,
+        CreatedDevice: validated.actor.device,
+        UpdatedDevice: validated.actor.device,
+        UpdatedBy: validated.actor.userName,
+      },
       orderPatch: {
         RefundStatus: "RefundRequested",
         RefundRequestedAmount: input.requestedAmount,
