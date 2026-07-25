@@ -1183,6 +1183,19 @@ export async function GET(req: Request) {
             "SubStatus",
             "Bad Delivery"
           );
+      } else if (
+        normalizedStatusFilter ===
+        "partialdelivery"
+      ) {
+        query = query
+          .eq(
+            "Status",
+            "Delivered"
+          )
+          .eq(
+            "SubStatus",
+            "Partial Delivery"
+          );
       } else if (dbStatus) {
         query = query.eq(
           "Status",
