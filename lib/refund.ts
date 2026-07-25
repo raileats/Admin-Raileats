@@ -581,11 +581,7 @@ function buildJourneyPatch(
   stage?: RefundJourneyStage,
 ): Record<string, unknown> {
   const effectiveRemarks = optionalText(remarks) ?? status;
-  const patch: Record<string, unknown> = {
-    Status: "Refund",
-    SubStatus: status,
-    Remarks: effectiveRemarks,
-  };
+  const patch: Record<string, unknown> = {};
 
   if (stage) {
     Object.assign(patch, {
@@ -786,7 +782,7 @@ async function applySequentialMutation(
   // Keep the original delivery status/sub-status unchanged. Only update the
   // journey/audit record when one already exists. Older imported orders may
   // legitimately have no OrderJourney row.
-  if (existingJourney) {
+  if (existingJourney && Object.keys(mutation.journeyPatch).length > 0) {
     const { data: journeyAfter, error: journeyError } = await supabase()
       .from(TABLES.orderJourney)
       .update(mutation.journeyPatch)
