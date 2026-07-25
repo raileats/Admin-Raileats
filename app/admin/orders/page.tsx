@@ -28,6 +28,7 @@ type TabKey =
   | "cancelled"
   | "notdelivered"
   | "baddelivery"
+  | "partialdelivery"
   | "complaints"
   | "refund"
   | "all";
@@ -76,6 +77,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "notdelivered", label: "Not Delivered" },
   { key: "refund", label: "Refund" },
   { key: "baddelivery", label: "Bad Delivery" },
+  { key: "partialdelivery", label: "Partial Delivery" },
   { key: "all", label: "All" },
 ];
 const CANCEL_REASONS = [
@@ -98,7 +100,7 @@ const NOT_DELIVERED_REASONS = [
   "Technical Issue",
 ];
 
-const DELIVERED_REASONS = ["Delivered", "Bad Delivery"];
+const DELIVERED_REASONS = ["Delivered", "Bad Delivery", "Partial Delivery"];
 
 const ORDER_PENALTY_BY_SUB_STATUS: Record<string, number> = {
   "Customer Plan Change": 0,
@@ -131,7 +133,7 @@ const OUT_FOR_DELIVERY_OUTCOME_OPTIONS: OutcomeOption[] = [
     key: "Partial Delivery",
     label: "Partial Delivery",
     dbValue: "Delivered",
-    targetTab: "delivered",
+    targetTab: "partialdelivery",
     vendorPenalty: 0,
     manualPenalty: true,
   },
@@ -308,6 +310,12 @@ const NEXT_MAP: Record<
     dbValue: "Bad Delivery",
   },
 
+  partialdelivery: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Partial Delivery",
+  },
+
   complaints: { next: null, actionLabel: "", dbValue: "Complaints" },
   refund: { next: null, actionLabel: "", dbValue: "Refund" },
 
@@ -318,10 +326,11 @@ const NEXT_MAP: Record<
   },
 };
 const FINAL_MARK_OPTIONS = [
-  { key: "delivered", label: "Delivered", dbValue: "Delivered" },
-  { key: "cancelled", label: "Cancelled", dbValue: "Cancelled" },
-  { key: "notdelivered", label: "Not Delivered", dbValue: "Not Delivered" },
-  { key: "baddelivery", label: "Bad Delivery", dbValue: "Bad Delivery" },
+  { key: "delivered", label: "Delivered", dbValue: "Delivered", targetTab: "delivered" },
+  { key: "cancelled", label: "Cancelled", dbValue: "Cancelled", targetTab: "cancelled" },
+  { key: "notdelivered", label: "Not Delivered", dbValue: "Not Delivered", targetTab: "notdelivered" },
+  { key: "baddelivery", label: "Bad Delivery", dbValue: "Delivered", targetTab: "baddelivery" },
+  { key: "partialdelivery", label: "Partial Delivery", dbValue: "Delivered", targetTab: "partialdelivery" },
 ] as const;
 
 const supabase = createClient(
@@ -541,13 +550,23 @@ const mapOrderRowToOrder = (row: any): Order => {
       .toLowerCase()
       .trim();
 
-    tabStatus = subStatus === "bad delivery" ? "baddelivery" : "delivered";
+    tabStatus =
+      subStatus === "bad delivery"
+        ? "baddelivery"
+        : subStatus === "partial delivery"
+          ? "partialdelivery"
+          : "delivered";
   } else if (lowerRaw === "cancelled") {
     tabStatus = "cancelled";
   } else if (lowerRaw === "notdelivered" || lowerRaw === "not delivered") {
     tabStatus = "notdelivered";
   } else if (lowerRaw === "baddelivery" || lowerRaw === "bad delivery") {
     tabStatus = "baddelivery";
+  } else if (
+    lowerRaw === "partialdelivery" ||
+    lowerRaw === "partial delivery"
+  ) {
+    tabStatus = "partialdelivery";
   } else if (lowerRaw === "complaints" || lowerRaw === "complaint") {
     tabStatus = "complaints";
   } else if (lowerRaw === "refund") {
@@ -851,6 +870,7 @@ export default function AdminOrdersPage() {
   const [remarks, setRemarks] = useState("");
 
   const [vendorPenaltyAmount, setVendorPenaltyAmount] = useState("");
+  const [refundRequestAmount, setRefundRequestAmount] = useState("");
 
   const [marking, setMarking] = useState<
     Record<string, { status: string; remarks: string }>
@@ -1923,6 +1943,46 @@ export default function AdminOrdersPage() {
     })();
   }
 
+  async function createRefundRequest({
+    order,
+    amount,
+    reason,
+    remarksText,
+  }: {
+    order: Order;
+    amount: number;
+    reason: string;
+    remarksText?: string;
+  }) {
+    const actor = getAdminActor();
+    const response = await fetch("/api/admin/refunds/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId: order.id,
+        requestedAmount: amount,
+        reason,
+        remarks: remarksText || "",
+        actor: {
+          userType: actor.userType || "Admin",
+          userName: actor.userName || "Admin",
+          source: "Admin Orders",
+          device:
+            typeof navigator !== "undefined" ? navigator.userAgent : null,
+        },
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.ok) {
+      const message =
+        payload?.error?.message || payload?.error || "Refund request failed";
+      throw new Error(String(message));
+    }
+
+    return payload;
+  }
+
   async function submitStatusAction() {
     if (!selectedOrder) return;
     if (!subStatus) {
@@ -1985,6 +2045,26 @@ export default function AdminOrdersPage() {
 
       const actor = getAdminActor();
       const cleanRemarks = remarks.trim();
+      const needsManualRefund =
+        subStatus === "Bad Delivery" || subStatus === "Partial Delivery";
+      const manualRefundAmount = Number(refundRequestAmount);
+
+      if (
+        needsManualRefund &&
+        (!Number.isFinite(manualRefundAmount) || manualRefundAmount <= 0)
+      ) {
+        alert("Please enter a valid refund amount greater than zero");
+        return;
+      }
+
+      const orderPaidAmount =
+        moneyFrom(selectedOrder.raw, "PPDAmount", "PaidAmount", "TotalAmount", "totalAmount") ??
+        Number(selectedOrder.total || 0);
+
+      if (needsManualRefund && manualRefundAmount > orderPaidAmount) {
+        alert(`Refund amount cannot exceed paid/order amount Rs ${moneyNumber(orderPaidAmount)}`);
+        return;
+      }
 
       const res = await fetch(
         `/api/orders/${encodeURIComponent(selectedOrder.id)}/status`,
@@ -2014,11 +2094,26 @@ export default function AdminOrdersPage() {
         return;
       }
 
+      if (needsManualRefund) {
+        try {
+          await createRefundRequest({
+            order: selectedOrder,
+            amount: manualRefundAmount,
+            reason: subStatus,
+            remarksText: cleanRemarks,
+          });
+        } catch (refundError: any) {
+          alert(
+            `Order status updated, but refund request failed: ${refundError?.message || "Unknown error"}`,
+          );
+        }
+      }
+
       const targetKey: TabKey = outForDeliveryOption
         ? outForDeliveryOption.targetTab
         : subStatus === "Bad Delivery"
           ? "baddelivery"
-          : (computedMainStatus.toLowerCase().replace(/\s/g, "") as TabKey);
+          : "delivered";
 
       const updatedOrder = {
         ...selectedOrder,
@@ -2066,6 +2161,7 @@ export default function AdminOrdersPage() {
       setSubStatus("");
       setRemarks("");
       setVendorPenaltyAmount("");
+      setRefundRequestAmount("");
       setActiveTab(targetKey);
     } catch (e) {
       console.error(e);
@@ -2079,10 +2175,41 @@ export default function AdminOrdersPage() {
       alert("Select status first");
       return;
     }
-    const targetKey = selection.status as TabKey;
-    const matchedOption = FINAL_MARK_OPTIONS.find((o) => o.key === targetKey);
-    const targetDbValue = matchedOption ? matchedOption.dbValue : targetKey;
-    const currentRemarks = selection.remarks || `Marked ${targetKey}`;
+    const matchedOption = FINAL_MARK_OPTIONS.find(
+      (option) => option.key === selection.status,
+    );
+    if (!matchedOption) {
+      alert("Invalid status selected");
+      return;
+    }
+
+    const targetKey = matchedOption.targetTab as TabKey;
+    const targetDbValue = matchedOption.dbValue;
+    const currentRemarks = selection.remarks || `Marked ${matchedOption.label}`;
+    const needsManualRefund =
+      matchedOption.label === "Bad Delivery" ||
+      matchedOption.label === "Partial Delivery";
+
+    let manualRefundAmount = 0;
+    if (needsManualRefund) {
+      const paidAmount =
+        moneyFrom(order.raw, "PPDAmount", "PaidAmount", "TotalAmount", "totalAmount") ??
+        Number(order.total || 0);
+      const entered = window.prompt(
+        `${matchedOption.label} refund amount enter karein (maximum Rs ${moneyNumber(paidAmount)})`,
+        String(paidAmount || ""),
+      );
+      if (entered === null) return;
+      manualRefundAmount = Number(entered);
+      if (!Number.isFinite(manualRefundAmount) || manualRefundAmount <= 0) {
+        alert("Please enter a valid refund amount greater than zero");
+        return;
+      }
+      if (manualRefundAmount > paidAmount) {
+        alert(`Refund amount cannot exceed paid/order amount Rs ${moneyNumber(paidAmount)}`);
+        return;
+      }
+    }
 
     try {
       const actor = getAdminActor();
@@ -2107,6 +2234,21 @@ export default function AdminOrdersPage() {
       if (!res.ok || !json?.ok) {
         alert("Failed to change status");
         return;
+      }
+
+      if (needsManualRefund) {
+        try {
+          await createRefundRequest({
+            order,
+            amount: manualRefundAmount,
+            reason: matchedOption.label,
+            remarksText: currentRemarks,
+          });
+        } catch (refundError: any) {
+          alert(
+            `Order status updated, but refund request failed: ${refundError?.message || "Unknown error"}`,
+          );
+        }
       }
 
       const updated: Order = {
@@ -2277,6 +2419,7 @@ export default function AdminOrdersPage() {
       cancelled: 0,
       notdelivered: 0,
       baddelivery: 0,
+      partialdelivery: 0,
       complaints: 0,
       refund: 0,
       all: 0,
@@ -3150,6 +3293,7 @@ export default function AdminOrdersPage() {
                                 setSubStatus("");
                                 setRemarks("");
                                 setVendorPenaltyAmount("");
+                                setRefundRequestAmount("");
                                 setStatusModalOpen(true);
                               }}
                               style={{
@@ -3176,6 +3320,7 @@ export default function AdminOrdersPage() {
                                 setSubStatus("");
                                 setRemarks("");
                                 setVendorPenaltyAmount("");
+                                setRefundRequestAmount("");
                                 setStatusModalOpen(true);
                               }}
                               style={{
@@ -4714,6 +4859,12 @@ export default function AdminOrdersPage() {
                     ? ""
                     : String(option?.vendorPenalty ?? ""),
                 );
+                if (
+                  e.target.value !== "Bad Delivery" &&
+                  e.target.value !== "Partial Delivery"
+                ) {
+                  setRefundRequestAmount("");
+                }
               }}
               style={{
                 width: "100%",
@@ -4813,6 +4964,42 @@ export default function AdminOrdersPage() {
                 </div>
               )}
 
+            {actionType === "mark" &&
+              (subStatus === "Bad Delivery" ||
+                subStatus === "Partial Delivery") && (
+                <label
+                  style={{
+                    display: "grid",
+                    gap: 6,
+                    marginBottom: 16,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: "#334155",
+                  }}
+                >
+                  Customer Refund Amount (Rs)
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={refundRequestAmount}
+                    onChange={(e) => setRefundRequestAmount(e.target.value)}
+                    placeholder="Enter refund amount"
+                    style={{
+                      width: "100%",
+                      padding: 10,
+                      borderRadius: 8,
+                      border: "1px solid #cbd5e1",
+                      fontSize: 13,
+                      fontWeight: 700,
+                    }}
+                  />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>
+                    Bad Delivery aur Partial Delivery ke liye refund amount required hai.
+                  </span>
+                </label>
+              )}
+
             <textarea
               placeholder="Internal administrative remarks annotation ledger (Optional)"
               value={remarks}
@@ -4839,6 +5026,7 @@ export default function AdminOrdersPage() {
                   setSubStatus("");
                   setRemarks("");
                   setVendorPenaltyAmount("");
+                  setRefundRequestAmount("");
                 }}
                 style={{
                   padding: "10px 14px",
