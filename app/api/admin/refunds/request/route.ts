@@ -1,43 +1,63 @@
+// app/api/admin/refunds/request/route.ts
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { requestRefund, type RefundActor } from "@/lib/refund";
 
 function cleanText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function numberValue(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+function readActor(value: unknown): RefundActor | null {
+  if (!value || typeof value !== "object") return null;
 
-function supabaseServer() {
-  const url =
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const actor = value as Record<string, unknown>;
 
-  if (!url || !key) {
-    throw new Error(
-      "SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required",
-    );
+  const userType = cleanText(actor.userType);
+  const userName = cleanText(actor.userName);
+  const source = cleanText(actor.source);
+
+  if (!userType || !userName || !source) {
+    return null;
   }
 
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+  return {
+    userType,
+    userName,
+    source,
+    ip: cleanText(actor.ip) || null,
+    device: cleanText(actor.device) || null,
+  };
 }
 
-function refundNumber(orderId: string) {
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const suffix = `${now.getTime()}`.slice(-6);
-  const orderSuffix = orderId.replace(/[^a-zA-Z0-9]/g, "").slice(-6);
-  return `RF-${date}-${orderSuffix || suffix}-${suffix}`;
+function getHttpStatus(code: string): number {
+  switch (code) {
+    case "ORDER_NOT_FOUND":
+    case "REFUND_NOT_FOUND":
+      return 404;
+
+    case "DUPLICATE_REFUND":
+    case "CONCURRENT_UPDATE":
+      return 409;
+
+    case "CONFIGURATION_ERROR":
+    case "DATABASE_ERROR":
+      return 500;
+
+    case "INVALID_ARGUMENT":
+    case "INVALID_AMOUNT":
+    case "AMOUNT_EXCEEDS_PAID_AMOUNT":
+    case "ORDER_NOT_ELIGIBLE":
+    case "UNSUPPORTED_PAYMENT_MODE":
+    case "COD_MANUAL_APPROVAL_REQUIRED":
+    case "INVALID_REFUND_STATE":
+      return 400;
+
+    default:
+      return 400;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -46,177 +66,118 @@ export async function POST(req: NextRequest) {
 
     if (!body || typeof body !== "object") {
       return NextResponse.json(
-        { ok: false, error: { message: "Valid JSON body is required" } },
+        {
+          ok: false,
+          error: {
+            code: "INVALID_ARGUMENT",
+            message: "Valid JSON body is required",
+          },
+        },
         { status: 400 },
       );
     }
 
-    const orderId = cleanText(body.orderId ?? body.OrderId);
-    const reason = cleanText(body.reason ?? body.RefundReason);
-    const remarks = cleanText(body.remarks ?? body.AdminRemarks);
-    const requestedAmount = numberValue(
-      body.requestedAmount ?? body.RefundAmount,
+    const payload = body as Record<string, unknown>;
+
+    const orderId = cleanText(payload.orderId ?? payload.OrderId);
+
+    const requestedAmount = Number(
+      payload.requestedAmount ?? payload.RefundAmount,
     );
 
+    const reason = cleanText(
+      payload.reason ??
+        payload.RefundReason ??
+        payload.subStatus ??
+        "Manual Refund",
+    );
+
+    const remarks = cleanText(
+      payload.remarks ??
+        payload.RefundRemarks ??
+        payload.AdminRemarks,
+    );
+
+    const actor =
+      readActor(payload.actor) ??
+      ({
+        userType: "Admin",
+        userName: cleanText(payload.userName) || "Admin",
+        source: cleanText(payload.source) || "Admin Panel",
+        ip: null,
+        device: null,
+      } satisfies RefundActor);
 
     if (!orderId) {
       return NextResponse.json(
-        { ok: false, error: { message: "orderId is required" } },
+        {
+          ok: false,
+          error: {
+            code: "INVALID_ARGUMENT",
+            message: "orderId is required",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "INVALID_AMOUNT",
+            message: "requestedAmount must be greater than zero",
+          },
+        },
         { status: 400 },
       );
     }
 
     if (!reason) {
       return NextResponse.json(
-        { ok: false, error: { message: "reason is required" } },
-        { status: 400 },
-      );
-    }
-
-    if (requestedAmount <= 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: { message: "requestedAmount must be greater than zero" },
-        },
-        { status: 400 },
-      );
-    }
-
-    const supabase = supabaseServer();
-    const { data: order, error: orderError } = await supabase
-      .from("Orders")
-      .select("*")
-      .eq("OrderId", orderId)
-      .maybeSingle();
-
-    if (orderError) {
-      return NextResponse.json(
-        { ok: false, error: { message: orderError.message } },
-        { status: 500 },
-      );
-    }
-
-    if (!order) {
-      return NextResponse.json(
-        { ok: false, error: { message: "Order not found" } },
-        { status: 404 },
-      );
-    }
-
-    const paidAmount = Math.max(
-      0,
-      numberValue(order.PPDAmount) ||
-        numberValue(order.PaidAmount) ||
-        numberValue(order.TotalAmount),
-    );
-
-    if (requestedAmount > paidAmount) {
-      return NextResponse.json(
         {
           ok: false,
           error: {
-            message: `Refund amount cannot exceed paid/order amount Rs ${paidAmount}`,
+            code: "INVALID_ARGUMENT",
+            message: "reason is required",
           },
         },
         { status: 400 },
       );
     }
 
-    const now = new Date().toISOString();
-    const payload: Record<string, unknown> = {
-      OrderId: orderId,
-      RefundNo: refundNumber(orderId),
-      RestroCode: order.RestroCode ?? null,
-      RestroName: order.RestroName ?? null,
-      StationCode: order.StationCode ?? null,
-      StationName: order.StationName ?? null,
-      CustomerName: order.CustomerName ?? null,
-      CustomerMobile: order.CustomerMobile ?? null,
-      PaymentMode: cleanText(order.PaymentMode) || "COD",
-      PaidAmount: paidAmount,
-      RefundAmount: requestedAmount,
-      OrderStatus: cleanText(order.Status) || null,
-      OrderSubStatus: cleanText(order.SubStatus) || reason,
-      RefundReason: reason,
-      RefundStatus: "Pending",
-      AdminRemarks: remarks || null,
-      UpdatedAt: now,
-    };
+    const result = await requestRefund({
+      orderId,
+      requestedAmount,
+      reason,
+      remarks: remarks || undefined,
+      actor,
+    });
 
-    const { data: existing, error: findError } = await supabase
-      .from("OrderRefunds")
-      .select("*")
-      .eq("OrderId", orderId)
-      .maybeSingle();
-
-    if (findError) {
-      return NextResponse.json(
-        { ok: false, error: { message: findError.message } },
-        { status: 500 },
-      );
-    }
-
-    if (existing) {
-      const existingStatus = cleanText(existing.RefundStatus).toLowerCase();
-      if (["approved", "processing", "success"].includes(existingStatus)) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: {
-              message: `Refund already exists with status ${existing.RefundStatus}`,
-            },
-          },
-          { status: 409 },
-        );
-      }
-
-      const updatePayload = { ...payload };
-      delete updatePayload.RefundNo;
-
-      let updateQuery = supabase.from("OrderRefunds").update(updatePayload);
-      updateQuery =
-        existing.RefundId != null
-          ? updateQuery.eq("RefundId", existing.RefundId)
-          : updateQuery.eq("OrderId", orderId);
-
-      const { data, error } = await updateQuery.select("*").maybeSingle();
-      if (error) {
-        return NextResponse.json(
-          { ok: false, error: { message: error.message } },
-          { status: 500 },
-        );
-      }
-
-      return NextResponse.json(
-        { ok: true, created: false, refund: data },
-        { status: 200 },
-      );
-    }
-
-    const { data, error } = await supabase
-      .from("OrderRefunds")
-      .insert(payload)
-      .select("*")
-      .maybeSingle();
-
-    if (error) {
-      return NextResponse.json(
-        { ok: false, error: { message: error.message } },
-        { status: 500 },
-      );
+    if (!result.ok) {
+      return NextResponse.json(result, {
+        status: getHttpStatus(result.error.code),
+      });
     }
 
     return NextResponse.json(
-      { ok: true, created: true, refund: data },
+      {
+        ok: true,
+        created: true,
+        refund: result.data,
+        data: result.data,
+      },
       { status: 201 },
     );
   } catch (error) {
     console.error("admin refund request POST error", error);
+
     return NextResponse.json(
       {
         ok: false,
         error: {
+          code: "DATABASE_ERROR",
           message:
             error instanceof Error
               ? error.message
