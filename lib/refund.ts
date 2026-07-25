@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const TABLES = {
   orders: "Orders",
-  refunds: "OrderRefunds",
+  orderRefunds: "OrderRefunds",
   orderJourney: "OrderJourney",
 } as const;
 
@@ -405,7 +405,7 @@ async function getOrder(orderId: string): Promise<DbOrder> {
 
 async function getRefund(orderId: string): Promise<DbRefund | null> {
   const { data, error } = await supabase()
-    .from(TABLES.refunds)
+    .from(TABLES.orderRefunds)
     .select("*")
     .eq("OrderId", orderId)
     .order("RefundAttempt", { ascending: false })
@@ -418,7 +418,7 @@ async function getRefund(orderId: string): Promise<DbRefund | null> {
 
 async function getActiveRefund(orderId: string): Promise<DbRefund | null> {
   const { data, error } = await supabase()
-    .from(TABLES.refunds)
+    .from(TABLES.orderRefunds)
     .select("*")
     .eq("OrderId", orderId)
     .in("RefundStatus", [...ACTIVE_REFUND_STATUSES])
@@ -693,7 +693,7 @@ async function rollbackRefund(
 ): Promise<string | null> {
   if (createRefund) {
     const { error } = await supabase()
-      .from(TABLES.refunds)
+      .from(TABLES.orderRefunds)
       .delete()
       .eq("RefundId", refundAfter.RefundId)
       .eq("RefundNo", refundAfter.RefundNo);
@@ -704,7 +704,7 @@ async function rollbackRefund(
   if (!refundBefore) return "Refund rollback failed: previous refund snapshot is missing";
 
   const { error } = await supabase()
-    .from(TABLES.refunds)
+    .from(TABLES.orderRefunds)
     .update(snapshotPatch(refundBefore, originalPatch))
     .eq("RefundId", refundBefore.RefundId)
     .eq("RefundStatus", refundAfter.RefundStatus);
@@ -722,7 +722,7 @@ async function applySequentialMutation(
 
   if (mutation.createRefund) {
     const { data, error } = await supabase()
-      .from(TABLES.refunds)
+      .from(TABLES.orderRefunds)
       .insert(mutation.refundPatch)
       .select("*")
       .single();
@@ -738,7 +738,7 @@ async function applySequentialMutation(
     }
 
     const { data, error } = await supabase()
-      .from(TABLES.refunds)
+      .from(TABLES.orderRefunds)
       .update(mutation.refundPatch)
       .eq("RefundId", mutation.refundBefore.RefundId)
       .eq("RefundStatus", mutation.expectedRefundStatus)
