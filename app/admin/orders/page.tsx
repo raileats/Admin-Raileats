@@ -851,7 +851,7 @@ export default function AdminOrdersPage() {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [workflowModal, setWorkflowModal] = useState<{
     open: boolean;
-    kind: "complaint-approve" | "complaint-reject" | "refund" | null;
+    kind: "complaint-approve" | "complaint-reject" | "refund" | "manual-refund" | null;
     order: Order | null;
   }>({ open: false, kind: null, order: null });
   const [workflowStatus, setWorkflowStatus] = useState("");
@@ -2523,13 +2523,30 @@ export default function AdminOrdersPage() {
       "_blank",
     );
   }
-  function openWorkflow(kind: "complaint-approve" | "complaint-reject" | "refund", order: Order) {
+  function openWorkflow(
+    kind: "complaint-approve" | "complaint-reject" | "refund" | "manual-refund",
+    order: Order,
+  ) {
     setWorkflowModal({ open: true, kind, order });
     setWorkflowStatus("");
     setWorkflowSubStatus("");
     setWorkflowPenalty("");
     setWorkflowRemarks("");
-    setWorkflowAmount(String(valueFrom(order.raw, "RefundAmount", "refundAmount", "PaidAmount", "paidAmount", "TotalAmount", "totalAmount") || ""));
+    setWorkflowAmount(
+      kind === "manual-refund"
+        ? ""
+        : String(
+            valueFrom(
+              order.raw,
+              "RefundAmount",
+              "refundAmount",
+              "PaidAmount",
+              "paidAmount",
+              "TotalAmount",
+              "totalAmount",
+            ) || "",
+          ),
+    );
   }
 
   async function submitWorkflow() {
@@ -2538,7 +2555,37 @@ export default function AdminOrdersPage() {
     const actor = getAdminActor();
     setWorkflowSaving(true);
     try {
-      if (workflowModal.kind === "complaint-approve" || workflowModal.kind === "complaint-reject") {
+      if (workflowModal.kind === "manual-refund") {
+        const amount = Number(workflowAmount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          throw new Error("Valid refund amount enter karein");
+        }
+
+        const maximumAmount =
+          moneyFrom(
+            order.raw,
+            "PPDAmount",
+            "PaidAmount",
+            "TotalAmount",
+            "totalAmount",
+          ) ?? Number(order.total || 0);
+
+        if (maximumAmount > 0 && amount > maximumAmount) {
+          throw new Error(
+            `Refund amount order amount Rs ${moneyNumber(maximumAmount)} se zyada nahi ho sakta`,
+          );
+        }
+
+        await createRefundRequest({
+          order,
+          amount,
+          reason:
+            order.status === "partialdelivery"
+              ? "Partial Delivery"
+              : "Bad Delivery",
+          remarksText: workflowRemarks,
+        });
+      } else if (workflowModal.kind === "complaint-approve" || workflowModal.kind === "complaint-reject") {
         const complaintId = valueFrom(order.raw, "ComplaintId", "complaintId", "ComplaintNo", "complaintNo");
         if (!complaintId) throw new Error("Complaint ID not found");
         if (workflowModal.kind === "complaint-approve" && !workflowStatus) throw new Error("Final status select karein");
@@ -3222,6 +3269,25 @@ export default function AdminOrdersPage() {
                         </div>
                       ) : o.status === "refund" ? (
                         <button onClick={() => openWorkflow("refund", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#7c3aed", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Update Refund</button>
+                      ) : o.status === "baddelivery" ||
+                        o.status === "partialdelivery" ? (
+                        <button
+                          type="button"
+                          onClick={() => openWorkflow("manual-refund", o)}
+                          style={{
+                            padding: "7px 12px",
+                            borderRadius: 7,
+                            background: "#7c3aed",
+                            color: "#fff",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: 800,
+                            fontSize: 11,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Manual Refund
+                        </button>
                       ) : o.status === "cancellationrequest" ? (
                         <button
                           type="button"
@@ -4792,7 +4858,15 @@ export default function AdminOrdersPage() {
       {workflowModal.open && workflowModal.order && (
         <div style={{ position: "fixed", inset: 0, zIndex: 10050, background: "rgba(15,23,42,.58)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ width: "100%", maxWidth: 560, background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 25px 70px rgba(0,0,0,.28)" }}>
-            <h3 style={{ margin: "0 0 6px", color: "#0f172a" }}>{workflowModal.kind === "complaint-approve" ? "Approve Complaint" : workflowModal.kind === "complaint-reject" ? "Reject Complaint" : "Update Refund"}</h3>
+            <h3 style={{ margin: "0 0 6px", color: "#0f172a" }}>
+              {workflowModal.kind === "complaint-approve"
+                ? "Approve Complaint"
+                : workflowModal.kind === "complaint-reject"
+                  ? "Reject Complaint"
+                  : workflowModal.kind === "manual-refund"
+                    ? "Manual Refund"
+                    : "Update Refund"}
+            </h3>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Order ID: <strong>{workflowModal.order.id}</strong></div>
             {workflowModal.kind === "complaint-approve" && <>
               <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Final Status<select value={workflowStatus} onChange={(e)=>setWorkflowStatus(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}><option value="">Select status</option><option>Cancelled</option><option>Not Delivered</option><option>Delivered</option><option>Bad Delivery</option><option>Partial Delivery</option></select></label>
@@ -4803,6 +4877,21 @@ export default function AdminOrdersPage() {
               <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Refund Status<select value={workflowStatus} onChange={(e)=>setWorkflowStatus(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}><option value="">Select status</option><option>Pending</option><option>Approved</option><option>Processing</option><option>Success</option><option>Failed</option></select></label>
               <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Refund Amount<input type="number" min="0" step="0.01" value={workflowAmount} onChange={(e)=>setWorkflowAmount(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
             </>}
+            {workflowModal.kind === "manual-refund" && (
+              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>
+                Refund Amount
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={workflowAmount}
+                  onChange={(e) => setWorkflowAmount(e.target.value)}
+                  placeholder="Enter refund amount"
+                  autoFocus
+                  style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}
+                />
+              </label>
+            )}
             <label style={{ display: "grid", gap: 6, marginBottom: 16, fontSize: 12, fontWeight: 800 }}>Admin Remarks<textarea rows={4} value={workflowRemarks} onChange={(e)=>setWorkflowRemarks(e.target.value)} placeholder="Remarks" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8, resize: "vertical" }}/></label>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button disabled={workflowSaving} onClick={()=>setWorkflowModal({open:false,kind:null,order:null})} style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontWeight: 700 }}>Close</button>
