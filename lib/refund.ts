@@ -122,7 +122,7 @@ export interface RejectRefundInput extends CommonInput {
 
 export interface StartRefundProcessingInput extends CommonInput {
   refundMethod?: string;
-  paymentProvider?: string;
+  PaymentGateway?: string;
   gatewayTransactionId?: string;
 }
 
@@ -134,7 +134,13 @@ export interface CompleteRefundInput extends CommonInput {
 interface DbOrder extends Record<string, unknown> {
   OrderId: string;
   OrderStatus?: string | null;
-  Status?: string | null;
+OrderSubStatus?: string | null;
+
+Status?: string | null;
+SubStatus?: string | null;
+
+TrainNo?: string | null;
+TrainNumber?: string | null;
   PaymentMode?: string | null;
   PaymentMethod?: string | null;
   PPDAmount?: number | string | null;
@@ -1008,11 +1014,28 @@ export async function requestRefund(
         PaymentMode: paymentMode,
         PaidAmount: paidAmount,
 
-        TrainNo: order.TrainNo ?? null,
-        DeliveryDate: order.DeliveryDate ?? null,
-        DeliveryTime: order.DeliveryTime ?? null,
-        StationCode: order.StationCode ?? null,
-        StationName: order.StationName ?? null,
+        TrainNo:
+  order.TrainNumber ??
+  order.TrainNo ??
+  null,
+
+DeliveryDate: order.DeliveryDate ?? null,
+DeliveryTime: order.DeliveryTime ?? null,
+
+StationCode: order.StationCode ?? null,
+StationName: order.StationName ?? null,
+
+OrderStatus:
+  order.Status ??
+  order.OrderStatus ??
+  "Delivered",
+
+OrderSubStatus:
+  order.SubStatus ??
+  order.OrderSubStatus ??
+  order.Status ??
+  order.OrderStatus ??
+  "Delivered",
         RefundAmount: input.requestedAmount,
         ApprovedAmount: null,
         RefundStatus: "Pending",
@@ -1197,7 +1220,7 @@ export async function startRefundProcessing(
       refundPatch: {
         RefundStatus: "Processing",
         RefundMethod: refundMethod,
-        PaymentProvider: optionalText(input.paymentProvider),
+        PaymentGateway: optionalText(input.PaymentGateway),
         GatewayTransactionId: optionalText(input.gatewayTransactionId),
         ProcessingStartedAt: currentTime.iso,
         AdminRemarks: remarks,
@@ -1247,7 +1270,7 @@ export async function completeRefund(
       expectedRefundStatus: "Processing",
       refundPatch: {
         RefundStatus: "Success",
-        ProviderRefundId:
+        GatewayRefundId:
           context.paymentMode === "PREPAID"
             ? transactionId
             : optionalText(input.providerRefundId),
