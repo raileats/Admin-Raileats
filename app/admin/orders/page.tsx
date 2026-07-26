@@ -1,5 +1,5 @@
+// app/admin/orders/page.tsx
 "use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
