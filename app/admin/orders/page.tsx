@@ -1,5 +1,5 @@
-// app/admin/orders/page.tsx
 "use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -2039,7 +2039,7 @@ export default function AdminOrdersPage() {
               changedBy: actor.userName,
               userType: actor.userType,
               userName: actor.userName,
-              actionSource: actor.userType || "Admin",
+              actionSource: actor.source,
             }),
           },
         );
@@ -2254,7 +2254,7 @@ export default function AdminOrdersPage() {
             changedBy: actor.userName,
             userType: actor.userType,
             userName: actor.userName,
-            actionSource: actor.userType || "Admin",
+            actionSource: actor.source,
             OrderPenalty: selectedVendorPenalty,
             vendorPenalty: selectedVendorPenalty,
             vendorPenaltyAmount: selectedVendorPenalty,
@@ -2405,7 +2405,7 @@ export default function AdminOrdersPage() {
             changedBy: actor.userName,
             userType: actor.userType,
             userName: actor.userName,
-            actionSource: actor.userType || "Admin",
+            actionSource: actor.source,
           }),
         },
       );
@@ -3738,10 +3738,22 @@ export default function AdminOrdersPage() {
                       )}
                       {!["cancelled", "notdelivered"].includes(activeTab) && (
                       o.status === "complaints" ? (
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => openWorkflow("complaint-approve", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Approve</button>
-                          <button onClick={() => openWorkflow("complaint-reject", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#dc2626", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Reject</button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openWorkflow("complaint-approve", o)}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: 6,
+                            background: "#2563eb",
+                            color: "#fff",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: 800,
+                            fontSize: 11,
+                          }}
+                        >
+                          Review
+                        </button>
                       ) : isPrepaidOrder(o) && getOrderRefundStatus(o) ? (
                         renderRefundAction(o)
                       ) : isPrepaidOrder(o) &&
