@@ -253,6 +253,17 @@ const OUT_FOR_DELIVERY_NOT_DELIVERED_REASONS =
     (option) => option.dbValue === "Not Delivered",
   ).map((option) => option.label);
 
+const RESTRO_MARK_DELIVERED_OUTCOME_OPTIONS: OutcomeOption[] = [
+  {
+    key: "Delivered",
+    label: "Delivered",
+    dbValue: "Delivered",
+    targetTab: "delivered",
+    vendorPenalty: 0,
+  },
+  ...OUT_FOR_DELIVERY_OUTCOME_OPTIONS,
+];
+
 const NEXT_MAP: Record<
   TabKey,
   {
@@ -2134,6 +2145,13 @@ export default function AdminOrdersPage() {
       alert("Please select reason/status");
       return;
     }
+    if (
+      selectedOrder.status === "restromarkeddelivered" &&
+      !remarks.trim()
+    ) {
+      alert("Please enter remarks.");
+      return;
+    }
 
     try {
       const outForDeliveryOption =
@@ -2146,7 +2164,9 @@ export default function AdminOrdersPage() {
           : null;
       const finalMarkOption =
         selectedOrder.status === "restromarkeddelivered"
-          ? FINAL_MARK_OPTIONS.find((option) => option.label === subStatus)
+          ? RESTRO_MARK_DELIVERED_OUTCOME_OPTIONS.find(
+              (option) => option.key === subStatus,
+            )
           : null;
       const shouldApplyOrderPenalty =
         actionType === "mark" &&
@@ -5531,68 +5551,83 @@ export default function AdminOrdersPage() {
               {actionType === "cancel" ? "Cancel Order" : "Mark Order Status"}
             </h2>
 
-            <select
-              value={subStatus}
-              onChange={(e) => {
-                setSubStatus(e.target.value);
-                const option = OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find(
-                  (item) => item.key === e.target.value,
-                );
-                setVendorPenaltyAmount(
-                  option?.manualPenalty
-                    ? ""
-                    : String(option?.vendorPenalty ?? ""),
-                );
-                if (
-                  e.target.value !== "Bad Delivery" &&
-                  e.target.value !== "Partial Delivery"
-                ) {
-                  setRefundRequestAmount("");
-                }
-              }}
+            <label
               style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #cbd5e1",
+                display: "grid",
+                gap: 6,
                 marginBottom: 16,
-                fontSize: "13px",
-                fontWeight: 600,
+                fontSize: 12,
+                fontWeight: 800,
+                color: "#334155",
               }}
             >
-              <option value="">
-                {actionType === "cancel"
-                  ? "-- Select Cancel Reason --"
-                  : "-- Select Outcome Status --"}
-              </option>
+              {selectedOrder?.status === "restromarkeddelivered"
+                ? "Final Status *"
+                : actionType === "cancel"
+                  ? "Cancel Reason"
+                  : "Outcome Status"}
+              <select
+                value={subStatus}
+                onChange={(e) => {
+                  setSubStatus(e.target.value);
+                  const option = OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find(
+                    (item) => item.key === e.target.value,
+                  );
+                  setVendorPenaltyAmount(
+                    option?.manualPenalty
+                      ? ""
+                      : String(option?.vendorPenalty ?? ""),
+                  );
+                  if (
+                    e.target.value !== "Bad Delivery" &&
+                    e.target.value !== "Partial Delivery"
+                  ) {
+                    setRefundRequestAmount("");
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #cbd5e1",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                }}
+              >
+                <option value="">
+                  {actionType === "cancel"
+                    ? "-- Select Cancel Reason --"
+                    : "-- Select Outcome Status --"}
+                </option>
 
-              {actionType === "cancel"
-                ? CANCEL_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>
-                      {reason}
-                    </option>
-                  ))
-                : selectedOrder?.status === "inkitchen" ||
-                    selectedOrder?.status === "outfordelivery"
-                  ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.map((option) => (
-                      <option key={option.key} value={option.key}>
-                        {option.manualPenalty
-                          ? `${option.label} - Manual Penalty`
-                          : `${option.label} - Rs ${option.vendorPenalty}`}
-                      </option>
-                    ))
-                  : selectedOrder?.status === "restromarkeddelivered"
-                    ? FINAL_MARK_OPTIONS.map((option) => (
-                        <option key={option.key} value={option.label}>
-                          {option.label}
-                        </option>
-                      ))
-                  : DELIVERED_REASONS.map((reason) => (
+                {actionType === "cancel"
+                  ? CANCEL_REASONS.map((reason) => (
                       <option key={reason} value={reason}>
                         {reason}
                       </option>
-                    ))}
-            </select>
+                    ))
+                  : selectedOrder?.status === "inkitchen" ||
+                      selectedOrder?.status === "outfordelivery"
+                    ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.manualPenalty
+                            ? `${option.label} - Manual Penalty`
+                            : `${option.label} - Rs ${option.vendorPenalty}`}
+                        </option>
+                      ))
+                    : selectedOrder?.status === "restromarkeddelivered"
+                      ? RESTRO_MARK_DELIVERED_OUTCOME_OPTIONS.map((option) => (
+                          <option key={option.key} value={option.key}>
+                            {option.label}
+                          </option>
+                        ))
+                    : DELIVERED_REASONS.map((reason) => (
+                        <option key={reason} value={reason}>
+                          {reason}
+                        </option>
+                      ))}
+              </select>
+            </label>
 
             {actionType === "mark" &&
               (selectedOrder?.status === "inkitchen" ||
@@ -5621,7 +5656,9 @@ export default function AdminOrdersPage() {
                         color: "#334155",
                       }}
                     >
-                      Vendor Penalty Amount (Rs)
+                      {selectedOrder?.status === "restromarkeddelivered"
+                        ? "Vendor Penalty"
+                        : "Vendor Penalty Amount (Rs)"}
                       <input
                         type="number"
                         min="0"
@@ -5657,7 +5694,9 @@ export default function AdminOrdersPage() {
 
             {actionType === "mark" &&
               (subStatus === "Bad Delivery" ||
-                subStatus === "Partial Delivery") && (
+                subStatus === "Partial Delivery") &&
+              selectedOrder &&
+              isPrepaidOrder(selectedOrder) && (
                 <label
                   style={{
                     display: "grid",
@@ -5668,7 +5707,9 @@ export default function AdminOrdersPage() {
                     color: "#334155",
                   }}
                 >
-                  Customer Refund Amount (Rs)
+                  {selectedOrder?.status === "restromarkeddelivered"
+                    ? "Refund Amount"
+                    : "Customer Refund Amount (Rs)"}
                   <input
                     type="number"
                     min="0.01"
@@ -5691,21 +5732,38 @@ export default function AdminOrdersPage() {
                 </label>
               )}
 
-            <textarea
-              placeholder="Internal administrative remarks annotation ledger (Optional)"
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              rows={4}
+            <label
               style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #cbd5e1",
+                display: "grid",
+                gap: 6,
                 marginBottom: 16,
-                resize: "vertical",
-                fontSize: "13px",
+                fontSize: 12,
+                fontWeight: 800,
+                color: "#334155",
               }}
-            />
+            >
+              {selectedOrder?.status === "restromarkeddelivered"
+                ? "Admin Remarks *"
+                : "Admin Remarks"}
+              <textarea
+                placeholder={
+                  selectedOrder?.status === "restromarkeddelivered"
+                    ? "Enter remarks"
+                    : "Internal administrative remarks annotation ledger (Optional)"
+                }
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                rows={4}
+                style={{
+                  width: "100%",
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "1px solid #cbd5e1",
+                  resize: "vertical",
+                  fontSize: "13px",
+                }}
+              />
+            </label>
 
             <div
               style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}
@@ -5729,7 +5787,9 @@ export default function AdminOrdersPage() {
                   fontSize: "13px",
                 }}
               >
-                Close
+                {selectedOrder?.status === "restromarkeddelivered"
+                  ? "Cancel"
+                  : "Close"}
               </button>
 
               <button
