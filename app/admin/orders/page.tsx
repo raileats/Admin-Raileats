@@ -466,13 +466,11 @@ const shouldAutoMoveBookedToVerification = (order: Order) => {
 
 const isPrepaidOrder = (order: Order) => {
   const mode = String(order.paymentMode || "")
-    .trim()
-    .toLowerCase();
+    .replace(/[\s_-]+/g, "")
+    .toUpperCase();
 
-  if (!mode) return false;
-
-  return ["prepaid", "ppd", "online", "paid", "paytm", "upi"].some((token) =>
-    mode.includes(token),
+  return ["PPD", "PREPAID", "ONLINE", "PAID", "UPI", "PAYTM"].includes(
+    mode,
   );
 };
 
@@ -655,6 +653,82 @@ const getOrderRefundStatus = (order: Order): OrderRefundStatus | "" => {
 
   return statuses[normalized] || "";
 };
+
+const hasRefundAudit = (order: Order) => {
+  const textFields = [
+    "RefundStatus",
+    "refundStatus",
+    "RefundNo",
+    "refundNo",
+    "RefundReference",
+    "refundReference",
+    "RefundRequestedAt",
+    "refundRequestedAt",
+    "RefundTransactionId",
+    "refundTransactionId",
+  ];
+
+  if (textFields.some((field) => {
+    const value = order.raw?.[field];
+    return value !== null && value !== undefined && String(value).trim() !== "";
+  })) {
+    return true;
+  }
+
+  return [
+    "RefundRequestedAmount",
+    "refundRequestedAmount",
+    "RefundApprovedAmount",
+    "refundApprovedAmount",
+  ].some((field) => {
+    const amount = Number(order.raw?.[field]);
+    return Number.isFinite(amount) && amount > 0;
+  });
+};
+
+const getReadableRefundStatus = (order: Order) => {
+  const labels: Record<OrderRefundStatus, string> = {
+    RefundRequested: "Requested",
+    RefundUnderReview: "Under Review",
+    RefundApproved: "Approved",
+    RefundProcessing: "Processing",
+    RefundCompleted: "Completed",
+    RefundRejected: "Rejected",
+    RefundFailed: "Failed",
+  };
+  const status = getOrderRefundStatus(order);
+  return status ? labels[status] : "-";
+};
+
+const getCurrentOrderStatus = (order: Order) => {
+  const subStatus = String(
+    valueFrom(order.raw, "SubStatus", "subStatus", "OrderSubStatus") || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  if (subStatus === "bad delivery") return "Bad Delivery";
+  if (subStatus === "partial delivery") return "Partial Delivery";
+
+  return String(
+    valueFrom(order.raw, "Status", "status", "OrderStatus") ||
+      order.dbStatus ||
+      "-",
+  );
+};
+
+const getRefundAmount = (order: Order) =>
+  moneyFrom(
+    order.raw,
+    "RefundApprovedAmount",
+    "refundApprovedAmount",
+    "ApprovedAmount",
+    "approvedAmount",
+    "RefundRequestedAmount",
+    "refundRequestedAmount",
+    "RefundAmount",
+    "refundAmount",
+  ) ?? 0;
 
 const moneyNumber = (value: any) => {
   const numberValue = Number(value ?? 0);
@@ -879,7 +953,13 @@ export default function AdminOrdersPage() {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [workflowModal, setWorkflowModal] = useState<{
     open: boolean;
-    kind: "complaint-approve" | "complaint-reject" | "refund" | "manual-refund" | null;
+    kind:
+      | "complaint-approve"
+      | "complaint-reject"
+      | "refund"
+      | "manual-refund"
+      | "refund-request"
+      | null;
     order: Order | null;
   }>({ open: false, kind: null, order: null });
   const [workflowStatus, setWorkflowStatus] = useState("");
@@ -961,7 +1041,7 @@ export default function AdminOrdersPage() {
   const [viewDrawerOpen, setViewDrawerOpen] = useState(false);
   const [detailedOrder, setDetailedOrder] = useState<any>(null);
   const [activeDrawerSection, setActiveDrawerSection] = useState<
-    "details" | "logs" | "whatsapp"
+    "details" | "logs" | "refund" | "whatsapp"
   >("details");
 
   const [fetchedItems, setFetchedItems] = useState<any[]>([]);
@@ -2081,8 +2161,10 @@ export default function AdminOrdersPage() {
 
       const actor = getAdminActor();
       const cleanRemarks = remarks.trim();
-      const needsManualRefund =
+      const isRefundOutcome =
         subStatus === "Bad Delivery" || subStatus === "Partial Delivery";
+      const needsManualRefund =
+        isRefundOutcome && isPrepaidOrder(selectedOrder);
       const manualRefundAmount = Number(refundRequestAmount);
 
       if (
@@ -2222,9 +2304,11 @@ export default function AdminOrdersPage() {
     const targetKey = matchedOption.targetTab as TabKey;
     const targetDbValue = matchedOption.dbValue;
     const currentRemarks = selection.remarks || `Marked ${matchedOption.label}`;
-    const needsManualRefund =
+    const isRefundOutcome =
       matchedOption.label === "Bad Delivery" ||
       matchedOption.label === "Partial Delivery";
+    const needsManualRefund =
+      isRefundOutcome && isPrepaidOrder(order);
 
     let manualRefundAmount = 0;
     if (needsManualRefund) {
@@ -2560,7 +2644,12 @@ export default function AdminOrdersPage() {
     );
   }
   function openWorkflow(
-    kind: "complaint-approve" | "complaint-reject" | "refund" | "manual-refund",
+    kind:
+      | "complaint-approve"
+      | "complaint-reject"
+      | "refund"
+      | "manual-refund"
+      | "refund-request",
     order: Order,
     refundAction = "",
   ) {
@@ -2571,7 +2660,7 @@ export default function AdminOrdersPage() {
     setWorkflowRemarks("");
     setWorkflowTransactionId("");
     setWorkflowAmount(
-      kind === "manual-refund"
+      kind === "manual-refund" || kind === "refund-request"
         ? ""
         : String(
              valueFrom(
@@ -2595,7 +2684,10 @@ export default function AdminOrdersPage() {
     const actor = getAdminActor();
     setWorkflowSaving(true);
     try {
-      if (workflowModal.kind === "manual-refund") {
+      if (
+        workflowModal.kind === "manual-refund" ||
+        workflowModal.kind === "refund-request"
+      ) {
         const amount = Number(workflowAmount);
         if (!Number.isFinite(amount) || amount <= 0) {
           throw new Error("Valid refund amount enter karein");
@@ -2622,7 +2714,9 @@ export default function AdminOrdersPage() {
           reason:
             order.status === "partialdelivery"
               ? "Partial Delivery"
-              : "Bad Delivery",
+              : order.status === "baddelivery"
+                ? "Bad Delivery"
+                : "Delivered",
           remarksText: workflowRemarks,
         });
       } else if (workflowModal.kind === "complaint-approve" || workflowModal.kind === "complaint-reject") {
@@ -2683,7 +2777,6 @@ export default function AdminOrdersPage() {
   requestBody.approvedAmount = approvedAmount;
 
   if (paymentMode === "COD" || paymentMode === "CASHONDELIVERY") {
-    requestBody.approveCodManually = true;
   }
 }
 
@@ -2733,6 +2826,71 @@ export default function AdminOrdersPage() {
       hasLoadedTabRef.current[activeTab] = false;
       setRefreshTick((v) => v + 1);
     } catch (e: any) { alert(e?.message || "Action failed"); } finally { setWorkflowSaving(false); }
+  }
+
+  function renderRefundAction(order: Order) {
+    const status = getOrderRefundStatus(order);
+    const buttonStyle = {
+      padding: "6px 10px",
+      borderRadius: 6,
+      color: "#fff",
+      border: "none",
+      cursor: "pointer",
+      fontWeight: 800,
+      fontSize: 11,
+      whiteSpace: "nowrap" as const,
+    };
+
+    if (status === "RefundRequested") {
+      return (
+        <button onClick={() => openWorkflow("refund", order, "Under Review")} style={{ ...buttonStyle, background: "#7c3aed" }}>
+          Review
+        </button>
+      );
+    }
+
+    if (status === "RefundUnderReview") {
+      return (
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => openWorkflow("refund", order, "Approved")} style={{ ...buttonStyle, background: "#16a34a" }}>
+            Approve
+          </button>
+          <button onClick={() => openWorkflow("refund", order, "Failed")} style={{ ...buttonStyle, background: "#dc2626" }}>
+            Reject
+          </button>
+        </div>
+      );
+    }
+
+    if (status === "RefundApproved") {
+      return (
+        <button onClick={() => openWorkflow("refund", order, "Processing")} style={{ ...buttonStyle, background: "#7c3aed" }}>
+          Start Processing
+        </button>
+      );
+    }
+
+    if (status === "RefundProcessing") {
+      return (
+        <button onClick={() => openWorkflow("refund", order, "Success")} style={{ ...buttonStyle, background: "#16a34a" }}>
+          Complete Refund
+        </button>
+      );
+    }
+
+    if (status === "RefundCompleted") {
+      return <span style={{ padding: "6px 10px", borderRadius: 6, background: "#dcfce7", color: "#166534", border: "1px solid #86efac", fontWeight: 800, fontSize: 11 }}>Completed</span>;
+    }
+
+    if (status === "RefundRejected") {
+      return <span style={{ padding: "6px 10px", borderRadius: 6, background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca", fontWeight: 800, fontSize: 11 }}>Rejected</span>;
+    }
+
+    if (status === "RefundFailed") {
+      return <span style={{ padding: "6px 10px", borderRadius: 6, background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca", fontWeight: 800, fontSize: 11 }}>Failed</span>;
+    }
+
+    return <span style={{ color: "#94a3b8", fontWeight: 700 }}>-</span>;
   }
 
   return (
@@ -3178,6 +3336,106 @@ export default function AdminOrdersPage() {
         }}
       >
         <div style={{ overflowX: "auto" }}>
+          {activeTab === "refund" ? (
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              minWidth: 980,
+            }}
+          >
+            <thead
+              style={{
+                textAlign: "left",
+                borderBottom: "2px solid #edf2f7",
+                background: "#f8fafc",
+                fontSize: 13,
+                color: "#475569",
+              }}
+            >
+              <tr>
+                <th style={{ padding: 12 }}>Order ID</th>
+                <th style={{ padding: 12 }}>Customer</th>
+                <th style={{ padding: 12 }}>Current Status</th>
+                <th style={{ padding: 12 }}>Refund Amount</th>
+                <th style={{ padding: 12 }}>Refund Status</th>
+                <th style={{ padding: 12 }}>Requested At</th>
+                <th style={{ padding: 12, textAlign: "center" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody style={{ fontSize: 13, color: "#334155" }}>
+              {visibleOrders.map((o) => (
+                <tr
+                  key={o.id}
+                  style={{ borderBottom: "1px solid #f1f5f9" }}
+                  className="table-row-hover"
+                >
+                  <td style={{ padding: 12 }}>
+                    <button
+                      onClick={() => handleOpenDiagnosticsDrawer(o, "details")}
+                      title="View order details"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        margin: 0,
+                        font: "inherit",
+                        fontWeight: 800,
+                        color: "#2563eb",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        textAlign: "left",
+                      }}
+                    >
+                      #{o.id}
+                    </button>
+                  </td>
+                  <td style={{ padding: 12 }}>
+                    <div style={{ fontWeight: 800, color: "#0f172a" }}>
+                      {o.customerName || "Guest"}
+                    </div>
+                    <div style={{ marginTop: 3, color: "#64748b", fontFamily: "monospace", fontSize: 11 }}>
+                      {o.customerMobile || "-"}
+                    </div>
+                  </td>
+                  <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    {getCurrentOrderStatus(o)}
+                  </td>
+                  <td style={{ padding: 12, fontWeight: 800, whiteSpace: "nowrap" }}>
+                    ₹{moneyNumber(getRefundAmount(o))}
+                  </td>
+                  <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    {getReadableRefundStatus(o)}
+                  </td>
+                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>
+                    {formatAdminDateTime(
+                      valueFrom(o.raw, "RefundRequestedAt", "refundRequestedAt", "RequestedAt"),
+                    )}
+                  </td>
+                  <td style={{ padding: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
+                      {renderRefundAction(o)}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!loading && visibleOrders.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ padding: 30, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>
+                    No refund records found.
+                  </td>
+                </tr>
+              )}
+              {loading && (
+                <tr>
+                  <td colSpan={7} style={{ padding: 30, textAlign: "center", color: "#64748b", fontWeight: 600 }}>
+                    Syncing refund records...
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          ) : (
           <table
             style={{
               width: "100%",
@@ -3209,6 +3467,15 @@ export default function AdminOrdersPage() {
                 <th style={{ padding: 12 }}>Customer Mobile</th>
                 <th style={{ padding: 12 }}>Payment</th>
                 <th style={{ padding: 12 }}>Order Process Log</th>
+                {["refund", "delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                  <th style={{ padding: 12 }}>Current Status</th>
+                )}
+                {activeTab === "refund" && (
+                  <th style={{ padding: 12 }}>Refund Amount</th>
+                )}
+                {["refund", "delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                  <th style={{ padding: 12 }}>Refund Status</th>
+                )}
                 <th style={{ padding: 12, textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
@@ -3368,6 +3635,22 @@ export default function AdminOrdersPage() {
                     </button>
                   </td>
 
+                  {["refund", "delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                    <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                      {getCurrentOrderStatus(o)}
+                    </td>
+                  )}
+                  {activeTab === "refund" && (
+                    <td style={{ padding: 12, fontWeight: 800, whiteSpace: "nowrap" }}>
+                      ₹{moneyNumber(getRefundAmount(o))}
+                    </td>
+                  )}
+                  {["refund", "delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                    <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                      {getReadableRefundStatus(o)}
+                    </td>
+                  )}
+
                   <td style={{ padding: 12, verticalAlign: "middle" }}>
                     <div
                       style={{
@@ -3378,7 +3661,27 @@ export default function AdminOrdersPage() {
                       }}
                     >
                       {/* INLINE BUTTON CONTROLLERS */}
-                      {o.status === "complaints" ? (
+                      {["delivered", "cancelled", "notdelivered"].includes(activeTab) && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDiagnosticsDrawer(o, "details")}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: 6,
+                            background: "#eff6ff",
+                            color: "#2563eb",
+                            border: "1px solid #bfdbfe",
+                            cursor: "pointer",
+                            fontWeight: 800,
+                            fontSize: 11,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          View Details
+                        </button>
+                      )}
+                      {!["cancelled", "notdelivered"].includes(activeTab) && (
+                      o.status === "complaints" ? (
                         <div style={{ display: "flex", gap: 6 }}>
                           <button onClick={() => openWorkflow("complaint-approve", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Approve</button>
                           <button onClick={() => openWorkflow("complaint-reject", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#dc2626", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Reject</button>
@@ -3401,8 +3704,10 @@ export default function AdminOrdersPage() {
                         <span style={{ padding: "6px 10px", borderRadius: 6, background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca", fontWeight: 800, fontSize: 11, whiteSpace: "nowrap" }}>
                           {getOrderRefundStatus(o) === "RefundRejected" ? "Refund Rejected" : "Refund Failed"}
                         </span>
-                      ) : o.status === "baddelivery" ||
-                        o.status === "partialdelivery" ? (
+                      ) : isPrepaidOrder(o) &&
+                        !hasRefundAudit(o) &&
+                        (o.status === "baddelivery" ||
+                          o.status === "partialdelivery") ? (
                         <button
                           type="button"
                           onClick={() => openWorkflow("manual-refund", o)}
@@ -3420,6 +3725,35 @@ export default function AdminOrdersPage() {
                         >
                           Manual Refund
                         </button>
+                      ) : isPrepaidOrder(o) &&
+                        !hasRefundAudit(o) &&
+                        o.status === "delivered" &&
+                        (activeTab === "delivered" || activeTab === "all") ? (
+                        <button
+                          type="button"
+                          onClick={() => openWorkflow("refund-request", o)}
+                          style={{
+                            padding: "7px 12px",
+                            borderRadius: 7,
+                            background: "#7c3aed",
+                            color: "#fff",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: 800,
+                            fontSize: 11,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Send to Refund
+                        </button>
+                      ) : [
+                          "delivered",
+                          "cancelled",
+                          "notdelivered",
+                          "baddelivery",
+                          "partialdelivery",
+                        ].includes(o.status) ? (
+                        <span style={{ color: "#94a3b8", fontWeight: 700 }}>-</span>
                       ) : o.status === "cancellationrequest" ? (
                         <button
                           type="button"
@@ -3629,6 +3963,7 @@ export default function AdminOrdersPage() {
                             </button>
                           )}
                         </div>
+                      )
                       )}
                     </div>
                   </td>
@@ -3668,6 +4003,7 @@ export default function AdminOrdersPage() {
               )}
             </tbody>
           </table>
+          )}
         </div>
       </div>
 
@@ -4127,6 +4463,27 @@ export default function AdminOrdersPage() {
               >
                 Order Process Log
               </button>
+              {activeTab === "all" && (
+                <button
+                  onClick={() => setActiveDrawerSection("refund")}
+                  style={{
+                    padding: "14px 20px",
+                    background: "none",
+                    border: "none",
+                    borderBottom:
+                      activeDrawerSection === "refund"
+                        ? "3px solid #7c3aed"
+                        : "3px solid transparent",
+                    color:
+                      activeDrawerSection === "refund" ? "#7c3aed" : "#64748b",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                >
+                  Refund Details
+                </button>
+              )}
               <button
                 onClick={() => setActiveDrawerSection("whatsapp")}
                 style={{
@@ -4856,6 +5213,91 @@ export default function AdminOrdersPage() {
                     </div>
                   )}
                 </div>
+              ) : activeDrawerSection === "refund" ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <h3 className="section-heading">Refund Details</h3>
+                  <div className="order-info-card">
+                    <div className="order-field-grid">
+                      <OrderDetailField
+                        label="Current Status"
+                        value={getCurrentOrderStatus(detailedOrder as Order)}
+                      />
+                      <OrderDetailField
+                        label="Refund Status"
+                        value={getReadableRefundStatus(detailedOrder as Order)}
+                      />
+                      <OrderDetailField
+                        label="Requested Amount"
+                        value={`₹${moneyNumber(
+                          moneyFrom(
+                            detailedOrder.raw,
+                            "RefundRequestedAmount",
+                            "refundRequestedAmount",
+                            "RefundAmount",
+                            "refundAmount",
+                          ) ?? 0,
+                        )}`}
+                      />
+                      <OrderDetailField
+                        label="Approved Amount"
+                        value={`₹${moneyNumber(
+                          moneyFrom(
+                            detailedOrder.raw,
+                            "RefundApprovedAmount",
+                            "refundApprovedAmount",
+                            "ApprovedAmount",
+                            "approvedAmount",
+                          ) ?? 0,
+                        )}`}
+                      />
+                      <OrderDetailField
+                        label="Requested At"
+                        value={formatAdminDateTime(
+                          valueFrom(
+                            detailedOrder.raw,
+                            "RefundRequestedAt",
+                            "refundRequestedAt",
+                            "RequestedAt",
+                          ),
+                        )}
+                      />
+                      <OrderDetailField
+                        label="Approved At"
+                        value={formatAdminDateTime(
+                          valueFrom(
+                            detailedOrder.raw,
+                            "RefundApprovedAt",
+                            "refundApprovedAt",
+                            "ApprovedAt",
+                          ),
+                        )}
+                      />
+                      <OrderDetailField
+                        label="Completed At"
+                        value={formatAdminDateTime(
+                          valueFrom(
+                            detailedOrder.raw,
+                            "RefundCompletedAt",
+                            "refundCompletedAt",
+                            "CompletedAt",
+                          ),
+                        )}
+                      />
+                      <OrderDetailField
+                        label="Refund Remarks"
+                        value={
+                          valueFrom(
+                            detailedOrder.raw,
+                            "RefundRemarks",
+                            "refundRemarks",
+                            "AdminRemarks",
+                            "adminRemarks",
+                          ) || "-"
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <div
                   style={{
@@ -4997,6 +5439,8 @@ export default function AdminOrdersPage() {
                   ? "Reject Complaint"
                   : workflowModal.kind === "manual-refund"
                     ? "Manual Refund"
+                    : workflowModal.kind === "refund-request"
+                      ? "Send to Refund"
                     : workflowStatus === "Under Review"
                       ? "Review Refund"
                       : workflowStatus === "Approved"
@@ -5021,7 +5465,8 @@ export default function AdminOrdersPage() {
                 <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Refund Transaction ID<input value={workflowTransactionId} onChange={(e)=>setWorkflowTransactionId(e.target.value)} placeholder="Provider or manual transaction ID" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
               )}
             </>}
-            {workflowModal.kind === "manual-refund" && (
+            {(workflowModal.kind === "manual-refund" ||
+              workflowModal.kind === "refund-request") && (
               <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>
                 Refund Amount
                 <input
