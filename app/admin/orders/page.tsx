@@ -24,6 +24,7 @@ type TabKey =
   | "neworder"
   | "inkitchen"
   | "outfordelivery"
+  | "restromarkeddelivered"
   | "delivered"
   | "cancelled"
   | "notdelivered"
@@ -80,6 +81,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "neworder", label: "New Order" },
   { key: "inkitchen", label: "In Kitchen" },
   { key: "outfordelivery", label: "Out for Delivery" },
+  { key: "restromarkeddelivered", label: "Restro Mark Delivered" },
   { key: "complaints", label: "Complaints" },
   { key: "delivered", label: "Delivered" },
   { key: "cancelled", label: "Cancelled" },
@@ -293,6 +295,12 @@ const NEXT_MAP: Record<
     next: "delivered",
     actionLabel: "Mark as Delivered ✅",
     dbValue: "Delivered",
+  },
+
+  restromarkeddelivered: {
+    next: null,
+    actionLabel: "",
+    dbValue: "Restro Marked Delivered",
   },
 
   delivered: {
@@ -552,6 +560,11 @@ const mapOrderRowToOrder = (row: any): Order => {
     tabStatus = "inkitchen";
   } else if (lowerRaw === "outfordelivery" || lowerRaw === "out for delivery") {
     tabStatus = "outfordelivery";
+  } else if (
+    lowerRaw === "restro marked delivered" ||
+    lowerRaw === "restromarkeddelivered"
+  ) {
+    tabStatus = "restromarkeddelivered";
   } else if (lowerRaw === "delivered") {
     const subStatus = String(row.subStatus ?? row.SubStatus ?? "")
       .toLowerCase()
@@ -2125,15 +2138,21 @@ export default function AdminOrdersPage() {
     try {
       const outForDeliveryOption =
         selectedOrder.status === "inkitchen" ||
-        selectedOrder.status === "outfordelivery"
+        selectedOrder.status === "outfordelivery" ||
+        selectedOrder.status === "restromarkeddelivered"
           ? OUT_FOR_DELIVERY_OUTCOME_OPTIONS.find(
               (option) => option.key === subStatus,
             )
           : null;
+      const finalMarkOption =
+        selectedOrder.status === "restromarkeddelivered"
+          ? FINAL_MARK_OPTIONS.find((option) => option.label === subStatus)
+          : null;
       const shouldApplyOrderPenalty =
         actionType === "mark" &&
         (selectedOrder.status === "inkitchen" ||
-          selectedOrder.status === "outfordelivery");
+          selectedOrder.status === "outfordelivery" ||
+          selectedOrder.status === "restromarkeddelivered");
       const selectedVendorPenalty = !shouldApplyOrderPenalty
         ? 0
         : outForDeliveryOption?.manualPenalty
@@ -2156,6 +2175,8 @@ export default function AdminOrdersPage() {
         computedMainStatus = "Cancelled";
       } else if (outForDeliveryOption) {
         computedMainStatus = outForDeliveryOption.dbValue;
+      } else if (finalMarkOption) {
+        computedMainStatus = finalMarkOption.dbValue;
       } else {
         if (subStatus === "Delivered" || subStatus === "Bad Delivery") {
           computedMainStatus = subStatus;
@@ -2243,8 +2264,10 @@ export default function AdminOrdersPage() {
         }
       }
 
-      const targetKey: TabKey = outForDeliveryOption
-        ? outForDeliveryOption.targetTab
+      const targetKey: TabKey = finalMarkOption
+        ? finalMarkOption.targetTab
+        : outForDeliveryOption
+          ? outForDeliveryOption.targetTab
         : subStatus === "Bad Delivery"
           ? "baddelivery"
           : "delivered";
@@ -2551,6 +2574,7 @@ export default function AdminOrdersPage() {
       neworder: 0,
       inkitchen: 0,
       outfordelivery: 0,
+      restromarkeddelivered: 0,
       delivered: 0,
       cancelled: 0,
       notdelivered: 0,
@@ -3679,6 +3703,32 @@ export default function AdminOrdersPage() {
                           "partialdelivery",
                         ].includes(o.status) ? (
                         <span style={{ color: "#94a3b8", fontWeight: 700 }}>-</span>
+                      ) : o.status === "restromarkeddelivered" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedOrder(o);
+                            setActionType("mark");
+                            setSubStatus("");
+                            setRemarks("");
+                            setVendorPenaltyAmount("");
+                            setRefundRequestAmount("");
+                            setStatusModalOpen(true);
+                          }}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: 6,
+                            background: "#475569",
+                            color: "#fff",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                            fontSize: 11,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Mark Final Status
+                        </button>
                       ) : o.status === "cancellationrequest" ? (
                         <button
                           type="button"
@@ -5531,6 +5581,12 @@ export default function AdminOrdersPage() {
                           : `${option.label} - Rs ${option.vendorPenalty}`}
                       </option>
                     ))
+                  : selectedOrder?.status === "restromarkeddelivered"
+                    ? FINAL_MARK_OPTIONS.map((option) => (
+                        <option key={option.key} value={option.label}>
+                          {option.label}
+                        </option>
+                      ))
                   : DELIVERED_REASONS.map((reason) => (
                       <option key={reason} value={reason}>
                         {reason}
@@ -5540,7 +5596,8 @@ export default function AdminOrdersPage() {
 
             {actionType === "mark" &&
               (selectedOrder?.status === "inkitchen" ||
-                selectedOrder?.status === "outfordelivery") &&
+                selectedOrder?.status === "outfordelivery" ||
+                selectedOrder?.status === "restromarkeddelivered") &&
               subStatus && (
                 <div
                   style={{
