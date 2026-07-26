@@ -133,16 +133,19 @@ export interface CompleteRefundInput extends CommonInput {
 
 interface DbOrder extends Record<string, unknown> {
   OrderId: string;
+
   OrderStatus?: string | null;
-OrderSubStatus?: string | null;
+  OrderSubStatus?: string | null;
 
-Status?: string | null;
-SubStatus?: string | null;
+  Status?: string | null;
+  SubStatus?: string | null;
 
-TrainNo?: string | null;
-TrainNumber?: string | null;
+  TrainNo?: string | null;
+  TrainNumber?: string | null;
+
   PaymentMode?: string | null;
   PaymentMethod?: string | null;
+
   PPDAmount?: number | string | null;
   CODAmount?: number | string | null;
   PaidAmount?: number | string | null;
@@ -150,14 +153,17 @@ TrainNumber?: string | null;
   TotalPaidAmount?: number | string | null;
   TotalAmount?: number | string | null;
   OrderAmount?: number | string | null;
+
   CustomerId?: string | null;
   CustomerName?: string | null;
   CustomerMobile?: string | null;
+
   RestroCode?: number | string | null;
   RestroName?: string | null;
-  TrainNo?: string | null;
+
   DeliveryDate?: string | null;
   DeliveryTime?: string | null;
+
   StationCode?: string | null;
   StationName?: string | null;
 }
