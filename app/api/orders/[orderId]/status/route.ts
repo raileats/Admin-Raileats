@@ -841,6 +841,34 @@ function resolveJourneyActor({
     .filter(Boolean)
     .join(" ");
 
+  const explicitlyAdminAction =
+    normalizeKey(requestedUserType).includes("admin") ||
+    normalizeKey(requestedSource).includes("admin");
+
+  if (explicitlyAdminAction) {
+    return {
+      userType: "Admin",
+      userName: requestedUserName || "Admin",
+      source: requestedSource || "Admin Orders",
+    };
+  }
+
+  const explicitlyAutomaticAction =
+    ["auto", "automatic", "system"].includes(
+      normalizeKey(requestedUserType)
+    ) ||
+    ["auto", "automatic", "system"].includes(
+      normalizeKey(requestedSource)
+    );
+
+  if (explicitlyAutomaticAction) {
+    return {
+      userType: requestedUserType || "Auto",
+      userName: requestedUserName || "System",
+      source: requestedSource || "Auto",
+    };
+  }
+
   if (
     isComplaintFinalResult &&
     (complaintReporterActor || looksLikeRestaurantReportedText(requestText))
@@ -853,10 +881,6 @@ function resolveJourneyActor({
       }
     );
   }
-
-  const explicitlyAdminAction =
-    normalizeKey(requestedUserType).includes("admin") ||
-    normalizeKey(requestedSource).includes("admin");
 
   if (
     sourceSaysRestro ||
@@ -873,7 +897,7 @@ function resolveJourneyActor({
   return {
     userType: requestedUserType || "Admin",
     userName: requestedUserName || "Admin",
-    source: requestedSource || requestedUserType || "Admin",
+    source: requestedSource || "Admin Orders",
   };
 }
 
