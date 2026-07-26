@@ -2841,10 +2841,14 @@ export default function AdminOrdersPage() {
       whiteSpace: "nowrap" as const,
     };
 
+    if (!isPrepaidOrder(order)) {
+      return <span style={{ color: "#94a3b8", fontWeight: 700 }}>-</span>;
+    }
+
     if (status === "RefundRequested") {
       return (
         <button onClick={() => openWorkflow("refund", order, "Under Review")} style={{ ...buttonStyle, background: "#7c3aed" }}>
-          Review
+          {activeTab === "refund" ? "Review" : "Review Refund"}
         </button>
       );
     }
@@ -2853,10 +2857,10 @@ export default function AdminOrdersPage() {
       return (
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => openWorkflow("refund", order, "Approved")} style={{ ...buttonStyle, background: "#16a34a" }}>
-            Approve
+            {activeTab === "refund" ? "Approve" : "Approve Refund"}
           </button>
           <button onClick={() => openWorkflow("refund", order, "Failed")} style={{ ...buttonStyle, background: "#dc2626" }}>
-            Reject
+            {activeTab === "refund" ? "Reject" : "Reject Refund"}
           </button>
         </div>
       );
@@ -3336,106 +3340,6 @@ export default function AdminOrdersPage() {
         }}
       >
         <div style={{ overflowX: "auto" }}>
-          {activeTab === "refund" ? (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              minWidth: 980,
-            }}
-          >
-            <thead
-              style={{
-                textAlign: "left",
-                borderBottom: "2px solid #edf2f7",
-                background: "#f8fafc",
-                fontSize: 13,
-                color: "#475569",
-              }}
-            >
-              <tr>
-                <th style={{ padding: 12 }}>Order ID</th>
-                <th style={{ padding: 12 }}>Customer</th>
-                <th style={{ padding: 12 }}>Current Status</th>
-                <th style={{ padding: 12 }}>Refund Amount</th>
-                <th style={{ padding: 12 }}>Refund Status</th>
-                <th style={{ padding: 12 }}>Requested At</th>
-                <th style={{ padding: 12, textAlign: "center" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody style={{ fontSize: 13, color: "#334155" }}>
-              {visibleOrders.map((o) => (
-                <tr
-                  key={o.id}
-                  style={{ borderBottom: "1px solid #f1f5f9" }}
-                  className="table-row-hover"
-                >
-                  <td style={{ padding: 12 }}>
-                    <button
-                      onClick={() => handleOpenDiagnosticsDrawer(o, "details")}
-                      title="View order details"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: 0,
-                        margin: 0,
-                        font: "inherit",
-                        fontWeight: 800,
-                        color: "#2563eb",
-                        cursor: "pointer",
-                        textDecoration: "underline",
-                        textAlign: "left",
-                      }}
-                    >
-                      #{o.id}
-                    </button>
-                  </td>
-                  <td style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 800, color: "#0f172a" }}>
-                      {o.customerName || "Guest"}
-                    </div>
-                    <div style={{ marginTop: 3, color: "#64748b", fontFamily: "monospace", fontSize: 11 }}>
-                      {o.customerMobile || "-"}
-                    </div>
-                  </td>
-                  <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
-                    {getCurrentOrderStatus(o)}
-                  </td>
-                  <td style={{ padding: 12, fontWeight: 800, whiteSpace: "nowrap" }}>
-                    ₹{moneyNumber(getRefundAmount(o))}
-                  </td>
-                  <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
-                    {getReadableRefundStatus(o)}
-                  </td>
-                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>
-                    {formatAdminDateTime(
-                      valueFrom(o.raw, "RefundRequestedAt", "refundRequestedAt", "RequestedAt"),
-                    )}
-                  </td>
-                  <td style={{ padding: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
-                      {renderRefundAction(o)}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!loading && visibleOrders.length === 0 && (
-                <tr>
-                  <td colSpan={7} style={{ padding: 30, textAlign: "center", color: "#94a3b8", fontWeight: 600 }}>
-                    No refund records found.
-                  </td>
-                </tr>
-              )}
-              {loading && (
-                <tr>
-                  <td colSpan={7} style={{ padding: 30, textAlign: "center", color: "#64748b", fontWeight: 600 }}>
-                    Syncing refund records...
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          ) : (
           <table
             style={{
               width: "100%",
@@ -3467,11 +3371,17 @@ export default function AdminOrdersPage() {
                 <th style={{ padding: 12 }}>Customer Mobile</th>
                 <th style={{ padding: 12 }}>Payment</th>
                 <th style={{ padding: 12 }}>Order Process Log</th>
-                {["delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                {["refund", "delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab) && (
                   <th style={{ padding: 12 }}>Current Status</th>
                 )}
-                {["delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                {activeTab === "refund" && (
+                  <th style={{ padding: 12 }}>Refund Amount</th>
+                )}
+                {["refund", "delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab) && (
                   <th style={{ padding: 12 }}>Refund Status</th>
+                )}
+                {activeTab === "refund" && (
+                  <th style={{ padding: 12 }}>Requested At</th>
                 )}
                 <th style={{ padding: 12, textAlign: "center" }}>Actions</th>
               </tr>
@@ -3632,14 +3542,34 @@ export default function AdminOrdersPage() {
                     </button>
                   </td>
 
-                  {["delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                  {["refund", "delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab) && (
                     <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
                       {getCurrentOrderStatus(o)}
                     </td>
                   )}
-                  {["delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                  {activeTab === "refund" && (
+                    <td style={{ padding: 12, fontWeight: 800, whiteSpace: "nowrap" }}>
+                      ₹{moneyNumber(getRefundAmount(o))}
+                    </td>
+                  )}
+                  {["refund", "delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab) && (
                     <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
                       {getReadableRefundStatus(o)}
+                    </td>
+                  )}
+                  {activeTab === "refund" && (
+                    <td style={{ padding: 12, whiteSpace: "nowrap" }}>
+                      {formatAdminDateTime(
+                        valueFrom(
+                          o.raw,
+                          "RefundRequestedAt",
+                          "refundRequestedAt",
+                          "RequestedAt",
+                          "requestedAt",
+                          "CreatedAt",
+                          "createdAt",
+                        ),
+                      )}
                     </td>
                   )}
 
@@ -3678,24 +3608,8 @@ export default function AdminOrdersPage() {
                           <button onClick={() => openWorkflow("complaint-approve", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Approve</button>
                           <button onClick={() => openWorkflow("complaint-reject", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#dc2626", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Reject</button>
                         </div>
-                      ) : getOrderRefundStatus(o) === "RefundRequested" ? (
-                        <button onClick={() => openWorkflow("refund", o, "Under Review")} style={{ padding: "6px 10px", borderRadius: 6, background: "#7c3aed", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Review Refund</button>
-                      ) : getOrderRefundStatus(o) === "RefundUnderReview" ? (
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => openWorkflow("refund", o, "Approved")} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Approve Refund</button>
-                          <button onClick={() => openWorkflow("refund", o, "Failed")} style={{ padding: "6px 10px", borderRadius: 6, background: "#dc2626", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Reject Refund</button>
-                        </div>
-                      ) : getOrderRefundStatus(o) === "RefundApproved" ? (
-                        <button onClick={() => openWorkflow("refund", o, "Processing")} style={{ padding: "6px 10px", borderRadius: 6, background: "#7c3aed", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Start Processing</button>
-                      ) : getOrderRefundStatus(o) === "RefundProcessing" ? (
-                        <button onClick={() => openWorkflow("refund", o, "Success")} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Complete Refund</button>
-                      ) : getOrderRefundStatus(o) === "RefundCompleted" ? (
-                        <button type="button" disabled style={{ padding: "6px 10px", borderRadius: 6, background: "#dcfce7", color: "#166534", border: "1px solid #86efac", cursor: "not-allowed", fontWeight: 800, fontSize: 11 }}>Refund Completed</button>
-                      ) : getOrderRefundStatus(o) === "RefundRejected" ||
-                        getOrderRefundStatus(o) === "RefundFailed" ? (
-                        <span style={{ padding: "6px 10px", borderRadius: 6, background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca", fontWeight: 800, fontSize: 11, whiteSpace: "nowrap" }}>
-                          {getOrderRefundStatus(o) === "RefundRejected" ? "Refund Rejected" : "Refund Failed"}
-                        </span>
+                      ) : isPrepaidOrder(o) && getOrderRefundStatus(o) ? (
+                        renderRefundAction(o)
                       ) : isPrepaidOrder(o) &&
                         !hasRefundAudit(o) &&
                         (o.status === "baddelivery" ||
@@ -3715,7 +3629,7 @@ export default function AdminOrdersPage() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          Manual Refund
+                          Send to Refund
                         </button>
                       ) : isPrepaidOrder(o) &&
                         !hasRefundAudit(o) &&
@@ -3965,7 +3879,13 @@ export default function AdminOrdersPage() {
               {!loading && visibleOrders.length === 0 && (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={
+                      activeTab === "refund"
+                        ? 19
+                        : ["delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab)
+                          ? 17
+                          : 15
+                    }
                     style={{
                       padding: 30,
                       textAlign: "center",
@@ -3981,7 +3901,13 @@ export default function AdminOrdersPage() {
               {loading && (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={
+                      activeTab === "refund"
+                        ? 19
+                        : ["delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab)
+                          ? 17
+                          : 15
+                    }
                     style={{
                       padding: 30,
                       textAlign: "center",
@@ -3995,7 +3921,6 @@ export default function AdminOrdersPage() {
               )}
             </tbody>
           </table>
-          )}
         </div>
       </div>
 
