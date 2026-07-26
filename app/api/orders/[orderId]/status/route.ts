@@ -1216,6 +1216,67 @@ async function upsertRefundBestEffort({
 }
 
 /* =========================================================
+   GET ORDER JOURNEY
+   ========================================================= */
+
+export async function GET(
+  _req: NextRequest,
+  {
+    params,
+  }: {
+    params: {
+      orderId?: string;
+      id?: string;
+    };
+  }
+) {
+  try {
+    const orderId = decodeURIComponent(
+      String(params.orderId ?? params.id ?? "")
+    ).trim();
+
+    if (!orderId) {
+      return NextResponse.json(
+        { ok: false, error: "Order id is required" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await serviceClient
+      .from("OrderJourney")
+      .select("*")
+      .eq("OrderId", orderId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("OrderJourney GET error:", {
+        orderId,
+        error: error.message,
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Unable to load order journey",
+          details: error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      journey: data ?? null,
+    });
+  } catch (error) {
+    console.error("ORDER JOURNEY GET ERROR:", error);
+    return NextResponse.json(
+      { ok: false, error: "Unable to load order journey" },
+      { status: 500 }
+    );
+  }
+}
+
+/* =========================================================
    PATCH
    ========================================================= */
 
