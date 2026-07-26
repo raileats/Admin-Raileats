@@ -91,6 +91,16 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "partialdelivery", label: "Partial Delivery" },
   { key: "all", label: "All" },
 ];
+
+const createEmptyTabCounts = (): Record<TabKey, number> =>
+  TABS.reduce(
+    (counts, tab) => {
+      counts[tab.key] = 0;
+      return counts;
+    },
+    {} as Record<TabKey, number>,
+  );
+
 const CANCEL_REASONS = [
   "Customer Plan Change",
   "Customer Call Not Connect",
@@ -1084,6 +1094,8 @@ export default function AdminOrdersPage() {
   const [allOrders, setAllOrders] = useState<Record<TabKey, Order[]>>(
     {} as Record<TabKey, Order[]>,
   );
+  const [tabCounts, setTabCounts] =
+    useState<Record<TabKey, number>>(createEmptyTabCounts);
 
   const [loading, setLoading] = useState(false);
 
@@ -1422,6 +1434,51 @@ export default function AdminOrdersPage() {
     bookingDateFilterOn,
     dateSearchType,
   ]);
+
+  /* ================= LOAD ALL TAB COUNTS ================= */
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTabCounts = async () => {
+      try {
+        const results = await Promise.all(
+          TABS.map(async ({ key }) => {
+            const url =
+              key === "all" ? "/api/orders" : `/api/orders?status=${key}`;
+            const res = await fetch(url, { cache: "no-store" });
+            const json = await res.json().catch(() => ({}) as any);
+
+            if (!res.ok || !json?.ok) {
+              console.error("order tab count fetch failed", key, json);
+              return [key, null] as const;
+            }
+
+            return [key, Array.isArray(json.orders) ? json.orders.length : 0] as const;
+          }),
+        );
+
+        if (cancelled) return;
+
+        setTabCounts((previous) => {
+          const next = { ...previous };
+
+          results.forEach(([key, count]) => {
+            if (count !== null) next[key] = count;
+          });
+
+          return next;
+        });
+      } catch (error) {
+        console.error("order tab counts fetch error", error);
+      }
+    };
+
+    loadTabCounts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
 
   /* ================= AUTO STATUS TABS SYNC ================= */
   useEffect(() => {
@@ -2673,36 +2730,6 @@ export default function AdminOrdersPage() {
     return filtered;
   };
 
-  const tabCounts = useMemo(() => {
-    const counts: Record<string, number> = {
-      booked: 0,
-      verification: 0,
-      cancellationrequest: 0,
-      neworder: 0,
-      inkitchen: 0,
-      outfordelivery: 0,
-      restromarkeddelivered: 0,
-      delivered: 0,
-      cancelled: 0,
-      notdelivered: 0,
-      baddelivery: 0,
-      partialdelivery: 0,
-      complaints: 0,
-      refund: 0,
-      all: 0,
-    };
-    const flatOrders = Object.values(allOrders).flat();
-
-    counts.all = flatOrders.length;
-
-    flatOrders.forEach((o) => {
-      if (counts[o.status] !== undefined) {
-        counts[o.status]++;
-      }
-    });
-
-    return counts;
-  }, [allOrders]);
   const visibleOrders = useMemo(
     () => applyFiltersAndSorting(orders),
     [
@@ -3565,7 +3592,7 @@ export default function AdminOrdersPage() {
             style={{
               width: "100%",
               borderCollapse: "collapse",
-              minWidth: 1300,
+              minWidth: 1080,
             }}
           >
             <thead
@@ -3581,15 +3608,11 @@ export default function AdminOrdersPage() {
                 <th style={{ padding: 12 }}>Order ID</th>
                 <th style={{ padding: 12 }}>Outlet ID</th>
                 <th style={{ padding: 12 }}>Outlet Name</th>
-                <th style={{ padding: 12 }}>Station Code</th>
-                <th style={{ padding: 12 }}>Station Name</th>
-                <th style={{ padding: 12 }}>Delivery Date</th>
-                <th style={{ padding: 12 }}>Delivery Time</th>
+                <th style={{ padding: 12 }}>Station</th>
+                <th style={{ padding: 12 }}>Delivery Date &amp; Time</th>
                 <th style={{ padding: 12 }}>Train No.</th>
-                <th style={{ padding: 12 }}>Coach</th>
-                <th style={{ padding: 12 }}>Seat</th>
-                <th style={{ padding: 12 }}>Customer Name</th>
-                <th style={{ padding: 12 }}>Customer Mobile</th>
+                <th style={{ padding: 12 }}>Coach / Seat</th>
+                <th style={{ padding: 12 }}>Customer</th>
                 <th style={{ padding: 12 }}>Payment</th>
                 <th style={{ padding: 12 }}>Order Process Log</th>
                 {["refund", "delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab) && (
@@ -3670,27 +3693,17 @@ export default function AdminOrdersPage() {
                   <td style={{ padding: 12, fontWeight: 600 }}>
                     {o.outletName}
                   </td>
-                  <td style={{ padding: 12 }}>
-                    <span
-                      style={{
-                        background: "#eff6ff",
-                        color: "#2563eb",
-                        padding: "3px 6px",
-                        borderRadius: 4,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {o.stationCode}
-                    </span>
-                  </td>
-                  <td style={{ padding: 12 }}>{o.stationName}</td>
-                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>
-                    {o.deliveryDate}
-                  </td>
                   <td
-                    style={{ padding: 12, fontWeight: 600, color: "#0284c7" }}
+                    style={{ padding: 12, fontWeight: 600, whiteSpace: "nowrap" }}
                   >
-                    {o.deliveryTime}
+                    {o.stationName || "-"}
+                    {o.stationCode ? ` (${o.stationCode})` : ""}
+                  </td>
+                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>
+                    <div>{o.deliveryDate || "-"}</div>
+                    <div style={{ fontWeight: 600, color: "#0284c7" }}>
+                      {o.deliveryTime || "-"}
+                    </div>
                   </td>
                   <td style={{ padding: 12 }}>
                     {o.trainNo ? (
@@ -3718,13 +3731,14 @@ export default function AdminOrdersPage() {
                       "-"
                     )}
                   </td>
-                  <td style={{ padding: 12 }}>{o.coach || "-"}</td>
-                  <td style={{ padding: 12 }}>{o.seat || "-"}</td>
-                  <td style={{ padding: 12, fontWeight: 600 }}>
-                    {o.customerName}
+                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>
+                    {o.coach || "-"} / {o.seat || "-"}
                   </td>
-                  <td style={{ padding: 12, fontFamily: "monospace" }}>
-                    {o.customerMobile}
+                  <td style={{ padding: 12, whiteSpace: "nowrap" }}>
+                    <div style={{ fontWeight: 600 }}>{o.customerName || "-"}</div>
+                    <div style={{ fontFamily: "monospace" }}>
+                      {o.customerMobile || "-"}
+                    </div>
                   </td>
                   <td style={{ padding: 12 }}>
                     <span
