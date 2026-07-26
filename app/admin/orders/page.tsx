@@ -724,11 +724,19 @@ const getRefundAmount = (order: Order) =>
     "refundApprovedAmount",
     "ApprovedAmount",
     "approvedAmount",
-    "RefundRequestedAmount",
-    "refundRequestedAmount",
     "RefundAmount",
     "refundAmount",
   ) ?? 0;
+
+const getOrderValue = (order: Order) =>
+  moneyFrom(order.raw, "TotalAmount", "totalAmount") ??
+  Number(order.total || 0);
+
+const formatRefundMoney = (value: number) =>
+  Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 const moneyNumber = (value: any) => {
   const numberValue = Number(value ?? 0);
@@ -2091,6 +2099,14 @@ export default function AdminOrdersPage() {
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload?.ok) {
+      if (
+        payload?.error?.code === "DUPLICATE_REFUND" ||
+        String(payload?.error?.message || payload?.error || "")
+          .toLowerCase()
+          .includes("refund request already exists")
+      ) {
+        throw new Error("Refund already exists for this order.");
+      }
       const message =
         payload?.error?.message || payload?.error || "Refund request failed";
       throw new Error(String(message));
@@ -2653,6 +2669,14 @@ export default function AdminOrdersPage() {
     order: Order,
     refundAction = "",
   ) {
+    if (
+      (kind === "manual-refund" || kind === "refund-request") &&
+      hasRefundAudit(order)
+    ) {
+      alert("Refund already exists for this order.");
+      return;
+    }
+
     setWorkflowModal({ open: true, kind, order });
     setWorkflowStatus(kind === "refund" ? refundAction : "");
     setWorkflowSubStatus("");
@@ -2688,24 +2712,19 @@ export default function AdminOrdersPage() {
         workflowModal.kind === "manual-refund" ||
         workflowModal.kind === "refund-request"
       ) {
+        if (hasRefundAudit(order)) {
+          throw new Error("Refund already exists for this order.");
+        }
+
         const amount = Number(workflowAmount);
         if (!Number.isFinite(amount) || amount <= 0) {
           throw new Error("Valid refund amount enter karein");
         }
 
-        const maximumAmount =
-          moneyFrom(
-            order.raw,
-            "PPDAmount",
-            "PaidAmount",
-            "TotalAmount",
-            "totalAmount",
-          ) ?? Number(order.total || 0);
+        const maximumAmount = getOrderValue(order);
 
         if (maximumAmount > 0 && amount > maximumAmount) {
-          throw new Error(
-            `Refund amount order amount Rs ${moneyNumber(maximumAmount)} se zyada nahi ho sakta`,
-          );
+          throw new Error("Refund amount cannot exceed Order Value.");
         }
 
         await createRefundRequest({
@@ -5355,7 +5374,7 @@ export default function AdminOrdersPage() {
                 : workflowModal.kind === "complaint-reject"
                   ? "Reject Complaint"
                   : workflowModal.kind === "manual-refund"
-                    ? "Manual Refund"
+                    ? "Send to Refund"
                     : workflowModal.kind === "refund-request"
                       ? "Send to Refund"
                     : workflowStatus === "Under Review"
@@ -5369,6 +5388,26 @@ export default function AdminOrdersPage() {
                             : "Complete Refund"}
             </h3>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Order ID: <strong>{workflowModal.order.id}</strong></div>
+            {(workflowModal.kind === "manual-refund" ||
+              workflowModal.kind === "refund-request") && (
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  padding: 12,
+                  marginBottom: 14,
+                  borderRadius: 8,
+                  border: "1px solid #e2e8f0",
+                  background: "#f8fafc",
+                  color: "#334155",
+                  fontSize: 12,
+                }}
+              >
+                <div>Customer: <strong>{workflowModal.order.customerName || "Guest"}</strong></div>
+                <div>Order Value: <strong>₹{formatRefundMoney(getOrderValue(workflowModal.order))}</strong></div>
+                <div>Max Refund Allowed: <strong>₹{formatRefundMoney(getOrderValue(workflowModal.order))}</strong></div>
+              </div>
+            )}
             {workflowModal.kind === "complaint-approve" && <>
               <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Final Status<select value={workflowStatus} onChange={(e)=>setWorkflowStatus(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}><option value="">Select status</option><option>Cancelled</option><option>Not Delivered</option><option>Delivered</option><option>Bad Delivery</option><option>Partial Delivery</option></select></label>
               <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Final Sub Status<input value={workflowSubStatus} onChange={(e)=>setWorkflowSubStatus(e.target.value)} placeholder="Sub status" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
@@ -5385,7 +5424,7 @@ export default function AdminOrdersPage() {
             {(workflowModal.kind === "manual-refund" ||
               workflowModal.kind === "refund-request") && (
               <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>
-                Refund Amount
+                Refund Amount *
                 <input
                   type="number"
                   min="0.01"
@@ -5398,9 +5437,9 @@ export default function AdminOrdersPage() {
                 />
               </label>
             )}
-            <label style={{ display: "grid", gap: 6, marginBottom: 16, fontSize: 12, fontWeight: 800 }}>Admin Remarks<textarea rows={4} value={workflowRemarks} onChange={(e)=>setWorkflowRemarks(e.target.value)} placeholder="Remarks" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8, resize: "vertical" }}/></label>
+            <label style={{ display: "grid", gap: 6, marginBottom: 16, fontSize: 12, fontWeight: 800 }}>{workflowModal.kind === "manual-refund" || workflowModal.kind === "refund-request" ? "Admin Remarks (optional)" : "Admin Remarks"}<textarea rows={4} value={workflowRemarks} onChange={(e)=>setWorkflowRemarks(e.target.value)} placeholder="Remarks" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8, resize: "vertical" }}/></label>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button disabled={workflowSaving} onClick={()=>setWorkflowModal({open:false,kind:null,order:null})} style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontWeight: 700 }}>Close</button>
+              <button disabled={workflowSaving} onClick={()=>setWorkflowModal({open:false,kind:null,order:null})} style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontWeight: 700 }}>{workflowModal.kind === "manual-refund" || workflowModal.kind === "refund-request" ? "Cancel" : "Close"}</button>
               <button disabled={workflowSaving} onClick={submitWorkflow} style={{ padding: "9px 14px", borderRadius: 8, border: "none", background: workflowModal.kind === "complaint-reject" ? "#dc2626" : "#0f172a", color: "#fff", cursor: "pointer", fontWeight: 800 }}>{workflowSaving ? "Saving..." : "Submit"}</button>
             </div>
           </div>
