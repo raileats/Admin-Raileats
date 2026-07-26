@@ -366,6 +366,101 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
+const ORDER_JOURNEY_LOG_STAGES = [
+  { prefix: "Booked", label: "Booked" },
+  { prefix: "InVerification", label: "In Verification" },
+  { prefix: "CancellationRequest", label: "Cancellation Request" },
+  { prefix: "NewOrder", label: "New Order" },
+  { prefix: "InKitchen", label: "In Kitchen" },
+  { prefix: "OutForDelivery", label: "Out for Delivery" },
+  { prefix: "RestroMarkedDelivered", label: "Restro Marked Delivered" },
+  { prefix: "Complaints", label: "Complaints" },
+  { prefix: "Delivered", label: "Delivered" },
+  { prefix: "Cancelled", label: "Cancelled" },
+  { prefix: "NotDelivered", label: "Not Delivered" },
+  { prefix: "BadDelivery", label: "Bad Delivery" },
+  { prefix: "PartialDelivery", label: "Partial Delivery" },
+  { prefix: "Refund", label: "Refund" },
+  { prefix: "RefundRequested", label: "Refund Requested" },
+  { prefix: "RefundUnderReview", label: "Refund Under Review" },
+  { prefix: "RefundApproved", label: "Refund Approved" },
+  { prefix: "RefundProcessing", label: "Refund Processing" },
+  { prefix: "RefundCompleted", label: "Refund Completed" },
+] as const;
+
+const orderJourneyActionAt = (
+  dateValue: unknown,
+  timeValue: unknown,
+  fallback: unknown,
+) => {
+  const date = String(dateValue ?? "").trim();
+  const time = String(timeValue ?? "").trim();
+  if (date) return `${date}T${time || "00:00:00"}+05:30`;
+  return String(fallback ?? "");
+};
+
+const mapOrderJourneyToLogs = (journey: any) => {
+  if (!journey) return [] as any[];
+
+  let previousStatus = "";
+  const logs = ORDER_JOURNEY_LOG_STAGES.flatMap((stage, index) => {
+    const update = String(journey[`${stage.prefix}Update`] ?? "").trim();
+    if (!update) return [];
+
+    const status = update || stage.label;
+    const remarks = journey[`${stage.prefix}Remarks`] ?? "";
+    const log = {
+      Id: `${journey.Id ?? journey.OrderId ?? "journey"}-${stage.prefix}-${index}`,
+      OrderId: journey.OrderId,
+      OldStatus: previousStatus,
+      NewStatus: status,
+      Status: status,
+      SubStatus:
+        stage.prefix === "BadDelivery" || stage.prefix === "PartialDelivery"
+          ? stage.label
+          : "",
+      Remarks: remarks,
+      Note: remarks,
+      UserType: journey[`${stage.prefix}UserType`] ?? "",
+      UserName: journey[`${stage.prefix}UserName`] ?? "",
+      ChangedBy: journey[`${stage.prefix}UserName`] ?? "",
+      ActionSource: journey[`${stage.prefix}Source`] ?? "",
+      ChangedAt: orderJourneyActionAt(
+        journey[`${stage.prefix}ActionAtDate`],
+        journey[`${stage.prefix}ActionAtTime`],
+        journey.UpdatedAt ?? journey.CreatedAt,
+      ),
+    };
+
+    previousStatus = status;
+    return [log];
+  });
+
+  return logs.sort((left, right) => {
+    const leftTime = new Date(left.ChangedAt || 0).getTime();
+    const rightTime = new Date(right.ChangedAt || 0).getTime();
+    return leftTime - rightTime;
+  });
+};
+
+const loadOrderJourneyLogs = async (orderId: string) => {
+  const { data, error } = await supabase
+    .from("OrderJourney")
+    .select("*")
+    .eq("OrderId", orderId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Unable to load OrderJourney log:", {
+      orderId,
+      error: error.message,
+    });
+    return [] as any[];
+  }
+
+  return mapOrderJourneyToLogs(data);
+};
+
 type SearchType =
   | "customerMobile"
   | "orderId"
@@ -1969,14 +2064,9 @@ export default function AdminOrdersPage() {
       setLoadingLogs(true);
       setOrderLogs([]);
       try {
-        const { data, error } = await supabase
-          .from("OrderStatusHistory")
-          .select("*")
-          .eq("OrderId", targetOrderId)
-          .order("ChangedAt", { ascending: true });
-        if (!error && data) setOrderLogs(data);
+        setOrderLogs(await loadOrderJourneyLogs(targetOrderId));
       } catch (e) {
-        console.error("Error connecting OrderStatusHistory database links:", e);
+        console.error("Error connecting OrderJourney database links:", e);
       } finally {
         setLoadingLogs(false);
       }
@@ -2075,12 +2165,7 @@ export default function AdminOrdersPage() {
 
         if (viewDrawerOpen && detailedOrder && detailedOrder.id === orderId) {
           try {
-            const { data: logReload } = await supabase
-              .from("OrderStatusHistory")
-              .select("*")
-              .eq("OrderId", orderId)
-              .order("ChangedAt", { ascending: true });
-            if (logReload) setOrderLogs(logReload);
+            setOrderLogs(await loadOrderJourneyLogs(orderId));
           } catch (err) {
             console.error(err);
           }
@@ -2322,12 +2407,7 @@ export default function AdminOrdersPage() {
         detailedOrder.id === selectedOrder.id
       ) {
         try {
-          const { data: logReload } = await supabase
-            .from("OrderStatusHistory")
-            .select("*")
-            .eq("OrderId", selectedOrder.id)
-            .order("ChangedAt", { ascending: true });
-          if (logReload) setOrderLogs(logReload);
+          setOrderLogs(await loadOrderJourneyLogs(selectedOrder.id));
         } catch (err) {
           console.error(err);
         }
@@ -2462,12 +2542,7 @@ export default function AdminOrdersPage() {
 
       if (viewDrawerOpen && detailedOrder && detailedOrder.id === order.id) {
         try {
-          const { data: logReload } = await supabase
-            .from("OrderStatusHistory")
-            .select("*")
-            .eq("OrderId", order.id)
-            .order("ChangedAt", { ascending: true });
-          if (logReload) setOrderLogs(logReload);
+          setOrderLogs(await loadOrderJourneyLogs(order.id));
         } catch (err) {
           console.error(err);
         }
