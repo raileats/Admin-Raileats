@@ -444,21 +444,21 @@ const mapOrderJourneyToLogs = (journey: any) => {
 };
 
 const loadOrderJourneyLogs = async (orderId: string) => {
-  const { data, error } = await supabase
-    .from("OrderJourney")
-    .select("*")
-    .eq("OrderId", orderId)
-    .maybeSingle();
+  const response = await fetch(
+    `/api/orders/${encodeURIComponent(orderId)}/status`,
+    { method: "GET", cache: "no-store" },
+  );
+  const payload = await response.json().catch(() => null);
 
-  if (error) {
+  if (!response.ok || !payload?.ok) {
     console.error("Unable to load OrderJourney log:", {
       orderId,
-      error: error.message,
+      error: payload?.error || `HTTP ${response.status}`,
     });
     return [] as any[];
   }
 
-  return mapOrderJourneyToLogs(data);
+  return mapOrderJourneyToLogs(payload.journey);
 };
 
 type SearchType =
