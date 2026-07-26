@@ -61,6 +61,15 @@ type Order = {
   raw?: any;
 };
 
+type OrderRefundStatus =
+  | "RefundRequested"
+  | "RefundUnderReview"
+  | "RefundApproved"
+  | "RefundProcessing"
+  | "RefundCompleted"
+  | "RefundRejected"
+  | "RefundFailed";
+
 const TABS: { key: TabKey; label: string }[] = [
   { key: "booked", label: "Booked" },
   { key: "verification", label: "In Verification" },
@@ -628,6 +637,25 @@ const valueFrom = (source: any, ...keys: string[]) => {
   return "";
 };
 
+const getOrderRefundStatus = (order: Order): OrderRefundStatus | "" => {
+  const value = String(
+    valueFrom(order.raw, "RefundStatus", "refundStatus") || "",
+  ).trim();
+
+  const normalized = value.replace(/[\s_-]+/g, "").toLowerCase();
+  const statuses: Record<string, OrderRefundStatus> = {
+    refundrequested: "RefundRequested",
+    refundunderreview: "RefundUnderReview",
+    refundapproved: "RefundApproved",
+    refundprocessing: "RefundProcessing",
+    refundcompleted: "RefundCompleted",
+    refundrejected: "RefundRejected",
+    refundfailed: "RefundFailed",
+  };
+
+  return statuses[normalized] || "";
+};
+
 const moneyNumber = (value: any) => {
   const numberValue = Number(value ?? 0);
   if (!Number.isFinite(numberValue)) return "0";
@@ -859,6 +887,7 @@ export default function AdminOrdersPage() {
   const [workflowPenalty, setWorkflowPenalty] = useState("");
   const [workflowRemarks, setWorkflowRemarks] = useState("");
   const [workflowAmount, setWorkflowAmount] = useState("");
+  const [workflowTransactionId, setWorkflowTransactionId] = useState("");
   const [workflowSaving, setWorkflowSaving] = useState(false);
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -968,7 +997,12 @@ export default function AdminOrdersPage() {
 
   const getAdminActor = () => {
     if (typeof window === "undefined") {
-      return { userType: "Admin", userName: "Admin" };
+      return {
+        userType: "Admin",
+        userName: "Admin",
+        source: "Admin Orders",
+        device: "",
+      };
     }
 
     const userName =
@@ -981,6 +1015,8 @@ export default function AdminOrdersPage() {
     return {
       userType: "Admin",
       userName,
+      source: "Admin Orders",
+      device: navigator.userAgent,
     };
   };
 
@@ -2526,19 +2562,23 @@ export default function AdminOrdersPage() {
   function openWorkflow(
     kind: "complaint-approve" | "complaint-reject" | "refund" | "manual-refund",
     order: Order,
+    refundAction = "",
   ) {
     setWorkflowModal({ open: true, kind, order });
-    setWorkflowStatus("");
+    setWorkflowStatus(kind === "refund" ? refundAction : "");
     setWorkflowSubStatus("");
     setWorkflowPenalty("");
     setWorkflowRemarks("");
+    setWorkflowTransactionId("");
     setWorkflowAmount(
       kind === "manual-refund"
         ? ""
         : String(
-            valueFrom(
-              order.raw,
-              "RefundAmount",
+             valueFrom(
+               order.raw,
+               "RefundRequestedAmount",
+               "refundRequestedAmount",
+               "RefundAmount",
               "refundAmount",
               "PaidAmount",
               "paidAmount",
@@ -2603,15 +2643,91 @@ export default function AdminOrdersPage() {
         const json = await res.json().catch(() => ({}));
         if (!res.ok || !json?.ok) throw new Error(json?.error || "Complaint action failed");
       } else {
-        const refundId = valueFrom(order.raw, "RefundId", "refundId", "RefundNo", "refundNo");
-        if (!refundId) throw new Error("Refund ID not found");
         if (!workflowStatus) throw new Error("Refund status select karein");
-        const res = await fetch(`/api/admin/refunds/${encodeURIComponent(String(refundId))}`, {
-          method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refundStatus: workflowStatus, refundAmount: workflowAmount === "" ? undefined : Number(workflowAmount), remarks: workflowRemarks, adminName: actor.userName }),
+
+        const endpointByStatus: Record<string, string> = {
+          "Under Review": "/api/admin/refunds/review",
+          Approved: "/api/admin/refunds/approve",
+          Failed: "/api/admin/refunds/reject",
+          Processing: "/api/admin/refunds/processing",
+          Success: "/api/admin/refunds/complete",
+        };
+        const endpoint = endpointByStatus[workflowStatus];
+        if (!endpoint) throw new Error("Invalid refund workflow action");
+
+        const requestBody: Record<string, unknown> = {
+          orderId: order.id,
+          actor,
+          remarks: workflowRemarks || undefined,
+        };
+
+        if (workflowStatus === "Approved") {
+  const approvedAmount = Number(workflowAmount);
+
+  if (!Number.isFinite(approvedAmount) || approvedAmount <= 0) {
+    throw new Error("Valid approved refund amount enter karein");
+  }
+
+  const paymentMode = String(
+    valueFrom(
+      order.raw,
+      "PaymentMode",
+      "paymentMode",
+      "PaymentMethod",
+      "paymentMethod",
+    ) || "",
+  )
+    .replace(/[\s_-]+/g, "")
+    .toUpperCase();
+
+  requestBody.approvedAmount = approvedAmount;
+
+  if (paymentMode === "COD" || paymentMode === "CASHONDELIVERY") {
+    requestBody.approveCodManually = true;
+  }
+}
+
+        if (workflowStatus === "Failed" && !workflowRemarks.trim()) {
+          throw new Error("Reject remarks enter karein");
+        }
+
+        if (workflowStatus === "Processing") {
+          const paymentMode = String(
+            valueFrom(order.raw, "PaymentMode", "paymentMode", "PaymentMethod", "paymentMethod") || "",
+          )
+            .replace(/[\s_-]+/g, "")
+            .toUpperCase();
+          if (paymentMode === "COD" || paymentMode === "CASHONDELIVERY") {
+            requestBody.refundMethod = "MANUAL";
+          }
+        }
+
+        if (workflowStatus === "Success") {
+          const transactionId = workflowTransactionId.trim();
+          if (!transactionId) {
+            throw new Error("Refund transaction ID enter karein");
+          }
+          const paymentMode = String(
+            valueFrom(order.raw, "PaymentMode", "paymentMode", "PaymentMethod", "paymentMethod") || "",
+          )
+            .replace(/[\s_-]+/g, "")
+            .toUpperCase();
+          if (paymentMode === "COD" || paymentMode === "CASHONDELIVERY") {
+            requestBody.manualTransactionId = transactionId;
+          } else {
+            requestBody.providerRefundId = transactionId;
+          }
+        }
+
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
         });
         const json = await res.json().catch(() => ({}));
-        if (!res.ok || !json?.ok) throw new Error(json?.error || "Refund update failed");
+        if (!res.ok || !json?.ok) {
+          throw new Error(json?.error?.message || json?.error || "Refund update failed");
+        }
       }
       setWorkflowModal({ open: false, kind: null, order: null });
       hasLoadedTabRef.current[activeTab] = false;
@@ -3267,8 +3383,24 @@ export default function AdminOrdersPage() {
                           <button onClick={() => openWorkflow("complaint-approve", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Approve</button>
                           <button onClick={() => openWorkflow("complaint-reject", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#dc2626", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Reject</button>
                         </div>
-                      ) : o.status === "refund" ? (
-                        <button onClick={() => openWorkflow("refund", o)} style={{ padding: "6px 10px", borderRadius: 6, background: "#7c3aed", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Update Refund</button>
+                      ) : getOrderRefundStatus(o) === "RefundRequested" ? (
+                        <button onClick={() => openWorkflow("refund", o, "Under Review")} style={{ padding: "6px 10px", borderRadius: 6, background: "#7c3aed", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Review Refund</button>
+                      ) : getOrderRefundStatus(o) === "RefundUnderReview" ? (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => openWorkflow("refund", o, "Approved")} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Approve Refund</button>
+                          <button onClick={() => openWorkflow("refund", o, "Failed")} style={{ padding: "6px 10px", borderRadius: 6, background: "#dc2626", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Reject Refund</button>
+                        </div>
+                      ) : getOrderRefundStatus(o) === "RefundApproved" ? (
+                        <button onClick={() => openWorkflow("refund", o, "Processing")} style={{ padding: "6px 10px", borderRadius: 6, background: "#7c3aed", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Start Processing</button>
+                      ) : getOrderRefundStatus(o) === "RefundProcessing" ? (
+                        <button onClick={() => openWorkflow("refund", o, "Success")} style={{ padding: "6px 10px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 800, fontSize: 11 }}>Complete Refund</button>
+                      ) : getOrderRefundStatus(o) === "RefundCompleted" ? (
+                        <button type="button" disabled style={{ padding: "6px 10px", borderRadius: 6, background: "#dcfce7", color: "#166534", border: "1px solid #86efac", cursor: "not-allowed", fontWeight: 800, fontSize: 11 }}>Refund Completed</button>
+                      ) : getOrderRefundStatus(o) === "RefundRejected" ||
+                        getOrderRefundStatus(o) === "RefundFailed" ? (
+                        <span style={{ padding: "6px 10px", borderRadius: 6, background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca", fontWeight: 800, fontSize: 11, whiteSpace: "nowrap" }}>
+                          {getOrderRefundStatus(o) === "RefundRejected" ? "Refund Rejected" : "Refund Failed"}
+                        </span>
                       ) : o.status === "baddelivery" ||
                         o.status === "partialdelivery" ? (
                         <button
@@ -4865,7 +4997,15 @@ export default function AdminOrdersPage() {
                   ? "Reject Complaint"
                   : workflowModal.kind === "manual-refund"
                     ? "Manual Refund"
-                    : "Update Refund"}
+                    : workflowStatus === "Under Review"
+                      ? "Review Refund"
+                      : workflowStatus === "Approved"
+                        ? "Approve Refund"
+                        : workflowStatus === "Failed"
+                          ? "Reject Refund"
+                          : workflowStatus === "Processing"
+                            ? "Start Refund Processing"
+                            : "Complete Refund"}
             </h3>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Order ID: <strong>{workflowModal.order.id}</strong></div>
             {workflowModal.kind === "complaint-approve" && <>
@@ -4874,8 +5014,12 @@ export default function AdminOrdersPage() {
               <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Vendor Penalty (Rs)<input type="number" min="0" value={workflowPenalty} onChange={(e)=>setWorkflowPenalty(e.target.value)} placeholder="0" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
             </>}
             {workflowModal.kind === "refund" && <>
-              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Refund Status<select value={workflowStatus} onChange={(e)=>setWorkflowStatus(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}><option value="">Select status</option><option>Pending</option><option>Approved</option><option>Processing</option><option>Success</option><option>Failed</option></select></label>
-              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Refund Amount<input type="number" min="0" step="0.01" value={workflowAmount} onChange={(e)=>setWorkflowAmount(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
+              {workflowStatus === "Approved" && (
+                <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Approved Refund Amount<input type="number" min="0.01" step="0.01" value={workflowAmount} onChange={(e)=>setWorkflowAmount(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
+              )}
+              {workflowStatus === "Success" && (
+                <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Refund Transaction ID<input value={workflowTransactionId} onChange={(e)=>setWorkflowTransactionId(e.target.value)} placeholder="Provider or manual transaction ID" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
+              )}
             </>}
             {workflowModal.kind === "manual-refund" && (
               <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>
