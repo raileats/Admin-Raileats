@@ -780,9 +780,23 @@ export async function GET(req: Request) {
       CustomerName,
       CustomerMobile,
       TotalAmount,
+      PaidAmount,
+      PPDAmount,
       PaymentMode,
       Status,
       SubStatus,
+      RefundStatus,
+      RefundReference,
+      RefundRequestedAmount,
+      RefundApprovedAmount,
+      RefundRequestedAt,
+      RefundReviewedAt,
+      RefundApprovedAt,
+      RefundProcessingAt,
+      RefundCompletedAt,
+      RefundTransactionId,
+      RefundReason,
+      RefundRemarks,
       CreatedAt
     `;
 
@@ -905,6 +919,12 @@ export async function GET(req: Request) {
             "booked"
         ),
 
+      Status:
+        String(
+          row.Status ||
+            "booked"
+        ),
+
       restroCode:
         row.RestroCode,
 
@@ -946,8 +966,38 @@ export async function GET(req: Request) {
       paymentMode:
         row.PaymentMode ?? "COD",
 
+      PaymentMode:
+        row.PaymentMode ?? "COD",
+
       subStatus:
         row.SubStatus ?? null,
+
+      SubStatus:
+        row.SubStatus ?? null,
+
+      RefundStatus:
+        row.RefundStatus ?? null,
+
+      RefundNo:
+        row.RefundReference ?? null,
+
+      RefundRequestedAmount:
+        row.RefundRequestedAmount ?? null,
+
+      RefundApprovedAmount:
+        row.RefundApprovedAmount ?? null,
+
+      RefundRequestedAt:
+        row.RefundRequestedAt ?? null,
+
+      PaidAmount:
+        row.PaidAmount ?? null,
+
+      PPDAmount:
+        row.PPDAmount ?? null,
+
+      TotalAmount:
+        row.TotalAmount ?? null,
 
       CreatedAt:
         row.CreatedAt ?? null,
@@ -1001,10 +1051,70 @@ export async function GET(req: Request) {
         );
       }
 
+      let auditOrdersQuery = supa
+        .from("Orders")
+        .select(
+          "OrderId,RefundStatus,RefundReference,RefundRequestedAt,RefundRequestedAmount,RefundApprovedAmount"
+        )
+        .or(
+          "RefundStatus.not.is.null,RefundReference.not.is.null,RefundRequestedAt.not.is.null,RefundRequestedAmount.not.is.null,RefundApprovedAmount.not.is.null"
+        );
+
+      auditOrdersQuery =
+        applyCommonOrderFilters(
+          auditOrdersQuery
+        );
+
+      const {
+        data: auditOrderRows,
+        error: auditOrderError,
+      } = await auditOrdersQuery;
+
+      if (auditOrderError) {
+        console.error(
+          "Refund audit Orders GET error",
+          auditOrderError
+        );
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "refund_audit_orders_fetch_failed",
+            details:
+              auditOrderError.message,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+
       const refundOrderIds =
         Array.from(
           new Set(
-            (refundRows || [])
+            [
+              ...(refundRows || []),
+              ...(auditOrderRows || []).filter(
+                (row: any) =>
+                  [
+                    row.RefundStatus,
+                    row.RefundReference,
+                    row.RefundRequestedAt,
+                  ].some(
+                    (value) =>
+                      value !== null &&
+                      value !== undefined &&
+                      String(value).trim() !== ""
+                  ) ||
+                  [row.RefundRequestedAmount, row.RefundApprovedAmount].some(
+                    (value) => {
+                      const amount = Number(value);
+                      return Number.isFinite(amount) && amount > 0;
+                    }
+                  )
+              ),
+            ]
               .map((row: any) =>
                 String(
                   row.OrderId ||
@@ -1082,27 +1192,75 @@ export async function GET(req: Request) {
         }
       );
 
+      const refundByOrderId =
+        new Map<string, any>();
+
+      (refundRows || []).forEach(
+        (row: any) => {
+          const key = String(
+            row.OrderId || ""
+          );
+          if (
+            key &&
+            !refundByOrderId.has(key)
+          ) {
+            refundByOrderId.set(
+              key,
+              row
+            );
+          }
+        }
+      );
+
       const orders =
-        (refundRows || [])
+        (orderRows || [])
           .map(
-            (refund: any) => {
+            (orderRow: any) => {
+              const refund =
+                refundByOrderId.get(
+                  String(
+                    orderRow.OrderId ||
+                      ""
+                  )
+                ) || {};
+
               const linkedOrder =
                 orderById.get(
                   String(
-                    refund.OrderId ||
+                    orderRow.OrderId ||
                       ""
                   )
                 );
 
-              if (!linkedOrder) {
-                return null;
-              }
+              const dbRefundStatus =
+                String(
+                  refund.RefundStatus ||
+                    ""
+                );
+
+              const orderRefundStatus =
+                linkedOrder.RefundStatus ||
+                ({
+                  Pending:
+                    refund.ReviewedAt
+                      ? "RefundUnderReview"
+                      : "RefundRequested",
+                  Approved:
+                    "RefundApproved",
+                  Processing:
+                    "RefundProcessing",
+                  Success:
+                    "RefundCompleted",
+                  Failed:
+                    "RefundFailed",
+                } as Record<
+                  string,
+                  string
+                >)[dbRefundStatus] ||
+                null;
 
               return mapOrder(
-                {
-                  ...linkedOrder,
-                  Status: "Refund",
-                },
+                linkedOrder,
                 {
                   ...refund,
 
@@ -1113,11 +1271,26 @@ export async function GET(req: Request) {
 
                   RefundNo:
                     refund.RefundNo ??
+                    linkedOrder.RefundReference ??
                     null,
 
                   RefundStatus:
-                    refund.RefundStatus ??
-                    "Pending",
+                    orderRefundStatus,
+
+                  RefundRequestedAmount:
+                    linkedOrder.RefundRequestedAmount ??
+                    refund.RefundAmount ??
+                    null,
+
+                  RefundApprovedAmount:
+                    linkedOrder.RefundApprovedAmount ??
+                    refund.ApprovedAmount ??
+                    null,
+
+                  RefundRequestedAt:
+                    linkedOrder.RefundRequestedAt ??
+                    refund.RequestedAt ??
+                    null,
 
                   RefundAmount:
                     Number(
