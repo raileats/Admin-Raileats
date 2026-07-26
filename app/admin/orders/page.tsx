@@ -405,7 +405,16 @@ const mapOrderJourneyToLogs = (journey: any) => {
   let previousStatus = "";
   const logs = ORDER_JOURNEY_LOG_STAGES.flatMap((stage, index) => {
     const update = String(journey[`${stage.prefix}Update`] ?? "").trim();
-    if (!update) return [];
+    const hasStageData = [
+      update,
+      journey[`${stage.prefix}Remarks`],
+      journey[`${stage.prefix}UserType`],
+      journey[`${stage.prefix}UserName`],
+      journey[`${stage.prefix}Source`],
+      journey[`${stage.prefix}ActionAtDate`],
+      journey[`${stage.prefix}ActionAtTime`],
+    ].some((value) => String(value ?? "").trim() !== "");
+    if (!hasStageData) return [];
 
     const status = update || stage.label;
     const remarks = journey[`${stage.prefix}Remarks`] ?? "";
