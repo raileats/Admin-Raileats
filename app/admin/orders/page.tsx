@@ -416,7 +416,10 @@ const mapOrderJourneyToLogs = (journey: any) => {
     ].some((value) => String(value ?? "").trim() !== "");
     if (!hasStageData) return [];
 
-    const status = update || stage.label;
+    const updateIsTimestamp =
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/i.test(update) ||
+      /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/i.test(update);
+    const status = update && !updateIsTimestamp ? update : stage.label;
     const remarks = journey[`${stage.prefix}Remarks`] ?? "";
     const log = {
       Id: `${journey.Id ?? journey.OrderId ?? "journey"}-${stage.prefix}-${index}`,
