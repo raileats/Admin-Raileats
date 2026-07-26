@@ -780,8 +780,6 @@ export async function GET(req: Request) {
       CustomerName,
       CustomerMobile,
       TotalAmount,
-      PaidAmount,
-      PPDAmount,
       PaymentMode,
       Status,
       SubStatus,
@@ -790,13 +788,6 @@ export async function GET(req: Request) {
       RefundRequestedAmount,
       RefundApprovedAmount,
       RefundRequestedAt,
-      RefundReviewedAt,
-      RefundApprovedAt,
-      RefundProcessingAt,
-      RefundCompletedAt,
-      RefundTransactionId,
-      RefundReason,
-      RefundRemarks,
       CreatedAt
     `;
 
@@ -991,10 +982,10 @@ export async function GET(req: Request) {
         row.RefundRequestedAt ?? null,
 
       PaidAmount:
-        row.PaidAmount ?? null,
+        null,
 
       PPDAmount:
-        row.PPDAmount ?? null,
+        null,
 
       TotalAmount:
         row.TotalAmount ?? null,
