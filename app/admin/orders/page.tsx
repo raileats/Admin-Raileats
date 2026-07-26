@@ -3638,24 +3638,53 @@ export default function AdminOrdersPage() {
                 >
                   {/* MODIFIED: Clickable Order ID triggers detailed information view */}
                   <td style={{ padding: 12 }}>
-                    <button
-                      onClick={() => handleOpenDiagnosticsDrawer(o, "details")}
-                      title="View order details"
+                    <div
                       style={{
-                        background: "none",
-                        border: "none",
-                        padding: 0,
-                        margin: 0,
-                        font: "inherit",
-                        fontWeight: 800,
-                        color: "#2563eb",
-                        cursor: "pointer",
-                        textDecoration: "underline",
-                        textAlign: "left",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: 5,
                       }}
                     >
-                      #{o.id}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText(o.id)}
+                        title="Copy Order ID"
+                        aria-label={`Copy Order ID ${o.id}`}
+                        style={{
+                          background: "#eff6ff",
+                          color: "#2563eb",
+                          border: "1px solid #bfdbfe",
+                          width: 28,
+                          height: 28,
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Copy size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleOpenDiagnosticsDrawer(o, "details")}
+                        title="View order details"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          margin: 0,
+                          font: "inherit",
+                          fontWeight: 800,
+                          color: "#2563eb",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          textAlign: "left",
+                        }}
+                      >
+                        #{o.id}
+                      </button>
+                    </div>
                   </td>
 
                   <td style={{ padding: 12 }}>
