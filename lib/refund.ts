@@ -984,7 +984,9 @@ export async function requestRefund(
     const paidAmount = getPaidAmount(order, paymentMode);
     validateRefundAmount(input.requestedAmount, paidAmount);
 
-    const latestRefund = await getRefund(validated.orderId);
+    const latestRefund: DbRefund | null = await getRefund(validated.orderId);
+    const latestRefundStatus: DbRefundStatus | null =
+      latestRefund?.RefundStatus ?? null;
     if (latestRefund || hasRefundAudit(order)) {
       throw new RefundEngineError(
         "DUPLICATE_REFUND",
@@ -1000,7 +1002,7 @@ export async function requestRefund(
       orderId: validated.orderId,
       refundBefore: latestRefund,
       createRefund: true,
-      expectedRefundStatus: latestRefund?.RefundStatus ?? null,
+      expectedRefundStatus: latestRefundStatus,
       refundPatch: {
         OrderId: validated.orderId,
         RefundAttempt: attempt,
