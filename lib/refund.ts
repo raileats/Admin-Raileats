@@ -12,8 +12,6 @@ const ACTIVE_REFUND_STATUSES = [
   "Processing",
 ] as const;
 
-const RETRYABLE_REFUND_STATUSES = ["Failed"] as const;
-
 type DbRefundStatus =
   | "Pending"
   | "Approved"
@@ -365,7 +363,9 @@ function getPaymentMode(order: DbOrder): PaymentMode {
     mode === "PREPAID" ||
     mode === "PPD" ||
     mode === "ONLINE" ||
+    mode === "PAID" ||
     mode === "UPI" ||
+    mode === "PAYTM" ||
     mode === "CARD" ||
     mode === "NETBANKING" ||
     mode === "WALLET"
@@ -375,8 +375,36 @@ function getPaymentMode(order: DbOrder): PaymentMode {
 
   throw new RefundEngineError(
     "UNSUPPORTED_PAYMENT_MODE",
-    "PaymentMode must be COD, CASH ON DELIVERY, PREPAID, PPD, ONLINE, UPI, CARD, NETBANKING, or WALLET",
+    "PaymentMode must be COD, CASH ON DELIVERY, PREPAID, PPD, ONLINE, PAID, UPI, PAYTM, CARD, NETBANKING, or WALLET",
   );
+}
+
+function hasRefundAudit(order: DbOrder): boolean {
+  const textAuditFields = [
+    "RefundStatus",
+    "RefundReference",
+    "RefundNo",
+    "RefundRequestedAt",
+    "RefundReviewedAt",
+    "RefundApprovedAt",
+    "RefundProcessingAt",
+    "RefundCompletedAt",
+    "RefundTransactionId",
+    "RefundReason",
+    "RefundRemarks",
+  ];
+
+  if (textAuditFields.some((field) => {
+    const value = order[field];
+    return value !== null && value !== undefined && String(value).trim() !== "";
+  })) {
+    return true;
+  }
+
+  return ["RefundRequestedAmount", "RefundApprovedAmount"].some((field) => {
+    const amount = Number(order[field]);
+    return Number.isFinite(amount) && amount > 0;
+  });
 }
 
 function getPaidAmount(order: DbOrder, paymentMode: PaymentMode): number {
@@ -514,49 +542,6 @@ function validateRefundAmount(
   }
 }
 
-function nextRefundAttempt(latestRefund: DbRefund | null): number {
-  if (!latestRefund) return 1;
-
-  if (latestRefund.RefundStatus === "Success") {
-    throw new RefundEngineError(
-      "DUPLICATE_REFUND",
-      "A new refund attempt is not allowed after RefundCompleted",
-    );
-  }
-
-  if (
-    ACTIVE_REFUND_STATUSES.includes(
-      latestRefund.RefundStatus as (typeof ACTIVE_REFUND_STATUSES)[number],
-    )
-  ) {
-    throw new RefundEngineError(
-      "DUPLICATE_REFUND",
-      "Only one active refund is allowed per order",
-    );
-  }
-
-  if (
-    !RETRYABLE_REFUND_STATUSES.includes(
-      latestRefund.RefundStatus as (typeof RETRYABLE_REFUND_STATUSES)[number],
-    )
-  ) {
-    throw new RefundEngineError(
-      "INVALID_REFUND_STATE",
-      `A new attempt is not allowed after ${latestRefund.RefundStatus}`,
-    );
-  }
-
-  const currentAttempt = Number(latestRefund.RefundAttempt);
-  if (!Number.isSafeInteger(currentAttempt) || currentAttempt < 1) {
-    throw new RefundEngineError(
-      "DATABASE_ERROR",
-      "Stored RefundAttempt is invalid",
-    );
-  }
-
-  return currentAttempt + 1;
-}
-
 function getCurrentISTDateTime(): ISTDateTime {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
@@ -677,7 +662,7 @@ function toDatabaseError(error: {
   if (error.code === "23505") {
     return new RefundEngineError(
       "DUPLICATE_REFUND",
-      "A conflicting refund attempt or reference already exists",
+      "Refund request already exists for this order.",
       error.code,
     );
   }
@@ -985,22 +970,29 @@ export async function requestRefund(
     const validated = validateCommonInput(input);
     const reason = requiredText(input.reason, "reason");
     const order = await getOrder(validated.orderId);
-    validateRefundEligibility(order);
 
     const paymentMode = getPaymentMode(order);
-    const paidAmount = getPaidAmount(order, paymentMode);
-    validateRefundAmount(input.requestedAmount, paidAmount);
-
-    const activeRefund = await getActiveRefund(validated.orderId);
-    if (activeRefund) {
+    if (paymentMode !== "PREPAID") {
       throw new RefundEngineError(
-        "DUPLICATE_REFUND",
-        "Only one active refund is allowed per order",
+        "ORDER_NOT_ELIGIBLE",
+        "Refund is allowed only for prepaid orders.",
       );
     }
 
+    validateRefundEligibility(order);
+
+    const paidAmount = getPaidAmount(order, paymentMode);
+    validateRefundAmount(input.requestedAmount, paidAmount);
+
     const latestRefund = await getRefund(validated.orderId);
-    const attempt = nextRefundAttempt(latestRefund);
+    if (latestRefund || hasRefundAudit(order)) {
+      throw new RefundEngineError(
+        "DUPLICATE_REFUND",
+        "Refund request already exists for this order.",
+      );
+    }
+
+    const attempt = 1;
     const currentTime = getCurrentISTDateTime();
     const remarks = optionalText(input.remarks) ?? reason;
 
