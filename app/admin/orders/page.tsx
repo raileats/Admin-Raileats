@@ -3467,13 +3467,10 @@ export default function AdminOrdersPage() {
                 <th style={{ padding: 12 }}>Customer Mobile</th>
                 <th style={{ padding: 12 }}>Payment</th>
                 <th style={{ padding: 12 }}>Order Process Log</th>
-                {["refund", "delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                {["delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
                   <th style={{ padding: 12 }}>Current Status</th>
                 )}
-                {activeTab === "refund" && (
-                  <th style={{ padding: 12 }}>Refund Amount</th>
-                )}
-                {["refund", "delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                {["delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
                   <th style={{ padding: 12 }}>Refund Status</th>
                 )}
                 <th style={{ padding: 12, textAlign: "center" }}>Actions</th>
@@ -3635,17 +3632,12 @@ export default function AdminOrdersPage() {
                     </button>
                   </td>
 
-                  {["refund", "delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                  {["delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
                     <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
                       {getCurrentOrderStatus(o)}
                     </td>
                   )}
-                  {activeTab === "refund" && (
-                    <td style={{ padding: 12, fontWeight: 800, whiteSpace: "nowrap" }}>
-                      ₹{moneyNumber(getRefundAmount(o))}
-                    </td>
-                  )}
-                  {["refund", "delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
+                  {["delivered", "cancelled", "notdelivered", "all"].includes(activeTab) && (
                     <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
                       {getReadableRefundStatus(o)}
                     </td>
