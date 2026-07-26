@@ -3614,7 +3614,6 @@ export default function AdminOrdersPage() {
                 <th style={{ padding: 12 }}>Coach / Seat</th>
                 <th style={{ padding: 12 }}>Customer</th>
                 <th style={{ padding: 12 }}>Payment</th>
-                <th style={{ padding: 12 }}>Order Process Log</th>
                 {["refund", "delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab) && (
                   <th style={{ padding: 12 }}>Current Status</th>
                 )}
@@ -3741,40 +3740,46 @@ export default function AdminOrdersPage() {
                     </div>
                   </td>
                   <td style={{ padding: 12 }}>
-                    <span
+                    <div
                       style={{
-                        padding: "4px 10px",
-                        borderRadius: 999,
-                        fontWeight: 700,
-                        fontSize: 12,
-                        background: isPrepaidOrder(o) ? "#dcfce7" : "#fee2e2",
-                        color: isPrepaidOrder(o) ? "#166534" : "#991b1b",
-                      }}
-                    >
-                      {isPrepaidOrder(o) ? "PPD" : "COD"}
-                    </span>
-                  </td>
-
-                  {/* Order process log opens the centered log view */}
-                  <td style={{ padding: 12 }}>
-                    <button
-                      onClick={() => handleOpenDiagnosticsDrawer(o, "logs")}
-                      style={{
-                        background: "#eff6ff",
-                        color: "#2563eb",
-                        border: "1px solid #bfdbfe",
-                        width: 38,
-                        height: 34,
-                        borderRadius: 8,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        display: "inline-flex",
+                        display: "flex",
+                        flexDirection: "column",
                         alignItems: "center",
-                        justifyContent: "center",
+                        gap: 7,
                       }}
                     >
-                      <Eye size={18} />
-                    </button>
+                      <button
+                        onClick={() => handleOpenDiagnosticsDrawer(o, "logs")}
+                        title="View order process log"
+                        style={{
+                          background: "#eff6ff",
+                          color: "#2563eb",
+                          border: "1px solid #bfdbfe",
+                          width: 38,
+                          height: 34,
+                          borderRadius: 8,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Eye size={18} />
+                      </button>
+                      <span
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 999,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          background: isPrepaidOrder(o) ? "#dcfce7" : "#fee2e2",
+                          color: isPrepaidOrder(o) ? "#166534" : "#991b1b",
+                        }}
+                      >
+                        {isPrepaidOrder(o) ? "PPD" : "COD"}
+                      </span>
+                    </div>
                   </td>
 
                   {["refund", "delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab) && (
