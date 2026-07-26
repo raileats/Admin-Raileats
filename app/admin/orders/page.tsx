@@ -3606,8 +3606,7 @@ export default function AdminOrdersPage() {
             >
               <tr>
                 <th style={{ padding: 12 }}>Order ID</th>
-                <th style={{ padding: 12 }}>Outlet ID</th>
-                <th style={{ padding: 12 }}>Outlet Name</th>
+                <th style={{ padding: 12 }}>Restaurant</th>
                 <th style={{ padding: 12 }}>Station</th>
                 <th style={{ padding: 12 }}>Delivery Date &amp; Time</th>
                 <th style={{ padding: 12 }}>Train No.</th>
@@ -3660,43 +3659,45 @@ export default function AdminOrdersPage() {
                   </td>
 
                   <td style={{ padding: 12 }}>
-                    {o.outletId ? (
-                      <Link
-                        href={`/admin/restros/${encodeURIComponent(o.outletId)}/edit`}
-                        title={`Open restro ${o.outletId} edit page`}
-                        style={{
-                          background: "#f1f5f9",
-                          color: "#0f172a",
-                          padding: "3px 6px",
-                          borderRadius: 4,
-                          fontWeight: 700,
-                          textDecoration: "underline",
-                          display: "inline-block",
-                        }}
-                      >
-                        {o.outletId}
-                      </Link>
-                    ) : (
-                      <span
-                        style={{
-                          background: "#f1f5f9",
-                          padding: "3px 6px",
-                          borderRadius: 4,
-                          fontWeight: 600,
-                        }}
-                      >
-                        -
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: 12, fontWeight: 600 }}>
-                    {o.outletName}
+                    <div style={{ marginBottom: 5 }}>
+                      {o.outletId ? (
+                        <Link
+                          href={`/admin/restros/${encodeURIComponent(o.outletId)}/edit`}
+                          title={`Open restro ${o.outletId} edit page`}
+                          style={{
+                            background: "#f1f5f9",
+                            color: "#0f172a",
+                            padding: "3px 6px",
+                            borderRadius: 4,
+                            fontWeight: 700,
+                            textDecoration: "underline",
+                            display: "inline-block",
+                          }}
+                        >
+                          {o.outletId}
+                        </Link>
+                      ) : (
+                        <span
+                          style={{
+                            background: "#f1f5f9",
+                            padding: "3px 6px",
+                            borderRadius: 4,
+                            fontWeight: 600,
+                          }}
+                        >
+                          -
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontWeight: 600 }}>{o.outletName}</div>
                   </td>
                   <td
-                    style={{ padding: 12, fontWeight: 600, whiteSpace: "nowrap" }}
+                    style={{ padding: 12, whiteSpace: "nowrap" }}
                   >
-                    {o.stationName || "-"}
-                    {o.stationCode ? ` (${o.stationCode})` : ""}
+                    <div style={{ fontWeight: 600 }}>{o.stationName || "-"}</div>
+                    <div style={{ color: "#2563eb", marginTop: 3 }}>
+                      {o.stationCode || "-"}
+                    </div>
                   </td>
                   <td style={{ padding: 12, whiteSpace: "nowrap" }}>
                     <div>{o.deliveryDate || "-"}</div>
