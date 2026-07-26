@@ -1242,10 +1242,20 @@ export async function GET(
       );
     }
 
+    const orderIdWithoutHash = orderId.replace(/^#+/, "");
+    const orderIdCandidates = Array.from(
+      new Set([
+        orderId,
+        orderIdWithoutHash,
+        `#${orderIdWithoutHash}`,
+      ].filter(Boolean))
+    );
+
     const { data, error } = await serviceClient
       .from("OrderJourney")
       .select("*")
-      .eq("OrderId", orderId)
+      .in("OrderId", orderIdCandidates)
+      .limit(1)
       .maybeSingle();
 
     if (error) {
@@ -1263,9 +1273,26 @@ export async function GET(
       );
     }
 
+    if (!data) {
+      console.warn("OrderJourney row not found:", {
+        requestedOrderId: orderId,
+        orderIdCandidates,
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Order journey not found",
+          orderId,
+          orderIdCandidates,
+        },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json({
       ok: true,
-      journey: data ?? null,
+      journey: data,
+      matchedOrderId: data.OrderId,
     });
   } catch (error) {
     console.error("ORDER JOURNEY GET ERROR:", error);
