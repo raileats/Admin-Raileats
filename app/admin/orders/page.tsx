@@ -1,4 +1,3 @@
-// app/admin/orders/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -2729,7 +2728,9 @@ export default function AdminOrdersPage() {
     setWorkflowRemarks("");
     setWorkflowTransactionId("");
     setWorkflowAmount(
-      kind === "manual-refund" || kind === "refund-request"
+      kind === "manual-refund" ||
+        kind === "refund-request" ||
+        kind === "complaint-approve"
         ? ""
         : String(
              valueFrom(
@@ -2786,20 +2787,89 @@ export default function AdminOrdersPage() {
       } else if (workflowModal.kind === "complaint-approve" || workflowModal.kind === "complaint-reject") {
         const complaintId = valueFrom(order.raw, "ComplaintId", "complaintId", "ComplaintNo", "complaintNo");
         if (!complaintId) throw new Error("Complaint ID not found");
-        if (workflowModal.kind === "complaint-approve" && !workflowStatus) throw new Error("Final status select karein");
+        const isComplaintApproval =
+          workflowModal.kind === "complaint-approve";
+        const selectedOutcome = isComplaintApproval
+          ? RESTRO_MARK_DELIVERED_OUTCOME_OPTIONS.find(
+              (option) => option.key === workflowStatus,
+            )
+          : null;
+        if (isComplaintApproval && !selectedOutcome) {
+          throw new Error("Final status select karein");
+        }
+
+        const cleanAdminRemarks = workflowRemarks.trim();
+        if (isComplaintApproval && !cleanAdminRemarks) {
+          throw new Error("Please enter remarks.");
+        }
+
+        const isManualPenalty = Boolean(selectedOutcome?.manualPenalty);
+        const vendorPenalty = !selectedOutcome
+          ? undefined
+          : isManualPenalty
+            ? Number(workflowPenalty)
+            : (selectedOutcome.vendorPenalty ??
+              ORDER_PENALTY_BY_SUB_STATUS[selectedOutcome.key] ??
+              0);
+        if (
+          isManualPenalty &&
+          (!Number.isFinite(Number(vendorPenalty)) ||
+            Number(vendorPenalty) < 0)
+        ) {
+          throw new Error("Please enter valid vendor penalty amount");
+        }
+
+        const isRefundOutcome =
+          selectedOutcome?.key === "Bad Delivery" ||
+          selectedOutcome?.key === "Partial Delivery";
+        const shouldCreateRefund =
+          isComplaintApproval &&
+          isRefundOutcome &&
+          isPrepaidOrder(order) &&
+          !hasRefundAudit(order);
+        const refundAmount = Number(workflowAmount);
+        const maximumRefundAmount = getOrderValue(order);
+
+        if (
+          shouldCreateRefund &&
+          (!Number.isFinite(refundAmount) || refundAmount <= 0)
+        ) {
+          throw new Error("Please enter a valid refund amount greater than zero");
+        }
+        if (
+          shouldCreateRefund &&
+          maximumRefundAmount > 0 &&
+          refundAmount > maximumRefundAmount
+        ) {
+          throw new Error("Refund amount cannot exceed paid/order amount");
+        }
+
         const res = await fetch(`/api/orders/complaints/${encodeURIComponent(String(complaintId))}`, {
           method: "PATCH", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            decision: workflowModal.kind === "complaint-approve" ? "Approved" : "Rejected",
-            finalStatus: workflowStatus || undefined,
-            finalSubStatus: workflowSubStatus || undefined,
-            vendorPenalty: workflowPenalty === "" ? undefined : Number(workflowPenalty),
-            adminRemarks: workflowRemarks,
+            decision: isComplaintApproval ? "Approved" : "Rejected",
+            finalStatus: selectedOutcome?.dbValue || undefined,
+            finalSubStatus: selectedOutcome?.key || workflowSubStatus || undefined,
+            vendorPenalty:
+              vendorPenalty ??
+              (workflowPenalty === "" ? undefined : Number(workflowPenalty)),
+            adminRemarks: isComplaintApproval
+              ? cleanAdminRemarks
+              : workflowRemarks,
             adminName: actor.userName, userName: actor.userName, changedBy: actor.userName,
           }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || !json?.ok) throw new Error(json?.error || "Complaint action failed");
+
+        if (shouldCreateRefund && selectedOutcome) {
+          await createRefundRequest({
+            order,
+            amount: refundAmount,
+            reason: selectedOutcome.key,
+            remarksText: cleanAdminRemarks,
+          });
+        }
       } else {
         if (!workflowStatus) throw new Error("Refund status select karein");
 
@@ -5480,9 +5550,75 @@ export default function AdminOrdersPage() {
               </div>
             )}
             {workflowModal.kind === "complaint-approve" && <>
-              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Final Status<select value={workflowStatus} onChange={(e)=>setWorkflowStatus(e.target.value)} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}><option value="">Select status</option><option>Cancelled</option><option>Not Delivered</option><option>Delivered</option><option>Bad Delivery</option><option>Partial Delivery</option></select></label>
-              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Final Sub Status<input value={workflowSubStatus} onChange={(e)=>setWorkflowSubStatus(e.target.value)} placeholder="Sub status" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
-              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>Vendor Penalty (Rs)<input type="number" min="0" value={workflowPenalty} onChange={(e)=>setWorkflowPenalty(e.target.value)} placeholder="0" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}/></label>
+              <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>
+                Final Status *
+                <select
+                  value={workflowStatus}
+                  onChange={(e) => {
+                    const nextStatus = e.target.value;
+                    const option = RESTRO_MARK_DELIVERED_OUTCOME_OPTIONS.find(
+                      (item) => item.key === nextStatus,
+                    );
+                    setWorkflowStatus(nextStatus);
+                    setWorkflowSubStatus(option?.key || "");
+                    setWorkflowPenalty(
+                      option?.manualPenalty
+                        ? ""
+                        : String(
+                            option?.vendorPenalty ??
+                              ORDER_PENALTY_BY_SUB_STATUS[nextStatus] ??
+                              "",
+                          ),
+                    );
+                    if (
+                      nextStatus !== "Bad Delivery" &&
+                      nextStatus !== "Partial Delivery"
+                    ) {
+                      setWorkflowAmount("");
+                    }
+                  }}
+                  style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}
+                >
+                  <option value="">Select status</option>
+                  {RESTRO_MARK_DELIVERED_OUTCOME_OPTIONS.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {RESTRO_MARK_DELIVERED_OUTCOME_OPTIONS.find(
+                (option) => option.key === workflowStatus,
+              )?.manualPenalty && (
+                <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>
+                  Vendor Penalty
+                  <input
+                    type="number"
+                    min="0"
+                    value={workflowPenalty}
+                    onChange={(e) => setWorkflowPenalty(e.target.value)}
+                    placeholder="Enter manual amount"
+                    style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}
+                  />
+                </label>
+              )}
+              {(workflowStatus === "Bad Delivery" ||
+                workflowStatus === "Partial Delivery") &&
+                isPrepaidOrder(workflowModal.order) &&
+                !hasRefundAudit(workflowModal.order) && (
+                  <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>
+                    Refund Amount *
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={workflowAmount}
+                      onChange={(e) => setWorkflowAmount(e.target.value)}
+                      placeholder="Enter refund amount"
+                      style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}
+                    />
+                  </label>
+                )}
             </>}
             {workflowModal.kind === "refund" && <>
               {workflowStatus === "Approved" && (
@@ -5508,7 +5644,7 @@ export default function AdminOrdersPage() {
                 />
               </label>
             )}
-            <label style={{ display: "grid", gap: 6, marginBottom: 16, fontSize: 12, fontWeight: 800 }}>{workflowModal.kind === "manual-refund" || workflowModal.kind === "refund-request" ? "Admin Remarks (optional)" : "Admin Remarks"}<textarea rows={4} value={workflowRemarks} onChange={(e)=>setWorkflowRemarks(e.target.value)} placeholder="Remarks" style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8, resize: "vertical" }}/></label>
+            <label style={{ display: "grid", gap: 6, marginBottom: 16, fontSize: 12, fontWeight: 800 }}>{workflowModal.kind === "manual-refund" || workflowModal.kind === "refund-request" ? "Admin Remarks (optional)" : workflowModal.kind === "complaint-approve" ? "Admin Remarks *" : "Admin Remarks"}<textarea rows={4} value={workflowRemarks} onChange={(e)=>setWorkflowRemarks(e.target.value)} placeholder={workflowModal.kind === "complaint-approve" ? "Enter remarks" : "Remarks"} style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8, resize: "vertical" }}/></label>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button disabled={workflowSaving} onClick={()=>setWorkflowModal({open:false,kind:null,order:null})} style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontWeight: 700 }}>{workflowModal.kind === "manual-refund" || workflowModal.kind === "refund-request" ? "Cancel" : "Close"}</button>
               <button disabled={workflowSaving} onClick={submitWorkflow} style={{ padding: "9px 14px", borderRadius: 8, border: "none", background: workflowModal.kind === "complaint-reject" ? "#dc2626" : "#0f172a", color: "#fff", cursor: "pointer", fontWeight: 800 }}>{workflowSaving ? "Saving..." : "Submit"}</button>
