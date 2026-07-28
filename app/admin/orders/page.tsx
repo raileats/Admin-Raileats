@@ -2649,6 +2649,12 @@ export default function AdminOrdersPage() {
         return;
       }
 
+      if (json?.refundWarning) {
+        alert(
+          `Order status updated, but refund request failed: ${json.refundWarning}`,
+        );
+      }
+
       if (needsManualRefund) {
         try {
           await createRefundRequest({
@@ -2668,6 +2674,10 @@ export default function AdminOrdersPage() {
         ? finalMarkOption.targetTab
         : outForDeliveryOption
           ? outForDeliveryOption.targetTab
+        : actionType === "cancel" || computedMainStatus === "Cancelled"
+          ? "cancelled"
+          : computedMainStatus === "Not Delivered"
+            ? "notdelivered"
         : subStatus === "Bad Delivery"
           ? "baddelivery"
           : "delivered";
@@ -3067,10 +3077,15 @@ export default function AdminOrdersPage() {
     setWorkflowPenalty("");
     setWorkflowRemarks("");
     setWorkflowTransactionId("");
+    const isFullRefundFinalStatus =
+      kind === "refund-request" &&
+      (order.status === "cancelled" || order.status === "notdelivered");
     setWorkflowAmount(
-      kind === "manual-refund" ||
-        kind === "refund-request" ||
-        kind === "complaint-approve"
+      isFullRefundFinalStatus
+        ? String(getOrderValue(order))
+        : kind === "manual-refund" ||
+            kind === "refund-request" ||
+            kind === "complaint-approve"
         ? ""
         : String(
              valueFrom(
@@ -3102,12 +3117,15 @@ export default function AdminOrdersPage() {
           throw new Error("Refund already exists for this order.");
         }
 
-        const amount = Number(workflowAmount);
+        const isFullRefundFinalStatus =
+          order.status === "cancelled" || order.status === "notdelivered";
+        const maximumAmount = getOrderValue(order);
+        const amount = isFullRefundFinalStatus
+          ? maximumAmount
+          : Number(workflowAmount);
         if (!Number.isFinite(amount) || amount <= 0) {
           throw new Error("Valid refund amount enter karein");
         }
-
-        const maximumAmount = getOrderValue(order);
 
         if (maximumAmount > 0 && amount > maximumAmount) {
           throw new Error("Refund amount cannot exceed Order Value.");
@@ -3121,7 +3139,11 @@ export default function AdminOrdersPage() {
               ? "Partial Delivery"
               : order.status === "baddelivery"
                 ? "Bad Delivery"
-                : "Delivered",
+                : order.status === "cancelled"
+                  ? "Cancelled"
+                  : order.status === "notdelivered"
+                    ? "Not Delivered"
+                    : "Delivered",
           remarksText: workflowRemarks,
         });
       } else if (workflowModal.kind === "complaint-approve" || workflowModal.kind === "complaint-reject") {
@@ -3159,16 +3181,21 @@ export default function AdminOrdersPage() {
           throw new Error("Please enter valid vendor penalty amount");
         }
 
-        const isRefundOutcome =
+        const isManualRefundOutcome =
           selectedOutcome?.key === "Bad Delivery" ||
           selectedOutcome?.key === "Partial Delivery";
+        const isFullRefundOutcome =
+          selectedOutcome?.dbValue === "Cancelled" ||
+          selectedOutcome?.dbValue === "Not Delivered";
         const shouldCreateRefund =
           isComplaintApproval &&
-          isRefundOutcome &&
+          (isManualRefundOutcome || isFullRefundOutcome) &&
           isPrepaidOrder(order) &&
           !hasRefundAudit(order);
-        const refundAmount = Number(workflowAmount);
         const maximumRefundAmount = getOrderValue(order);
+        const refundAmount = isFullRefundOutcome
+          ? maximumRefundAmount
+          : Number(workflowAmount);
 
         if (
           shouldCreateRefund &&
@@ -4142,8 +4169,7 @@ export default function AdminOrdersPage() {
                           View Details
                         </button>
                       )}
-                      {!["cancelled", "notdelivered"].includes(activeTab) && (
-                      o.status === "complaints" ? (
+                      {o.status === "complaints" ? (
                         <button
                           type="button"
                           onClick={() => openWorkflow("complaint-approve", o)}
@@ -4185,8 +4211,10 @@ export default function AdminOrdersPage() {
                         </button>
                       ) : isPrepaidOrder(o) &&
                         !hasRefundAudit(o) &&
-                        o.status === "delivered" &&
-                        (activeTab === "delivered" || activeTab === "all") ? (
+                        ["delivered", "cancelled", "notdelivered"].includes(
+                          o.status,
+                        ) &&
+                        (activeTab === o.status || activeTab === "all") ? (
                         <button
                           type="button"
                           onClick={() => openWorkflow("refund-request", o)}
@@ -4447,7 +4475,6 @@ export default function AdminOrdersPage() {
                             </button>
                           )}
                         </div>
-                      )
                       )}
                     </div>
                   </td>
@@ -6049,16 +6076,45 @@ export default function AdminOrdersPage() {
             {(workflowModal.kind === "manual-refund" ||
               workflowModal.kind === "refund-request") && (
               <label style={{ display: "grid", gap: 6, marginBottom: 12, fontSize: 12, fontWeight: 800 }}>
-                Refund Amount *
+                {workflowModal.kind === "refund-request" &&
+                ["cancelled", "notdelivered"].includes(
+                  workflowModal.order.status,
+                )
+                  ? "Full Refund Amount *"
+                  : "Refund Amount *"}
                 <input
                   type="number"
                   min="0.01"
                   step="0.01"
                   value={workflowAmount}
                   onChange={(e) => setWorkflowAmount(e.target.value)}
-                  placeholder="Enter refund amount"
+                  placeholder={
+                    workflowModal.kind === "refund-request" &&
+                    ["cancelled", "notdelivered"].includes(
+                      workflowModal.order.status,
+                    )
+                      ? "Full order amount"
+                      : "Enter refund amount"
+                  }
+                  readOnly={
+                    workflowModal.kind === "refund-request" &&
+                    ["cancelled", "notdelivered"].includes(
+                      workflowModal.order.status,
+                    )
+                  }
                   autoFocus
-                  style={{ padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}
+                  style={{
+                    padding: 10,
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    background:
+                      workflowModal.kind === "refund-request" &&
+                      ["cancelled", "notdelivered"].includes(
+                        workflowModal.order.status,
+                      )
+                        ? "#f8fafc"
+                        : "#fff",
+                  }}
                 />
               </label>
             )}
