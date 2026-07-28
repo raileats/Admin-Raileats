@@ -1,4 +1,3 @@
-// lib/refund.ts
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const TABLES = {
@@ -502,11 +501,14 @@ function validateRefundEligibility(order: DbOrder): void {
   if (
     status !== "DELIVERED" &&
     status !== "BADDELIVERY" &&
-    status !== "PARTIALDELIVERY"
+    status !== "PARTIALDELIVERY" &&
+    status !== "CANCELLED" &&
+    status !== "CANCELED" &&
+    status !== "NOTDELIVERED"
   ) {
     throw new RefundEngineError(
       "ORDER_NOT_ELIGIBLE",
-      "Only Delivered, Bad Delivery, or Partial Delivery orders are eligible for refunds",
+      "Only Delivered, Bad Delivery, Partial Delivery, Cancelled, or Not Delivered orders are eligible for refunds",
     );
   }
 }
@@ -954,7 +956,6 @@ async function transitionRefund(
     },
     orderPatch: {
       RefundStatus: nextStatus,
-      RefundRemarks: remarks,
       RefundBy: context.actor.userName,
       ...orderPatch,
     },
@@ -1060,14 +1061,7 @@ OrderSubStatus:
         RefundStatus: "RefundRequested",
         RefundRequestedAmount: input.requestedAmount,
         RefundApprovedAmount: null,
-        RefundReason: reason,
-        RefundRemarks: remarks,
         RefundRequestedAt: currentTime.iso,
-        RefundReviewedAt: null,
-        RefundApprovedAt: null,
-        RefundProcessingAt: null,
-        RefundCompletedAt: null,
-        RefundTransactionId: null,
         RefundBy: validated.actor.userName,
         IsRefunded: false,
       },
@@ -1097,9 +1091,7 @@ export async function reviewRefund(
         ReviewedAt: currentTime.iso,
         ReviewedBy: validated.actor.userName,
       },
-      {
-        RefundReviewedAt: currentTime.iso,
-      },
+      {},
       "RefundUnderReview",
     );
   });
@@ -1146,8 +1138,6 @@ export async function approveRefund(
       orderPatch: {
         RefundStatus: "RefundApproved",
         RefundApprovedAmount: input.approvedAmount,
-        RefundApprovedAt: currentTime.iso,
-        RefundRemarks: remarks,
         RefundBy: context.actor.userName,
       },
       journeyPatch: buildJourneyPatch(
@@ -1189,7 +1179,6 @@ export async function rejectRefund(
       },
       orderPatch: {
         RefundStatus: "RefundRejected",
-        RefundRemarks: rejectionReason,
         RefundBy: context.actor.userName,
       },
       journeyPatch: buildJourneyPatch(
@@ -1235,8 +1224,6 @@ export async function startRefundProcessing(
       },
       orderPatch: {
         RefundStatus: "RefundProcessing",
-        RefundProcessingAt: currentTime.iso,
-        RefundRemarks: remarks,
         RefundBy: context.actor.userName,
       },
       journeyPatch: buildJourneyPatch(
@@ -1291,9 +1278,6 @@ export async function completeRefund(
       orderPatch: {
         IsRefunded: true,
         RefundStatus: "RefundCompleted",
-        RefundCompletedAt: currentTime.iso,
-        RefundTransactionId: transactionId,
-        RefundRemarks: remarks,
         RefundBy: context.actor.userName,
       },
       journeyPatch: buildJourneyPatch(
