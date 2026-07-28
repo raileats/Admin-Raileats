@@ -19,6 +19,10 @@ import {
   updateOrderJourneySafe,
 } from "@/lib/orderJourney";
 
+import {
+  requestRefund,
+} from "@/lib/refund";
+
 /* =========================================================
    SUPABASE SERVER CLIENT
    ========================================================= */
@@ -995,11 +999,17 @@ async function upsertRefundBestEffort({
   order,
   newStatus,
   subStatus,
+  actor,
 }: {
   supabase: any;
   order: any;
   newStatus: string;
   subStatus: string | null;
+  actor: {
+    userType: string;
+    userName: string;
+    source: string;
+  };
 }) {
   if (
     !isPrepaidOrder(order) ||
@@ -1008,6 +1018,98 @@ async function upsertRefundBestEffort({
     return {
       data: null,
       skipped: true,
+      warning: null,
+    };
+  }
+
+  if (
+    isPrepaidOrder(order) &&
+    isRefundEligibleStatus(newStatus)
+  ) {
+    const paidAmount =
+      Math.max(
+        0,
+        normalizeNumber(
+          order?.PPDAmount,
+          0
+        ) ||
+        normalizeNumber(
+          order?.TotalAmount,
+          0
+        ) ||
+        0
+      );
+
+    if (paidAmount <= 0) {
+      return {
+        data: null,
+        skipped: false,
+        warning:
+          "Prepaid refund amount must be greater than zero",
+      };
+    }
+
+    const normalizedStatus =
+      normalizeKey(newStatus) ===
+        "notdelivered"
+        ? "Not Delivered"
+        : "Cancelled";
+
+    const reason =
+      subStatus ||
+      (
+        normalizedStatus ===
+          "Cancelled"
+          ? "Order Cancelled"
+          : "Order Not Delivered"
+      );
+
+    const result =
+      await requestRefund({
+        orderId:
+          String(order?.OrderId ?? "")
+            .trim(),
+        requestedAmount:
+          paidAmount,
+        reason,
+        remarks:
+          reason,
+        actor: {
+          userType:
+            actor.userType,
+          userName:
+            actor.userName,
+          source:
+            actor.source,
+          ip: null,
+          device: null,
+        },
+      });
+
+    if (!result.ok) {
+      if (
+        result.error.code ===
+        "DUPLICATE_REFUND"
+      ) {
+        return {
+          data: null,
+          skipped: true,
+          warning: null,
+        };
+      }
+
+      return {
+        data: null,
+        skipped: false,
+        warning:
+          result.error.message,
+      };
+    }
+
+    return {
+      data:
+        result.data,
+      skipped: false,
       warning: null,
     };
   }
@@ -1795,6 +1897,12 @@ export async function PATCH(
           updatedRows[0],
         newStatus,
         subStatus,
+        actor: {
+          userType,
+          userName,
+          source:
+            actionSource,
+        },
       });
 
     /* =====================================================
