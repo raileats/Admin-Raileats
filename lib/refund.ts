@@ -1,4 +1,3 @@
-// lib/refund.ts
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const TABLES = {
@@ -283,10 +282,14 @@ function optionalText(value: unknown): string | null {
 
 function validateOrderId(value: unknown): string {
   const orderId = requiredText(value, "orderId");
-  if (!orderId.toUpperCase().startsWith("RE-") || orderId.length > 100) {
+  const upperOrderId = orderId.toUpperCase();
+  const isLegacyOrderId = upperOrderId.startsWith("RE-");
+  const isCompactOrderId = /^RE\d{13}$/.test(upperOrderId);
+
+  if ((!isLegacyOrderId && !isCompactOrderId) || orderId.length > 100) {
     throw new RefundEngineError(
       "INVALID_ARGUMENT",
-      "orderId must start with RE- and contain at most 100 characters",
+      "orderId must be a RailEats order ID and contain at most 100 characters",
     );
   }
   return orderId;
