@@ -92,6 +92,124 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
+type TabTheme = {
+  background: string;
+  border: string;
+  text: string;
+  count: string;
+  rowTint: string;
+};
+
+const TAB_THEMES: Record<TabKey, TabTheme> = {
+  booked: {
+    background: "#eff6ff",
+    border: "#bfdbfe",
+    text: "#2563eb",
+    count: "#2563eb",
+    rowTint: "#f5f9ff",
+  },
+  verification: {
+    background: "#eff6ff",
+    border: "#bfdbfe",
+    text: "#2563eb",
+    count: "#2563eb",
+    rowTint: "#f5f9ff",
+  },
+  cancellationrequest: {
+    background: "#fffbeb",
+    border: "#fde68a",
+    text: "#d97706",
+    count: "#d97706",
+    rowTint: "#fffcf4",
+  },
+  neworder: {
+    background: "#eff6ff",
+    border: "#bfdbfe",
+    text: "#2563eb",
+    count: "#2563eb",
+    rowTint: "#f5f9ff",
+  },
+  inkitchen: {
+    background: "#eff6ff",
+    border: "#bfdbfe",
+    text: "#2563eb",
+    count: "#2563eb",
+    rowTint: "#f5f9ff",
+  },
+  outfordelivery: {
+    background: "#ecfeff",
+    border: "#a5f3fc",
+    text: "#0891b2",
+    count: "#0891b2",
+    rowTint: "#f5fdff",
+  },
+  restromarkeddelivered: {
+    background: "#ecfdf5",
+    border: "#a7f3d0",
+    text: "#047857",
+    count: "#047857",
+    rowTint: "#f5fdf9",
+  },
+  delivered: {
+    background: "#ecfdf5",
+    border: "#a7f3d0",
+    text: "#047857",
+    count: "#047857",
+    rowTint: "#f5fdf9",
+  },
+  cancelled: {
+    background: "#fef2f2",
+    border: "#fecaca",
+    text: "#dc2626",
+    count: "#dc2626",
+    rowTint: "#fff8f8",
+  },
+  notdelivered: {
+    background: "#fef2f2",
+    border: "#fecaca",
+    text: "#dc2626",
+    count: "#dc2626",
+    rowTint: "#fff8f8",
+  },
+  baddelivery: {
+    background: "#fef2f2",
+    border: "#fecaca",
+    text: "#dc2626",
+    count: "#dc2626",
+    rowTint: "#fff8f8",
+  },
+  partialdelivery: {
+    background: "#fffbeb",
+    border: "#fde68a",
+    text: "#d97706",
+    count: "#d97706",
+    rowTint: "#fffcf4",
+  },
+  complaints: {
+    background: "#f5f3ff",
+    border: "#ddd6fe",
+    text: "#7c3aed",
+    count: "#7c3aed",
+    rowTint: "#faf8ff",
+  },
+  refund: {
+    background: "#f5f3ff",
+    border: "#ddd6fe",
+    text: "#7c3aed",
+    count: "#7c3aed",
+    rowTint: "#faf8ff",
+  },
+  all: {
+    background: "#f8fafc",
+    border: "#cbd5e1",
+    text: "#475569",
+    count: "#475569",
+    rowTint: "#fafbfc",
+  },
+};
+
+const EVEN_ORDER_ROW_BACKGROUND = "#f7faff";
+
 const createEmptyTabCounts = (): Record<TabKey, number> =>
   TABS.reduce(
     (counts, tab) => {
@@ -856,6 +974,114 @@ const getCurrentOrderStatus = (order: Order) => {
       order.dbStatus ||
       "-",
   );
+};
+
+const getCurrentStatusBadgeStyle = (status: string) => {
+  const normalized = status.replace(/[\s_-]+/g, "").toLowerCase();
+
+  let colors = {
+    background: "#eff6ff",
+    color: "#1d4ed8",
+    border: "#bfdbfe",
+  };
+
+  if (
+    normalized.includes("bad") ||
+    normalized.includes("cancel") ||
+    normalized.includes("notdelivered") ||
+    normalized.includes("failed") ||
+    normalized.includes("rejected")
+  ) {
+    colors = {
+      background: "#fef2f2",
+      color: "#dc2626",
+      border: "#fecaca",
+    };
+  } else if (
+    normalized.includes("partial") ||
+    normalized.includes("pending") ||
+    normalized.includes("processing")
+  ) {
+    colors = {
+      background: "#fffbeb",
+      color: "#d97706",
+      border: "#fde68a",
+    };
+  } else if (
+    normalized.includes("complaint") ||
+    normalized.includes("refund") ||
+    normalized.includes("review")
+  ) {
+    colors = {
+      background: "#f5f3ff",
+      color: "#7c3aed",
+      border: "#ddd6fe",
+    };
+  } else if (normalized.includes("delivered") || normalized.includes("success")) {
+    colors = {
+      background: "#ecfdf5",
+      color: "#047857",
+      border: "#a7f3d0",
+    };
+  }
+
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "5px 9px",
+    borderRadius: 6,
+    border: `1px solid ${colors.border}`,
+    background: colors.background,
+    color: colors.color,
+    fontSize: 11,
+    fontWeight: 800,
+    whiteSpace: "nowrap" as const,
+  };
+};
+
+const getRefundStatusBadgeStyle = (status: string) => {
+  const normalized = status.replace(/[\s_-]+/g, "").toLowerCase();
+
+  let colors = {
+    background: "#f5f3ff",
+    color: "#7c3aed",
+    border: "#ddd6fe",
+  };
+
+  if (normalized === "approved" || normalized === "completed") {
+    colors = {
+      background: "#ecfdf5",
+      color: "#047857",
+      border: "#a7f3d0",
+    };
+  } else if (normalized === "processing") {
+    colors = {
+      background: "#fffbeb",
+      color: "#d97706",
+      border: "#fde68a",
+    };
+  } else if (normalized === "rejected" || normalized === "failed") {
+    colors = {
+      background: "#fef2f2",
+      color: "#dc2626",
+      border: "#fecaca",
+    };
+  }
+
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "5px 9px",
+    borderRadius: 6,
+    border: `1px solid ${colors.border}`,
+    background: colors.background,
+    color: colors.color,
+    fontSize: 11,
+    fontWeight: 800,
+    whiteSpace: "nowrap" as const,
+  };
 };
 
 const getRefundAmount = (order: Order) =>
@@ -3145,12 +3371,15 @@ export default function AdminOrdersPage() {
     return <span style={{ color: "#94a3b8", fontWeight: 700 }}>-</span>;
   }
 
+  const activeTabTheme = TAB_THEMES[activeTab];
+
   return (
     <section
+      className="orders-dashboard-root"
       style={{
         padding: 12,
         minHeight: "100vh",
-        background: "#f8fafc",
+        background: "#f6f9fd",
         fontFamily: "sans-serif",
       }}
     >
@@ -3164,7 +3393,8 @@ export default function AdminOrdersPage() {
           background: "#fff",
           padding: 16,
           borderRadius: 12,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          border: "1px solid #edf2f7",
+          boxShadow: "0 2px 8px rgba(15,23,42,0.025)",
         }}
       >
         <div>
@@ -3231,9 +3461,9 @@ export default function AdminOrdersPage() {
             )}
           </Link>
 
-          <div style={{ color: "#6b7280", fontSize: 13, fontWeight: 600 }}>
+          <div style={{ color: "#64748b", fontSize: 13, fontWeight: 800 }}>
             Active Stage:{" "}
-            <strong style={{ color: "#2563eb" }}>
+            <strong style={{ color: activeTabTheme.text, fontWeight: 900 }}>
               {TABS.find((t) => t.key === activeTab)?.label}
             </strong>
             {loading ? " • Syncing..." : ""}
@@ -3253,6 +3483,7 @@ export default function AdminOrdersPage() {
       >
         {TABS.map((tab) => {
           const active = tab.key === activeTab;
+          const theme = TAB_THEMES[tab.key];
           return (
             <button
               key={tab.key}
@@ -3272,23 +3503,29 @@ export default function AdminOrdersPage() {
                 setBookingDateFilterOn(false);
               }}
               style={{
-                padding: "8px 12px",
+                padding: "9px 13px",
                 borderRadius: 8,
-                border: active ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                background: active ? "#fff" : "#f8fafc",
-                fontWeight: active ? 700 : 600,
+                border: active
+                  ? `2px solid ${theme.text}`
+                  : `1px solid ${theme.border}`,
+                background: theme.background,
+                color: theme.text,
+                fontWeight: 800,
                 cursor: "pointer",
                 transition: "all 0.2s",
+                boxShadow: active
+                  ? `0 0 0 2px ${theme.border}55`
+                  : "none",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ color: active ? "#0f172a" : "#475569" }}>
+                <span style={{ color: theme.text, fontWeight: 800 }}>
                   {tab.label}
                 </span>
                 <span
                   style={{
-                    background: active ? "#2563eb" : "#e2e8f0",
-                    color: active ? "#fff" : "#475569",
+                    background: active ? theme.count : `${theme.border}88`,
+                    color: active ? "#fff" : theme.text,
                     borderRadius: 999,
                     minWidth: 20,
                     height: 20,
@@ -3297,7 +3534,7 @@ export default function AdminOrdersPage() {
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: 11,
-                    fontWeight: 700,
+                    fontWeight: 900,
                   }}
                 >
                   {tabCounts[tab.key] || 0}
@@ -3319,7 +3556,8 @@ export default function AdminOrdersPage() {
           background: "#fff",
           padding: 12,
           borderRadius: 10,
-          border: "1px solid #e2e8f0",
+          border: "1px solid #f3dfb1",
+          boxShadow: "0 1px 4px rgba(217,119,6,0.025)",
         }}
       >
         <input
@@ -3328,8 +3566,9 @@ export default function AdminOrdersPage() {
           onChange={(e) => setDraftOrderId(e.target.value)}
           style={{
             padding: 8,
-            borderRadius: 6,
-            border: "1px solid #cbd5e1",
+            borderRadius: 8,
+            border: "1px solid #f1dfb8",
+            background: "#fffefa",
             width: 150,
             fontSize: 13,
           }}
@@ -3341,8 +3580,9 @@ export default function AdminOrdersPage() {
           onChange={(e) => setDraftCustomerMobile(e.target.value)}
           style={{
             padding: 8,
-            borderRadius: 6,
-            border: "1px solid #cbd5e1",
+            borderRadius: 8,
+            border: "1px solid #f1dfb8",
+            background: "#fffefa",
             width: 150,
             fontSize: 13,
           }}
@@ -3354,8 +3594,9 @@ export default function AdminOrdersPage() {
           onChange={(e) => setDraftOutlet(e.target.value)}
           style={{
             padding: 8,
-            borderRadius: 6,
-            border: "1px solid #cbd5e1",
+            borderRadius: 8,
+            border: "1px solid #f1dfb8",
+            background: "#fffefa",
             width: 160,
             fontSize: 13,
           }}
@@ -3367,8 +3608,9 @@ export default function AdminOrdersPage() {
           onChange={(e) => setDraftStation(e.target.value)}
           style={{
             padding: 8,
-            borderRadius: 6,
-            border: "1px solid #cbd5e1",
+            borderRadius: 8,
+            border: "1px solid #f1dfb8",
+            background: "#fffefa",
             width: 170,
             fontSize: 13,
           }}
@@ -3380,8 +3622,9 @@ export default function AdminOrdersPage() {
           onChange={(e) => setDraftTrainNo(e.target.value)}
           style={{
             padding: 8,
-            borderRadius: 6,
-            border: "1px solid #cbd5e1",
+            borderRadius: 8,
+            border: "1px solid #f1dfb8",
+            background: "#fffefa",
             width: 120,
             fontSize: 13,
           }}
@@ -3394,8 +3637,9 @@ export default function AdminOrdersPage() {
           }
           style={{
             padding: 8,
-            borderRadius: 6,
-            border: "1px solid #cbd5e1",
+            borderRadius: 8,
+            border: "1px solid #f1dfb8",
+            background: "#fffefa",
             width: 160,
             fontSize: 13,
           }}
@@ -3413,8 +3657,9 @@ export default function AdminOrdersPage() {
               title="Delivery From"
               style={{
                 padding: 7,
-                borderRadius: 6,
-                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+                border: "1px solid #f1dfb8",
+                background: "#fffefa",
                 width: 190,
                 fontSize: 13,
               }}
@@ -3427,8 +3672,9 @@ export default function AdminOrdersPage() {
               title="Delivery To"
               style={{
                 padding: 7,
-                borderRadius: 6,
-                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+                border: "1px solid #f1dfb8",
+                background: "#fffefa",
                 width: 190,
                 fontSize: 13,
               }}
@@ -3445,8 +3691,9 @@ export default function AdminOrdersPage() {
               title="Booking From"
               style={{
                 padding: 7,
-                borderRadius: 6,
-                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+                border: "1px solid #f1dfb8",
+                background: "#fffefa",
                 width: 190,
                 fontSize: 13,
               }}
@@ -3459,8 +3706,9 @@ export default function AdminOrdersPage() {
               title="Booking To"
               style={{
                 padding: 7,
-                borderRadius: 6,
-                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+                border: "1px solid #f1dfb8",
+                background: "#fffefa",
                 width: 190,
                 fontSize: 13,
               }}
@@ -3589,6 +3837,7 @@ export default function AdminOrdersPage() {
       >
         <div style={{ overflowX: "auto" }}>
           <table
+            className="orders-table"
             style={{
               width: "100%",
               borderCollapse: "collapse",
@@ -3599,13 +3848,14 @@ export default function AdminOrdersPage() {
               style={{
                 textAlign: "left",
                 borderBottom: "2px solid #edf2f7",
-                background: "#f8fafc",
+                background: "#f2f6fc",
                 fontSize: 13,
-                color: "#475569",
+                color: "#334155",
+                fontWeight: 900,
               }}
             >
               <tr>
-                <th style={{ padding: 12 }}>Order ID</th>
+                <th style={{ padding: 12, textAlign: "center" }}>Order ID</th>
                 <th style={{ padding: 12 }}>Restaurant</th>
                 <th style={{ padding: 12 }}>Station</th>
                 <th style={{ padding: 12 }}>Delivery Date &amp; Time</th>
@@ -3630,42 +3880,29 @@ export default function AdminOrdersPage() {
             </thead>
 
             <tbody style={{ fontSize: 13, color: "#334155" }}>
-              {visibleOrders.map((o) => (
+              {visibleOrders.map((o, orderIndex) => (
                 <tr
                   key={o.id}
-                  style={{ borderBottom: "1px solid #f1f5f9" }}
+                  style={{
+                    borderBottom: "1px solid #eaf0f7",
+                    background:
+                      orderIndex % 2 === 0
+                        ? activeTabTheme.rowTint
+                        : EVEN_ORDER_ROW_BACKGROUND,
+                  }}
                   className="table-row-hover"
                 >
                   {/* MODIFIED: Clickable Order ID triggers detailed information view */}
-                  <td style={{ padding: 12 }}>
+                  <td style={{ padding: 12, textAlign: "center" }}>
                     <div
                       style={{
                         display: "flex",
-                        flexDirection: "column",
-                        alignItems: "flex-start",
-                        gap: 5,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard.writeText(o.id)}
-                        title="Copy Order ID"
-                        aria-label={`Copy Order ID ${o.id}`}
-                        style={{
-                          background: "#eff6ff",
-                          color: "#2563eb",
-                          border: "1px solid #bfdbfe",
-                          width: 28,
-                          height: 28,
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Copy size={15} />
-                      </button>
                       <button
                         onClick={() => handleOpenDiagnosticsDrawer(o, "details")}
                         title="View order details"
@@ -3679,10 +3916,32 @@ export default function AdminOrdersPage() {
                           color: "#2563eb",
                           cursor: "pointer",
                           textDecoration: "underline",
-                          textAlign: "left",
+                          textAlign: "center",
                         }}
                       >
                         #{o.id}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText(o.id)}
+                        title="Copy Order ID"
+                        aria-label={`Copy Order ID ${o.id}`}
+                        style={{
+                          background: "transparent",
+                          color: "#2563eb",
+                          border: "none",
+                          width: 20,
+                          height: 20,
+                          padding: 0,
+                          borderRadius: 4,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flex: "0 0 auto",
+                        }}
+                      >
+                        <Copy size={14} />
                       </button>
                     </div>
                   </td>
@@ -3805,6 +4064,9 @@ export default function AdminOrdersPage() {
                           fontSize: 12,
                           background: isPrepaidOrder(o) ? "#dcfce7" : "#fee2e2",
                           color: isPrepaidOrder(o) ? "#166534" : "#991b1b",
+                          border: isPrepaidOrder(o)
+                            ? "1px solid #a7f3d0"
+                            : "1px solid #fecaca",
                         }}
                       >
                         {isPrepaidOrder(o) ? "PPD" : "COD"}
@@ -3813,8 +4075,10 @@ export default function AdminOrdersPage() {
                   </td>
 
                   {["refund", "delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab) && (
-                    <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
-                      {getCurrentOrderStatus(o)}
+                    <td style={{ padding: 12, whiteSpace: "nowrap" }}>
+                      <span style={getCurrentStatusBadgeStyle(getCurrentOrderStatus(o))}>
+                        {getCurrentOrderStatus(o)}
+                      </span>
                     </td>
                   )}
                   {activeTab === "refund" && (
@@ -3823,8 +4087,14 @@ export default function AdminOrdersPage() {
                     </td>
                   )}
                   {["refund", "delivered", "cancelled", "notdelivered", "baddelivery", "partialdelivery", "all"].includes(activeTab) && (
-                    <td style={{ padding: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
-                      {getReadableRefundStatus(o)}
+                    <td style={{ padding: 12, whiteSpace: "nowrap" }}>
+                      {getReadableRefundStatus(o) === "-" ? (
+                        <span style={{ color: "#64748b", fontWeight: 800 }}>-</span>
+                      ) : (
+                        <span style={getRefundStatusBadgeStyle(getReadableRefundStatus(o))}>
+                          {getReadableRefundStatus(o)}
+                        </span>
+                      )}
                     </td>
                   )}
                   {activeTab === "refund" && (
@@ -3849,7 +4119,7 @@ export default function AdminOrdersPage() {
                         display: "flex",
                         gap: 6,
                         alignItems: "center",
-                        justifyContent: "flex-end",
+                        justifyContent: "center",
                       }}
                     >
                       {/* INLINE BUTTON CONTROLLERS */}
@@ -6103,7 +6373,8 @@ export default function AdminOrdersPage() {
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
         @keyframes scaleIn { from { opacity: 0; transform: scale(0.96) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        .table-row-hover:hover { background-color: #f8fafc !important; transition: background-color 0.15s ease; }
+        .orders-dashboard-root th { font-weight: 900 !important; }
+        .table-row-hover:hover { background-color: #eef6ff !important; transition: background-color 0.15s ease; }
         .order-top-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr); gap: 18px; align-items: stretch; }
         .order-info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
         .payment-card { background: #f8fafc; }
