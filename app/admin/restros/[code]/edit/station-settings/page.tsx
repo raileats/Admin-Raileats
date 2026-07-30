@@ -1,7 +1,6 @@
 // app/admin/restros/[code]/edit/station-settings/page.tsx
 
 import React from "react";
-import { unstable_noStore as noStore } from "next/cache";
 import StationSettingsClient from "@/components/restro-route-tabs/StationSettingsClient";
 import { getRestroById } from "@/lib/restroService";
 
@@ -15,8 +14,6 @@ type Props = {
 };
 
 export default async function StationSettingsPage({ params }: Props) {
-  noStore();
-
   const code = Number(params.code);
 
   if (!Number.isFinite(code) || code <= 0) {
