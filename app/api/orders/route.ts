@@ -1403,7 +1403,9 @@ export async function GET(req: Request) {
 
     if (
       normalizedStatusFilter ===
-      "complaints"
+        "complaints" ||
+      normalizedStatusFilter ===
+        "all"
     ) {
       const ids =
         (data || [])
@@ -1422,14 +1424,12 @@ export async function GET(req: Request) {
           .from(
             "OrderComplaints"
           )
-          .select("*")
+          .select(
+            "ComplaintId,ComplaintNo,OrderId,ComplaintStatus,RequestedSubStatus,ComplaintRemarks,CreatedAt"
+          )
           .in(
             "OrderId",
             ids
-          )
-          .eq(
-            "ComplaintStatus",
-            "Pending"
           )
           .order(
             "CreatedAt",
@@ -1466,15 +1466,30 @@ export async function GET(req: Request) {
               row.OrderId || ""
             );
 
+          const existing =
+            complaintByOrder.get(
+              key
+            );
+
           if (
             key &&
-            !complaintByOrder.has(
-              key
-            )
+            (!existing ||
+              (row.ComplaintStatus ===
+                "Pending" &&
+                existing.ComplaintStatus !==
+                  "Pending"))
           ) {
             complaintByOrder.set(
               key,
-              row
+              {
+                ...row,
+                ComplaintReason:
+                  row.RequestedSubStatus ??
+                  null,
+                ComplaintCreatedAt:
+                  row.CreatedAt ??
+                  null,
+              }
             );
           }
         });
