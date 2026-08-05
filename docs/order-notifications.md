@@ -28,9 +28,10 @@ WhatsApp notifications are disabled. The helper does not read WhatsApp contacts 
 
 ## Email actions
 
-- The branded email includes the RailEats logo, a structured order card, and Accept/Reject buttons.
+- The branded email uses a clean white logo header and includes a structured order card plus Accept, Reject, and Print buttons.
 - Accept opens a confirmation screen and then moves the order to `In Kitchen` through the existing status workflow.
 - Reject opens the restaurant cancellation-reason form. Submitting it moves the order to `Cancellation Request` with the selected reason and remarks.
+- Print opens a secure print-friendly view. Its print stylesheet includes only the order details card and removes the toolbar and page background.
 - Action links are signed, bound to the order and restaurant, expire after 48 hours, and work only while the order is still `New Order`.
 - Link scanners cannot change an order because GET requests only render forms; the mutation requires a POST confirmation.
 

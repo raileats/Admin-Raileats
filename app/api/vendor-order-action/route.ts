@@ -45,7 +45,7 @@ function page(title: string, content: string, tone = "#2563eb") {
 <body style="margin:0;background:#eef2f7;font-family:Arial,sans-serif;color:#14213d">
   <main style="max-width:560px;margin:32px auto;padding:0 14px">
     <section style="background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 12px 36px rgba(15,23,42,.12)">
-      <header style="background:#ffd900;padding:22px;text-align:center">
+      <header style="background:#ffffff;padding:22px;text-align:center;border-bottom:1px solid #e2e8f0">
         <img src="/logo.png" width="72" height="72" alt="RailEats" style="border-radius:50%">
         <div style="font-size:27px;font-weight:900">RailEats</div>
       </header>
@@ -75,12 +75,59 @@ function errorPage(message: string, status = 400) {
 async function loadOrder(orderId: string, restroCode: string) {
   const { data, error } = await serviceClient
     .from("Orders")
-    .select("OrderId,RestroCode,RestroName,Status,CustomerName,TrainNumber")
+    .select("OrderId,RestroCode,RestroName,Status,CustomerName,CustomerMobile,TrainNumber,Coach,Seat,DeliveryDate,DeliveryTime,TotalAmount,PaymentMode")
     .eq("OrderId", orderId)
     .eq("RestroCode", restroCode)
     .maybeSingle();
 
   return { order: data, error };
+}
+
+async function loadOrderItems(orderId: string) {
+  const { data, error } = await serviceClient
+    .from("OrderItems")
+    .select("ItemName,Quantity,LineTotal")
+    .eq("OrderId", orderId);
+
+  return { items: data || [], error };
+}
+
+function printPage(order: any, items: any[]) {
+  const rows = items.length
+    ? items.map((item) => `<tr><td>${escapeHtml(item.ItemName || "Item")}</td><td class="center">${escapeHtml(item.Quantity || 0)}</td><td class="right">₹${Number(item.LineTotal || 0).toFixed(2)}</td></tr>`).join("")
+    : '<tr><td colspan="3">Order item details unavailable</td></tr>';
+
+  return new Response(`<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Order ${escapeHtml(order.OrderId)}</title>
+<style>
+  *{box-sizing:border-box} body{margin:0;background:#eef2f7;font-family:Arial,sans-serif;color:#111827}.toolbar{max-width:620px;margin:20px auto 10px;padding:0 12px}.print-button{width:100%;border:0;border-radius:9px;padding:13px;background:#14213d;color:#fff;font-size:16px;font-weight:800;cursor:pointer}.order-card{max-width:620px;margin:0 auto 28px;background:#fff;padding:26px;border:1px solid #dbe2ea;border-radius:14px}.brand{text-align:center;border-bottom:2px solid #14213d;padding-bottom:14px;margin-bottom:20px}.brand img{width:68px;height:68px;border-radius:50%}.brand h1{font-size:24px;margin:5px 0 0}.order-id{text-align:center;font-size:20px;font-weight:800;margin-bottom:20px}.details{width:100%;border-collapse:collapse;margin-bottom:18px}.details td{padding:6px 0;border-bottom:1px solid #edf0f4}.details td:last-child{text-align:right;font-weight:700}.items{width:100%;border-collapse:collapse;margin:18px 0}.items th{background:#14213d;color:#fff;padding:9px;text-align:left}.items td{border:1px solid #dbe2ea;padding:9px}.items .center,.items th.center{text-align:center}.items .right,.items th.right{text-align:right}.total{font-size:17px;font-weight:800;text-align:right}.footer{text-align:center;color:#64748b;font-size:12px;margin-top:24px}
+  @media print{body{background:#fff}.toolbar{display:none}.order-card{max-width:none;margin:0;border:0;border-radius:0;padding:0;box-shadow:none}@page{margin:12mm}}
+</style></head><body>
+  <div class="toolbar"><button class="print-button" onclick="window.print()">Print Order Details</button></div>
+  <article class="order-card">
+    <div class="brand"><img src="/logo.png" alt="RailEats"><h1>RailEats Order</h1></div>
+    <div class="order-id">#${escapeHtml(order.OrderId)}</div>
+    <table class="details">
+      <tr><td>Restaurant</td><td>${escapeHtml(order.RestroName || "—")}</td></tr>
+      <tr><td>Customer</td><td>${escapeHtml(order.CustomerName || "—")}</td></tr>
+      <tr><td>Mobile</td><td>${escapeHtml(order.CustomerMobile || "—")}</td></tr>
+      <tr><td>Train</td><td>${escapeHtml(order.TrainNumber || "—")}</td></tr>
+      <tr><td>Coach / Seat</td><td>${escapeHtml(order.Coach || "—")} / ${escapeHtml(order.Seat || "—")}</td></tr>
+      <tr><td>Delivery</td><td>${escapeHtml(order.DeliveryDate || "—")} ${escapeHtml(order.DeliveryTime || "")}</td></tr>
+      <tr><td>Payment</td><td>${escapeHtml(order.PaymentMode || "—")}</td></tr>
+    </table>
+    <table class="items"><thead><tr><th>Item</th><th class="center">Qty</th><th class="right">Amount</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="total">Total: ₹${Number(order.TotalAmount || 0).toFixed(2)}</div>
+    <div class="footer">Please prepare and deliver this order on time.</div>
+  </article>
+</body></html>`, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+    },
+  });
 }
 
 function hidden(name: string, value: string) {
@@ -92,12 +139,18 @@ export async function GET(request: NextRequest) {
   const action = normalize(request.nextUrl.searchParams.get("action"));
   const payload = verifyVendorOrderActionToken(token);
 
-  if (!payload || !["accept", "reject"].includes(action)) {
+  if (!payload || !["accept", "reject", "print"].includes(action)) {
     return errorPage("This secure order link is invalid or has expired.");
   }
 
   const { order, error } = await loadOrder(payload.orderId, payload.restroCode);
   if (error || !order) return errorPage("Order could not be found.", 404);
+
+  if (action === "print") {
+    const { items, error: itemsError } = await loadOrderItems(payload.orderId);
+    if (itemsError) return errorPage("Order item details could not be loaded.", 500);
+    return printPage(order, items);
+  }
 
   if (normalize(order.Status) !== "neworder") {
     return page(

@@ -102,6 +102,7 @@ function buildEmail(
   const restaurant = orderValue(order, "RestroName", "restroName") || "Restaurant Partner";
   const acceptUrl = `${actionUrl}&action=accept`;
   const rejectUrl = `${actionUrl}&action=reject`;
+  const printUrl = `${actionUrl}&action=print`;
 
   return {
     subject: `New RailEats order ${orderId} — Please accept or reject`,
@@ -110,7 +111,7 @@ function buildEmail(
   <div style="display:none;max-height:0;overflow:hidden">New order ${escapeHtml(orderId)} is waiting for your response.</div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f6fb;padding:28px 12px"><tr><td align="center">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 8px 30px rgba(20,33,61,.10)">
-      <tr><td style="background:#ffd900;padding:22px 28px;text-align:center">
+      <tr><td style="background:#ffffff;padding:22px 28px;text-align:center;border-bottom:1px solid #e2e8f0">
         <img src="${escapeHtml(logoUrl)}" width="74" height="74" alt="RailEats" style="display:block;margin:0 auto 8px;border-radius:50%">
         <div style="font-size:28px;font-weight:800;color:#111827">RailEats</div>
         <div style="font-size:13px;font-weight:700;letter-spacing:1px;color:#4b5563">RESTAURANT ORDER ALERT</div>
@@ -146,6 +147,7 @@ function buildEmail(
           <td width="2%"></td>
           <td width="49%"><a href="${escapeHtml(rejectUrl)}" style="display:block;background:#dc2626;color:#fff;text-decoration:none;text-align:center;padding:14px 8px;border-radius:10px;font-weight:800">REJECT ORDER</a></td>
         </tr></table>
+        <a href="${escapeHtml(printUrl)}" style="display:block;margin-top:12px;background:#14213d;color:#fff;text-decoration:none;text-align:center;padding:13px 8px;border-radius:10px;font-weight:800">PRINT ORDER</a>
         <p style="margin:18px 0 0;text-align:center;font-size:12px;color:#94a3b8">These secure links expire in 48 hours. For help, reply to support@raileats.in.</p>
       </td></tr>
     </table>
