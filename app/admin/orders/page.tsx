@@ -1,3 +1,4 @@
+// app/admin/orders/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -3147,8 +3148,17 @@ export default function AdminOrdersPage() {
           remarksText: workflowRemarks,
         });
       } else if (workflowModal.kind === "complaint-approve" || workflowModal.kind === "complaint-reject") {
-        const complaintId = valueFrom(order.raw, "ComplaintId", "complaintId", "ComplaintNo", "complaintNo");
-        if (!complaintId) throw new Error("Complaint ID not found");
+        const explicitComplaintId = valueFrom(
+          order.raw,
+          "ComplaintId",
+          "complaintId",
+          "ComplaintNo",
+          "complaintNo",
+        );
+        const complaintIdentifier = explicitComplaintId || order.id;
+        if (!complaintIdentifier && !order.id) {
+          throw new Error("Order ID not found");
+        }
         const isComplaintApproval =
           workflowModal.kind === "complaint-approve";
         const selectedOutcome = isComplaintApproval
@@ -3211,9 +3221,11 @@ export default function AdminOrdersPage() {
           throw new Error("Refund amount cannot exceed paid/order amount");
         }
 
-        const res = await fetch(`/api/orders/complaints/${encodeURIComponent(String(complaintId))}`, {
+        const res = await fetch(`/api/orders/complaints/${encodeURIComponent(String(complaintIdentifier))}`, {
           method: "PATCH", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            orderId: order.id,
+            complaintId: explicitComplaintId || undefined,
             decision: isComplaintApproval ? "Approved" : "Rejected",
             finalStatus: selectedOutcome?.dbValue || undefined,
             finalSubStatus: selectedOutcome?.key || workflowSubStatus || undefined,
