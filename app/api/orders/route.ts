@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabaseServer";
 import { updateOrderJourneySafe } from "@/lib/orderJourney";
+import { sendVendorOrderNotification } from "@/lib/vendorNotifications";
 
 /**
  * Expected payload from raileats.in CheckoutClient (approx):
@@ -594,6 +595,35 @@ export async function POST(req: Request) {
           orderId,
         }
       );
+    }
+
+    const notification =
+      await sendVendorOrderNotification({
+        supabase: supa,
+        event: "order_created",
+        order: {
+          OrderId: orderId,
+          RestroCode: restro.RestroCode,
+          RestroName: restro.RestroName,
+          CustomerName: customer.full_name,
+          CustomerMobile: customer.phone,
+          TrainNumber: delivery.train_no,
+          Coach: delivery.coach,
+          Seat: delivery.seat,
+          DeliveryDate: deliveryDate,
+          DeliveryTime: deliveryTime,
+          TotalAmount: pricing.total,
+          PaymentMode: pricing.payment_mode ?? "COD",
+          Status: "booked",
+        },
+        items: orderItemsPayload,
+      });
+
+    if (notification.email.warning) {
+      console.error("Restaurant order email notification warning", {
+        orderId,
+        warning: notification.email.warning,
+      });
     }
 
     return NextResponse.json({

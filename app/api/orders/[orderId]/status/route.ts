@@ -23,6 +23,10 @@ import {
   requestRefund,
 } from "@/lib/refund";
 
+import {
+  sendVendorOrderNotification,
+} from "@/lib/vendorNotifications";
+
 /* =========================================================
    SUPABASE SERVER CLIENT
    ========================================================= */
@@ -1904,6 +1908,31 @@ export async function PATCH(
             actionSource,
         },
       });
+
+    const previousStatus =
+      cleanText(
+        existing?.OrderStatus ??
+        existing?.Status ??
+        existing?.CurrentStatus ??
+        existing?.OrderCurrentStatus ??
+        existing?.orderStatus ??
+        existing?.status
+      );
+
+    const notification =
+      await sendVendorOrderNotification({
+        supabase,
+        event: "status_changed",
+        order: updatedRows[0],
+        previousStatus,
+      });
+
+    if (notification.email.warning) {
+      console.error("Restaurant order status email notification warning", {
+        orderId,
+        warning: notification.email.warning,
+      });
+    }
 
     /* =====================================================
        SUCCESS RESPONSE
