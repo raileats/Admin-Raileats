@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       actor,
     });
 
-    if (!result.ok) {
+    if (result.ok === false) {
       return NextResponse.json(result, {
         status: getHttpStatus(result.error.code),
       });

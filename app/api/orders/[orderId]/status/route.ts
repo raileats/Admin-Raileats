@@ -1090,7 +1090,7 @@ async function upsertRefundBestEffort({
         },
       });
 
-    if (!result.ok) {
+    if (result.ok === false) {
       if (
         result.error.code ===
         "DUPLICATE_REFUND"
