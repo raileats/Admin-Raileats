@@ -16,6 +16,11 @@ import {
   PATCH as updateOrderStatus,
 } from "../../[orderId]/status/route";
 
+import {
+  updateOrderJourneySafe,
+  type OrderJourneyStage,
+} from "@/lib/orderJourney";
+
 /* =========================================================
    SUPABASE SERVER CLIENT
    ========================================================= */
@@ -259,6 +264,391 @@ async function readResponseJson(
     );
 }
 
+type ComplaintLookupResult = {
+  complaint: Record<string, any> | null;
+  resolvedOrderId: string | null;
+};
+
+function isPrimaryComplaintId(
+  value: string | null
+) {
+  return Boolean(
+    value && /^\d+$/.test(value)
+  );
+}
+
+function resolveJourneyStage(
+  status: any,
+  subStatus: any
+): OrderJourneyStage {
+  const subStatusKey =
+    normalizeKey(subStatus);
+
+  if (
+    subStatusKey ===
+    "baddelivery"
+  ) {
+    return "Bad Delivery";
+  }
+
+  if (
+    subStatusKey ===
+    "partialdelivery"
+  ) {
+    return "Partial Delivery";
+  }
+
+  const byStatus:
+    Record<string, OrderJourneyStage> = {
+      booked: "Booked",
+      inverification:
+        "In Verification",
+      cancellationrequest:
+        "Cancellation Request",
+      neworder: "New Order",
+      inkitchen: "In Kitchen",
+      outfordelivery:
+        "Out for Delivery",
+      restromarkeddelivered:
+        "Restro Marked Delivered",
+      complaints: "Complaints",
+      delivered: "Delivered",
+      cancelled: "Cancelled",
+      notdelivered:
+        "Not Delivered",
+      baddelivery:
+        "Bad Delivery",
+      partialdelivery:
+        "Partial Delivery",
+      refund: "Refund",
+    };
+
+  return (
+    byStatus[
+      normalizeKey(status)
+    ] || "Booked"
+  );
+}
+
+function isMissingComplaintNoColumn(
+  error: any
+) {
+  const message = String(
+    error?.message ?? ""
+  ).toLowerCase();
+
+  return (
+    error?.code === "42703" ||
+    error?.code === "PGRST204"
+  ) && message.includes(
+    "complaintno"
+  );
+}
+
+async function findComplaintBy(
+  supabase: any,
+  column:
+    | "ComplaintId"
+    | "ComplaintNo"
+    | "OrderId",
+  value: string | null
+) {
+  if (!value) {
+    return null;
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("OrderComplaints")
+    .select("*")
+    .eq(column, value)
+    .order("CreatedAt", {
+      ascending: false,
+    })
+    .limit(20);
+
+  if (error) {
+    if (
+      column === "ComplaintNo" &&
+      isMissingComplaintNoColumn(
+        error
+      )
+    ) {
+      return null;
+    }
+
+    throw error;
+  }
+
+  const rows = Array.isArray(data)
+    ? data
+    : [];
+
+  return (
+    rows.find(
+      (row: any) =>
+        row.ComplaintStatus ===
+        "Pending"
+    ) ||
+    rows[0] ||
+    null
+  );
+}
+
+async function resolveComplaint(
+  supabase: any,
+  {
+    routeIdentifier,
+    bodyComplaintId,
+    bodyOrderId,
+  }: {
+    routeIdentifier: string | null;
+    bodyComplaintId: string | null;
+    bodyOrderId: string | null;
+  }
+): Promise<ComplaintLookupResult> {
+  const attempts: Array<{
+    column:
+      | "ComplaintId"
+      | "ComplaintNo"
+      | "OrderId";
+    value: string | null;
+  }> = [];
+
+  if (
+    isPrimaryComplaintId(
+      bodyComplaintId
+    )
+  ) {
+    attempts.push({
+      column: "ComplaintId",
+      value: bodyComplaintId,
+    });
+  }
+
+  if (
+    isPrimaryComplaintId(
+      routeIdentifier
+    )
+  ) {
+    attempts.push({
+      column: "ComplaintId",
+      value: routeIdentifier,
+    });
+  }
+
+  attempts.push(
+    {
+      column: "ComplaintNo",
+      value: routeIdentifier,
+    },
+    {
+      column: "OrderId",
+      value: bodyOrderId,
+    },
+    {
+      column: "OrderId",
+      value: routeIdentifier,
+    }
+  );
+
+  const seen = new Set<string>();
+
+  for (const attempt of attempts) {
+    if (!attempt.value) {
+      continue;
+    }
+
+    const key =
+      `${attempt.column}:${attempt.value}`;
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+
+    const complaint =
+      await findComplaintBy(
+        supabase,
+        attempt.column,
+        attempt.value
+      );
+
+    if (complaint) {
+      return {
+        complaint,
+        resolvedOrderId:
+          cleanText(
+            complaint.OrderId
+          ) || bodyOrderId,
+      };
+    }
+  }
+
+  return {
+    complaint: null,
+    resolvedOrderId:
+      bodyOrderId || null,
+  };
+}
+
+async function findOrderByCandidates(
+  supabase: any,
+  candidates:
+    Array<string | null>
+) {
+  const seen = new Set<string>();
+
+  for (const candidate of candidates) {
+    const orderId =
+      cleanText(candidate);
+
+    if (
+      !orderId ||
+      seen.has(orderId)
+    ) {
+      continue;
+    }
+
+    seen.add(orderId);
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("Orders")
+      .select("*")
+      .eq("OrderId", orderId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) {
+      return data;
+    }
+  }
+
+  return null;
+}
+
+async function resolveLegacyPreviousState(
+  supabase: any,
+  orderId: string
+): Promise<{
+  status: OrderJourneyStage;
+  subStatus: string | null;
+}> {
+  const {
+    data: journey,
+    error,
+  } = await supabase
+    .from("OrderJourney")
+    .select("*")
+    .eq("OrderId", orderId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "Legacy complaint journey lookup warning",
+      error
+    );
+  }
+
+  const candidates: Array<{
+    prefix: string;
+    status: OrderJourneyStage;
+    subStatus: string | null;
+  }> = [
+    {
+      prefix: "PartialDelivery",
+      status: "Delivered",
+      subStatus: "Partial Delivery",
+    },
+    {
+      prefix: "BadDelivery",
+      status: "Delivered",
+      subStatus: "Bad Delivery",
+    },
+    {
+      prefix: "Delivered",
+      status: "Delivered",
+      subStatus: "Delivered",
+    },
+    {
+      prefix: "NotDelivered",
+      status: "Not Delivered",
+      subStatus: null,
+    },
+    {
+      prefix: "Cancelled",
+      status: "Cancelled",
+      subStatus: null,
+    },
+    {
+      prefix: "RestroMarkedDelivered",
+      status: "Restro Marked Delivered",
+      subStatus: null,
+    },
+    {
+      prefix: "OutForDelivery",
+      status: "Out for Delivery",
+      subStatus: null,
+    },
+    {
+      prefix: "InKitchen",
+      status: "In Kitchen",
+      subStatus: null,
+    },
+    {
+      prefix: "NewOrder",
+      status: "New Order",
+      subStatus: null,
+    },
+    {
+      prefix: "InVerification",
+      status: "In Verification",
+      subStatus: null,
+    },
+    {
+      prefix: "Booked",
+      status: "Booked",
+      subStatus: null,
+    },
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      journey &&
+      [
+        journey[`${candidate.prefix}Update`],
+        journey[`${candidate.prefix}ActionAtDate`],
+        journey[`${candidate.prefix}ActionAtTime`],
+      ].some(
+        (value) =>
+          value !== null &&
+          value !== undefined &&
+          String(value).trim() !== ""
+      )
+    ) {
+      return {
+        status: candidate.status,
+        subStatus:
+          candidate.subStatus,
+      };
+    }
+  }
+
+  return {
+    status: "Booked",
+    subStatus: null,
+  };
+}
+
 /* =========================================================
    GET SINGLE COMPLAINT
    ========================================================= */
@@ -275,7 +665,7 @@ export async function GET(
   }
 ) {
   try {
-    const complaintId =
+    const routeIdentifier =
       decodeURIComponent(
         String(
           params.complaintId ??
@@ -284,12 +674,12 @@ export async function GET(
         )
       ).trim();
 
-    if (!complaintId) {
+    if (!routeIdentifier) {
       return NextResponse.json(
         {
           ok: false,
           error:
-            "Complaint id is required",
+            "Complaint id or OrderId is required",
         },
         {
           status: 400,
@@ -297,61 +687,30 @@ export async function GET(
       );
     }
 
-    const numericId =
-      Number(
-        complaintId
-      );
-
     const supabase =
       supabaseServer();
 
-    let query =
-      supabase
-        .from(
-          "OrderComplaints"
-        )
-        .select("*");
-
-    query =
-      Number.isFinite(
-        numericId
-      )
-        ? query.eq(
-            "ComplaintId",
-            numericId
-          )
-        : query.eq(
-            "ComplaintNo",
-            complaintId
-          );
-
     const {
-      data,
-      error,
-    } =
-      await query
-        .maybeSingle();
-
-    if (error) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            error.message ||
-            "Failed to load complaint",
-        },
-        {
-          status: 500,
-        }
-      );
-    }
+      complaint: data,
+      resolvedOrderId,
+    } = await resolveComplaint(
+      supabase,
+      {
+        routeIdentifier:
+          routeIdentifier,
+        bodyComplaintId: null,
+        bodyOrderId: null,
+      }
+    );
 
     if (!data) {
       return NextResponse.json(
         {
           ok: false,
           error:
-            "Complaint not found",
+            "complaint_record_not_found",
+          orderId:
+            resolvedOrderId,
         },
         {
           status: 404,
@@ -397,7 +756,7 @@ export async function PATCH(
   }
 ) {
   try {
-    const complaintId =
+    const routeIdentifier =
       decodeURIComponent(
         String(
           params.complaintId ??
@@ -406,25 +765,41 @@ export async function PATCH(
         )
       ).trim();
 
-    if (!complaintId) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Complaint id is required",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
     const body =
       await req
         .json()
         .catch(
           () => ({})
         );
+
+    const bodyComplaintId =
+      cleanText(
+        body.complaintId ??
+        body.ComplaintId
+      );
+
+    const bodyOrderId =
+      cleanText(
+        body.orderId ??
+        body.OrderId
+      );
+
+    if (
+      !routeIdentifier &&
+      !bodyComplaintId &&
+      !bodyOrderId
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Order ID not found",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
     const decision =
       normalizeDecision(
@@ -470,63 +845,399 @@ export async function PATCH(
     const supabase =
       supabaseServer();
 
-    const numericId =
-      Number(
-        complaintId
-      );
-
-    let complaintQuery =
-      supabase
-        .from(
-          "OrderComplaints"
-        )
-        .select("*");
-
-    complaintQuery =
-      Number.isFinite(
-        numericId
-      )
-        ? complaintQuery.eq(
-            "ComplaintId",
-            numericId
-          )
-        : complaintQuery.eq(
-            "ComplaintNo",
-            complaintId
-          );
-
     const {
-      data: complaint,
-      error: complaintError,
-    } =
-      await complaintQuery
-        .maybeSingle();
-
-    if (complaintError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            complaintError.message ||
-            "Failed to load complaint",
-        },
-        {
-          status: 500,
-        }
-      );
-    }
+      complaint,
+      resolvedOrderId:
+        lookupOrderId,
+    } = await resolveComplaint(
+      supabase,
+      {
+        routeIdentifier,
+        bodyComplaintId,
+        bodyOrderId,
+      }
+    );
 
     if (!complaint) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Complaint not found",
-        },
-        {
-          status: 404,
+      const legacyOrder =
+        await findOrderByCandidates(
+          supabase,
+          [
+            lookupOrderId,
+            bodyOrderId,
+            routeIdentifier,
+          ]
+        );
+
+      const legacyOrderId =
+        cleanText(
+          legacyOrder?.OrderId
+        ) ||
+        lookupOrderId ||
+        bodyOrderId;
+
+      if (!legacyOrder) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "complaint_record_not_found",
+            orderId:
+              legacyOrderId || null,
+          },
+          {
+            status: 404,
+          }
+        );
+      }
+
+      if (
+        normalizeKey(
+          legacyOrder.Status
+        ) !== "complaints"
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "complaint_already_completed",
+            orderId:
+              legacyOrderId,
+            order:
+              legacyOrder,
+          },
+          {
+            status: 409,
+          }
+        );
+      }
+
+      const changedAt =
+        new Date()
+          .toISOString();
+
+      if (
+        decision === "Rejected"
+      ) {
+        const previous =
+          await resolveLegacyPreviousState(
+            supabase,
+            String(
+              legacyOrderId
+            )
+          );
+
+        const {
+          data: restoredOrder,
+          error: restoreError,
+        } = await supabase
+          .from("Orders")
+          .update({
+            Status:
+              previous.status,
+            SubStatus:
+              previous.subStatus,
+            UpdatedAt:
+              changedAt,
+          })
+          .eq(
+            "OrderId",
+            legacyOrderId
+          )
+          .eq(
+            "Status",
+            legacyOrder.Status
+          )
+          .select("*")
+          .maybeSingle();
+
+        if (
+          restoreError ||
+          !restoredOrder
+        ) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error:
+                restoreError
+                  ?.message ||
+                "complaint_concurrent_update",
+              orderId:
+                legacyOrderId,
+            },
+            {
+              status:
+                restoreError
+                  ? 500
+                  : 409,
+            }
+          );
         }
-      );
+
+        const journey =
+          await updateOrderJourneySafe({
+            supabase,
+            orderId:
+              String(
+                legacyOrderId
+              ),
+            stage:
+              previous.status,
+            status:
+              previous.status,
+            subStatus:
+              previous.subStatus,
+            remarks:
+              adminRemarks ||
+              "Complaint Rejected",
+            userType: "Admin",
+            userName:
+              adminName,
+            source:
+              "Complaint Rejected",
+            actionAt:
+              changedAt,
+            order: {
+              restroCode:
+                legacyOrder.RestroCode,
+              restroName:
+                legacyOrder.RestroName,
+              stationCode:
+                legacyOrder.StationCode,
+              stationName:
+                legacyOrder.StationName,
+              deliveryDate:
+                legacyOrder.DeliveryDate,
+              deliveryTime:
+                legacyOrder.DeliveryTime,
+            },
+          });
+
+        const {
+          data: history,
+          error: historyError,
+        } = await insertHistoryBestEffort(
+          supabase,
+          {
+            OrderId:
+              legacyOrderId,
+            OldStatus:
+              legacyOrder.Status,
+            PreviousStatus:
+              legacyOrder.Status,
+            NewStatus:
+              previous.status,
+            Status:
+              previous.status,
+            SubStatus:
+              previous.subStatus,
+            Remarks:
+              adminRemarks,
+            Note:
+              adminRemarks ??
+              "Complaint Rejected",
+            ChangedBy:
+              adminName,
+            UserType:
+              "Admin",
+            UserName:
+              adminName,
+            ActionSource:
+              "Complaint Rejected",
+            OrderPenalty:
+              legacyOrder.OrderPenalty ??
+              0,
+            ChangedAt:
+              changedAt,
+            CreatedAt:
+              changedAt,
+          }
+        );
+
+        return NextResponse.json({
+          ok: true,
+          complaintId: null,
+          orderId:
+            legacyOrderId,
+          decision:
+            "Rejected",
+          finalStatus:
+            previous.status,
+          finalSubStatus:
+            previous.subStatus,
+          legacyComplaint: true,
+          order:
+            restoredOrder,
+          history,
+          journey,
+          historyWarning:
+            historyError
+              ?.message ||
+            null,
+        });
+      }
+
+      const legacyFinalStatus =
+        normalizeFinalStatus(
+          body.finalStatus ??
+          body.FinalStatus
+        );
+
+      if (!legacyFinalStatus) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Final status must be Cancelled, Not Delivered, Delivered, Bad Delivery or Partial Delivery",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const legacyFinalSubStatus =
+        cleanText(
+          body.finalSubStatus ??
+          body.FinalSubStatus ??
+          body.subStatus ??
+          body.SubStatus
+        );
+
+      if (!legacyFinalSubStatus) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Final sub status is required",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const legacyPenalty =
+        normalizePenalty(
+          body.orderPenalty ??
+          body.OrderPenalty ??
+          body.vendorPenalty ??
+          body.VendorPenalty
+        );
+
+      const statusUrl =
+        new URL(
+          `/api/orders/${encodeURIComponent(
+            String(
+              legacyOrderId
+            )
+          )}/status`,
+          req.url
+        );
+
+      const statusRequest =
+        new NextRequest(
+          statusUrl,
+          {
+            method: "PATCH",
+            headers: {
+              "content-type":
+                "application/json",
+            },
+            body:
+              JSON.stringify({
+                newStatus:
+                  legacyFinalStatus,
+                subStatus:
+                  legacyFinalSubStatus,
+                remarks:
+                  adminRemarks ??
+                  legacyFinalSubStatus,
+                note:
+                  adminRemarks ??
+                  "Legacy complaint approved",
+                userType:
+                  "Admin",
+                userName:
+                  adminName,
+                actionSource:
+                  "Complaint Approved",
+                ...(legacyPenalty !==
+                null
+                  ? {
+                      OrderPenalty:
+                        legacyPenalty,
+                    }
+                  : {}),
+              }),
+          }
+        );
+
+      const statusResponse =
+        await updateOrderStatus(
+          statusRequest,
+          {
+            params: {
+              orderId:
+                String(
+                  legacyOrderId
+                ),
+            },
+          }
+        );
+
+      const statusBody =
+        await readResponseJson(
+          statusResponse
+        );
+
+      if (
+        !statusResponse.ok ||
+        statusBody?.ok === false
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              statusBody?.error ||
+              statusBody?.message ||
+              "Complaint approval failed while marking the order",
+            details:
+              statusBody,
+          },
+          {
+            status:
+              statusResponse.status ||
+              500,
+          }
+        );
+      }
+
+      const updatedOrder =
+        statusBody?.row ??
+        statusBody?.order ??
+        await findOrderByCandidates(
+          supabase,
+          [legacyOrderId]
+        );
+
+      return NextResponse.json({
+        ok: true,
+        complaintId: null,
+        orderId:
+          legacyOrderId,
+        decision:
+          "Approved",
+        finalStatus:
+          legacyFinalStatus,
+        finalSubStatus:
+          legacyFinalSubStatus,
+        legacyComplaint: true,
+        order:
+          updatedOrder,
+        orderResult:
+          statusBody,
+      });
     }
 
     if (
@@ -600,6 +1311,26 @@ export async function PATCH(
         },
         {
           status: 404,
+        }
+      );
+    }
+
+    if (
+      normalizeKey(
+        order.Status
+      ) !== "complaints"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "complaint_already_completed",
+          complaint,
+          orderId,
+          order,
+        },
+        {
+          status: 409,
         }
       );
     }
@@ -706,6 +1437,10 @@ export async function PATCH(
             "OrderId",
             orderId
           )
+          .eq(
+            "Status",
+            order.Status
+          )
           .select("*")
           .maybeSingle();
 
@@ -808,10 +1543,61 @@ export async function PATCH(
           }
         );
 
+      const journey =
+        await updateOrderJourneySafe({
+          supabase,
+          orderId,
+          stage:
+            resolveJourneyStage(
+              previousStatus,
+              previousSubStatus
+            ),
+          status:
+            previousStatus,
+          subStatus:
+            previousSubStatus,
+          remarks:
+            adminRemarks ||
+            "Complaint Rejected",
+          userType: "Admin",
+          userName:
+            adminName,
+          source:
+            "Complaint Rejected",
+          actionAt:
+            changedAt,
+          order: {
+            restroCode:
+              order.RestroCode,
+            restroName:
+              order.RestroName,
+            stationCode:
+              order.StationCode,
+            stationName:
+              order.StationName,
+            deliveryDate:
+              order.DeliveryDate,
+            deliveryTime:
+              order.DeliveryTime,
+          },
+        });
+
       return NextResponse.json({
         ok: true,
+        complaintId:
+          rejectedComplaint.ComplaintId ??
+          null,
+        orderId,
         decision:
           "Rejected",
+
+        finalStatus:
+          previousStatus,
+
+        finalSubStatus:
+          previousSubStatus,
+
+        legacyComplaint: false,
 
         message:
           "Complaint rejected and order restored",
@@ -823,6 +1609,8 @@ export async function PATCH(
           restoredOrder,
 
         history,
+
+        journey,
 
         historyWarning:
           historyError
@@ -1068,10 +1856,31 @@ export async function PATCH(
       );
     }
 
+    const updatedOrder =
+      statusBody?.row ??
+      statusBody?.order ??
+      await findOrderByCandidates(
+        supabase,
+        [orderId]
+      );
+
     return NextResponse.json({
       ok: true,
+      complaintId:
+        reservedComplaint.ComplaintId ??
+        null,
+      orderId,
       decision:
         "Approved",
+
+      finalStatus,
+
+      finalSubStatus,
+
+      legacyComplaint: false,
+
+      order:
+        updatedOrder,
 
       message:
         "Complaint approved and order marked successfully",
