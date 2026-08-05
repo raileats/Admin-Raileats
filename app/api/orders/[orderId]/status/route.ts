@@ -1919,19 +1919,23 @@ export async function PATCH(
         existing?.status
       );
 
-    const notification =
-      await sendVendorOrderNotification({
-        supabase,
-        event: "status_changed",
-        order: updatedRows[0],
-        previousStatus,
-      });
+    const movedToNewOrder =
+      normalizeKey(newStatus) === "neworder" &&
+      normalizeKey(previousStatus) !== "neworder";
 
-    if (notification.email.warning) {
-      console.error("Restaurant order status email notification warning", {
-        orderId,
-        warning: notification.email.warning,
-      });
+    if (movedToNewOrder) {
+      const notification =
+        await sendVendorOrderNotification({
+          supabase,
+          order: updatedRows[0],
+        });
+
+      if (notification.email.warning) {
+        console.error("Restaurant new-order email notification warning", {
+          orderId,
+          warning: notification.email.warning,
+        });
+      }
     }
 
     /* =====================================================

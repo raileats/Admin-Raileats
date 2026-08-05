@@ -1,14 +1,12 @@
+import { createVendorOrderActionToken } from "@/lib/vendorOrderActionToken";
+
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const EMAIL_FROM = "RailEats Support <support@raileats.in>";
 const EMAIL_REPLY_TO = "support@raileats.in";
 
-type NotificationEvent = "order_created" | "status_changed";
-
 type SendVendorOrderNotificationArgs = {
   supabase: any;
   order: Record<string, any>;
-  event: NotificationEvent;
-  previousStatus?: string | null;
   items?: Array<Record<string, any>>;
 };
 
@@ -82,42 +80,76 @@ function itemRows(items: Array<Record<string, any>>) {
     .join("");
 }
 
+function publicBaseUrl() {
+  const configured = text(
+    process.env.VENDOR_NOTIFICATION_BASE_URL ||
+    process.env.NEXT_PUBLIC_ADMIN_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+    process.env.VERCEL_URL
+  );
+
+  if (!configured) return null;
+  return configured.startsWith("http") ? configured.replace(/\/$/, "") : `https://${configured.replace(/\/$/, "")}`;
+}
+
 function buildEmail(
   order: Record<string, any>,
-  event: NotificationEvent,
-  previousStatus: string | null,
-  items: Array<Record<string, any>>
+  items: Array<Record<string, any>>,
+  actionUrl: string,
+  logoUrl: string
 ) {
   const orderId = text(orderValue(order, "OrderId", "orderId", "id"));
-  const status = text(orderValue(order, "Status", "OrderStatus", "status")) || "Booked";
-  const heading = event === "order_created" ? "New restaurant order" : "Restaurant order status updated";
-  const subject = event === "order_created"
-    ? `New RailEats order ${orderId}`
-    : `RailEats order ${orderId} status: ${status}`;
-  const statusChange = event === "status_changed"
-    ? `<p><strong>Status:</strong> ${escapeHtml(previousStatus || "—")} → ${escapeHtml(status)}</p>`
-    : `<p><strong>Status:</strong> ${escapeHtml(status)}</p>`;
+  const restaurant = orderValue(order, "RestroName", "restroName") || "Restaurant Partner";
+  const acceptUrl = `${actionUrl}&action=accept`;
+  const rejectUrl = `${actionUrl}&action=reject`;
 
   return {
-    subject,
+    subject: `New RailEats order ${orderId} — Please accept or reject`,
     html: `<!doctype html>
-<html><body style="font-family:Arial,sans-serif;color:#172033;line-height:1.5">
-  <div style="max-width:640px;margin:0 auto;padding:24px">
-    <h2 style="margin:0 0 16px">${heading}</h2>
-    <p><strong>Order ID:</strong> ${escapeHtml(orderId)}</p>
-    ${statusChange}
-    <p><strong>Restaurant:</strong> ${escapeHtml(orderValue(order, "RestroName", "restroName") || "—")}</p>
-    <p><strong>Customer:</strong> ${escapeHtml(orderValue(order, "CustomerName", "customerName") || "—")} (${escapeHtml(orderValue(order, "CustomerMobile", "customerMobile") || "—")})</p>
-    <p><strong>Train / Seat:</strong> ${escapeHtml(orderValue(order, "TrainNumber", "trainNumber") || "—")} / ${escapeHtml(orderValue(order, "Coach", "coach") || "—")}-${escapeHtml(orderValue(order, "Seat", "seat") || "—")}</p>
-    <p><strong>Delivery:</strong> ${escapeHtml(orderValue(order, "DeliveryDate", "deliveryDate") || "—")} ${escapeHtml(orderValue(order, "DeliveryTime", "deliveryTime") || "")}</p>
-    <table style="width:100%;border-collapse:collapse;margin:20px 0">
-      <thead><tr><th style="padding:8px;border:1px solid #ddd;text-align:left">Item</th><th style="padding:8px;border:1px solid #ddd">Qty</th><th style="padding:8px;border:1px solid #ddd;text-align:right">Amount</th></tr></thead>
-      <tbody>${itemRows(items)}</tbody>
+<html><body style="margin:0;background:#f3f6fb;font-family:Arial,sans-serif;color:#14213d">
+  <div style="display:none;max-height:0;overflow:hidden">New order ${escapeHtml(orderId)} is waiting for your response.</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f6fb;padding:28px 12px"><tr><td align="center">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 8px 30px rgba(20,33,61,.10)">
+      <tr><td style="background:#ffd900;padding:22px 28px;text-align:center">
+        <img src="${escapeHtml(logoUrl)}" width="74" height="74" alt="RailEats" style="display:block;margin:0 auto 8px;border-radius:50%">
+        <div style="font-size:28px;font-weight:800;color:#111827">RailEats</div>
+        <div style="font-size:13px;font-weight:700;letter-spacing:1px;color:#4b5563">RESTAURANT ORDER ALERT</div>
+      </td></tr>
+      <tr><td style="padding:28px">
+        <h1 style="margin:0 0 8px;font-size:25px;text-align:center">New order received</h1>
+        <p style="margin:0 0 24px;text-align:center;color:#64748b">Hello ${escapeHtml(restaurant)}, please accept and deliver this order on time.</p>
+
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;margin-bottom:20px">
+          <tr><td style="padding:18px">
+            <div style="font-size:12px;color:#64748b;text-transform:uppercase;font-weight:700">Order ID</div>
+            <div style="font-size:19px;font-weight:800;margin:3px 0 14px">#${escapeHtml(orderId)}</div>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="4">
+              <tr><td style="color:#64748b">Customer</td><td align="right" style="font-weight:700">${escapeHtml(orderValue(order, "CustomerName", "customerName") || "—")}</td></tr>
+              <tr><td style="color:#64748b">Mobile</td><td align="right" style="font-weight:700">${escapeHtml(orderValue(order, "CustomerMobile", "customerMobile") || "—")}</td></tr>
+              <tr><td style="color:#64748b">Train</td><td align="right" style="font-weight:700">${escapeHtml(orderValue(order, "TrainNumber", "trainNumber") || "—")}</td></tr>
+              <tr><td style="color:#64748b">Coach / Seat</td><td align="right" style="font-weight:700">${escapeHtml(orderValue(order, "Coach", "coach") || "—")} / ${escapeHtml(orderValue(order, "Seat", "seat") || "—")}</td></tr>
+              <tr><td style="color:#64748b">Delivery</td><td align="right" style="font-weight:700">${escapeHtml(orderValue(order, "DeliveryDate", "deliveryDate") || "—")} ${escapeHtml(orderValue(order, "DeliveryTime", "deliveryTime") || "")}</td></tr>
+            </table>
+          </td></tr>
+        </table>
+
+        <table style="width:100%;border-collapse:collapse;margin:0 0 18px">
+          <thead><tr style="background:#14213d;color:#fff"><th style="padding:10px;text-align:left">Item</th><th style="padding:10px">Qty</th><th style="padding:10px;text-align:right">Amount</th></tr></thead>
+          <tbody>${itemRows(items)}</tbody>
+        </table>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="5" style="font-size:16px;margin-bottom:22px">
+          <tr><td>Payment: <strong>${escapeHtml(orderValue(order, "PaymentMode", "paymentMode") || "—")}</strong></td><td align="right">Total: <strong>${escapeHtml(money(orderValue(order, "TotalAmount", "totalAmount")))}</strong></td></tr>
+        </table>
+
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
+          <td width="49%"><a href="${escapeHtml(acceptUrl)}" style="display:block;background:#16a34a;color:#fff;text-decoration:none;text-align:center;padding:14px 8px;border-radius:10px;font-weight:800">ACCEPT ORDER</a></td>
+          <td width="2%"></td>
+          <td width="49%"><a href="${escapeHtml(rejectUrl)}" style="display:block;background:#dc2626;color:#fff;text-decoration:none;text-align:center;padding:14px 8px;border-radius:10px;font-weight:800">REJECT ORDER</a></td>
+        </tr></table>
+        <p style="margin:18px 0 0;text-align:center;font-size:12px;color:#94a3b8">These secure links expire in 48 hours. For help, reply to support@raileats.in.</p>
+      </td></tr>
     </table>
-    <p><strong>Total:</strong> ${escapeHtml(money(orderValue(order, "TotalAmount", "totalAmount")))}</p>
-    <p><strong>Payment:</strong> ${escapeHtml(orderValue(order, "PaymentMode", "paymentMode") || "—")}</p>
-    <p style="margin-top:24px;color:#5b6473">For help, reply to this email or contact support@raileats.in.</p>
-  </div>
+  </td></tr></table>
 </body></html>`,
   };
 }
@@ -138,8 +170,6 @@ function baseResult(): VendorNotificationResult {
 export async function sendVendorOrderNotification({
   supabase,
   order,
-  event,
-  previousStatus = null,
   items,
 }: SendVendorOrderNotificationArgs): Promise<VendorNotificationResult> {
   const result = baseResult();
@@ -185,6 +215,13 @@ export async function sendVendorOrderNotification({
       return result;
     }
 
+    const baseUrl = publicBaseUrl();
+    const actionToken = createVendorOrderActionToken(orderId, String(restroCode));
+    if (!baseUrl || !actionToken) {
+      result.email.warning = "Vendor action URL or signing secret is not configured";
+      return result;
+    }
+
     let notificationItems = items;
     if (!notificationItems) {
       const { data, error } = await supabase
@@ -198,7 +235,13 @@ export async function sendVendorOrderNotification({
       notificationItems = data || [];
     }
 
-    const email = buildEmail(order, event, previousStatus, notificationItems || []);
+    const actionUrl = `${baseUrl}/api/vendor-order-action?token=${encodeURIComponent(actionToken)}`;
+    const email = buildEmail(
+      order,
+      notificationItems || [],
+      actionUrl,
+      `${baseUrl}/logo.png`
+    );
     result.email.attempted = true;
 
     const response = await fetch(RESEND_ENDPOINT, {
@@ -206,6 +249,7 @@ export async function sendVendorOrderNotification({
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "Idempotency-Key": `restaurant-new-order-${orderId}`,
       },
       body: JSON.stringify({
         from: EMAIL_FROM,

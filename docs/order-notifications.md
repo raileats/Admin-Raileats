@@ -19,13 +19,23 @@ Recipients come only from the restaurant's Contacts tab (`RestroMaster`):
 
 WhatsApp notifications are disabled. The helper does not read WhatsApp contacts or call a WhatsApp provider.
 
-## Events
+## Event and duplicate protection
 
-- `POST /api/orders` sends a new-order email after the order, items, and initial journey work completes.
-- `PATCH /api/orders/[orderId]/status` sends a status-update email after the order status and related server-side work completes.
+- Email is sent only when an order transitions into `New Order`.
+- No email is sent for `In Verification`, `In Kitchen`, or other status changes.
+- Repeated updates that leave an order in `New Order` are ignored.
+- The Resend idempotency key `restaurant-new-order-{OrderId}` prevents duplicate delivery retries for 24 hours.
+
+## Email actions
+
+- The branded email includes the RailEats logo, a structured order card, and Accept/Reject buttons.
+- Accept opens a confirmation screen and then moves the order to `In Kitchen` through the existing status workflow.
+- Reject opens the restaurant cancellation-reason form. Submitting it moves the order to `Cancellation Request` with the selected reason and remarks.
+- Action links are signed, bound to the order and restaurant, expire after 48 hours, and work only while the order is still `New Order`.
+- Link scanners cannot change an order because GET requests only render forms; the mutation requires a POST confirmation.
 
 Email delivery is best-effort: a missing key, no enabled recipients, contact lookup failure, or Resend failure is logged, but it does not roll back or fail an otherwise successful order operation. Notification details and restaurant email addresses are not exposed in order API responses.
 
 ## Operational checks
 
-Confirm the `raileats.in` sending domain is verified in Resend and `RESEND_API_KEY` is present in every deployed server environment. Resend failures are available in server logs.
+Confirm the `raileats.in` sending domain is verified in Resend and `RESEND_API_KEY` is present in every deployed server environment. The action-link base URL uses `VENDOR_NOTIFICATION_BASE_URL`, `NEXT_PUBLIC_ADMIN_URL`, or Vercel's production URL (in that order). Set `VENDOR_NOTIFICATION_SECRET` for dedicated signing; the existing Supabase service-role secret is used as a fallback. Resend failures are available in server logs.
