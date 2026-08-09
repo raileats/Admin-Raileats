@@ -68,18 +68,47 @@ const ORDER_EXTRA_COLUMNS = [
 ] as const;
 
 const STAGE_COLUMN_GROUPS = [
-  { key: "Booked", label: "Booked" },
-  { key: "In Verification", label: "In Verification" },
-  { key: "New Order", label: "New Order" },
-  { key: "In Kitchen", label: "In Kitchen" },
-  { key: "Out for Delivery", label: "Out for Delivery" },
-  { key: "Delivered", label: "Delivered" },
-  { key: "Cancelled", label: "Cancelled" },
-  { key: "Not Delivered", label: "Not Delivered" },
-  { key: "Bad Delivery", label: "Bad Delivery" },
-];
+  { key: "Booked", label: "Booked", prefix: "Booked" },
+  {
+    key: "In Verification",
+    label: "In Verification",
+    prefix: "InVerification",
+  },
+  {
+    key: "Cancellation Request",
+    label: "Cancellation Request",
+    prefix: "CancellationRequest",
+  },
+  { key: "New Order", label: "New Order", prefix: "NewOrder" },
+  { key: "In Kitchen", label: "In Kitchen", prefix: "InKitchen" },
+  {
+    key: "Out for Delivery",
+    label: "Out for Delivery",
+    prefix: "OutForDelivery",
+  },
+  {
+    key: "Restro Marked Delivered",
+    label: "Restro Marked Delivered",
+    prefix: "RestroMarkedDelivered",
+  },
+  { key: "Complaints", label: "Complaints", prefix: "Complaints" },
+  { key: "Delivered", label: "Delivered", prefix: "Delivered" },
+  { key: "Cancelled", label: "Cancelled", prefix: "Cancelled" },
+  {
+    key: "Not Delivered",
+    label: "Not Delivered",
+    prefix: "NotDelivered",
+  },
+  { key: "Bad Delivery", label: "Bad Delivery", prefix: "BadDelivery" },
+  {
+    key: "Partial Delivery",
+    label: "Partial Delivery",
+    prefix: "PartialDelivery",
+  },
+  { key: "Refund", label: "Refund", prefix: "Refund" },
+] as const;
 
-const STATUS_COLUMNS = STAGE_COLUMN_GROUPS.map((s) => s.key);
+const STATUS_COLUMNS = new Set<string>(STAGE_COLUMN_GROUPS.map((s) => s.key));
 
 function csvEscape(value: any) {
   const text =
@@ -187,15 +216,29 @@ function normalizeStatusName(value: any) {
   if (s === "verification" || s === "in verification") {
     return "In Verification";
   }
+  if (s === "cancellationrequest" || s === "cancellation request") {
+    return "Cancellation Request";
+  }
   if (s === "neworder" || s === "new order") return "New Order";
   if (s === "inkitchen" || s === "in kitchen") return "In Kitchen";
   if (s === "outfordelivery" || s === "out for delivery") {
     return "Out for Delivery";
   }
+  if (
+    s === "restromarkeddelivered" ||
+    s === "restro marked delivered"
+  ) {
+    return "Restro Marked Delivered";
+  }
+  if (s === "complaints" || s === "complaint") return "Complaints";
   if (s === "delivered") return "Delivered";
   if (s === "cancelled") return "Cancelled";
   if (s === "notdelivered" || s === "not delivered") return "Not Delivered";
   if (s === "baddelivery" || s === "bad delivery") return "Bad Delivery";
+  if (s === "partialdelivery" || s === "partial delivery") {
+    return "Partial Delivery";
+  }
+  if (s === "refund") return "Refund";
 
   return String(value ?? "").trim();
 }
@@ -217,6 +260,10 @@ function getLogBy(log: any) {
   return String(
     pick(
       log,
+      "UserType",
+      "userType",
+      "ActorType",
+      "actorType",
       "ChangedBy",
       "changedBy",
       "UserName",
@@ -224,6 +271,12 @@ function getLogBy(log: any) {
       "Actor",
       "actor"
     )
+  ).trim();
+}
+
+function getLogSource(log: any) {
+  return String(
+    pick(log, "ActionSource", "actionSource", "Source", "source")
   ).trim();
 }
 
@@ -378,12 +431,13 @@ export async function GET(req: NextRequest) {
       .map((row: any) => String(pick(row, "OrderId", "id")).trim())
       .filter(Boolean);
 
-    const [itemsRows, historyRows] = orderIds.length
+    const [itemsRows, historyRows, journeyRows] = orderIds.length
       ? await Promise.all([
           fetchByOrderIds("OrderItems", orderIds),
           fetchByOrderIds("OrderStatusHistory", orderIds),
+          fetchByOrderIds("OrderJourney", orderIds),
         ])
-      : [[], []];
+      : [[], [], []];
 
     const itemsMap: Record<string, string> = {};
     const vendorPriceMap: Record<string, number> = {};
@@ -425,6 +479,7 @@ const text = `${itemName}*${qty}`;
         {
           status: string;
           by: string;
+          source: string;
           date: string;
           time: string;
           rawAt: string;
@@ -439,9 +494,10 @@ const text = `${itemName}*${qty}`;
         pick(log, "NewStatus", "newStatus", "Status", "status")
       );
 
-      const stage = STATUS_COLUMNS.includes(newStatus) ? newStatus : "Booked";
+      const stage = STATUS_COLUMNS.has(newStatus) ? newStatus : "Booked";
       const statusText = buildStatusText(log);
       const by = getLogBy(log);
+      const source = getLogSource(log);
       const at = getLogAt(log);
 
       if (!historyStageMap[orderId]) {
@@ -457,9 +513,56 @@ const text = `${itemName}*${qty}`;
         historyStageMap[orderId][stage] = {
           status: statusText,
           by,
+          source,
           date: formatDateOnly(at),
           time: formatTimeOnly(at),
           rawAt: at,
+        };
+      }
+    }
+
+    for (const journey of journeyRows) {
+      const orderId = String(pick(journey, "OrderId", "orderId")).trim();
+      if (!orderId) continue;
+
+      if (!historyStageMap[orderId]) {
+        historyStageMap[orderId] = {};
+      }
+
+      for (const stage of STAGE_COLUMN_GROUPS) {
+        const update = pick(journey, `${stage.prefix}Update`);
+        const userType = pick(journey, `${stage.prefix}UserType`);
+        const userName = pick(journey, `${stage.prefix}UserName`);
+        const source = pick(journey, `${stage.prefix}Source`);
+        const date = String(
+          pick(journey, `${stage.prefix}ActionAtDate`)
+        ).trim();
+        const time = String(
+          pick(journey, `${stage.prefix}ActionAtTime`)
+        ).trim();
+        const hasJourneyStage = [
+          update,
+          userType,
+          userName,
+          source,
+          date,
+          time,
+        ].some((value) => String(value ?? "").trim() !== "");
+
+        if (!hasJourneyStage) continue;
+
+        const existing = historyStageMap[orderId][stage.key];
+        historyStageMap[orderId][stage.key] = {
+          status:
+            existing?.status || normalizeStatusName(update) || stage.label,
+          by: String(userType || existing?.by || userName || "").trim(),
+          source: String(source || existing?.source || "").trim(),
+          date: date || existing?.date || "",
+          time: time || existing?.time || "",
+          rawAt:
+            date
+              ? `${date}T${time || "00:00:00"}+05:30`
+              : existing?.rawAt || "",
         };
       }
     }
@@ -494,6 +597,7 @@ const text = `${itemName}*${qty}`;
       ...STAGE_COLUMN_GROUPS.flatMap((stage) => [
         `${stage.label} Status`,
         `${stage.label} By`,
+        `${stage.label} Source`,
         `${stage.label} Date`,
         `${stage.label} Time`,
       ]),
@@ -584,6 +688,7 @@ pick(row, "BasePrice", "basePrice", "SubTotal", "subTotal"),
         ...STAGE_COLUMN_GROUPS.flatMap((stage) => [
           stageLogs[stage.key]?.status || "",
           stageLogs[stage.key]?.by || "",
+          stageLogs[stage.key]?.source || "",
           stageLogs[stage.key]?.date || "",
           stageLogs[stage.key]?.time || "",
         ]),
