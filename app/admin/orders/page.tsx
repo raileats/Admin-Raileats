@@ -3000,6 +3000,7 @@ export default function AdminOrdersPage() {
 
     params.set("status", activeTab);
     params.set("orderIds", visibleOrders.map((o) => o.id).join(","));
+    params.set("sortBy", dateSearchType);
 
     window.open(`/api/admin/orders-report?${params.toString()}`, "_blank");
   }
@@ -3757,14 +3758,6 @@ export default function AdminOrdersPage() {
 
         <button
           onClick={() => {
-            const hasTextSearch = Boolean(
-              draftOrderId.trim() ||
-                draftCustomerMobile.trim() ||
-                draftOutlet.trim() ||
-                draftStation.trim() ||
-                draftTrainNo.trim(),
-            );
-
             setSearchOrderId(draftOrderId.trim());
             setSearchCustomerMobile(draftCustomerMobile.trim());
             setSearchOutlet(draftOutlet.trim());
@@ -3772,15 +3765,7 @@ export default function AdminOrdersPage() {
             setSearchTrainNo(draftTrainNo.trim());
             setDateSearchType(draftDateSearchType);
 
-            if (hasTextSearch) {
-              setActiveTab("all");
-              localStorage.setItem("raileats_admin_tab", "all");
-              setSearchDeliveryFrom("");
-              setSearchDeliveryTo("");
-              setSearchBookingFrom("");
-              setSearchBookingTo("");
-              setBookingDateFilterOn(false);
-            } else if (draftDateSearchType === "delivery") {
+            if (draftDateSearchType === "delivery") {
               setSearchDeliveryFrom(draftDeliveryFrom);
               setSearchDeliveryTo(draftDeliveryTo);
               setSearchBookingFrom("");

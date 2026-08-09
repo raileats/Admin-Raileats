@@ -13,14 +13,59 @@ const supabase = createClient(
 type TabKey =
   | "booked"
   | "verification"
+  | "cancellationrequest"
   | "neworder"
   | "inkitchen"
   | "outfordelivery"
+  | "restromarkeddelivered"
   | "delivered"
   | "cancelled"
   | "notdelivered"
   | "baddelivery"
+  | "partialdelivery"
+  | "complaints"
+  | "refund"
   | "all";
+
+const ORDER_EXTRA_COLUMNS = [
+  "SubTotal",
+  "JourneyPayload",
+  "BookingSource",
+  "PNR",
+  "BookedBy",
+  "RestroPrice",
+  "CouponCode",
+  "CouponDiscount",
+  "OrderPenalty",
+  "CouponId",
+  "Commission",
+  "RestroDiscount",
+  "REDiscount",
+  "IGST",
+  "CODAmount",
+  "PPDAmount",
+  "DiscountedBasePrice",
+  "RestroMarkedDeliveredAt",
+  "RestroMarkedStatus",
+  "RestroMarkedSubStatus",
+  "RestroMarkedRemarks",
+  "RestroMarkedBy",
+  "RestroMarkedAt",
+  "RefundStatus",
+  "RefundRequestedAmount",
+  "RefundApprovedAmount",
+  "RefundReference",
+  "RefundReason",
+  "RefundRemarks",
+  "RefundRequestedAt",
+  "RefundReviewedAt",
+  "RefundApprovedAt",
+  "RefundProcessingAt",
+  "RefundCompletedAt",
+  "RefundTransactionId",
+  "RefundBy",
+  "IsRefunded",
+] as const;
 
 const STAGE_COLUMN_GROUPS = [
   { key: "Booked", label: "Booked" },
@@ -37,7 +82,10 @@ const STAGE_COLUMN_GROUPS = [
 const STATUS_COLUMNS = STAGE_COLUMN_GROUPS.map((s) => s.key);
 
 function csvEscape(value: any) {
-  const text = String(value ?? "");
+  const text =
+    value !== null && typeof value === "object"
+      ? JSON.stringify(value)
+      : String(value ?? "");
   return `"${text.replace(/"/g, '""')}"`;
 }
 
@@ -82,6 +130,12 @@ function getTabStatus(row: any): TabKey {
   if (rawStatus === "verification" || rawStatus === "in verification") {
     return "verification";
   }
+  if (
+    rawStatus === "cancellationrequest" ||
+    rawStatus === "cancellation request"
+  ) {
+    return "cancellationrequest";
+  }
   if (rawStatus === "neworder" || rawStatus === "new order") {
     return "neworder";
   }
@@ -91,13 +145,21 @@ function getTabStatus(row: any): TabKey {
   if (rawStatus === "outfordelivery" || rawStatus === "out for delivery") {
     return "outfordelivery";
   }
+  if (
+    rawStatus === "restromarkeddelivered" ||
+    rawStatus === "restro marked delivered"
+  ) {
+    return "restromarkeddelivered";
+  }
 
   if (rawStatus === "delivered") {
     const sub = String(pick(row, "SubStatus", "subStatus"))
       .toLowerCase()
       .trim();
 
-    return sub === "bad delivery" ? "baddelivery" : "delivered";
+    if (sub === "bad delivery") return "baddelivery";
+    if (sub === "partial delivery") return "partialdelivery";
+    return "delivered";
   }
 
   if (rawStatus === "cancelled") return "cancelled";
@@ -107,6 +169,13 @@ function getTabStatus(row: any): TabKey {
   if (rawStatus === "baddelivery" || rawStatus === "bad delivery") {
     return "baddelivery";
   }
+  if (rawStatus === "partialdelivery" || rawStatus === "partial delivery") {
+    return "partialdelivery";
+  }
+  if (rawStatus === "complaints" || rawStatus === "complaint") {
+    return "complaints";
+  }
+  if (rawStatus === "refund") return "refund";
 
   return "booked";
 }
@@ -193,6 +262,13 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
 
     const status = String(url.searchParams.get("status") || "booked") as TabKey;
+    const requestedOrderIds = String(url.searchParams.get("orderIds") || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const requestedOrderIdSet = new Set(requestedOrderIds);
+    const sortBy =
+      url.searchParams.get("sortBy") === "booking" ? "booking" : "delivery";
     const searchType = String(url.searchParams.get("searchType") || "orderId");
     const q = String(url.searchParams.get("q") || "").trim().toLowerCase();
     const deliveryDate = String(
@@ -209,10 +285,15 @@ export async function GET(req: NextRequest) {
 
     if (ordersError) throw ordersError;
 
-    let orders =
-  status === "all"
-    ? ordersData || []
-    : (ordersData || []).filter((row: any) => getTabStatus(row) === status);
+    let orders = requestedOrderIds.length
+      ? (ordersData || []).filter((row: any) =>
+          requestedOrderIdSet.has(
+            String(pick(row, "OrderId", "id")).trim()
+          )
+        )
+      : status === "all"
+        ? ordersData || []
+        : (ordersData || []).filter((row: any) => getTabStatus(row) === status);
 
     if (q) {
       orders = orders.filter((row: any) => {
@@ -271,6 +352,13 @@ export async function GET(req: NextRequest) {
     }
 
     orders.sort((a: any, b: any) => {
+      if (sortBy === "booking") {
+        return (
+          new Date(pick(b, "CreatedAt", "createdAt", "created_at") || 0).getTime() -
+          new Date(pick(a, "CreatedAt", "createdAt", "created_at") || 0).getTime()
+        );
+      }
+
       const aDate = String(pick(a, "DeliveryDate", "deliveryDate"));
       const aTime = String(
         pick(a, "DeliveryTime", "deliveryTime") || "00:00:00"
@@ -281,8 +369,8 @@ export async function GET(req: NextRequest) {
       );
 
       return (
-        new Date(`${aDate}T${aTime}`).getTime() -
-        new Date(`${bDate}T${bTime}`).getTime()
+        new Date(`${bDate}T${bTime}`).getTime() -
+        new Date(`${aDate}T${aTime}`).getTime()
       );
     });
 
@@ -401,6 +489,8 @@ const text = `${itemName}*${qty}`;
       "Order Status",
       "Sub Status",
 
+      ...ORDER_EXTRA_COLUMNS,
+
       ...STAGE_COLUMN_GROUPS.flatMap((stage) => [
         `${stage.label} Status`,
         `${stage.label} By`,
@@ -489,6 +579,8 @@ pick(row, "BasePrice", "basePrice", "SubTotal", "subTotal"),
         pick(row, "Status", "status"),
         pick(row, "SubStatus", "subStatus"),
 
+        ...ORDER_EXTRA_COLUMNS.map((column) => row?.[column] ?? ""),
+
         ...STAGE_COLUMN_GROUPS.flatMap((stage) => [
           stageLogs[stage.key]?.status || "",
           stageLogs[stage.key]?.by || "",
@@ -526,12 +618,16 @@ const statusLabel =
     ? "Booked"
     : status === "verification"
     ? "In_Verification"
+    : status === "cancellationrequest"
+    ? "Cancellation_Request"
     : status === "neworder"
     ? "New_Order"
     : status === "inkitchen"
     ? "In_Kitchen"
     : status === "outfordelivery"
     ? "Out_for_Delivery"
+    : status === "restromarkeddelivered"
+    ? "Restro_Mark_Delivered"
     : status === "delivered"
     ? "Delivered"
     : status === "cancelled"
@@ -540,6 +636,12 @@ const statusLabel =
     ? "Not_Delivered"
     : status === "baddelivery"
     ? "Bad_Delivery"
+    : status === "partialdelivery"
+    ? "Partial_Delivery"
+    : status === "complaints"
+    ? "Complaints"
+    : status === "refund"
+    ? "Refund"
     : status;
 
 const fileName = `Order Report ${statusLabel}_${downloadDateTime}.csv`;
