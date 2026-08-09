@@ -4108,7 +4108,8 @@ export default function AdminOrdersPage() {
                             : "1px solid #fecaca",
                         }}
                       >
-                        {isPrepaidOrder(o) ? "PPD" : "COD"}
+                        {isPrepaidOrder(o) ? "PPD" : "COD"} ₹
+                        {moneyNumber(getOrderValue(o))}
                       </span>
                     </div>
                   </td>
