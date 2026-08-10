@@ -110,6 +110,7 @@ export async function POST(req: Request) {
       mobile: user.mobile ?? null,
       email: user.email ?? null,
       name: user.name ?? null,
+      user_type: user.user_type ?? null,
       iat: Math.floor(Date.now() / 1000),
     };
 

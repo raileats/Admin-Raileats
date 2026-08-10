@@ -274,9 +274,8 @@ export default function AdminShell({
   requireAuth = true,
 }: Props) {
   const pathname = usePathname() || "";
-  const visibleNavItems = filterNavItems(
-    adminNavItems,
-    currentUser?.user_type
+  const [sessionUser, setSessionUser] = useState<User>(
+    currentUser ?? null
   );
 
   const [mobileOpen, setMobileOpen] =
@@ -289,18 +288,58 @@ export default function AdminShell({
     pathname === "/admin/login" ||
     pathname.startsWith("/admin/login/");
 
+  const activeUser = sessionUser ?? currentUser ?? null;
+  const userType = activeUser?.user_type ?? null;
+  const visibleNavItems = filterNavItems(
+    adminNavItems,
+    userType
+  );
+
+  useEffect(() => {
+    setSessionUser(currentUser ?? null);
+  }, [currentUser]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSessionUser = async () => {
+      try {
+        const res = await fetch("/api/admin/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (!res.ok || cancelled) return;
+
+        const data = await res.json();
+        if (cancelled || !data?.user) return;
+
+        setSessionUser((prev) => ({
+          ...(prev || {}),
+          ...data.user,
+        }));
+      } catch {
+        // keep server-provided user
+      }
+    };
+
+    if (!hideChrome) {
+      loadSessionUser();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hideChrome]);
+
   useEffect(() => {
     if (hideChrome) return;
 
-    if (
-      !isAdminPathAllowed(
-        pathname,
-        currentUser?.user_type
-      )
-    ) {
+    if (!isAdminPathAllowed(pathname, userType)) {
       window.location.replace("/admin/home");
     }
-  }, [pathname, currentUser?.user_type, hideChrome]);
+  }, [pathname, userType, hideChrome]);
 
   /* =======================================================
      GLOBAL ORDER SOUND
@@ -725,7 +764,7 @@ export default function AdminShell({
             <div className="flex items-center gap-3">
               <div className="hidden text-right sm:block">
                 <div className="text-sm font-semibold">
-                  {userLabel(currentUser)}
+                  {userLabel(activeUser)}
                 </div>
 
                 <button
@@ -737,9 +776,9 @@ export default function AdminShell({
                 </button>
               </div>
 
-              {currentUser?.photo_url ? (
+              {activeUser?.photo_url ? (
                 <img
-                  src={currentUser.photo_url}
+                  src={activeUser.photo_url}
                   alt="Admin"
                   className="h-10 w-10 rounded-full border border-slate-200 object-cover"
                 />

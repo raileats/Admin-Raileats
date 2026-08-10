@@ -74,6 +74,16 @@ export default async function AdminLayout({ children }: Props) {
             const { data: row, error } = await q.single();
             if (!error && row) {
               currentUser = row;
+            } else if (payload.user_type) {
+              currentUser = {
+                id: payload.uid ?? null,
+                user_id: payload.user_id ?? null,
+                user_type: payload.user_type,
+                name: payload.name ?? null,
+                mobile: payload.mobile ?? null,
+                email: payload.email ?? null,
+                photo_url: null,
+              };
             }
           } catch (err) {
             console.warn("Invalid admin_auth JWT", err);
