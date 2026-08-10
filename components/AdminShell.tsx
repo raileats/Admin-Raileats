@@ -7,6 +7,10 @@ import { usePathname } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import * as LucideIcons from "lucide-react";
 import AuthGuard from "@/components/admin/AuthGuard";
+import {
+  filterNavItems,
+  isAdminPathAllowed,
+} from "@/lib/adminAccess";
 
 /*
  * Namespace import use kiya hai taaki purane lucide-react version me
@@ -270,6 +274,10 @@ export default function AdminShell({
   requireAuth = true,
 }: Props) {
   const pathname = usePathname() || "";
+  const visibleNavItems = filterNavItems(
+    adminNavItems,
+    currentUser?.user_type
+  );
 
   const [mobileOpen, setMobileOpen] =
     useState(false);
@@ -280,6 +288,19 @@ export default function AdminShell({
   const hideChrome =
     pathname === "/admin/login" ||
     pathname.startsWith("/admin/login/");
+
+  useEffect(() => {
+    if (hideChrome) return;
+
+    if (
+      !isAdminPathAllowed(
+        pathname,
+        currentUser?.user_type
+      )
+    ) {
+      window.location.replace("/admin/home");
+    }
+  }, [pathname, currentUser?.user_type, hideChrome]);
 
   /* =======================================================
      GLOBAL ORDER SOUND
@@ -568,7 +589,7 @@ export default function AdminShell({
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-5">
-        {adminNavItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const Icon = item.icon;
 
           const active =
