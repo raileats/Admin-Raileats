@@ -15,9 +15,6 @@ export default function AdminLogin() {
     setTimeout(() => setSubmitting(false), 5000);
   }
 
-  const mobileVal = identifier && !identifier.includes("@") ? identifier.trim() : "";
-  const emailVal = identifier && identifier.includes("@") ? identifier.trim() : "";
-
   return (
     <div className="flex min-h-[calc(100vh-96px)] items-center justify-center px-4 py-8">
       <form
@@ -46,9 +43,6 @@ export default function AdminLogin() {
           className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
           placeholder="8888888888 or name@example.com"
         />
-
-        <input type="hidden" name="mobile" value={mobileVal} />
-        <input type="hidden" name="email" value={emailVal} />
 
         <label className="mb-1 mt-4 block text-xs font-semibold text-slate-600">
           Password

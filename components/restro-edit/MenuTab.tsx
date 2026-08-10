@@ -10,6 +10,7 @@ type Row = {
   restro_code: string;
   item_code: string;
   item_name: string;
+  menu_item_image?: string | null;
   item_description?: string | null;
   item_category?: string | null;
   item_cuisine?: string | null;
@@ -46,6 +47,15 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
   const n = (x?: number | null) =>
     typeof x === "number" ? Number(x).toFixed(2).replace(/\.00$/, "") : "—";
   const dt = (s?: string | null) => (s ? new Date(s).toLocaleString() : "—");
+  const menuImageUrl = (value?: string | null) => {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "";
+    if (/^https?:\/\//i.test(raw)) return raw;
+    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!baseUrl) return "";
+    const fileName = raw.split("/").pop() || raw;
+    return `${baseUrl}/storage/v1/object/public/menu_item_image/${encodeURIComponent(fileName)}`;
+  };
 
   async function load() {
     if (!code) return;
@@ -168,22 +178,22 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
         <table className="min-w-[1200px] w-full text-sm">
           <thead className="bg-slate-50">
             <tr className="text-left">
-              <th className="p-2">Item Code</th>
-              <th className="p-2">Item Name</th>
+               <th className="p-2">Item Code</th>
+               <th className="p-2">Item Name</th>
               <th className="p-2">Item Description</th>
               <th className="p-2">Item Category</th>
               <th className="p-2">Cuisine</th>
               <th className="p-2">Menu Type</th>
-              <th className="p-2">Item Start</th>
-              <th className="p-2">Item Closed</th>
+               <th className="p-2">Open / Close</th>
               <th className="p-2 text-right">Restro Price</th>
               <th className="p-2 text-right">Base Price</th>
               <th className="p-2 text-right">GST %</th>
               <th className="p-2 text-right">Selling Price</th>
               <th className="p-2">Status</th>
-              <th className="p-2">Created</th>
-              <th className="p-2">Updated</th>
-              <th className="p-2">Edit</th>
+               <th className="p-2">Created</th>
+               <th className="p-2">Updated</th>
+               <th className="p-2">Image</th>
+               <th className="p-2">Edit</th>
               <th className="p-2">Actions</th>
             </tr>
           </thead>
@@ -200,14 +210,16 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
             ) : (
               filtered.map((r) => (
                 <tr key={r.id} className="border-t">
-                  <td className="p-2">{r.item_code}</td>
-                  <td className="p-2 font-medium">{r.item_name}</td>
+                   <td className="p-2">{r.item_code}</td>
+                   <td className="p-2 font-medium">{r.item_name}</td>
                   <td className="p-2 text-gray-600">{r.item_description}</td>
                   <td className="p-2">{r.item_category}</td>
                   <td className="p-2">{r.item_cuisine}</td>
                   <td className="p-2">{r.menu_type ?? "—"}</td>
-                  <td className="p-2">{t(r.start_time)}</td>
-                  <td className="p-2">{t(r.end_time)}</td>
+                   <td className="p-2 text-xs">
+                     <div className="font-semibold text-emerald-700">{t(r.start_time)}</div>
+                     <div className="mt-1 font-semibold text-red-600">{t(r.end_time)}</div>
+                   </td>
                   <td className="p-2 text-right">{n(r.restro_price)}</td>
                   <td className="p-2 text-right">{n(r.base_price)}</td>
                   <td className="p-2 text-right">{typeof r.gst_percent === "number" ? r.gst_percent : 0}</td>
@@ -217,10 +229,20 @@ export default function MenuTab({ restroCode }: { restroCode?: string }) {
                     {r.status === "OFF" && <span className="rounded bg-amber-100 px-2 py-1 text-amber-700">Off</span>}
                     {r.status === "DELETED" && <span className="rounded bg-rose-100 px-2 py-1 text-rose-700">Deleted</span>}
                   </td>
-                  <td className="p-2">{dt(r.created_at)}</td>
-                  <td className="p-2">{dt(r.updated_at)}</td>
+                   <td className="p-2">{dt(r.created_at)}</td>
+                   <td className="p-2">{dt(r.updated_at)}</td>
+                   <td className="p-2">
+                     {menuImageUrl(r.menu_item_image) ? (
+                       <img
+                         src={menuImageUrl(r.menu_item_image)}
+                         alt={`${r.item_name} item`}
+                         className="h-9 w-9 rounded-md border border-slate-200 object-cover"
+                         loading="lazy"
+                       />
+                     ) : <span className="text-xs text-slate-400">—</span>}
+                   </td>
 
-                  {/* Pencil edit icon */}
+                   {/* Pencil edit icon */}
                   <td className="p-2">
                     <button
                       type="button"

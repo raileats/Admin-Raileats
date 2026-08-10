@@ -52,6 +52,7 @@ const ALLOWED_MENU_TYPES = [
   "Beverages",
   "Restro Specials",
   "Bakery",
+  "Bulk",
 ] as const;
 
 type ExactHeader =

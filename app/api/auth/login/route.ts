@@ -60,11 +60,11 @@ export async function POST(req: Request) {
     const body = (await parseBody(req)) || {};
 
     const rawIdentifier = (
-      body.mobile ??
-      body.email ??
-      body.identifier ??
-      body.identifier_raw ??
-      body.user_id ??
+      body.identifier ||
+      body.identifier_raw ||
+      body.mobile ||
+      body.email ||
+      body.user_id ||
       ""
     )
       .toString()
@@ -76,16 +76,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Mobile and password required" }, { status: 400 });
     }
 
-    let mobile = "";
-    let email = "";
-    if (rawIdentifier.includes("@")) email = rawIdentifier;
-    else mobile = rawIdentifier;
-    if (body.mobile) mobile = String(body.mobile).trim();
-    if (body.email) email = String(body.email).trim();
+    const explicitMobile = String(body.mobile || "").trim();
+    const explicitEmail = String(body.email || "").trim();
+    const email = explicitEmail || (rawIdentifier.includes("@") ? rawIdentifier : "");
+    const mobile =
+      explicitMobile || (!email && /^\d{10,15}$/.test(rawIdentifier) ? rawIdentifier : "");
 
     let query = serviceClient.from("users").select("*").limit(1);
-    if (mobile) query = query.eq("mobile", mobile);
-    else if (email) query = query.eq("email", email);
+    if (email) query = query.eq("email", email);
+    else if (mobile) query = query.eq("mobile", mobile);
     else query = serviceClient.from("users").select("*").eq("user_id", rawIdentifier).limit(1);
 
     const { data: user, error } = await query.single();

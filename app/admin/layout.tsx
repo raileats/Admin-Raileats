@@ -5,6 +5,7 @@ import { serviceClient, getServerClient } from "@/lib/supabaseServer";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import GlobalOrderNotifier from "@/components/admin/GlobalOrderNotifier";
+import AdminEscapeHandler from "@/components/admin/AdminEscapeHandler";
 
 type Props = { children: React.ReactNode };
 
@@ -92,6 +93,7 @@ export default async function AdminLayout({ children }: Props) {
    */
       return (
     <>
+      <AdminEscapeHandler />
       <GlobalOrderNotifier />
       <AdminShell currentUser={currentUser} requireAuth>
         {children}

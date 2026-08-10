@@ -15,7 +15,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Restro = { [k: string]: any; id?: string | number };
+type Restro = { [key: string]: any; id?: string | number };
 
 function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().trim();
@@ -31,13 +31,87 @@ function isRaileatsActive(value: unknown) {
   return status === "1" || status === "active" || status === "true" || status === "on";
 }
 
+function display(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text || "-";
+}
+
+function formatDate(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "-";
+  const parsed = parseFssaiDate(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(parsed);
+}
+
+function isExpired(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return false;
+  const expiryDate = parseFssaiDate(raw);
+  expiryDate.setHours(23, 59, 59, 999);
+  const expiry = expiryDate.getTime();
+  return Number.isFinite(expiry) && expiry < Date.now();
+}
+
+function parseFssaiDate(raw: string) {
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+
+  const slash = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash) {
+    const first = Number(slash[1]);
+    const second = Number(slash[2]);
+    const month = second > 12 ? first : second;
+    const day = second > 12 ? second : first;
+    return new Date(Number(slash[3]), month - 1, day);
+  }
+
+  return new Date(Number.NaN);
+}
+
+function formatTime(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "-";
+  return raw.slice(0, 5);
+}
+
+function formatMoney(value: unknown) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `₹${amount.toLocaleString("en-IN")}` : "-";
+}
+
+function restroPhotoUrl(value: unknown) {
+  const path = String(value ?? "").trim();
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalizedPath = path.startsWith("RestroDisplayPhoto/")
+    ? path.slice("RestroDisplayPhoto/".length)
+    : path;
+  return supabase.storage.from("RestroDisplayPhoto").getPublicUrl(normalizedPath).data.publicUrl;
+}
+
+function Pair({ top, bottom, topClassName = "" }: {
+  top: React.ReactNode;
+  bottom: React.ReactNode;
+  topClassName?: string;
+}) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <div className={`font-semibold text-slate-900 ${topClassName}`}>{top}</div>
+      <div className="text-xs text-slate-500">{bottom}</div>
+    </div>
+  );
+}
+
 export default function RestroMasterPage() {
   const router = useRouter();
-
   const [results, setResults] = useState<Restro[]>([]);
   const [filteredResults, setFilteredResults] = useState<Restro[]>([]);
   const [loading, setLoading] = useState(false);
-
   const [restroCode, setRestroCode] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [stationCode, setStationCode] = useState("");
@@ -45,76 +119,49 @@ export default function RestroMasterPage() {
   const [restroName, setRestroName] = useState("");
   const [ownerPhone, setOwnerPhone] = useState("");
   const [fssaiNumber, setFssaiNumber] = useState("");
-  const [gstNumber, setGstNumber] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
-    fetchRestros();
+    void fetchRestros();
   }, []);
 
   async function fetchRestros() {
     setLoading(true);
-
-    const { data, error } = await supabase
-      .from("RestroMaster")
-      .select("*")
-      .order("RestroCode", {
-        ascending: false,
-      });
-
-    if (error) {
-      alert(`Failed to load restros: ${error.message}`);
+    try {
+      const response = await fetch("/api/restrosmaster", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || "Failed to load restros");
+      const rows = (Array.isArray(payload) ? payload : []).map((row: Restro) => ({
+        id: row.RestroCode,
+        ...row,
+      }));
+      setResults(rows);
+      setFilteredResults(rows);
+    } catch (error: any) {
+      alert(`Failed to load restros: ${error?.message || String(error)}`);
       setResults([]);
       setFilteredResults([]);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const finalData = (data ?? []).map((r: any) => ({
-      id: r.RestroCode,
-      ...r,
-    }));
-
-    setResults(finalData);
-    setFilteredResults(finalData);
-    setLoading(false);
   }
 
   function handleSearch() {
-    const filtered = results.filter((item) => {
-      const matchRestroCode = valueIncludes(item?.RestroCode, restroCode);
-      const matchOwnerName = valueIncludes(item?.OwnerName, ownerName);
-      const matchStationCode = valueIncludes(item?.StationCode, stationCode);
-      const matchStationName = valueIncludes(item?.StationName, stationName);
-      const matchRestroName = valueIncludes(item?.RestroName, restroName);
-      const matchOwnerPhone = valueIncludes(item?.OwnerPhone, ownerPhone);
-      const matchFssai = valueIncludes(item?.FSSAINumber ?? item?.FSSAI, fssaiNumber);
-      const matchGst = valueIncludes(item?.GSTNumber, gstNumber);
-
-      let matchStatus = true;
-
-      if (statusFilter === "active") {
-        matchStatus = isRaileatsActive(item?.RaileatsStatus);
-      }
-
-      if (statusFilter === "deactive") {
-        matchStatus = !isRaileatsActive(item?.RaileatsStatus);
-      }
-
-      return (
-        matchRestroCode &&
-        matchOwnerName &&
-        matchStationCode &&
-        matchStationName &&
-        matchRestroName &&
-        matchOwnerPhone &&
-        matchFssai &&
-        matchGst &&
-        matchStatus
-      );
-    });
-
-    setFilteredResults(filtered);
+    setFilteredResults(results.filter((item) => {
+      const statusMatches = statusFilter === "active"
+        ? isRaileatsActive(item.RaileatsStatus)
+        : statusFilter === "deactive"
+          ? !isRaileatsActive(item.RaileatsStatus)
+          : true;
+      return valueIncludes(item.RestroCode, restroCode) &&
+        valueIncludes(item.OwnerName, ownerName) &&
+        valueIncludes(item.StationCode, stationCode) &&
+        valueIncludes(item.StationName, stationName) &&
+        valueIncludes(item.RestroName, restroName) &&
+        valueIncludes(item.OwnerPhone, ownerPhone) &&
+        valueIncludes(item.FSSAINumber ?? item.FSSAI, fssaiNumber) &&
+        statusMatches;
+    }));
   }
 
   function resetFilters() {
@@ -125,290 +172,177 @@ export default function RestroMasterPage() {
     setRestroName("");
     setOwnerPhone("");
     setFssaiNumber("");
-    setGstNumber("");
     setStatusFilter("");
     setFilteredResults(results);
   }
 
-  function csvEscape(value: any) {
-    const text = String(value ?? "");
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-
   function downloadOutletReport() {
     const downloadRows = filteredResults.length ? filteredResults : results;
-
-    if (!downloadRows.length) {
-      alert("No data found to download");
-      return;
-    }
-
-    const headers = Object.keys(downloadRows[0]).filter((h) => h !== "id");
-
-    const csv = [
-      headers.join(","),
-      ...downloadRows.map((row) =>
-        headers.map((h) => csvEscape(row[h])).join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob(["\ufeff" + csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-
-    a.href = url;
-    a.download = `Outlet_Master_Report_${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if (!downloadRows.length) return alert("No data found to download");
+    const headers = Object.keys(downloadRows[0]).filter((header) => header !== "id");
+    const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = [headers.join(","), ...downloadRows.map((row) =>
+      headers.map((header) => escape(row[header])).join(",")
+    )].join("\n");
+    const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `Outlet_Master_Report_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
     URL.revokeObjectURL(url);
   }
 
   async function toggleRaileats(row: Restro) {
-    const currentOn = isRaileatsActive(row.RaileatsStatus);
-    const next = currentOn ? 0 : 1;
+    const next = isRaileatsActive(row.RaileatsStatus) ? 0 : 1;
     const previousResults = results;
-    const previousFilteredResults = filteredResults;
-
-    const applyLocalStatus = (list: Restro[]) =>
-      list.map((item) =>
-        String(item.RestroCode) === String(row.RestroCode)
-          ? { ...item, RaileatsStatus: next }
-          : item
-      );
-
-    setResults(applyLocalStatus);
-    setFilteredResults(applyLocalStatus);
-
-    const { error } = await supabase
-      .from("RestroMaster")
-      .update({ RaileatsStatus: next })
-      .eq("RestroCode", row.RestroCode);
-
-    if (error) {
+    const previousFiltered = filteredResults;
+    const apply = (list: Restro[]) => list.map((item) =>
+      String(item.RestroCode) === String(row.RestroCode)
+        ? { ...item, RaileatsStatus: next }
+        : item
+    );
+    setResults(apply);
+    setFilteredResults(apply);
+    try {
+      const response = await fetch(`/api/admin/restros/${row.RestroCode}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ RaileatsStatus: next }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || "Status update failed");
+    } catch (error: any) {
       setResults(previousResults);
-      setFilteredResults(previousFilteredResults);
-      alert(`Failed to update Raileats status: ${error.message}`);
+      setFilteredResults(previousFiltered);
+      alert(`Failed to update Raileats status: ${error?.message || String(error)}`);
     }
   }
 
-  function openEdit(code: string | number) {
-    router.push(`/admin/restros/${code}/edit`);
-  }
-
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
-    if (e.key === "Enter") {
-      handleSearch();
-    }
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (event.key === "Enter") handleSearch();
   };
 
   const columns: Column<Restro>[] = [
     {
-      key: "RestroCode",
-      title: "Restro Code",
-      width: "110px",
+      key: "restaurant",
+      title: "Restaurant",
+      width: "180px",
+      render: (row) => {
+        const count = Number(row.NearbyActiveOrderCount) || 0;
+        return <Pair
+          top={<span className="inline-flex items-center gap-2">
+            <span>{display(row.RestroCode)}</span>
+            {count > 0 && <span
+              className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-bold text-white"
+              title={`${count} active order${count === 1 ? "" : "s"} from 60 minutes before to 30 minutes after now`}
+              aria-label={`${count} nearby active orders`}
+            >{count}</span>}
+          </span>}
+          bottom={display(row.RestroName)}
+        />;
+      },
     },
     {
-      key: "RestroName",
-      title: "Restro Name",
-    },
-    {
-      key: "StationCode",
-      title: "Station Code",
-      width: "110px",
-    },
-    {
-      key: "StationName",
-      title: "Station Name",
-    },
-    {
-      key: "OwnerName",
-      title: "Owner Name",
-    },
-    {
-      key: "OwnerPhone",
-      title: "Owner Phone",
+      key: "station",
+      title: "Station",
       width: "140px",
+      render: (row) => <Pair top={display(row.StationCode)} bottom={display(row.StationName)} />,
     },
     {
-      key: "FSSAINumber",
-      title: "FSSAI",
-      width: "150px",
-      render: (row) => <span>{row.FSSAINumber ?? row.FSSAI ?? "-"}</span>,
-    },
-    {
-      key: "GSTNumber",
-      title: "GST Number",
+      key: "owner",
+      title: "Owner",
       width: "160px",
-      render: (row) => <span>{row.GSTNumber ?? "-"}</span>,
+      render: (row) => <Pair top={display(row.OwnerName)} bottom={display(row.OwnerPhone)} />,
     },
     {
-      key: "RaileatsStatus",
-      title: "Raileats",
+      key: "fssai",
+      title: "FSSAI / Expiry",
+      width: "170px",
+      render: (row) => {
+        const expiry = row.FSSAIExpiryDate;
+        const expired = isExpired(expiry);
+        return <Pair
+          top={display(row.FSSAINumber ?? row.FSSAI)}
+          bottom={<span className={expired ? "font-semibold text-red-600" : ""}>
+            {formatDate(expiry)}{expired ? " · Expired" : ""}
+          </span>}
+        />;
+      },
+    },
+    {
+      key: "ratingPhoto",
+      title: "Rating / Photo",
       width: "110px",
       render: (row) => {
+        const photo = restroPhotoUrl(row.RestroDisplayPhoto);
+        return <div className="space-y-1">
+          <div className="font-semibold text-slate-900">★ {display(row.RestroRating)}</div>
+          {photo ? <img src={photo} alt={`${display(row.RestroName)} display`} className="h-9 w-9 rounded-md border border-slate-200 object-cover" loading="lazy" /> : <span className="text-xs text-slate-400">No photo</span>}
+        </div>;
+      },
+    },
+    {
+      key: "hoursMinimum",
+      title: "Open / Close / Min",
+      width: "145px",
+      render: (row) => <div className="space-y-1 text-xs">
+        <div><span className="font-semibold text-emerald-700">Open</span> {formatTime(row.open_time)}</div>
+        <div><span className="font-semibold text-red-600">Close</span> {formatTime(row.closed_time)}</div>
+        <div className="font-semibold text-slate-900">Min {formatMoney(row.MinimumOrderValue)}</div>
+      </div>,
+    },
+    {
+      key: "menuCutoff",
+      title: "Active Menu / Cutoff",
+      width: "135px",
+      render: (row) => <div className="min-w-0 space-y-1">
+        <div className="font-semibold text-slate-900">{Number(row.ActiveMenuCount) || 0} items</div>
+        <div className="text-xs font-medium text-sky-700">Images: {Number(row.ActiveMenuImageCount) || 0}</div>
+        <div className="text-xs text-slate-500">Cutoff {display(row.CutOffTime)}</div>
+      </div>,
+    },
+    {
+      key: "controls",
+      title: "Status / Edit",
+      width: "105px",
+      render: (row) => {
         const on = isRaileatsActive(row.RaileatsStatus);
-
-        return (
-          <button
-            type="button"
-            onClick={() => toggleRaileats(row)}
-            className={[
-              "relative h-6 w-12 rounded-full transition",
-              on ? "bg-sky-500" : "bg-slate-400",
-            ].join(" ")}
-            aria-label={on ? "Deactivate RailEats" : "Activate RailEats"}
-          >
-            <span
-              className={[
-                "absolute top-1 h-4 w-4 rounded-full bg-white transition-all",
-                on ? "left-7" : "left-1",
-              ].join(" ")}
-            />
+        return <div className="flex flex-col items-start gap-2">
+          <button type="button" onClick={() => void toggleRaileats(row)} className={`relative h-6 w-12 rounded-full transition ${on ? "bg-sky-500" : "bg-slate-400"}`} aria-label={on ? "Deactivate RailEats" : "Activate RailEats"}>
+            <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${on ? "left-7" : "left-1"}`} />
           </button>
-        );
+          <AdminButton variant="secondary" className="h-8 bg-amber-400 px-3 text-black hover:bg-amber-500" onClick={() => router.push(`/admin/restros/${row.RestroCode}/edit`)}>Edit</AdminButton>
+        </div>;
       },
     },
   ];
 
-  return (
-    <AdminPage
-      title="Restro Master"
-      subtitle="Search, manage, and update RailEats restaurant outlets"
-      actions={
-        <div className="flex flex-wrap gap-2">
-          <AdminButton variant="secondary" onClick={downloadOutletReport}>
-            Download Outlet Master Report
-          </AdminButton>
-
-          <AdminButton
-  variant="success"
-  onClick={() => {
-    try {
-      localStorage.removeItem("new_restro_code");
-      localStorage.removeItem("new_restro_basic");
-    } catch {}
-
-    router.push("/admin/restros/new/basic");
-  }}
->
-  + Add New Restro
-</AdminButton>
-        </div>
-      }
-    >
-      <AdminToolbar
-        actions={
-          <>
-            <AdminButton onClick={handleSearch}>Search</AdminButton>
-            <AdminButton variant="secondary" onClick={resetFilters}>
-              Reset
-            </AdminButton>
-          </>
-        }
-      >
-        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9">
-          <AdminInput
-            type="text"
-            placeholder="RestroCode"
-            value={restroCode}
-            onChange={(e) => setRestroCode(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-          />
-
-          <AdminInput
-            type="text"
-            placeholder="OwnerName"
-            value={ownerName}
-            onChange={(e) => setOwnerName(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-          />
-
-          <AdminInput
-            type="text"
-            placeholder="StationCode"
-            value={stationCode}
-            onChange={(e) => setStationCode(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-          />
-
-          <AdminInput
-            type="text"
-            placeholder="StationName"
-            value={stationName}
-            onChange={(e) => setStationName(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-          />
-
-          <AdminInput
-            type="text"
-            placeholder="RestroName"
-            value={restroName}
-            onChange={(e) => setRestroName(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-          />
-
-          <AdminInput
-            type="text"
-            placeholder="OwnerPhone"
-            value={ownerPhone}
-            onChange={(e) => setOwnerPhone(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-          />
-
-          <AdminInput
-            type="text"
-            placeholder="FSSAINumber"
-            value={fssaiNumber}
-            onChange={(e) => setFssaiNumber(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-          />
-
-          <AdminInput
-            type="text"
-            placeholder="GSTNumber"
-            value={gstNumber}
-            onChange={(e) => setGstNumber(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-          />
-
-          <AdminSelect
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-          >
-            <option value="">RaileatsStatus</option>
-            <option value="active">Active</option>
-            <option value="deactive">Deactivate</option>
-          </AdminSelect>
-        </div>
-      </AdminToolbar>
-
-      <AdminCard bodyClassName="p-0">
-        <AdminTable
-          title=""
-          subtitle=""
-          columns={columns}
-          data={filteredResults}
-          loading={loading}
-          pageSize={30}
-          actions={(row) => (
-            <AdminButton
-              variant="secondary"
-              className="h-9 bg-amber-400 text-black hover:bg-amber-500"
-              onClick={() => openEdit(row.RestroCode)}
-            >
-              Edit
-            </AdminButton>
-          )}
-        />
-      </AdminCard>
-    </AdminPage>
-  );
+  return <AdminPage title="Restro Master" subtitle="Search, manage, and update RailEats restaurant outlets" actions={<div className="flex flex-wrap gap-2">
+    <AdminButton variant="secondary" onClick={downloadOutletReport}>Download Outlet Master Report</AdminButton>
+    <AdminButton variant="success" onClick={() => {
+      try {
+        localStorage.removeItem("new_restro_code");
+        localStorage.removeItem("new_restro_basic");
+      } catch {}
+      router.push("/admin/restros/new/basic");
+    }}>+ Add New Restro</AdminButton>
+  </div>}>
+    <AdminToolbar actions={<><AdminButton onClick={handleSearch}>Search</AdminButton><AdminButton variant="secondary" onClick={resetFilters}>Reset</AdminButton></>}>
+      <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+        <AdminInput placeholder="RestroCode" value={restroCode} onChange={(event) => setRestroCode(event.target.value)} onKeyDown={handleSearchKeyDown} />
+        <AdminInput placeholder="OwnerName" value={ownerName} onChange={(event) => setOwnerName(event.target.value)} onKeyDown={handleSearchKeyDown} />
+        <AdminInput placeholder="StationCode" value={stationCode} onChange={(event) => setStationCode(event.target.value)} onKeyDown={handleSearchKeyDown} />
+        <AdminInput placeholder="StationName" value={stationName} onChange={(event) => setStationName(event.target.value)} onKeyDown={handleSearchKeyDown} />
+        <AdminInput placeholder="RestroName" value={restroName} onChange={(event) => setRestroName(event.target.value)} onKeyDown={handleSearchKeyDown} />
+        <AdminInput placeholder="OwnerPhone" value={ownerPhone} onChange={(event) => setOwnerPhone(event.target.value)} onKeyDown={handleSearchKeyDown} />
+        <AdminInput placeholder="FSSAINumber" value={fssaiNumber} onChange={(event) => setFssaiNumber(event.target.value)} onKeyDown={handleSearchKeyDown} />
+        <AdminSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} onKeyDown={handleSearchKeyDown}>
+          <option value="">RaileatsStatus</option><option value="active">Active</option><option value="deactive">Deactivate</option>
+        </AdminSelect>
+      </div>
+    </AdminToolbar>
+    <AdminCard bodyClassName="p-0"><AdminTable title="" subtitle="" columns={columns} data={filteredResults} loading={loading} pageSize={30} compact /></AdminCard>
+  </AdminPage>;
 }

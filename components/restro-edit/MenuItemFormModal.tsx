@@ -74,6 +74,7 @@ const MENU_TYPE_OPTIONS = [
   "Beverages",
   "Restro Specials",
   "Bakery",
+  "Bulk",
 ] as const;
 
 function normalizeTime(value: any) {
