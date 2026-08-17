@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import MenuItemFormModal from "@/components/restro-edit/MenuItemFormModal";
 
 /*
  * Admin screen par dikhne wale columns.
@@ -67,6 +68,22 @@ function csvEscape(value: any) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+function getMenuImagePublicUrl(value: unknown) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!baseUrl) return "";
+
+  const fileName = raw.split("/").pop() || raw;
+
+  return `${baseUrl}/storage/v1/object/public/menu_item_image/${encodeURIComponent(
+    fileName
+  )}`;
+}
+
 export default function MenuItemsTable() {
   const [rows, setRows] = useState<any[]>([]);
 
@@ -82,6 +99,7 @@ export default function MenuItemsTable() {
   const [error, setError] = useState<string | null>(null);
 
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [editRow, setEditRow] = useState<any | null>(null);
 
   const [uploadMode, setUploadMode] =
     useState<UploadMode>("single");
@@ -1106,7 +1124,11 @@ export default function MenuItemsTable() {
               )}
 
               <th className="border-b px-3 py-3 font-semibold">
-                Action
+                Image
+              </th>
+
+              <th className="border-b px-3 py-3 font-semibold">
+                Edit
               </th>
             </tr>
           </thead>
@@ -1117,7 +1139,7 @@ export default function MenuItemsTable() {
                 <td
                   colSpan={
                     TABLE_HEADERS.length +
-                    1
+                    2
                   }
                   className="px-3 py-8 text-center text-slate-500"
                 >
@@ -1129,7 +1151,7 @@ export default function MenuItemsTable() {
                 <td
                   colSpan={
                     TABLE_HEADERS.length +
-                    1
+                    2
                   }
                   className="px-3 py-8 text-center text-slate-500"
                 >
@@ -1172,8 +1194,28 @@ export default function MenuItemsTable() {
                     )}
 
                     <td className="border-b px-3 py-3">
+                      {getMenuImagePublicUrl(
+                        getField(row, "menu_item_image")
+                      ) ? (
+                        <img
+                          src={getMenuImagePublicUrl(
+                            getField(row, "menu_item_image")
+                          )}
+                          alt={`${String(
+                            getField(row, "item_name") || "Menu item"
+                          )} item`}
+                          className="h-9 w-9 rounded-md border border-slate-200 object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+
+                    <td className="border-b px-3 py-3">
                       <button
                         type="button"
+                        onClick={() => setEditRow(row)}
                         className="rounded bg-amber-400 px-3 py-1 text-sm font-semibold text-slate-900"
                       >
                         Edit
@@ -1186,6 +1228,18 @@ export default function MenuItemsTable() {
           </tbody>
         </table>
       </div>
+
+      <MenuItemFormModal
+        open={Boolean(editRow)}
+        restroCode={getField(editRow, "restro_code")}
+        mode="edit"
+        initial={editRow ?? undefined}
+        onClose={() => setEditRow(null)}
+        onSaved={() => {
+          setEditRow(null);
+          load(page);
+        }}
+      />
 
       <div className="flex flex-col gap-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
         <div>
