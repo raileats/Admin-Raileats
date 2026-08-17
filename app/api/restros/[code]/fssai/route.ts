@@ -48,6 +48,59 @@ function getFssaiStatus(expiryDate: any): "active" | "inactive" {
   return expiry >= today ? "active" : "inactive";
 }
 
+async function syncFssaiStatuses(restroCode: number, rows: any[]) {
+  if (!rows.length) return { latestStatus: "inactive" as const };
+
+  const latest = rows[0];
+  const latestStatus = getFssaiStatus(latest.expiry_date);
+
+  // Only the newest FSSAI can be active. This intentionally does not filter
+  // by the old status value, because legacy rows may contain "Active" casing.
+  const { error: deactivateError } = await supabase
+    .from("RestroFSSAI")
+    .update({ status: "inactive" })
+    .eq("RestroCode", restroCode);
+
+  if (deactivateError) throw new Error(deactivateError.message);
+
+  if (latestStatus === "active") {
+    let activateQuery = supabase
+      .from("RestroFSSAI")
+      .update({ status: "active" })
+      .eq("RestroCode", restroCode);
+
+    if (latest.id != null) {
+      activateQuery = activateQuery.eq("id", latest.id);
+    } else if (latest.FssaiId != null) {
+      activateQuery = activateQuery.eq("FssaiId", latest.FssaiId);
+    } else if (latest.created_at) {
+      activateQuery = activateQuery.eq("created_at", latest.created_at);
+    } else {
+      activateQuery = activateQuery
+        .eq("fssai_number", latest.fssai_number)
+        .eq("expiry_date", latest.expiry_date);
+    }
+
+    const { error: activateError } = await activateQuery;
+    if (activateError) throw new Error(activateError.message);
+  }
+
+  const { error: masterError } = await supabase
+    .from("RestroMaster")
+    .update({
+      FSSAINumber: latest.fssai_number,
+      FSSAIExpiryDate: latest.expiry_date,
+      FSSAICopyUpload: latest.file_url ?? null,
+      FSSAIStatus: latestStatus === "active" ? "Active" : "Inactive",
+      UpdatedAt: new Date().toISOString(),
+    })
+    .eq("RestroCode", restroCode);
+
+  if (masterError) throw new Error(masterError.message);
+
+  return { latestStatus };
+}
+
 /* ========================= GET ========================= */
 export async function GET(
   req: NextRequest,
@@ -72,8 +125,18 @@ export async function GET(
     return NextResponse.json({ ok: false, error: error.message });
   }
 
+  try {
+    await syncFssaiStatuses(restroCode, data || []);
+  } catch (syncError: any) {
+    return NextResponse.json({
+      ok: false,
+      error: syncError?.message || "FSSAI status sync failed",
+    });
+  }
+
   const rows = (data || []).map((r: any, idx: number) => {
-    const computedStatus = getFssaiStatus(r.expiry_date);
+    const computedStatus =
+      idx === 0 ? getFssaiStatus(r.expiry_date) : "inactive";
 
     return {
       id: r.id ?? r.FssaiId ?? `${r.RestroCode}-${r.fssai_number}-${idx}`,
@@ -124,14 +187,7 @@ export async function POST(
 
   const newStatus = getFssaiStatus(expiry_date);
 
-  /* 🔥 STEP 1: OLD ACTIVE → INACTIVE (BANK LOGIC) */
-  await supabase
-    .from("RestroFSSAI")
-    .update({ status: "inactive" })
-    .eq("RestroCode", restroCode)
-    .eq("status", "active");
-
-  /* 🔥 STEP 2: FILE UPLOAD */
+  /* 🔥 STEP 1: FILE UPLOAD */
   let file_url: string | null = null;
 
   if (file) {
@@ -156,7 +212,7 @@ export async function POST(
     file_url = data.publicUrl;
   }
 
-  /* 🔥 STEP 3: INSERT NEW FSSAI */
+  /* 🔥 STEP 2: INSERT NEW FSSAI */
   const { data: row, error } = await supabase
     .from("RestroFSSAI")
     .insert({
@@ -176,27 +232,31 @@ export async function POST(
     });
   }
 
-  /* 🔥 STEP 4: SYNC LATEST FSSAI INTO RESTRO MASTER */
-  const { error: masterError } = await supabase
-    .from("RestroMaster")
-    .update({
-      FSSAINumber: fssai_number,
-      FSSAIExpiryDate: expiry_date,
-      FSSAICopyUpload: file_url,
-      FSSAIStatus: newStatus === "active" ? "Active" : "Inactive",
-      UpdatedAt: new Date().toISOString(),
-    })
-    .eq("RestroCode", restroCode);
+  /* 🔥 STEP 3: NEWEST/UNEXPIRED ONLY → ACTIVE */
+  const { data: allRows, error: rowsError } = await supabase
+    .from("RestroFSSAI")
+    .select("*")
+    .eq("RestroCode", restroCode)
+    .order("created_at", { ascending: false });
 
-  if (masterError) {
+  if (rowsError) {
     return NextResponse.json({
       ok: false,
-      error: masterError.message,
+      error: rowsError.message,
+    });
+  }
+
+  try {
+    await syncFssaiStatuses(restroCode, allRows || []);
+  } catch (syncError: any) {
+    return NextResponse.json({
+      ok: false,
+      error: syncError?.message || "FSSAI status sync failed",
     });
   }
 
   return NextResponse.json(
-    { ok: true, row },
+    { ok: true, row: { ...row, status: newStatus } },
     {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",

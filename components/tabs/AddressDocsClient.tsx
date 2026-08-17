@@ -294,13 +294,13 @@ export default function AddressDocsClient({
         fssai_number: json.row?.fssai_number ?? fssaiNumber,
         expiry_date: json.row?.expiry_date ?? (fssaiExpiry || null),
         file_url: json.row?.file_url ?? null,
-        status: "active",
+        status: json.row?.status === "active" ? "active" : "inactive",
         created_at: json.row?.created_at ?? new Date().toISOString(),
       };
 
       setFssaiRows((prev) => [
         savedRow,
-        ...prev.map((r) => (r.status === "active" ? { ...r, status: "inactive" as const } : r)),
+        ...prev.map((r) => ({ ...r, status: "inactive" as const })),
       ]);
 
       setShowFssai(false);
