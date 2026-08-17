@@ -89,6 +89,14 @@ const tabs = [
   },
 ];
 
+const supportHiddenTabLabels = [
+  "Restro User & Password",
+  "Credit / Debit Note",
+  "Settlement",
+  "Statement",
+  "Accounting",
+] as const;
+
 export default async function RestroEditLayout({
   params,
   children,
@@ -158,7 +166,10 @@ export default async function RestroEditLayout({
       </AdminCard>
 
       <AdminCard>
-        <Tabs tabs={tabs} />
+        <Tabs
+          tabs={tabs}
+          supportHiddenLabels={supportHiddenTabLabels}
+        />
 
         {error ? (
           <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">

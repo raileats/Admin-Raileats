@@ -6,6 +6,22 @@ export const SUPPORT_ALLOWED_PREFIXES = [
   "/admin/stations",
 ] as const;
 
+export const SUPPORT_BLOCKED_PREFIXES = [
+  "/admin/restros/new/restro-user-password",
+  "/admin/restros/new/credit-debit-note",
+  "/admin/restros/new/settlement",
+  "/admin/restros/new/statement",
+  "/admin/restros/new/accounting",
+] as const;
+
+const SUPPORT_BLOCKED_RESTRO_SECTIONS = new Set([
+  "restro-user-password",
+  "credit-debit-note",
+  "settlement",
+  "statement",
+  "accounting",
+]);
+
 export function normalizeUserType(userType?: string | null) {
   return (userType || "").trim().toLowerCase();
 }
@@ -39,6 +55,24 @@ export function isAdminPathAllowed(
   }
 
   const path = pathname.split("?")[0];
+
+  if (
+    SUPPORT_BLOCKED_PREFIXES.some(
+      (prefix) => path === prefix || path.startsWith(`${prefix}/`)
+    )
+  ) {
+    return false;
+  }
+
+  const restroPathMatch = path.match(
+    /^\/admin\/restros\/[^/]+\/(?:edit\/)?([^/]+)/
+  );
+  if (
+    restroPathMatch &&
+    SUPPORT_BLOCKED_RESTRO_SECTIONS.has(restroPathMatch[1])
+  ) {
+    return false;
+  }
 
   if (
     path === "/admin/login" ||

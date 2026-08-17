@@ -7,9 +7,11 @@ import { usePathname } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import * as LucideIcons from "lucide-react";
 import AuthGuard from "@/components/admin/AuthGuard";
+import { AdminUserProvider } from "@/components/admin/AdminUserContext";
 import {
   filterNavItems,
   isAdminPathAllowed,
+  normalizeUserType,
 } from "@/lib/adminAccess";
 
 /*
@@ -710,7 +712,10 @@ export default function AdminShell({
      ======================================================= */
 
   const shell = (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
+    <div
+      className="min-h-screen bg-slate-100 text-slate-900"
+      data-admin-user-type={normalizeUserType(userType)}
+    >
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 lg:hidden"
@@ -835,9 +840,13 @@ export default function AdminShell({
     </div>
   );
 
+  const shellWithUser = (
+    <AdminUserProvider user={activeUser}>{shell}</AdminUserProvider>
+  );
+
   return requireAuth ? (
-    <AuthGuard>{shell}</AuthGuard>
+    <AuthGuard>{shellWithUser}</AuthGuard>
   ) : (
-    shell
+    shellWithUser
   );
 }

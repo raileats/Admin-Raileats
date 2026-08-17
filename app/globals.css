@@ -129,5 +129,10 @@ body {
   background: rgba(0,0,0,0.45) !important;
 }
 
+/* Use the same resolved role as the sidebar to hide restricted restro tabs. */
+[data-admin-user-type="support"] [data-support-hidden="true"] {
+  display: none !important;
+}
+
 /* simple responsive helpers */
 img { max-width: 100%; height: auto; }
